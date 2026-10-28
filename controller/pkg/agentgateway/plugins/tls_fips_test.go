@@ -15,6 +15,60 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
+func TestValidateFIPSTLSOptions(t *testing.T) {
+	for _, tt := range []struct {
+		suite agentgateway.CipherSuite
+		valid bool
+	}{
+		{agentgateway.CipherSuiteTLS13_AES_256_GCM_SHA384, true},
+		{agentgateway.CipherSuiteTLS13_AES_128_GCM_SHA256, true},
+		{agentgateway.CipherSuiteTLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, true},
+		{agentgateway.CipherSuiteTLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, true},
+		{agentgateway.CipherSuiteTLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, true},
+		{agentgateway.CipherSuiteTLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, true},
+		{agentgateway.CipherSuiteTLS13_CHACHA20_POLY1305_SHA256, false},
+		{agentgateway.CipherSuiteTLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, false},
+		{agentgateway.CipherSuiteTLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, false},
+	} {
+		t.Run(string(tt.suite), func(t *testing.T) {
+			err := validateFIPSTLSOptions([]agentgateway.CipherSuite{tt.suite}, nil)
+			if tt.valid {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, string(tt.suite))
+			}
+		})
+	}
+	for _, tt := range []struct {
+		group agentgateway.KeyExchangeGroup
+		valid bool
+	}{
+		{agentgateway.KeyExchangeGroupP256, true},
+		{agentgateway.KeyExchangeGroupP384, true},
+		{agentgateway.KeyExchangeGroupX25519MLKEM768, true},
+		{agentgateway.KeyExchangeGroupX25519, false},
+	} {
+		t.Run(string(tt.group), func(t *testing.T) {
+			err := validateFIPSTLSOptions(nil, []agentgateway.KeyExchangeGroup{tt.group})
+			if tt.valid {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, string(tt.group))
+			}
+		})
+	}
+	t.Run("defaults", func(t *testing.T) {
+		require.NoError(t, validateFIPSTLSOptions(nil, nil))
+	})
+	t.Run("mixed options", func(t *testing.T) {
+		err := validateFIPSTLSOptions(
+			[]agentgateway.CipherSuite{agentgateway.CipherSuiteTLS13_AES_128_GCM_SHA256, agentgateway.CipherSuiteTLS13_CHACHA20_POLY1305_SHA256},
+			[]agentgateway.KeyExchangeGroup{agentgateway.KeyExchangeGroupP256, agentgateway.KeyExchangeGroupX25519, agentgateway.KeyExchangeGroupX25519MLKEM768},
+		)
+		require.EqualError(t, err, "TLS configuration is not permitted in FIPS mode: non-approved cipher suites [TLS13_CHACHA20_POLY1305_SHA256], non-approved key exchange groups [X25519]")
+	})
+}
+
 func TestFIPSTLSPolicyStatus(t *testing.T) {
 	t.Logf("FIPS mode: %t", fips140.Enabled())
 	approvedGroups := []agentgateway.KeyExchangeGroup{
@@ -110,6 +164,7 @@ func TestFIPSTLSPolicyStatus(t *testing.T) {
 			if fips140.Enabled() && len(tt.rejected) > 0 {
 				require.Equal(t, metav1.ConditionFalse, accepted.Status)
 				require.Equal(t, agentgateway.PolicyReasonInvalid, accepted.Reason)
+				require.NotContains(t, accepted.Message, "\n")
 				for _, value := range tt.rejected {
 					require.Contains(t, accepted.Message, value)
 				}
@@ -118,6 +173,9 @@ func TestFIPSTLSPolicyStatus(t *testing.T) {
 				}
 				if tt.backend != nil {
 					require.Contains(t, accepted.Message, "backend.tls:")
+				}
+				if tt.frontend != nil && tt.backend != nil {
+					require.Contains(t, accepted.Message, "; backend.tls:")
 				}
 			} else {
 				require.Equal(t, metav1.ConditionTrue, accepted.Status)
@@ -145,6 +203,30 @@ func TestFIPSTLSPolicyStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFIPSTLSPolicyDiagnostics(t *testing.T) {
+	policy := &agentgateway.AgentgatewayPolicy{
+		Name: "policy", Namespace: "default",
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Backend: &agentgateway.BackendFull{TLS: &agentgateway.BackendTLS{
+				KeyExchangeGroups: []agentgateway.KeyExchangeGroup{agentgateway.KeyExchangeGroupX25519},
+			}},
+		},
+	}
+	policies, err := TranslatePolicyToAgw(PolicyCtx{}, policy)
+	require.Len(t, policies, 1)
+	conditions := PolicyConditionMap(err, len(policies) > 0)
+	accepted := conditions[agentgateway.PolicyConditionAccepted]
+	if fips140.Enabled() {
+		require.ErrorContains(t, err, "backend.tls:")
+		require.Equal(t, metav1.ConditionFalse, accepted.Status)
+		require.Equal(t, agentgateway.PolicyReasonInvalid, accepted.Reason)
+	} else {
+		require.NoError(t, err)
+		require.Equal(t, metav1.ConditionTrue, accepted.Status)
+	}
+	require.Equal(t, metav1.ConditionTrue, conditions[agentgateway.PolicyConditionAttached].Status)
 }
 
 func TestFIPSTLSPolicyStatusUpdate(t *testing.T) {
@@ -189,6 +271,81 @@ func TestFIPSTLSPolicyStatusUpdate(t *testing.T) {
 				}
 				policy.Status = *status
 			}
+		})
+	}
+}
+
+func TestFIPSTLSGuardrailInlinePolicies(t *testing.T) {
+	connection := agentgateway.BackendConnectionPolicy{
+		TLS: &agentgateway.BackendTLS{KeyExchangeGroups: []agentgateway.KeyExchangeGroup{agentgateway.KeyExchangeGroupX25519}},
+		Tunnel: &agentgateway.BackendTunnel{
+			PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{URL: new("http://proxy.example.com:8080")},
+			Mode:                  agentgateway.BackendTunnelModeConnect,
+		},
+	}
+	ctx := backendTLSContext(t, nil, nil)
+	tests := []struct {
+		name      string
+		translate func() []*api.BackendPolicySpec
+	}{
+		{
+			name: "moderation",
+			translate: func() []*api.BackendPolicySpec {
+				return processModeration(ctx, "default", &agentgateway.OpenAIModeration{
+					Policies: &agentgateway.OpenAIModerationPolicy{
+						BackendConnectionPolicy: connection,
+						Auth:                    &agentgateway.OpenAIModerationAuth{InlineKey: new("test-key")},
+					},
+				}).InlinePolicies
+			},
+		},
+		{
+			name: "bedrock guardrails",
+			translate: func() []*api.BackendPolicySpec {
+				return processBedrockGuardrails(ctx, "default", &agentgateway.BedrockGuardrails{
+					Policies: &agentgateway.BedrockGuardrailsPolicy{
+						BackendConnectionPolicy: connection,
+						Auth:                    &agentgateway.BedrockGuardrailsAuth{InlineKey: new("test-key")},
+					},
+				}).InlinePolicies
+			},
+		},
+		{
+			name: "google model armor",
+			translate: func() []*api.BackendPolicySpec {
+				return processGoogleModelArmor(ctx, "default", &agentgateway.GoogleModelArmor{
+					Policies: &agentgateway.GoogleModelArmorPolicy{
+						BackendConnectionPolicy: connection,
+						Auth:                    &agentgateway.GoogleModelArmorAuth{GCP: &agentgateway.GcpAuth{}},
+					},
+				}).InlinePolicies
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policies := tt.translate()
+			require.Len(t, policies, 3)
+			var tls *api.BackendPolicySpec_BackendTLS
+			var auth *api.BackendAuthPolicy
+			var tunnel *api.BackendPolicySpec_BackendTunnel
+			for _, policy := range policies {
+				if p := policy.GetBackendTls(); p != nil {
+					tls = p
+				}
+				if p := policy.GetAuth(); p != nil {
+					auth = p
+				}
+				if p := policy.GetBackendTunnel(); p != nil {
+					tunnel = p
+				}
+			}
+			require.NotNil(t, tls)
+			require.Equal(t, []api.TLSConfig_KeyExchangeGroup{api.TLSConfig_X25519}, tls.KeyExchangeGroups)
+			require.NotNil(t, auth)
+			require.NotNil(t, tunnel)
+			require.Equal(t, "proxy.example.com", tunnel.Proxy.GetInline().Hostname)
+			require.Equal(t, api.BackendPolicySpec_BackendTunnel_CONNECT, tunnel.Mode)
 		})
 	}
 }

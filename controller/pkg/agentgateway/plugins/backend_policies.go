@@ -511,10 +511,6 @@ func translateBackendTransformation(
 func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	var errs []error
 	tls := policy.Spec.Backend.TLS
-	if err := validateFIPSTLSOptions(nil, tls.KeyExchangeGroups); err != nil {
-		// Keep the TLS policy. Dropping it would allow plaintext connections.
-		errs = append(errs, fmt.Errorf("backend.tls: %w", err))
-	}
 
 	p := &api.BackendPolicySpec_BackendTLS{}
 

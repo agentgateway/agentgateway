@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/cert"
@@ -12,39 +13,49 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
-type fipsTLSConfigError struct {
-	cipherSuites      []agentgateway.CipherSuite
-	keyExchangeGroups []agentgateway.KeyExchangeGroup
-}
-
-func (e *fipsTLSConfigError) Error() string {
-	return fmt.Sprintf("TLS configuration is not permitted in FIPS mode: non-approved cipher suites %v, non-approved key exchange groups %v", e.cipherSuites, e.keyExchangeGroups)
-}
-
-func validateFIPSTLSOptions(cipherSuites []agentgateway.CipherSuite, keyExchangeGroups []agentgateway.KeyExchangeGroup) error {
+func validatePolicyFIPSTLSOptions(policy *agentgateway.AgentgatewayPolicy) *ConfigError {
 	if !fips140.Enabled() {
 		return nil
 	}
 
+	var problems []string
+	if frontend := policy.Spec.Frontend; frontend != nil && frontend.TLS != nil {
+		if err := validateFIPSTLSOptions(frontend.TLS.CipherSuites, frontend.TLS.KeyExchangeGroups); err != nil {
+			problems = append(problems, fmt.Sprintf("frontend.tls: %v", err))
+		}
+	}
+	if backend := policy.Spec.Backend; backend != nil && backend.TLS != nil {
+		if err := validateFIPSTLSOptions(nil, backend.TLS.KeyExchangeGroups); err != nil {
+			problems = append(problems, fmt.Sprintf("backend.tls: %v", err))
+		}
+	}
+	if len(problems) > 0 {
+		return &ConfigError{Reason: agentgateway.PolicyReasonInvalid, Message: strings.Join(problems, "; ")}
+	}
+	return nil
+}
+
+func validateFIPSTLSOptions(cipherSuites []agentgateway.CipherSuite, keyExchangeGroups []agentgateway.KeyExchangeGroup) error {
 	// Keep in sync with provider_with_options_validated in crates/agentgateway/src/crypto/tls.rs.
-	err := &fipsTLSConfigError{}
+	var badSuites []agentgateway.CipherSuite
+	var badGroups []agentgateway.KeyExchangeGroup
 	for _, suite := range cipherSuites {
 		switch suite {
 		case agentgateway.CipherSuiteTLS13_CHACHA20_POLY1305_SHA256,
 			agentgateway.CipherSuiteTLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
 			agentgateway.CipherSuiteTLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256:
-			err.cipherSuites = append(err.cipherSuites, suite)
+			badSuites = append(badSuites, suite)
 		}
 	}
 	for _, group := range keyExchangeGroups {
 		if group == agentgateway.KeyExchangeGroupX25519 {
-			err.keyExchangeGroups = append(err.keyExchangeGroups, group)
+			badGroups = append(badGroups, group)
 		}
 	}
-	if len(err.cipherSuites) == 0 && len(err.keyExchangeGroups) == 0 {
+	if len(badSuites) == 0 && len(badGroups) == 0 {
 		return nil
 	}
-	return err
+	return fmt.Errorf("TLS configuration is not permitted in FIPS mode: non-approved cipher suites %v, non-approved key exchange groups %v", badSuites, badGroups)
 }
 
 var (

@@ -335,8 +335,8 @@ func TranslateAgentgatewayPolicy(
 func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condition {
 	conds := map[string]*Condition{}
 	if err != nil {
-		_, fipsInvalid := errors.AsType[*fipsTLSConfigError](err)
-		if hasTranslatedPolicies && !fipsInvalid {
+		_, invalid := errors.AsType[*ConfigError](err)
+		if hasTranslatedPolicies && !invalid {
 			conds[agentgateway.PolicyConditionAccepted] = &Condition{
 				Status:  metav1.ConditionTrue,
 				Reason:  agentgateway.PolicyReasonPartiallyValid,
@@ -443,6 +443,9 @@ func TranslatePolicyToAgw(
 ) ([]*api.Policy, error) {
 	agwPolicies := make([]*api.Policy, 0)
 	var errs []error
+	if err := validatePolicyFIPSTLSOptions(policy); err != nil {
+		errs = append(errs, err)
+	}
 
 	frontend, err := translateFrontendPolicyToAgw(ctx, policy)
 	agwPolicies = append(agwPolicies, frontend...)
