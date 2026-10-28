@@ -1110,10 +1110,10 @@ mod responses {
 		),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		("stream", ALL_COMPLETIONS),
+		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		(
-			"stream_tool_empty_content",
+			"stream-empty_no_finish",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
 		),
 		(
@@ -1126,6 +1126,10 @@ mod responses {
 		),
 		(
 			"stream-vllm_reasoning",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream_tool_empty_content",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
 		),
 	];
@@ -1697,6 +1701,223 @@ mod responses {
 			})
 			.await;
 		}
+	}
+
+	async fn completions_stream_events(input: &str, provider: &str) -> Vec<Value> {
+		let body = agent_http::Body::from(input.to_string());
+		let log = StreamingUsageGuard::default();
+		let content = LogContentFields::default();
+		let body = match provider {
+			COMPLETIONS_TO_MESSAGES => {
+				conversion::completions::from_messages::translate_stream(body, 1024 * 1024, log, content)
+			},
+			COMPLETIONS_TO_RESPONSES => conversion::openai_compat::to_responses::translate_stream(
+				body,
+				1024 * 1024,
+				log,
+				content,
+				None,
+			),
+			_ => unreachable!(),
+		};
+		let output = body.collect().await.unwrap().to_bytes();
+		String::from_utf8(output.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.map(|data| serde_json::from_str(data).unwrap())
+			.collect()
+	}
+
+	fn event_types(events: &[Value]) -> Vec<&str> {
+		events
+			.iter()
+			.map(|event| event["type"].as_str().unwrap())
+			.collect()
+	}
+
+	#[tokio::test]
+	async fn completions_streams_fail_without_output_or_finish_reason() {
+		for (provider, want) in [
+			(COMPLETIONS_TO_MESSAGES, &["message_start", "error"][..]),
+			(
+				COMPLETIONS_TO_RESPONSES,
+				&[
+					"response.created",
+					"response.in_progress",
+					"response.failed",
+				][..],
+			),
+		] {
+			for input in [
+				include_str!("tests/response/completions/stream-empty_no_finish.json"),
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","content":""}}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[]}}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"","tool_calls":[]}}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				r#"data: {"id":"chunk","choices":[],"model":"m","usage":{"prompt_tokens":100,"completion_tokens":5,"total_tokens":105}}
+
+data: [DONE]
+
+"#,
+			] {
+				let events = completions_stream_events(input, provider).await;
+				assert_eq!(event_types(&events), want, "{provider}: {input}");
+			}
+			let events = completions_stream_events("data: [DONE]\n\n", provider).await;
+			assert_eq!(event_types(&events), [*want.last().unwrap()], "{provider}");
+		}
+	}
+
+	#[tokio::test]
+	async fn completions_streams_keep_finished_replies_and_content() {
+		fn completed(items: &[&'static str]) -> Vec<&'static str> {
+			let mut want = vec!["response.created", "response.in_progress"];
+			want.extend_from_slice(items);
+			want.push("response.completed");
+			want
+		}
+		let message_end = ["message_start", "message_delta", "message_stop"];
+		let message_content = [
+			"message_start",
+			"content_block_start",
+			"content_block_delta",
+			"content_block_stop",
+			"message_delta",
+			"message_stop",
+		];
+		let response_text = [
+			"response.output_item.added",
+			"response.content_part.added",
+			"response.output_text.delta",
+			"response.output_text.done",
+			"response.content_part.done",
+			"response.output_item.done",
+		];
+		let cases = [
+			// Usage triggers the early flush.
+			(
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":"stop"}],"model":"m","usage":{"prompt_tokens":4,"completion_tokens":0,"total_tokens":4}}
+
+data: [DONE]
+
+"#,
+				message_end.as_slice(),
+				completed(&["response.output_item.added", "response.output_item.done"]),
+			),
+			// [DONE] flushes the reply when usage is absent.
+			(
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":"stop"}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				message_end.as_slice(),
+				completed(&["response.output_item.added", "response.output_item.done"]),
+			),
+			// Text without a finish reason.
+			(
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"}}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				message_content.as_slice(),
+				completed(&response_text),
+			),
+			// Whitespace counts as text.
+			(
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","content":" "}}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				message_content.as_slice(),
+				completed(&response_text),
+			),
+			// Tool call without a finish reason.
+			(
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{}"}}]}}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				message_content.as_slice(),
+				completed(&[
+					"response.output_item.added",
+					"response.output_item.added",
+					"response.function_call_arguments.delta",
+					"response.function_call_arguments.done",
+					"response.output_item.done",
+					"response.output_item.done",
+				]),
+			),
+			// Reasoning without a finish reason.
+			(
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"Thinking."}}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				message_content.as_slice(),
+				completed(&[
+					"response.output_item.added",
+					"response.reasoning_text.delta",
+					"response.reasoning_text.done",
+					"response.output_item.done",
+					"response.output_item.added",
+					"response.output_item.done",
+				]),
+			),
+			// An empty tool list with an explicit finish.
+			(
+				r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[]},"finish_reason":"stop"}],"model":"m"}
+
+data: [DONE]
+
+"#,
+				message_end.as_slice(),
+				completed(&["response.output_item.added", "response.output_item.done"]),
+			),
+		];
+		for (input, messages, responses) in cases {
+			for (provider, want) in [
+				(COMPLETIONS_TO_MESSAGES, messages),
+				(COMPLETIONS_TO_RESPONSES, responses.as_slice()),
+			] {
+				let events = completions_stream_events(input, provider).await;
+				assert_eq!(event_types(&events), want, "{provider}: {input}");
+			}
+		}
+		// Messages carries the signature even when reasoning text is withheld. Responses has no
+		// place for it, so the reply is empty there and fails.
+		let signature_only = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","reasoning_signature":"sig"}}],"model":"m"}
+
+data: [DONE]
+
+"#;
+		let events = completions_stream_events(signature_only, COMPLETIONS_TO_MESSAGES).await;
+		assert_eq!(event_types(&events), message_content);
+		let events = completions_stream_events(signature_only, COMPLETIONS_TO_RESPONSES).await;
+		assert_eq!(
+			event_types(&events),
+			[
+				"response.created",
+				"response.in_progress",
+				"response.failed"
+			]
+		);
 	}
 
 	#[tokio::test]

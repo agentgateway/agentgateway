@@ -1965,7 +1965,10 @@ async fn llm_remote_ratelimit_response(#[case] check_requests: bool) {
 
 async fn assert_llm_remote_rate_limit_cost(
 	response_body: &[u8],
+	request_path: &str,
 	request_body: &[u8],
+	cost: &str,
+	expected_status: StatusCode,
 	expected_cost: u64,
 ) {
 	let (rate_limit_tx, mut rate_limit_rx) = mpsc::unbounded_channel();
@@ -1981,15 +1984,25 @@ async fn assert_llm_remote_rate_limit_cost(
 	let mock = body_mock(response_body).await;
 	let (_mock, mut bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider {
+		AIProvider::Custom(custom::Provider {
 			model_override: None,
-			moderation: None,
+			provider_override: None,
+			formats: vec![custom::ProviderFormatConfig {
+				format: custom::ProviderFormat::Completions,
+				path: None,
+			}],
 		}),
 		false,
 		"{}",
 	);
 	bind
 		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/messages": "messages",
+					"/v1/responses": "responses",
+				},
+			},
 			"remoteRateLimit": {
 				"domain": "llm",
 				"host": rate_limit.address.to_string(),
@@ -1999,14 +2012,20 @@ async fn assert_llm_remote_rate_limit_cost(
 						"value": "\"model\"",
 					}],
 					"type": "tokens",
-					"cost": "llm.outputTokens * uint(1000) + llm.inputTokens",
+					"cost": cost,
 				}],
 			},
 		}))
 		.await;
 
-	let res = send_request_body(io, Method::POST, "http://lo", request_body).await;
-	assert_eq!(res.status(), 200);
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{request_path}"),
+		request_body,
+	)
+	.await;
+	assert_eq!(res.status(), expected_status);
 	let _ = read_body_raw(res.into_body()).await;
 
 	let initial_request = recv_rate_limit_request(&mut rate_limit_rx).await;
@@ -2029,7 +2048,10 @@ async fn assert_llm_remote_rate_limit_cost(
 async fn llm_remote_rate_limit_cost_amends_response_tokens() {
 	assert_llm_remote_rate_limit_cost(
 		llm_body!("response/completions/basic.json"),
+		"/",
 		&completions_request_body(false),
+		"llm.outputTokens * uint(1000) + llm.inputTokens",
+		StatusCode::OK,
 		23017,
 	)
 	.await;
@@ -2039,8 +2061,34 @@ async fn llm_remote_rate_limit_cost_amends_response_tokens() {
 async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
 	assert_llm_remote_rate_limit_cost(
 		llm_body!("response/completions/stream.json"),
+		"/",
 		&completions_request_body(true),
+		"llm.outputTokens * uint(1000) + llm.inputTokens",
+		StatusCode::OK,
 		286018,
+	)
+	.await;
+}
+
+#[rstest::rstest]
+#[case::messages("/v1/messages", llm_body!("requests/messages/basic.json"))]
+#[case::responses("/v1/responses", llm_body!("requests/responses/basic.json"))]
+#[tokio::test]
+async fn llm_rejected_empty_completions_reply_amends_remote_rate_limit_cost(
+	#[case] path: &str,
+	#[case] request_body: &[u8],
+) {
+	let mut response: Value =
+		serde_json::from_slice(llm_body!("response/completions/basic.json")).unwrap();
+	response["choices"][0]["finish_reason"] = Value::Null;
+	response["choices"][0]["message"] = json!({"content": null, "role": "assistant"});
+	assert_llm_remote_rate_limit_cost(
+		&serde_json::to_vec(&response).unwrap(),
+		path,
+		request_body,
+		"response.code == 200 ? llm.outputTokens * uint(1000) + llm.inputTokens : uint(0)",
+		StatusCode::BAD_GATEWAY,
+		23017,
 	)
 	.await;
 }

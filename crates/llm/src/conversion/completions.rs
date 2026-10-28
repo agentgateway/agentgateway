@@ -9,6 +9,24 @@ use tracing::debug;
 
 use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
 
+/// The error for a Chat Completions reply with no output and no finish reason. It carries the
+/// reply's usage so the failed request is still logged and charged.
+pub(crate) fn empty_reply(
+	model: &str,
+	service_tier: Option<&str>,
+	usage: Option<&types::completions::typed::Usage>,
+) -> crate::AIError {
+	let mut response = crate::LLMResponse {
+		provider_model: Some(strng::new(model)),
+		service_tier: service_tier.map(Into::into),
+		..Default::default()
+	};
+	if let Some(usage) = usage {
+		usage.apply(&mut response);
+	}
+	crate::AIError::EmptyResponse(Some(Box::new(response)))
+}
+
 #[cfg(test)]
 #[path = "completions_tests.rs"]
 mod tests;
@@ -205,6 +223,19 @@ pub mod from_messages {
 			Some(completions::FinishReason::ToolCalls) => (messages::StopReason::ToolUse, false),
 			Some(completions::FinishReason::ContentFilter) => (messages::StopReason::Refusal, false),
 			Some(completions::FinishReason::FunctionCall) => (messages::StopReason::ToolUse, false),
+			// An empty reply needs a finish reason to count as a completed turn.
+			// Empty text blocks do not count as output.
+			None
+				if content
+					.iter()
+					.all(|block| matches!(block, messages::ContentBlock::Text(t) if t.text.is_empty())) =>
+			{
+				return Err(super::empty_reply(
+					&model,
+					service_tier.as_deref(),
+					usage.as_ref(),
+				));
+			},
 			None => (messages::StopReason::EndTurn, false),
 		};
 		// When the engine names the stop sequence that ended generation, the
@@ -217,20 +248,8 @@ pub mod from_messages {
 			stop_reason = messages::StopReason::StopSequence;
 		}
 
-		let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
-			u.prompt_tokens_details
-				.as_ref()
-				.and_then(|d| d.cache_write_tokens)
-				.or(u.cache_creation_input_tokens)
-				.map(|tokens| tokens as usize)
-		});
-		let cache_read_input_tokens = usage.as_ref().and_then(|u| {
-			u.prompt_tokens_details
-				.as_ref()
-				.and_then(|d| d.cached_tokens)
-				.or(u.cache_read_input_tokens)
-				.map(|tokens| tokens as usize)
-		});
+		let (cache_creation_input_tokens, cache_read_input_tokens) =
+			usage.as_ref().map(usage_cache_tokens).unwrap_or_default();
 		Ok(messages::MessagesResponse {
 			content,
 			stop_reason: Some(stop_reason),
@@ -286,6 +305,14 @@ pub mod from_messages {
 		thinking.into_iter().chain(std::iter::once(tool_use))
 	}
 
+	fn usage_cache_tokens(u: &completions::Usage) -> (Option<usize>, Option<usize>) {
+		let (write, read) = u.cache_tokens();
+		(
+			write.map(|tokens| tokens as usize),
+			read.map(|tokens| tokens as usize),
+		)
+	}
+
 	pub fn translate_stream(
 		b: Body,
 		buffer_limit: usize,
@@ -316,6 +343,7 @@ pub mod from_messages {
 			pending_stop_reason: Option<messages::StopReason>,
 			pending_stop_sequence: Option<String>,
 			pending_usage: Option<completions::Usage>,
+			failed: bool,
 		}
 
 		fn push_event(
@@ -512,20 +540,8 @@ pub mod from_messages {
 			close_text_block(state, events);
 			close_all_tool_blocks(state, events);
 
-			let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
-				u.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as usize)
-			});
-			let cache_read_input_tokens = usage.as_ref().and_then(|u| {
-				u.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens)
-					.or(u.cache_read_input_tokens)
-					.map(|tokens| tokens as usize)
-			});
+			let (cache_creation_input_tokens, cache_read_input_tokens) =
+				usage.as_ref().map(usage_cache_tokens).unwrap_or_default();
 			let (input_tokens, output_tokens) = usage
 				.as_ref()
 				.map(|u| {
@@ -558,18 +574,7 @@ pub mod from_messages {
 			state.sent_message_stop = true;
 
 			if let Some(usage) = usage {
-				log.update(|r| {
-					r.response.input_tokens = Some(usage.prompt_tokens as u64);
-					r.response.output_tokens = Some(usage.output_tokens() as u64);
-					r.response.total_tokens = Some(usage.total_tokens as u64);
-					r.response.reasoning_tokens = usage
-						.completion_tokens_details
-						.as_ref()
-						.and_then(|d| d.reasoning_tokens);
-					r.response.cache_creation_input_tokens =
-						cache_creation_input_tokens.map(|tokens| tokens as u64);
-					r.response.cached_input_tokens = cache_read_input_tokens.map(|tokens| tokens as u64);
-				});
+				usage.record(log);
 			}
 
 			if log_tool_calls
@@ -595,8 +600,37 @@ pub mod from_messages {
 			_,
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
+			if state.failed {
+				return events;
+			}
 			match evt {
 				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
+				// [DONE] can arrive with no content or finish reason, even before the first chunk.
+				// Send an error the client can retry unless message_stop already ended the reply.
+				SseJsonEvent::Done
+					if !state.sent_message_stop
+						&& state.pending_stop_reason.is_none()
+						&& state.next_block_index == 0 =>
+				{
+					tracing::warn!(
+						"chat completions stream ended without content or a finish reason; emitting error event"
+					);
+					state.failed = true;
+					if let Some(usage) = state.pending_usage.take() {
+						usage.record(&log);
+					}
+					log.update(|r| r.response.stream_error = Some(strng::new(crate::EMPTY_REPLY_ERROR)));
+					push_event(
+						&mut events,
+						messages::MessagesStreamEvent::Error {
+							error: messages::MessagesError {
+								r#type: "api_error".to_string(),
+								message: crate::EMPTY_REPLY_ERROR.to_string(),
+							},
+						},
+					);
+					return events;
+				},
 				SseJsonEvent::Done => {
 					flush_message_end(&mut state, &mut events, &log, true, log_content.tool_calls);
 					return events;

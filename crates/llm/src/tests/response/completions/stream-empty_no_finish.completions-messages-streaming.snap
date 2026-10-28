@@ -1,0 +1,21 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-empty_no_finish.json
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"chunk-empty","type":"message","role":"assistant","content":[],"model":"gemini-4-argon","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: error
+data: {"type":"error","error":{"type":"api_error","message":"upstream response ended without content or a finish reason"}}
+
+
+
+{
+  "input_tokens": 283710,
+  "output_tokens": 1423,
+  "total_tokens": 285133,
+  "reasoning_tokens": 1415,
+  "cached_input_tokens": 281661,
+  "provider_model": "gemini-4-argon",
+  "stream_error": "upstream response ended without content or a finish reason"
+}
