@@ -279,8 +279,8 @@ func TestFIPSTLSGuardrailInlinePolicies(t *testing.T) {
 	connection := agentgateway.BackendConnectionPolicy{
 		TLS: &agentgateway.BackendTLS{KeyExchangeGroups: []agentgateway.KeyExchangeGroup{agentgateway.KeyExchangeGroupX25519}},
 		Tunnel: &agentgateway.BackendTunnel{
-			PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{URL: new("http://proxy.example.com:8080")},
-			Mode:                  agentgateway.BackendTunnelModeConnect,
+			URL:  new("http://proxy.example.com:8080"),
+			Mode: agentgateway.BackendTunnelModeConnect,
 		},
 	}
 	ctx := backendTLSContext(t, nil, nil)
