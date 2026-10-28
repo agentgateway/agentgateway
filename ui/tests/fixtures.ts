@@ -1,12 +1,12 @@
 import type { Page, Route } from '@playwright/test';
 import { dump, load } from 'js-yaml';
 
-import { mcpSettingsFields } from '../../src/config';
-import type { DumpModel, StoresDump } from '../../src/gateway-admin';
+import { mcpSettingsFields } from '@/config';
+import type { DumpModel, StoresDump } from '@/gateway-admin';
 
 export type TestConfig = Record<string, unknown>;
 
-export function bareConfig(): TestConfig {
+export function unconfiguredConfig(): TestConfig {
 	return {
 		config: {
 			logging: {
@@ -14,14 +14,14 @@ export function bareConfig(): TestConfig {
 					url: 'sqlite:///tmp/gw-logs.db'
 				}
 			}
-		},
-		binds: []
+		}
 	};
 }
 
 export function emptyConfig(): TestConfig {
 	return {
-		...bareConfig(),
+		...unconfiguredConfig(),
+		binds: [],
 		llm: {
 			port: 4000,
 			models: [],
@@ -45,8 +45,7 @@ export function emptyConfig(): TestConfig {
 					exposeHeaders: ['Mcp-Session-Id']
 				}
 			}
-		},
-		binds: []
+		}
 	};
 }
 
@@ -625,7 +624,7 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 	});
 
 	await page.route('**/api/logs/analytics/summary', async route => {
-		const now = new Date();
+		const now = new Date('2025-01-01T00:00:00.000Z');
 		await json(route, {
 			timeRange: {
 				from: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
@@ -755,7 +754,7 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 	};
 }
 
-async function json(route: Route, body: unknown, headers: Record<string, string> = {}) {
+export async function json(route: Route, body: unknown, headers: Record<string, string> = {}) {
 	await route.fulfill({
 		status: 200,
 		contentType: 'application/json',
