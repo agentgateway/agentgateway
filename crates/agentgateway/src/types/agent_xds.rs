@@ -4884,6 +4884,8 @@ mod tests {
 
 	#[test]
 	fn test_backend_policy_from_proto_backend_tls_file_paths() {
+		use crate::http::backendtls::{BackendTLS, BackendTLSSource};
+
 		let key = rcgen::KeyPair::generate().unwrap();
 		let cert = rcgen::CertificateParams::new(vec!["localhost".to_string()])
 			.unwrap()
@@ -4896,39 +4898,55 @@ mod tests {
 		std::fs::write(&key_path, key.serialize_pem()).unwrap();
 		let path_str = |p: &std::path::Path| Some(p.to_str().unwrap().to_string());
 
-		let convert = |btls: proto::agent::backend_policy_spec::BackendTls| {
-			backend_policy_from_proto(
-				&proto::agent::BackendPolicySpec {
-					kind: Some(proto::agent::backend_policy_spec::Kind::BackendTls(btls)),
-				},
-				&mut Diagnostics::default(),
-			)
+		let convert =
+			|btls: proto::agent::backend_policy_spec::BackendTls| -> (BackendTLS, Diagnostics) {
+				let mut diagnostics = Diagnostics::default();
+				let policy = backend_policy_from_proto(
+					&proto::agent::BackendPolicySpec {
+						kind: Some(proto::agent::backend_policy_spec::Kind::BackendTls(btls)),
+					},
+					&mut diagnostics,
+				)
+				.expect("an invalid backend TLS policy is stored, not rejected");
+				let BackendTrafficPolicy::BackendTLS(tls) = policy else {
+					panic!("expected a BackendTLS policy");
+				};
+				(tls, diagnostics)
+			};
+		let valid = || proto::agent::backend_policy_spec::BackendTls {
+			cert_path: path_str(&cert_path),
+			key_path: path_str(&key_path),
+			..Default::default()
 		};
 
-		let policy = convert(proto::agent::backend_policy_spec::BackendTls {
-			cert_path: path_str(&cert_path),
-			key_path: path_str(&key_path),
-			..Default::default()
-		})
-		.unwrap();
-		assert!(matches!(policy, BackendTrafficPolicy::BackendTLS(_)));
+		http::backendtls::set_allowed_file_dirs(vec![dir.path().to_path_buf()]);
+		let (tls, diagnostics) = convert(valid());
+		assert!(matches!(tls.source, BackendTLSSource::Static(_)));
+		assert!(diagnostics.is_empty());
+		assert_eq!(tls.metadata.cert_path, path_str(&cert_path));
 
-		// Inline material cannot be combined with a path.
-		convert(proto::agent::backend_policy_spec::BackendTls {
-			cert: Some(b"inline-cert".to_vec()),
-			cert_path: path_str(&cert_path),
-			key_path: path_str(&key_path),
-			..Default::default()
-		})
-		.expect_err("inline cert and cert_path must be rejected");
+		let invalid = [
+			// Inline material cannot be combined with a path.
+			proto::agent::backend_policy_spec::BackendTls {
+				cert: Some(b"inline-cert".to_vec()),
+				..valid()
+			},
+			proto::agent::backend_policy_spec::BackendTls {
+				cert_path: path_str(&dir.path().join("does-not-exist.pem")),
+				..valid()
+			},
+		];
+		for btls in invalid {
+			let (tls, diagnostics) = convert(btls);
+			assert!(matches!(tls.source, BackendTLSSource::Invalid(_)));
+			assert_eq!(diagnostics.into_warnings().len(), 1);
+		}
 
-		// An unreadable file is rejected rather than silently dropping client auth.
-		convert(proto::agent::backend_policy_spec::BackendTls {
-			cert_path: path_str(&dir.path().join("does-not-exist.pem")),
-			key_path: path_str(&key_path),
-			..Default::default()
-		})
-		.expect_err("a missing cert_path must be rejected");
+		// Files outside the allowed directories fail closed.
+		http::backendtls::set_allowed_file_dirs(vec![]);
+		let (tls, diagnostics) = convert(valid());
+		assert!(matches!(tls.source, BackendTLSSource::Invalid(_)));
+		assert_eq!(diagnostics.into_warnings().len(), 1);
 	}
 
 	#[test]

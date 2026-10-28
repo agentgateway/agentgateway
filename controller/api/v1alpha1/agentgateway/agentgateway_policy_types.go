@@ -582,6 +582,7 @@ const (
 // +kubebuilder:validation:AtMostOneOf=verifySubjectAltNames;insecureSkipVerify
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
+// +kubebuilder:validation:XValidation:rule="!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef) || !self.mtlsCertificateRef.exists(r, has(r.kind) && r.kind == 'File')",message="caCertificateRefs may not be combined with a File mtlsCertificateRef; use file.root instead"
 // +kubebuilder:validation:XValidation:rule="!has(self.certificateSource) || self.certificateSource != 'SPIFFE' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))",message="certificateSource SPIFFE may not be combined with mtlsCertificateRef, caCertificateRefs, or insecureSkipVerify"
 type BackendTLS struct {
 	// Source for the gateway's client identity and trust roots (`Inline` default, or `SPIFFE`).
@@ -670,7 +671,8 @@ type BackendTLSCertificateRef struct {
 	// +optional
 	Kind string `json:"kind,omitempty"`
 
-	// Paths on the agentgateway pod's local filesystem. Required when `kind` is `File`.
+	// Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+	// gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
 	// +optional
 	File *BackendTLSFile `json:"file,omitempty"`
 }
