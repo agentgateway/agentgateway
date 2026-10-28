@@ -2620,7 +2620,7 @@ fn backend_policy_from_proto(
 		}),
 		Some(bps::Kind::BackendTls(btls)) => {
 			let mode = bps::backend_tls::VerificationMode::try_from(btls.verification)?;
-			let tls = http::backendtls::ResolvedBackendTLS {
+			let resolved = http::backendtls::ResolvedBackendTLS {
 				cert: btls.cert.clone(),
 				key: btls.key.clone(),
 				root: btls.root.clone(),
@@ -2640,9 +2640,19 @@ fn backend_policy_from_proto(
 				spiffe: bps::backend_tls::CertificateSource::try_from(btls.certificate_source)
 					.unwrap_or_default()
 					== bps::backend_tls::CertificateSource::Spiffe,
-			}
-			.try_into()
-			.map_err(|e| ProtoError::Generic(e.to_string()))?;
+			};
+			let metadata = http::backendtls::BackendTLSInfo::from_resolved(&resolved);
+			// A rejected policy must not leave the backend reachable in plaintext.
+			let tls = resolved.try_into().unwrap_or_else(|e| {
+				diagnostics.add_warning(format!(
+					"invalid backend TLS policy, requests to the backend will fail: {e}"
+				));
+				http::backendtls::BackendTLS {
+					hostname_override: None,
+					source: http::backendtls::BackendTLSSource::Invalid(strng::new(e.to_string())),
+					metadata,
+				}
+			});
 			BackendTrafficPolicy::BackendTLS(tls)
 		},
 		Some(bps::Kind::Auth(auth)) => {
@@ -6746,5 +6756,58 @@ mod tests {
 			spiffe.verify_sans,
 			vec!["spiffe://example.org/ns/default/sa/upstream".to_string()]
 		);
+	}
+
+	#[test]
+	fn backend_policy_from_proto_invalid_tls_fails_closed() {
+		use crate::http::backendtls::BackendTLSSource;
+		use crate::types::proto::agent::backend_policy_spec as bps;
+
+		let spec = proto::agent::BackendPolicySpec {
+			kind: Some(bps::Kind::BackendTls(bps::BackendTls {
+				certificate_source: bps::backend_tls::CertificateSource::Spiffe as i32,
+				verification: bps::backend_tls::VerificationMode::InsecureAll as i32,
+				..Default::default()
+			})),
+		};
+		let mut diagnostics = Diagnostics::default();
+		let policy = backend_policy_from_proto(&spec, &mut diagnostics)
+			.expect("an invalid backend TLS policy should still be stored");
+
+		let BackendTrafficPolicy::BackendTLS(bt) = policy else {
+			panic!("expected a BackendTLS policy");
+		};
+		assert!(matches!(bt.source, BackendTLSSource::Invalid(_)));
+		assert_eq!(diagnostics.into_warnings().len(), 1);
+	}
+
+	#[cfg(feature = "fips")]
+	#[test]
+	fn fips_backend_policy_from_proto_non_approved_group_fails_closed() {
+		use crate::http::backendtls::BackendTLSSource;
+		use crate::types::proto::agent::backend_policy_spec as bps;
+
+		let spec = proto::agent::BackendPolicySpec {
+			kind: Some(bps::Kind::BackendTls(bps::BackendTls {
+				verification: bps::backend_tls::VerificationMode::InsecureAll as i32,
+				key_exchange_groups: vec![proto::agent::tls_config::KeyExchangeGroup::X25519 as i32],
+				..Default::default()
+			})),
+		};
+		let mut diagnostics = Diagnostics::default();
+		let policy = backend_policy_from_proto(&spec, &mut diagnostics)
+			.expect("a non-approved backend TLS policy should still be stored");
+
+		let BackendTrafficPolicy::BackendTLS(bt) = policy else {
+			panic!("expected a BackendTLS policy");
+		};
+		let BackendTLSSource::Invalid(err) = bt.source else {
+			panic!("expected an invalid backend TLS source");
+		};
+		assert!(
+			err.contains("X25519"),
+			"error should name the group, got: {err}"
+		);
+		assert_eq!(diagnostics.into_warnings().len(), 1);
 	}
 }

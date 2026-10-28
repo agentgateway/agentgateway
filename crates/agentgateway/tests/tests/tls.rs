@@ -248,6 +248,34 @@ async fn tls_backend_connection() {
 }
 
 #[tokio::test]
+async fn tls_backend_invalid_does_not_connect() {
+	use agentgateway::http::backendtls::{BackendTLS, BackendTLSSource};
+
+	let mock = simple_mock().await;
+	let backend_tls = BackendTLS {
+		hostname_override: None,
+		source: BackendTLSSource::Invalid(strng::new("rejected")),
+		metadata: Default::default(),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![BackendTrafficPolicy::BackendTLS(backend_tls)],
+		})
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+
+	let res = send_http_version(&t, Version::HTTP_11).await;
+	assert_eq!(res.status(), 503);
+	assert_eq!(mock.received_requests().await.unwrap().len(), 0);
+}
+
+#[tokio::test]
 #[cfg(feature = "crypto-aws-lc")]
 async fn tls_backend_connection_alpn() {
 	let (mock, certs) = tls_mock().await;

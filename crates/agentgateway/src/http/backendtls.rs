@@ -76,6 +76,8 @@ pub enum BackendTLSSource {
 	/// Sourced from the SPIFFE Workload API at connection time (SVID rotates), resolved via
 	/// `SpiffeClient::client_config`. See `proxy::httpproxy::resolve_backend_tls`.
 	Spiffe(SpiffeBackendTLS),
+	/// The configured TLS could not be built. Connections fail rather than fall back to plaintext.
+	Invalid(Strng),
 }
 
 /// Parameters needed to build a SPIFFE-sourced upstream `ClientConfig` at connection time.

@@ -1903,6 +1903,9 @@ fn resolve_backend_tls(
 				peer_identity_mode: transport::tls::PeerIdentityMode::Spiffe,
 			})
 		},
+		BackendTLSSource::Invalid(err) => Err(ProxyError::Processing(anyhow!(
+			"backend TLS policy is invalid: {err}"
+		))),
 	}
 }
 
