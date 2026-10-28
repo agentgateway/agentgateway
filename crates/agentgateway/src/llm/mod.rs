@@ -8,11 +8,11 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 pub use agent_llm::tokenizer::{num_tokens, preload_tokenizers};
 pub use agent_llm::{
-	AIError, CacheTokenConvention, ChatFormat, ContentScope, DetectedOperation, InputFormat, LLMInfo,
-	LLMRequest, LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider,
-	ProviderState, RequestText, RequestType, ResponseText, ResponseType, RouteType,
-	SimpleChatCompletionMessage, TokenGapSummary, anthropic, conversion, copilot, custom, gemini,
-	logged_response_parsing, openai, types,
+	AIError, CacheTokenConvention, ChatFormat, ContentScope, DetectedEndpoint, DetectedOperation,
+	InputFormat, LLMInfo, LLMRequest, LLMRequestParams, LLMResponse, LogContentFields,
+	PromptCachingConfig, Provider, ProviderState, RequestText, RequestType, ResponseText,
+	ResponseType, RouteType, SimpleChatCompletionMessage, TokenGapSummary, anthropic, conversion,
+	copilot, custom, gemini, logged_response_parsing, openai, types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -1349,6 +1349,18 @@ impl AIProvider {
 		bedrock_endpoint: Option<bedrock::BedrockEndpoint>,
 	) -> anyhow::Result<()> {
 		if matches!(route_type, RouteType::Passthrough | RouteType::Detect) {
+			// Detect covers many endpoints (images, audio, ...), so a custom path override is found by
+			// the endpoint classified from the request rather than the route type.
+			if let AIProvider::Custom(provider) = self
+				&& let Some(InputFormat::Detect(DetectedEndpoint {
+					format: Some(format),
+					..
+				})) = llm_request.map(|l| l.input_format)
+				&& let Some(path) = provider.path_for(format)
+			{
+				http::modify_req_uri(req, |uri| Self::set_path_and_query(uri, path))?;
+				return Ok(());
+			}
 			if let Some(prefix) = path_prefix {
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
@@ -2252,7 +2264,7 @@ impl AIProvider {
 			.map(|v| v == headers::ContentType::json())
 			.unwrap_or_default();
 		let multipart_boundary = model_router::multipart_boundary(&hreq);
-		let operation = model_router::classify_operation(hreq.uri().path());
+		let endpoint = model_router::classify_detect(hreq.uri().path());
 		let (mut parts, mut managed_body) = hreq.into_parts();
 		let cached = managed_body.remove_extension::<json::ParsedJson>();
 		let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
@@ -2281,14 +2293,14 @@ impl AIProvider {
 				&& p.has_request_body_mutations()
 			{
 				serde_json::from_slice::<serde_json::Value>(bytes.as_ref())
-					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(None), err))
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(Default::default()), err))
 					.and_then(|value| {
 						record_body_model(&value);
 						p.unmarshal_request_value(value, log)
 					})
 			} else {
 				serde_json::from_slice(bytes.as_ref())
-					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(None), err))
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(Default::default()), err))
 			}
 			.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
 		} else if let Some(boundary) = multipart_boundary {
@@ -2337,7 +2349,7 @@ impl AIProvider {
 			.process_non_chat_request(
 				backend_info,
 				policies,
-				InputFormat::Detect(operation),
+				InputFormat::Detect(endpoint),
 				req,
 				parts,
 				managed_body,

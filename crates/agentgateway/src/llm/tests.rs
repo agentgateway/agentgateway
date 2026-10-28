@@ -2967,6 +2967,106 @@ fn setup_request_custom_detect_replaces_v1_with_path_prefix(
 	assert_eq!(req.uri().path(), expected_path);
 }
 
+const COMPLETIONS_BODY: &str = r#"{"model":"m","messages":[{"role":"user","content":"hi"}]}"#;
+const MESSAGES_BODY: &str =
+	r#"{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}"#;
+const DECISIONS_BODY: &str = r#"{"model":"m","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}],"questions":[{"type":"predicate","name":"q","instructions":"q?"}]}"#;
+const MODEL_BODY: &str = r#"{"model":"m"}"#;
+
+fn custom_with(formats: &[(custom::ProviderFormat, Option<&'static str>)]) -> AIProvider {
+	AIProvider::Custom(custom::Provider {
+		model_override: None,
+		provider_override: None,
+		formats: formats
+			.iter()
+			.map(|(format, path)| custom::ProviderFormatConfig {
+				format: *format,
+				path: path.map(strng::new),
+			})
+			.collect(),
+	})
+}
+
+/// How a custom provider handles each endpoint: the upstream path it forwards to, `local` when the
+/// gateway answers itself, or `rejected`.
+#[rstest::rstest]
+#[case::chat_unlisted_rejected(custom_with(&[(custom::ProviderFormat::Embeddings, None)]), "/v1/chat/completions", COMPLETIONS_BODY, "rejected")]
+#[case::chat_translates_to_listed(custom_with(&[(custom::ProviderFormat::Messages, None)]), "/v1/chat/completions", COMPLETIONS_BODY, "/base/messages")]
+#[case::chat_listed_path(custom_with(&[(custom::ProviderFormat::Completions, Some("/chat"))]), "/v1/chat/completions", COMPLETIONS_BODY, "/chat")]
+#[case::embeddings_unlisted_rejected(custom_with(&[(custom::ProviderFormat::Completions, None)]), "/v1/embeddings", r#"{"model":"m","input":"hi"}"#, "rejected")]
+#[case::rerank_listed_path(custom_with(&[(custom::ProviderFormat::Rerank, Some("/v2/rerank"))]), "/v1/rerank", r#"{"model":"m","query":"q","documents":["a"]}"#, "/v2/rerank")]
+#[case::decisions_translates_to_systemone(custom_with(&[(custom::ProviderFormat::SystemOne, None)]), "/v1/decisions", DECISIONS_BODY, "/base/systemone")]
+#[case::count_tokens_unlisted_is_local(custom_with(&[(custom::ProviderFormat::Messages, None)]), "/v1/messages/count_tokens", MESSAGES_BODY, "local")]
+#[case::detect_unlisted_forwards(custom_with(&[(custom::ProviderFormat::Completions, None)]), "/v1/audio/transcriptions", MODEL_BODY, "/base/audio/transcriptions")]
+#[case::detect_listed_path(custom_with(&[(custom::ProviderFormat::AudioSpeech, Some("/tts"))]), "/v1/audio/speech", MODEL_BODY, "/tts")]
+#[case::detect_unknown_path_forwards(custom_with(&[(custom::ProviderFormat::Completions, None)]), "/v1/videos", MODEL_BODY, "/base/videos")]
+#[case::deepinfra_images_outside_base(AIProvider::Custom(custom::ProviderPreset::Deepinfra.provider(None)), "/v1/images/generations", MODEL_BODY, "/v1/images/generations")]
+#[tokio::test]
+async fn custom_provider_endpoint_handling(
+	#[case] provider: AIProvider,
+	#[case] path: &str,
+	#[case] body: &'static str,
+	#[case] expected: &str,
+) {
+	let llm = NamedAIProvider {
+		name: strng::literal!("custom"),
+		provider,
+		provider_backend: None,
+		host_override: None,
+		path_override: None,
+		path_prefix: Some(strng::literal!("/base")),
+		tokenize: false,
+		inline_policies: vec![],
+	};
+	// Paths the model router does not recognize model a `routes: {"*": detect}` backend policy.
+	let route_type = model_router::classify_route(path).unwrap_or(RouteType::Detect);
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri(format!("https://example.com{path}"))
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(body))
+		.unwrap();
+	let result = crate::proxy::httpproxy::process_llm_request(
+		&llm,
+		route_type,
+		&openai_test_backend_info(),
+		None,
+		req,
+		&mut None,
+		None,
+	)
+	.await;
+	let outcome = match result {
+		Ok(RequestResult::Success {
+			mut request,
+			llm_request,
+			upstream_route_type,
+		}) => {
+			llm
+				.provider
+				.setup_request(
+					&mut request,
+					upstream_route_type,
+					Some(&llm_request),
+					None,
+					llm.path_prefix.as_deref(),
+					true,
+					None,
+					None,
+				)
+				.expect("setup_request should succeed");
+			request.uri().path().to_string()
+		},
+		Ok(RequestResult::DirectResponse(_)) => "local".to_string(),
+		Err(crate::proxy::ProxyError::AIRequest(AIError::UnsupportedConversion(_))) => {
+			"rejected".to_string()
+		},
+		Ok(_) => panic!("{path}: unexpected result"),
+		Err(err) => panic!("{path}: unexpected error: {err}"),
+	};
+	assert_eq!(outcome, expected);
+}
+
 #[test]
 fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 	let provider = AIProvider::OpenAI(openai::Provider {
