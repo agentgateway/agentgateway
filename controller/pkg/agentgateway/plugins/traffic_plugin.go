@@ -335,24 +335,31 @@ func TranslateAgentgatewayPolicy(
 func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condition {
 	conds := map[string]*Condition{}
 	if err != nil {
-		// If we produced some policies alongside errors, treat as partial validity
-		if hasTranslatedPolicies {
+		_, fipsInvalid := errors.AsType[*fipsTLSConfigError](err)
+		if hasTranslatedPolicies && !fipsInvalid {
 			conds[agentgateway.PolicyConditionAccepted] = &Condition{
 				Status:  metav1.ConditionTrue,
 				Reason:  agentgateway.PolicyReasonPartiallyValid,
 				Message: err.Error(),
 			}
 		} else {
-			// No policies produced and error present -> invalid
 			conds[agentgateway.PolicyConditionAccepted] = &Condition{
 				Status:  metav1.ConditionFalse,
 				Reason:  agentgateway.PolicyReasonInvalid,
 				Message: err.Error(),
 			}
-			conds[agentgateway.PolicyConditionAttached] = &Condition{
-				Status:  metav1.ConditionFalse,
-				Reason:  agentgateway.PolicyReasonPending,
-				Message: "Policy is not attached due to invalid status",
+			if hasTranslatedPolicies {
+				conds[agentgateway.PolicyConditionAttached] = &Condition{
+					Status:  metav1.ConditionTrue,
+					Reason:  agentgateway.PolicyReasonAttached,
+					Message: reporter.PolicyAttachedMsg,
+				}
+			} else {
+				conds[agentgateway.PolicyConditionAttached] = &Condition{
+					Status:  metav1.ConditionFalse,
+					Reason:  agentgateway.PolicyReasonPending,
+					Message: "Policy is not attached due to invalid status",
+				}
 			}
 		}
 	} else {

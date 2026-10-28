@@ -59,7 +59,7 @@ func translateFrontendPolicyToAgw(
 	}
 
 	if s := frontend.TLS; s != nil {
-		appendPolicy("tls")(translateFrontendTLS(policy, policyName), nil)
+		appendPolicy("tls")(translateFrontendTLS(policy, policyName))
 	}
 
 	if s := frontend.TCP; s != nil {
@@ -469,7 +469,7 @@ func quantityUint32(ka *agentgateway.ByteSize) *uint32 {
 	return ka.ClampedValue()
 }
 
-func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tls := policy.Spec.Frontend.TLS
 	spec := &api.FrontendPolicySpec_TLS{
 		HandshakeTimeout: durationToProto(tls.HandshakeTimeout),
@@ -550,7 +550,11 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 		"policy", policy.Name,
 		"agentgateway_policy", tlsPolicy.Name)
 
-	return tlsPolicy
+	err := validateFIPSTLSOptions(tls.CipherSuites, tls.KeyExchangeGroups)
+	if err != nil {
+		err = fmt.Errorf("frontend.tls: %w", err)
+	}
+	return tlsPolicy, err
 }
 
 func convertTLSKeyExchangeGroups(groups []agentgateway.KeyExchangeGroup) []api.TLSConfig_KeyExchangeGroup {
