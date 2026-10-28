@@ -369,7 +369,7 @@ function CustomProviderSettings(props: {
 						{props.help.field<CustomProvider>(
 							'CustomProvider',
 							'formats',
-							'Select each API shape this custom provider supports. Optional path overrides are appended to the base URL.'
+							'Select chat formats to translate requests into, or endpoints that need a path override. Unselected endpoints are forwarded as-is under the base URL.'
 						)}
 					</p>
 				</div>

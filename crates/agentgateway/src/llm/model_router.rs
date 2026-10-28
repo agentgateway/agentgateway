@@ -68,6 +68,8 @@ struct ServingEndpoint {
 	matcher: EndpointMatch,
 	route_type: Option<llm::RouteType>,
 	operation: Option<llm::DetectedOperation>,
+	/// The custom-provider format of a Detect endpoint, which may carry a path override.
+	format: Option<llm::custom::ProviderFormat>,
 	template: &'static str,
 }
 
@@ -75,44 +77,84 @@ struct ServingEndpoint {
 static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
 	use llm::DetectedOperation as Op;
 	use llm::RouteType::*;
+	use llm::custom::ProviderFormat as Format;
 	let mut endpoints = [
-		("/v1/models", Some(Models), None),
-		("/models", Some(Models), None),
+		("/v1/models", Some(Models), None, None),
+		("/models", Some(Models), None, None),
 		(
 			"/v1/messages/count_tokens",
 			Some(AnthropicTokenCount),
 			Some(Op::CountTokens),
+			None,
 		),
-		("/v1/chat/completions", Some(Completions), Some(Op::Chat)),
-		("/v1/messages", Some(Messages), Some(Op::Chat)),
-		("/v1/responses", Some(Responses), Some(Op::Chat)),
-		("/v1/responses/compact", Some(Detect), Some(Op::Compaction)),
-		("/v1/images/generations", Some(Detect), Some(Op::Image)),
-		("/v1/images/edits", Some(Detect), Some(Op::Image)),
-		("/v1/images/variations", Some(Detect), Some(Op::Image)),
+		("/v1/chat/completions", Some(Completions), Some(Op::Chat), None),
+		("/v1/messages", Some(Messages), Some(Op::Chat), None),
+		("/v1/responses", Some(Responses), Some(Op::Chat), None),
+		(
+			"/v1/responses/compact",
+			Some(Detect),
+			Some(Op::Compaction),
+			None,
+		),
+		(
+			"/v1/images/generations",
+			Some(Detect),
+			Some(Op::Image),
+			Some(Format::ImageGenerations),
+		),
+		(
+			"/v1/images/edits",
+			Some(Detect),
+			Some(Op::Image),
+			Some(Format::ImageEdits),
+		),
+		(
+			"/v1/images/variations",
+			Some(Detect),
+			Some(Op::Image),
+			Some(Format::ImageVariations),
+		),
 		(
 			"/v1/audio/transcriptions",
 			Some(Detect),
 			Some(Op::Transcription),
+			Some(Format::AudioTranscriptions),
 		),
 		(
 			"/v1/audio/translations",
 			Some(Detect),
 			Some(Op::Transcription),
+			Some(Format::AudioTranslations),
 		),
-		("/v1/audio/speech", Some(Detect), Some(Op::Speech)),
-		("/v1/ocr", Some(Detect), Some(Op::Ocr)),
-		("/v1/systemone", Some(SystemOne), Some(Op::Decisions)),
-		("/v1/decisions", Some(Decisions), Some(Op::Decisions)),
-		("/v1/embeddings", Some(Embeddings), Some(Op::Embeddings)),
-		("/v1/rerank", Some(Rerank), Some(Op::Rerank)),
-		("/v2/rerank", Some(Rerank), Some(Op::Rerank)),
+		(
+			"/v1/audio/speech",
+			Some(Detect),
+			Some(Op::Speech),
+			Some(Format::AudioSpeech),
+		),
+		("/v1/ocr", Some(Detect), Some(Op::Ocr), Some(Format::Ocr)),
+		(
+			"/v1/systemone",
+			Some(SystemOne),
+			Some(Op::Decisions),
+			None,
+		),
+		("/v1/decisions", Some(Decisions), Some(Op::Decisions), None),
+		(
+			"/v1/embeddings",
+			Some(Embeddings),
+			Some(Op::Embeddings),
+			None,
+		),
+		("/v1/rerank", Some(Rerank), Some(Op::Rerank), None),
+		("/v2/rerank", Some(Rerank), Some(Op::Rerank), None),
 	]
 	.into_iter()
-	.map(|(path, route_type, operation)| ServingEndpoint {
+	.map(|(path, route_type, operation, format)| ServingEndpoint {
 		matcher: EndpointMatch::Exact(strng::new(path)),
 		route_type,
 		operation,
+		format,
 		template: path,
 	})
 	.collect::<Vec<_>>();
@@ -132,6 +174,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
 			)).expect("valid Vertex model route regex")),
 			route_type: Some(route_type),
 			operation: Some(operation),
+			format: None,
 			template: "/${version}/projects/{project}/locations/{location}/publishers/{publisher}/models/{model}:${operation}",
 		});
 		if gemini {
@@ -144,6 +187,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
 				),
 				route_type: Some(route_type),
 				operation: Some(operation),
+				format: None,
 				template: "/${version}/models/{model}:${operation}",
 			});
 		}
@@ -157,6 +201,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
 			matcher: EndpointMatch::Regex(regex::Regex::new(pattern).expect("valid model route regex")),
 			route_type: Some(Models),
 			operation: None,
+			format: None,
 			template,
 		});
 	}
@@ -169,6 +214,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
 		),
 		route_type: Some(Detect),
 		operation: None,
+		format: None,
 		template: "/model/{model}/${operation}",
 	});
 	endpoints
@@ -204,10 +250,26 @@ pub fn classify_route(path: &str) -> Option<llm::RouteType> {
 	serving_endpoint(path).and_then(|endpoint| endpoint.route_type)
 }
 
-/// The operation a request path serves, independent of how it is routed (e.g. `passthrough: detect`
-/// on /v1/chat/completions is still chat).
-pub fn classify_operation(path: &str) -> Option<llm::DetectedOperation> {
-	serving_endpoint(path).and_then(|endpoint| endpoint.operation)
+/// The endpoint a Detect request path serves, independent of how it is routed (e.g.
+/// `passthrough: detect` on /v1/chat/completions is still chat). Backend `routes` match by suffix,
+/// so a path the serving table does not know, such as `/api/v1/audio/speech`, falls back to
+/// matching a Detect endpoint by its path after `/v1`.
+pub fn classify_detect(path: &str) -> llm::DetectedEndpoint {
+	serving_endpoint(path)
+		.or_else(|| {
+			SERVING_ENDPOINTS.iter().find(|endpoint| {
+				endpoint.format.is_some()
+					&& endpoint
+						.template
+						.strip_prefix("/v1")
+						.is_some_and(|suffix| path.ends_with(suffix))
+			})
+		})
+		.map(|endpoint| llm::DetectedEndpoint {
+			operation: endpoint.operation,
+			format: endpoint.format,
+		})
+		.unwrap_or_default()
 }
 
 #[apply(schema_ser_schema!)]

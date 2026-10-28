@@ -62,7 +62,7 @@ impl Request {
 
 impl RequestType for Request {
 	fn input_format() -> crate::InputFormat {
-		crate::InputFormat::Detect(None)
+		crate::InputFormat::Detect(Default::default())
 	}
 	fn supports_model(&self) -> bool {
 		false
@@ -96,7 +96,7 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			// We never tokenize these, so always empty
 			input_tokens: None,
-			input_format: InputFormat::Detect(None),
+			input_format: InputFormat::Detect(Default::default()),
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: match self {
 				Self::Multipart { model, .. } => model.as_deref().map(Into::into),
@@ -210,7 +210,7 @@ mod tests {
 	fn llm_request() -> LLMRequest {
 		LLMRequest {
 			input_tokens: None,
-			input_format: crate::InputFormat::Detect(None),
+			input_format: crate::InputFormat::Detect(Default::default()),
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new("unknown"),
 			provider: strng::new("aws.bedrock"),

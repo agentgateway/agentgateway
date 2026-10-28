@@ -9791,7 +9791,7 @@
           ]
         },
         "formats": {
-          "description": "Supported API payload formats and optional path overrides for this provider.",
+          "description": "How requests are sent to this provider, with optional per-endpoint path overrides. Formats form\nfamilies (chat: completions, messages, responses, generateContent; decisions: decisions,\nsystemOne; every other format stands alone). A request is forwarded as-is if its own format is\nlisted, or translated to a listed format of its family. Families with nothing listed are\nforwarded in the client's format at their default path, except Anthropic count_tokens, which is\nestimated locally unless `anthropicTokenCount` is listed.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ProviderFormatConfig"
@@ -9821,20 +9821,98 @@
       ]
     },
     "ProviderFormat": {
-      "description": "A custom provider's advertised upstream wire format.\n\nUnlike `InputFormat`, this describes what the backend accepts, not what the\nclient sent. Unlike `RouteType`, it is only for LLM payload endpoints that\ncan be converted or passed through; generic routes such as models,\npassthrough, and detect do not have a `ProviderFormat`.",
-      "type": "string",
-      "enum": [
-        "completions",
-        "messages",
-        "responses",
-        "embeddings",
-        "anthropicTokenCount",
-        "generateContent",
-        "geminiCountTokens",
-        "realtime",
-        "rerank",
-        "decisions",
-        "systemOne"
+      "description": "A custom provider's advertised upstream endpoint.\n\nUnlike `InputFormat`, this describes what the backend accepts, not what the\nclient sent. Unlike `RouteType`, it names individual LLM endpoints: the\nopaque (Detect) endpoints such as images and audio each have their own\nformat, while generic routes such as models and passthrough have none.",
+      "oneOf": [
+        {
+          "description": "OpenAI `/chat/completions`",
+          "type": "string",
+          "const": "completions"
+        },
+        {
+          "description": "Anthropic `/messages`",
+          "type": "string",
+          "const": "messages"
+        },
+        {
+          "description": "OpenAI `/responses`",
+          "type": "string",
+          "const": "responses"
+        },
+        {
+          "description": "OpenAI `/embeddings`",
+          "type": "string",
+          "const": "embeddings"
+        },
+        {
+          "description": "Anthropic `/messages/count_tokens`",
+          "type": "string",
+          "const": "anthropicTokenCount"
+        },
+        {
+          "description": "Gemini `models/{model}:generateContent` and `models/{model}:streamGenerateContent`",
+          "type": "string",
+          "const": "generateContent"
+        },
+        {
+          "description": "Gemini `models/{model}:countTokens`",
+          "type": "string",
+          "const": "geminiCountTokens"
+        },
+        {
+          "description": "OpenAI `/realtime` (websockets)",
+          "type": "string",
+          "const": "realtime"
+        },
+        {
+          "description": "Cohere `/rerank`",
+          "type": "string",
+          "const": "rerank"
+        },
+        {
+          "description": "OpenAI `/decisions`",
+          "type": "string",
+          "const": "decisions"
+        },
+        {
+          "description": "TypeSafe `/systemone`",
+          "type": "string",
+          "const": "systemOne"
+        },
+        {
+          "description": "OpenAI `/images/generations`",
+          "type": "string",
+          "const": "imageGenerations"
+        },
+        {
+          "description": "OpenAI `/images/edits`",
+          "type": "string",
+          "const": "imageEdits"
+        },
+        {
+          "description": "OpenAI `/images/variations`",
+          "type": "string",
+          "const": "imageVariations"
+        },
+        {
+          "description": "OpenAI `/audio/transcriptions`",
+          "type": "string",
+          "const": "audioTranscriptions"
+        },
+        {
+          "description": "OpenAI `/audio/translations`",
+          "type": "string",
+          "const": "audioTranslations"
+        },
+        {
+          "description": "OpenAI `/audio/speech`",
+          "type": "string",
+          "const": "audioSpeech"
+        },
+        {
+          "description": "Mistral `/ocr`",
+          "type": "string",
+          "const": "ocr"
+        }
       ]
     },
     "LocalBackendPolicies": {

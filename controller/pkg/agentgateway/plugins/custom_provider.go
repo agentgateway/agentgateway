@@ -49,6 +49,20 @@ func translateCustomProviderFormat(format agentgateway.ProviderFormat) (api.AIBa
 		return api.AIBackend_DECISIONS, nil
 	case agentgateway.ProviderFormatSystemOne:
 		return api.AIBackend_SYSTEM_ONE, nil
+	case agentgateway.ProviderFormatImageGenerations:
+		return api.AIBackend_IMAGE_GENERATIONS, nil
+	case agentgateway.ProviderFormatImageEdits:
+		return api.AIBackend_IMAGE_EDITS, nil
+	case agentgateway.ProviderFormatImageVariations:
+		return api.AIBackend_IMAGE_VARIATIONS, nil
+	case agentgateway.ProviderFormatAudioTranscriptions:
+		return api.AIBackend_AUDIO_TRANSCRIPTIONS, nil
+	case agentgateway.ProviderFormatAudioTranslations:
+		return api.AIBackend_AUDIO_TRANSLATIONS, nil
+	case agentgateway.ProviderFormatAudioSpeech:
+		return api.AIBackend_AUDIO_SPEECH, nil
+	case agentgateway.ProviderFormatOCR:
+		return api.AIBackend_OCR, nil
 	default:
 		return api.AIBackend_PROVIDER_FORMAT_UNSPECIFIED, fmt.Errorf("unsupported custom provider format %q", format)
 	}

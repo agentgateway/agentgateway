@@ -2421,7 +2421,7 @@ fn resolve_llm_route_type(
 /// Kept out of `make_backend_call`: in debug builds each boxed provider future here takes several
 /// KB of the poll frame, and `make_backend_call` stays on the stack through nested backend calls
 /// (e.g. OAuth token exchange).
-async fn process_llm_request(
+pub(crate) async fn process_llm_request(
 	llm: &llm::NamedAIProvider,
 	route_type: RouteType,
 	backend_info: &auth::BackendInfo,

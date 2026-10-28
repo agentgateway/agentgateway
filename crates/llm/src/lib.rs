@@ -190,9 +190,8 @@ pub enum InputFormat {
 	Realtime,
 	/// Anthropic-shaped /v1/messages/count_tokens body
 	CountTokens,
-	/// Forwarded as-is, with usage inspected from the response. The operation is what the model
-	/// router recognizes the request path as, if anything.
-	Detect(Option<DetectedOperation>),
+	/// Forwarded as-is, with usage inspected from the response.
+	Detect(DetectedEndpoint),
 	Rerank,
 	Decisions,
 	SystemOne,
@@ -229,6 +228,14 @@ impl InputFormat {
 			InputFormat::Rerank => false,
 		}
 	}
+}
+
+/// What the model router recognizes a Detect request path as, if anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
+pub struct DetectedEndpoint {
+	pub operation: Option<DetectedOperation>,
+	/// The custom-provider format of the endpoint, which may carry a path override.
+	pub format: Option<custom::ProviderFormat>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]

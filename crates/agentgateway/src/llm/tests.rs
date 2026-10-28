@@ -451,29 +451,6 @@ async fn custom_provider_completions_inbound_renders_native_gemini() {
 }
 
 #[test]
-fn custom_provider_declaring_gemini_count_tokens_renders_passthrough() {
-	// countTokens has no cross-provider conversion, so the render gate must accept exactly
-	// the providers that speak it natively, including a custom provider declaring it.
-	let req: types::gemini::CountTokensRequest =
-		serde_json::from_value(json!({"contents": [{"role": "user", "parts": [{"text": "hi"}]}]}))
-			.unwrap();
-
-	let provider = custom_provider(custom::ProviderFormat::GeminiCountTokens);
-	let body = provider
-		.render_gemini_count_tokens_request(&req, "gemini-2.5-flash")
-		.expect("declared format renders passthrough");
-	let json: Value = serde_json::from_slice(&body).unwrap();
-	assert!(json.get("contents").is_some(), "{json}");
-
-	let undeclared = custom_provider(custom::ProviderFormat::Completions);
-	assert!(
-		undeclared
-			.render_gemini_count_tokens_request(&req, "gemini-2.5-flash")
-			.is_err()
-	);
-}
-
-#[test]
 fn gemini_render_is_passthrough_with_unknown_fields() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
@@ -3003,6 +2980,111 @@ fn setup_request_custom_detect_replaces_v1_with_path_prefix(
 	.expect("setup_request should succeed");
 
 	assert_eq!(req.uri().path(), expected_path);
+}
+
+const COMPLETIONS_BODY: &str = r#"{"model":"m","messages":[{"role":"user","content":"hi"}]}"#;
+const MESSAGES_BODY: &str =
+	r#"{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}"#;
+const GEMINI_BODY: &str = r#"{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}"#;
+const DECISIONS_BODY: &str = r#"{"model":"m","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}],"questions":[{"type":"predicate","name":"q","instructions":"q?"}]}"#;
+const MODEL_BODY: &str = r#"{"model":"m"}"#;
+
+fn custom_with(formats: &[(custom::ProviderFormat, Option<&'static str>)]) -> AIProvider {
+	AIProvider::Custom(custom::Provider {
+		model_override: None,
+		provider_override: None,
+		formats: formats
+			.iter()
+			.map(|(format, path)| custom::ProviderFormatConfig {
+				format: *format,
+				path: path.map(strng::new),
+			})
+			.collect(),
+	})
+}
+
+/// How a custom provider handles each endpoint: the upstream path it forwards to, or `None` when
+/// the gateway answers locally.
+#[rstest::rstest]
+#[case::chat_unlisted_forwards(custom_with(&[]), "/v1/chat/completions", COMPLETIONS_BODY, Some("/base/chat/completions"))]
+#[case::messages_unlisted_forwards(custom_with(&[]), "/v1/messages", MESSAGES_BODY, Some("/base/messages"))]
+#[case::chat_translates_to_listed(custom_with(&[(custom::ProviderFormat::Messages, None)]), "/v1/chat/completions", COMPLETIONS_BODY, Some("/base/messages"))]
+#[case::chat_listed_path(custom_with(&[(custom::ProviderFormat::Completions, Some("/chat"))]), "/v1/chat/completions", COMPLETIONS_BODY, Some("/chat"))]
+#[case::gemini_unlisted_forwards(custom_with(&[]), "/v1beta/models/gemini-x:generateContent", GEMINI_BODY, Some("/base/v1beta/models/gemini-x:generateContent"))]
+#[case::embeddings_unlisted_forwards(custom_with(&[]), "/v1/embeddings", r#"{"model":"m","input":"hi"}"#, Some("/base/embeddings"))]
+#[case::rerank_unlisted_forwards(custom_with(&[]), "/v1/rerank", r#"{"model":"m","query":"q","documents":["a"]}"#, Some("/base/rerank"))]
+#[case::rerank_listed_path(custom_with(&[(custom::ProviderFormat::Rerank, Some("/v2/rerank"))]), "/v1/rerank", r#"{"model":"m","query":"q","documents":["a"]}"#, Some("/v2/rerank"))]
+#[case::decisions_unlisted_forwards(custom_with(&[]), "/v1/decisions", DECISIONS_BODY, Some("/base/decisions"))]
+#[case::decisions_translates_to_systemone(custom_with(&[(custom::ProviderFormat::SystemOne, None)]), "/v1/decisions", DECISIONS_BODY, Some("/base/systemone"))]
+#[case::count_tokens_unlisted_is_local(custom_with(&[]), "/v1/messages/count_tokens", MESSAGES_BODY, None)]
+#[case::count_tokens_listed_forwards(custom_with(&[(custom::ProviderFormat::AnthropicTokenCount, None)]), "/v1/messages/count_tokens", MESSAGES_BODY, Some("/base/messages/count_tokens"))]
+#[case::gemini_count_tokens_unlisted_forwards(custom_with(&[]), "/v1beta/models/gemini-x:countTokens", GEMINI_BODY, Some("/base/v1beta/models/gemini-x:countTokens"))]
+#[case::detect_unlisted_forwards(custom_with(&[]), "/v1/audio/transcriptions", MODEL_BODY, Some("/base/audio/transcriptions"))]
+#[case::detect_listed_path(custom_with(&[(custom::ProviderFormat::AudioSpeech, Some("/tts"))]), "/v1/audio/speech", MODEL_BODY, Some("/tts"))]
+#[case::detect_listed_path_matches_suffix(custom_with(&[(custom::ProviderFormat::AudioSpeech, Some("/tts"))]), "/api/v1/audio/speech", MODEL_BODY, Some("/tts"))]
+#[case::detect_other_format_path_unused(custom_with(&[(custom::ProviderFormat::AudioSpeech, Some("/tts"))]), "/v1/audio/translations", MODEL_BODY, Some("/base/audio/translations"))]
+#[case::deepinfra_images_outside_base(AIProvider::Custom(custom::ProviderPreset::Deepinfra.provider(None)), "/v1/images/generations", MODEL_BODY, Some("/v1/images/generations"))]
+#[tokio::test]
+async fn custom_provider_endpoint_handling(
+	#[case] provider: AIProvider,
+	#[case] path: &str,
+	#[case] body: &'static str,
+	#[case] expected: Option<&str>,
+) {
+	let llm = NamedAIProvider {
+		name: strng::literal!("custom"),
+		provider,
+		provider_backend: None,
+		host_override: None,
+		path_override: None,
+		path_prefix: Some(strng::literal!("/base")),
+		tokenize: false,
+		inline_policies: vec![],
+	};
+	// Paths the model router does not recognize model a `routes: {"*": detect}` backend policy.
+	let route_type = model_router::classify_route(path).unwrap_or(RouteType::Detect);
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri(format!("https://example.com{path}"))
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(body))
+		.unwrap();
+	let result = crate::proxy::httpproxy::process_llm_request(
+		&llm,
+		route_type,
+		&openai_test_backend_info(),
+		None,
+		req,
+		&mut None,
+		None,
+	)
+	.await
+	.unwrap_or_else(|err| panic!("{path} should be handled: {err}"));
+	let forwarded = match result {
+		RequestResult::Success {
+			mut request,
+			llm_request,
+			upstream_route_type,
+		} => {
+			llm
+				.provider
+				.setup_request(
+					&mut request,
+					upstream_route_type,
+					Some(&llm_request),
+					None,
+					llm.path_prefix.as_deref(),
+					true,
+					None,
+					None,
+				)
+				.expect("setup_request should succeed");
+			Some(request.uri().path().to_string())
+		},
+		RequestResult::Rejected(_) => None,
+		RequestResult::GuardrailRejected { .. } => panic!("unexpected guardrail rejection"),
+	};
+	assert_eq!(forwarded.as_deref(), expected);
 }
 
 #[test]

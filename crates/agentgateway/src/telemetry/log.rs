@@ -34,7 +34,7 @@ use crate::http::substrate::ateattr;
 use crate::http::substrate::ateattr::{ResumeDisposition, RouteOutcome};
 use crate::http::{Request, health};
 use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
-use crate::llm::{DetectedOperation, InputFormat};
+use crate::llm::{DetectedEndpoint, DetectedOperation, InputFormat};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
@@ -1419,7 +1419,10 @@ fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 		InputFormat::Rerank => "rerank",
 		InputFormat::Decisions | InputFormat::SystemOne => "decisions",
 		InputFormat::CountTokens | InputFormat::GeminiCountTokens => "count_tokens",
-		InputFormat::Detect(Some(operation)) => match operation {
+		InputFormat::Detect(DetectedEndpoint {
+			operation: Some(operation),
+			..
+		}) => match operation {
 			DetectedOperation::Chat => "chat",
 			DetectedOperation::GenerateContent => "generate_content",
 			DetectedOperation::Embeddings => "embeddings",
@@ -1433,7 +1436,9 @@ fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 			DetectedOperation::Speech => "speech",
 		},
 		// The path is not a known serving endpoint; do not assume it is chat.
-		InputFormat::Detect(None) => "unknown",
+		InputFormat::Detect(DetectedEndpoint {
+			operation: None, ..
+		}) => "unknown",
 	}
 }
 
@@ -3402,8 +3407,14 @@ mod tests {
 			(InputFormat::Decisions, "decisions"),
 			(InputFormat::CountTokens, "count_tokens"),
 			(InputFormat::GeminiCountTokens, "count_tokens"),
-			(InputFormat::Detect(None), "unknown"),
-			(InputFormat::Detect(Some(DetectedOperation::Chat)), "chat"),
+			(InputFormat::Detect(DetectedEndpoint::default()), "unknown"),
+			(
+				InputFormat::Detect(DetectedEndpoint {
+					operation: Some(DetectedOperation::Chat),
+					format: None,
+				}),
+				"chat",
+			),
 		] {
 			for streaming in [false, true] {
 				for has_response in [false, true] {

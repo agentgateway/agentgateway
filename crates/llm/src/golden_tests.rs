@@ -865,7 +865,7 @@ mod responses {
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
 				input_tokens: None,
-				input_format: InputFormat::Detect(None),
+				input_format: InputFormat::Detect(Default::default()),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
 				provider: Default::default(),
@@ -1869,7 +1869,7 @@ data: {"type":"message_stop"}
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
 				input_tokens: None,
-				input_format: InputFormat::Detect(None),
+				input_format: InputFormat::Detect(Default::default()),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
 				provider: Default::default(),
@@ -1904,7 +1904,7 @@ data: {"type":"message_stop"}
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
 				input_tokens: None,
-				input_format: InputFormat::Detect(None),
+				input_format: InputFormat::Detect(Default::default()),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
 				provider: Default::default(),

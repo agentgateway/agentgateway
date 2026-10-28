@@ -314,8 +314,14 @@ spec:
                                         == 0) && (!has(self.kind) || self.kind ==
                                         ''Service'')) ? has(self.port) : true'
                                   formats:
-                                    description: Provider-native API formats this
-                                      provider supports.
+                                    description: |-
+                                      How requests are sent to this provider, with optional per-endpoint path
+                                      overrides. Formats form families (chat: Completions, Messages, Responses;
+                                      decisions: Decisions, SystemOne; every other format stands alone). A request
+                                      is forwarded as-is if its own format is listed, or translated to a listed
+                                      format of its family. Families with nothing listed are forwarded in the
+                                      client's format at their default path, except Anthropic count_tokens, which
+                                      is estimated locally unless `AnthropicTokenCount` is listed.
                                     items:
                                       description: Provider-native LLM API format
                                         settings.
@@ -331,10 +337,17 @@ spec:
                                           description: Provider-native API format.
                                           enum:
                                           - AnthropicTokenCount
+                                          - AudioSpeech
+                                          - AudioTranscriptions
+                                          - AudioTranslations
                                           - Completions
                                           - Decisions
                                           - Embeddings
+                                          - ImageEdits
+                                          - ImageGenerations
+                                          - ImageVariations
                                           - Messages
+                                          - OCR
                                           - Realtime
                                           - Rerank
                                           - Responses
@@ -346,7 +359,7 @@ spec:
                                       x-kubernetes-validations:
                                       - message: path must start with /
                                         rule: '!has(self.path) || self.path.startsWith(''/'')'
-                                    maxItems: 6
+                                    maxItems: 16
                                     minItems: 1
                                     type: array
                                     x-kubernetes-list-map-keys:
@@ -7564,8 +7577,14 @@ spec:
                                 && (!has(self.kind) || self.kind == ''Service''))
                                 ? has(self.port) : true'
                           formats:
-                            description: Provider-native API formats this provider
-                              supports.
+                            description: |-
+                              How requests are sent to this provider, with optional per-endpoint path
+                              overrides. Formats form families (chat: Completions, Messages, Responses;
+                              decisions: Decisions, SystemOne; every other format stands alone). A request
+                              is forwarded as-is if its own format is listed, or translated to a listed
+                              format of its family. Families with nothing listed are forwarded in the
+                              client's format at their default path, except Anthropic count_tokens, which
+                              is estimated locally unless `AnthropicTokenCount` is listed.
                             items:
                               description: Provider-native LLM API format settings.
                               properties:
@@ -7580,10 +7599,17 @@ spec:
                                   description: Provider-native API format.
                                   enum:
                                   - AnthropicTokenCount
+                                  - AudioSpeech
+                                  - AudioTranscriptions
+                                  - AudioTranslations
                                   - Completions
                                   - Decisions
                                   - Embeddings
+                                  - ImageEdits
+                                  - ImageGenerations
+                                  - ImageVariations
                                   - Messages
+                                  - OCR
                                   - Realtime
                                   - Rerank
                                   - Responses
@@ -7595,7 +7621,7 @@ spec:
                               x-kubernetes-validations:
                               - message: path must start with /
                                 rule: '!has(self.path) || self.path.startsWith(''/'')'
-                            maxItems: 6
+                            maxItems: 16
                             minItems: 1
                             type: array
                             x-kubernetes-list-map-keys:

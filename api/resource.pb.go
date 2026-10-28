@@ -2580,21 +2580,35 @@ const (
 	AIBackend_RERANK                      AIBackend_ProviderFormat = 7
 	AIBackend_DECISIONS                   AIBackend_ProviderFormat = 8
 	AIBackend_SYSTEM_ONE                  AIBackend_ProviderFormat = 9
+	AIBackend_IMAGE_GENERATIONS           AIBackend_ProviderFormat = 10
+	AIBackend_IMAGE_EDITS                 AIBackend_ProviderFormat = 11
+	AIBackend_IMAGE_VARIATIONS            AIBackend_ProviderFormat = 12
+	AIBackend_AUDIO_TRANSCRIPTIONS        AIBackend_ProviderFormat = 13
+	AIBackend_AUDIO_TRANSLATIONS          AIBackend_ProviderFormat = 14
+	AIBackend_AUDIO_SPEECH                AIBackend_ProviderFormat = 15
+	AIBackend_OCR                         AIBackend_ProviderFormat = 16
 )
 
 // Enum value maps for AIBackend_ProviderFormat.
 var (
 	AIBackend_ProviderFormat_name = map[int32]string{
-		0: "PROVIDER_FORMAT_UNSPECIFIED",
-		1: "COMPLETIONS",
-		2: "MESSAGES",
-		3: "RESPONSES",
-		4: "EMBEDDINGS",
-		5: "ANTHROPIC_TOKEN_COUNT",
-		6: "REALTIME",
-		7: "RERANK",
-		8: "DECISIONS",
-		9: "SYSTEM_ONE",
+		0:  "PROVIDER_FORMAT_UNSPECIFIED",
+		1:  "COMPLETIONS",
+		2:  "MESSAGES",
+		3:  "RESPONSES",
+		4:  "EMBEDDINGS",
+		5:  "ANTHROPIC_TOKEN_COUNT",
+		6:  "REALTIME",
+		7:  "RERANK",
+		8:  "DECISIONS",
+		9:  "SYSTEM_ONE",
+		10: "IMAGE_GENERATIONS",
+		11: "IMAGE_EDITS",
+		12: "IMAGE_VARIATIONS",
+		13: "AUDIO_TRANSCRIPTIONS",
+		14: "AUDIO_TRANSLATIONS",
+		15: "AUDIO_SPEECH",
+		16: "OCR",
 	}
 	AIBackend_ProviderFormat_value = map[string]int32{
 		"PROVIDER_FORMAT_UNSPECIFIED": 0,
@@ -2607,6 +2621,13 @@ var (
 		"RERANK":                      7,
 		"DECISIONS":                   8,
 		"SYSTEM_ONE":                  9,
+		"IMAGE_GENERATIONS":           10,
+		"IMAGE_EDITS":                 11,
+		"IMAGE_VARIATIONS":            12,
+		"AUDIO_TRANSCRIPTIONS":        13,
+		"AUDIO_TRANSLATIONS":          14,
+		"AUDIO_SPEECH":                15,
+		"OCR":                         16,
 	}
 )
 
@@ -19786,7 +19807,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\xee#\n" +
+	"_qualifier\"\xf9$\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -19901,7 +19922,7 @@ const file_resource_proto_rawDesc = "" +
 	",BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED\x10\x03\"-\n" +
 	"\x11AzureResourceType\x12\v\n" +
 	"\aOPEN_AI\x10\x00\x12\v\n" +
-	"\aFOUNDRY\x10\x01\"\xc3\x01\n" +
+	"\aFOUNDRY\x10\x01\"\xce\x02\n" +
 	"\x0eProviderFormat\x12\x1f\n" +
 	"\x1bPROVIDER_FORMAT_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vCOMPLETIONS\x10\x01\x12\f\n" +
@@ -19915,7 +19936,15 @@ const file_resource_proto_rawDesc = "" +
 	"\x06RERANK\x10\a\x12\r\n" +
 	"\tDECISIONS\x10\b\x12\x0e\n" +
 	"\n" +
-	"SYSTEM_ONE\x10\t\"\x89\x04\n" +
+	"SYSTEM_ONE\x10\t\x12\x15\n" +
+	"\x11IMAGE_GENERATIONS\x10\n" +
+	"\x12\x0f\n" +
+	"\vIMAGE_EDITS\x10\v\x12\x14\n" +
+	"\x10IMAGE_VARIATIONS\x10\f\x12\x18\n" +
+	"\x14AUDIO_TRANSCRIPTIONS\x10\r\x12\x16\n" +
+	"\x12AUDIO_TRANSLATIONS\x10\x0e\x12\x10\n" +
+	"\fAUDIO_SPEECH\x10\x0f\x12\a\n" +
+	"\x03OCR\x10\x10\"\x89\x04\n" +
 	"\x0eProviderPreset\x12\x1f\n" +
 	"\x1bPROVIDER_PRESET_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PROVIDER_PRESET_COHERE\x10\x01\x12\x1a\n" +

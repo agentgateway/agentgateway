@@ -8,7 +8,8 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 pub use agent_llm::tokenizer::{num_tokens, preload_tokenizers};
 pub use agent_llm::{
-	AIError, CacheTokenConvention, ChatFormat, ContentScope, DetectedOperation, InputFormat, LLMInfo,
+	AIError, CacheTokenConvention, ChatFormat, ContentScope, DetectedEndpoint, DetectedOperation,
+	InputFormat, LLMInfo,
 	LLMRequest, LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider,
 	ProviderState, RequestType, ResponseText, ResponseType, RouteType, SimpleChatCompletionMessage,
 	TokenGapSummary, anthropic, conversion, copilot, custom, gemini, logged_response_parsing, openai,
@@ -1166,7 +1167,18 @@ impl AIProvider {
 		request_model: &str,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<&'static ChatTranslation, AIError> {
-		let supported = self.supported_chat_formats(request_model, catalog);
+		let mut supported = self.supported_chat_formats(request_model, catalog);
+		// Listed chat formats are a custom provider's chat family; with none listed, chat requests are
+		// forwarded in the client's own format.
+		if supported.is_empty() && matches!(self, AIProvider::Custom(_)) {
+			supported.extend(match input_format {
+				InputFormat::Completions => Some(ChatFormat::OpenAICompletions),
+				InputFormat::Messages => Some(ChatFormat::AnthropicMessages),
+				InputFormat::Responses => Some(ChatFormat::OpenAIResponses),
+				InputFormat::Gemini => Some(ChatFormat::VertexGemini),
+				_ => None,
+			});
+		}
 		CHAT_TRANSLATIONS
 			.iter()
 			.find(|translation| {
@@ -1190,31 +1202,27 @@ impl AIProvider {
 		request_model: &str,
 	) -> Option<custom::ProviderFormat> {
 		use custom::ProviderFormat::*;
-		let format = match input_format {
-			InputFormat::Embeddings => Embeddings,
-			InputFormat::Realtime => Realtime,
-			InputFormat::CountTokens => AnthropicTokenCount,
-			InputFormat::GeminiCountTokens => GeminiCountTokens,
-			InputFormat::Rerank => Rerank,
-			InputFormat::Decisions => {
-				return [Decisions, SystemOne]
-					.into_iter()
-					.find(|f| self.supports_format(*f, request_model));
-			},
-			InputFormat::SystemOne => {
-				return [SystemOne, Decisions]
-					.into_iter()
-					.find(|f| self.supports_format(*f, request_model));
-			},
+		let (format, alternative) = match input_format {
+			InputFormat::Embeddings => (Embeddings, None),
+			InputFormat::Realtime => (Realtime, None),
+			InputFormat::CountTokens => (AnthropicTokenCount, None),
+			InputFormat::GeminiCountTokens => (GeminiCountTokens, None),
+			InputFormat::Rerank => (Rerank, None),
+			InputFormat::Decisions => (Decisions, Some(SystemOne)),
+			InputFormat::SystemOne => (SystemOne, Some(Decisions)),
 			InputFormat::Detect(_)
 			| InputFormat::Completions
 			| InputFormat::Messages
 			| InputFormat::Responses
 			| InputFormat::Gemini => return None,
 		};
-		self
-			.supports_format(format, request_model)
-			.then_some(format)
+		[Some(format), alternative]
+			.into_iter()
+			.flatten()
+			.find(|f| self.supports_format(*f, request_model))
+			// Custom providers forward a family with nothing listed in the client's own format. Anthropic
+			// count_tokens never gets here unlisted: it is estimated locally instead.
+			.or_else(|| matches!(self, AIProvider::Custom(_)).then_some(format))
 	}
 
 	/// Default backend policies (TLS + auth) for connecting to the provider. Split from
@@ -1354,6 +1362,18 @@ impl AIProvider {
 		bedrock_endpoint: Option<bedrock::BedrockEndpoint>,
 	) -> anyhow::Result<()> {
 		if matches!(route_type, RouteType::Passthrough | RouteType::Detect) {
+			// Detect covers many endpoints (images, audio, ...), so a custom path override is found by
+			// the endpoint classified from the request rather than the route type.
+			if let AIProvider::Custom(provider) = self
+				&& let Some(InputFormat::Detect(DetectedEndpoint {
+					format: Some(format),
+					..
+				})) = llm_request.map(|l| l.input_format)
+				&& let Some(path) = provider.path_for(format)
+			{
+				http::modify_req_uri(req, |uri| Self::set_path_and_query(uri, path))?;
+				return Ok(());
+			}
 			if let Some(prefix) = path_prefix {
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
@@ -2244,7 +2264,7 @@ impl AIProvider {
 			.map(|v| v == headers::ContentType::json())
 			.unwrap_or_default();
 		let multipart_boundary = model_router::multipart_boundary(&hreq);
-		let operation = model_router::classify_operation(hreq.uri().path());
+		let endpoint = model_router::classify_detect(hreq.uri().path());
 		let (mut parts, mut managed_body) = hreq.into_parts();
 		let cached = managed_body.remove_extension::<json::ParsedJson>();
 		let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
@@ -2265,7 +2285,7 @@ impl AIProvider {
 				p.unmarshal_request(&bytes, log)
 			} else {
 				serde_json::from_slice(bytes.as_ref())
-					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(None), err))
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(Default::default()), err))
 			}
 			.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
 		} else if let Some(boundary) = multipart_boundary {
@@ -2311,7 +2331,7 @@ impl AIProvider {
 			.process_non_chat_request(
 				backend_info,
 				policies,
-				InputFormat::Detect(operation),
+				InputFormat::Detect(endpoint),
 				req,
 				parts,
 				managed_body,
@@ -2380,9 +2400,7 @@ impl AIProvider {
 			AIProvider::Vertex(p) if p.is_gemini_model(request_model) => {
 				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
 			},
-			AIProvider::Custom(p) if p.supports(custom::ProviderFormat::GeminiCountTokens) => {
-				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
-			},
+			AIProvider::Custom(_) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
 			_ => Err(AIError::UnsupportedConversion(strng::format!(
 				"from GeminiCountTokens to provider {}",
 				self.provider()

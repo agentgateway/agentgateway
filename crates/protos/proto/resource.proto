@@ -1967,6 +1967,13 @@ message AIBackend {
     RERANK = 7;
     DECISIONS = 8;
     SYSTEM_ONE = 9;
+    IMAGE_GENERATIONS = 10;
+    IMAGE_EDITS = 11;
+    IMAGE_VARIATIONS = 12;
+    AUDIO_TRANSCRIPTIONS = 13;
+    AUDIO_TRANSLATIONS = 14;
+    AUDIO_SPEECH = 15;
+    OCR = 16;
   }
   message ProviderFormatConfig {
     ProviderFormat format = 1;

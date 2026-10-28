@@ -889,6 +889,13 @@ fn convert_provider_format(
 		Ok(ProtoFormat::Rerank) => Ok(llm::custom::ProviderFormat::Rerank),
 		Ok(ProtoFormat::Decisions) => Ok(llm::custom::ProviderFormat::Decisions),
 		Ok(ProtoFormat::SystemOne) => Ok(llm::custom::ProviderFormat::SystemOne),
+		Ok(ProtoFormat::ImageGenerations) => Ok(llm::custom::ProviderFormat::ImageGenerations),
+		Ok(ProtoFormat::ImageEdits) => Ok(llm::custom::ProviderFormat::ImageEdits),
+		Ok(ProtoFormat::ImageVariations) => Ok(llm::custom::ProviderFormat::ImageVariations),
+		Ok(ProtoFormat::AudioTranscriptions) => Ok(llm::custom::ProviderFormat::AudioTranscriptions),
+		Ok(ProtoFormat::AudioTranslations) => Ok(llm::custom::ProviderFormat::AudioTranslations),
+		Ok(ProtoFormat::AudioSpeech) => Ok(llm::custom::ProviderFormat::AudioSpeech),
+		Ok(ProtoFormat::Ocr) => Ok(llm::custom::ProviderFormat::Ocr),
 		Err(_) => Err(ProtoError::Generic(format!(
 			"AI backend custom provider at index {provider_idx} has unknown supported format value {proto_format}"
 		))),

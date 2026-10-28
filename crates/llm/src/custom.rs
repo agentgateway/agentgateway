@@ -1,7 +1,7 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
 
-use crate::{InputFormat, RouteType, apply};
+use crate::{DetectedEndpoint, DetectedOperation, InputFormat, RouteType, apply};
 
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "CustomProvider"))]
@@ -14,7 +14,12 @@ pub struct Provider {
 	/// a bare custom provider may set it to match a catalog entry. Falls back to "custom".
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub provider_override: Option<Strng>,
-	/// Supported API payload formats and optional path overrides for this provider.
+	/// How requests are sent to this provider, with optional per-endpoint path overrides. Formats form
+	/// families (chat: completions, messages, responses, generateContent; decisions: decisions,
+	/// systemOne; every other format stands alone). A request is forwarded as-is if its own format is
+	/// listed, or translated to a listed format of its family. Families with nothing listed are
+	/// forwarded in the client's format at their default path, except Anthropic count_tokens, which is
+	/// estimated locally unless `anthropicTokenCount` is listed.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub formats: Vec<ProviderFormatConfig>,
 }
@@ -105,6 +110,10 @@ impl ProviderPreset {
 					format(Completions, Some("/compatibility/v1/chat/completions")),
 					format(Embeddings, Some("/compatibility/v1/embeddings")),
 					format(Rerank, Some("/v2/rerank")),
+					format(
+						AudioTranscriptions,
+						Some("/compatibility/v1/audio/transcriptions"),
+					),
 				],
 			),
 			Self::Ollama => (
@@ -126,6 +135,13 @@ impl ProviderPreset {
 					format(Completions, None),
 					format(Messages, Some("/anthropic/v1/messages")),
 					format(Embeddings, None),
+					// Images and audio are served outside the /v1/openai base path.
+					format(ImageGenerations, Some("/v1/images/generations")),
+					format(ImageEdits, Some("/v1/images/edits")),
+					format(ImageVariations, Some("/v1/images/variations")),
+					format(AudioTranscriptions, Some("/v1/audio/transcriptions")),
+					format(AudioTranslations, Some("/v1/audio/translations")),
+					format(AudioSpeech, Some("/v1/audio/speech")),
 				],
 			),
 			Self::Deepseek => (
@@ -212,26 +228,51 @@ pub struct ProviderFormatConfig {
 	pub path: Option<Strng>,
 }
 
-/// A custom provider's advertised upstream wire format.
+/// A custom provider's advertised upstream endpoint.
 ///
 /// Unlike `InputFormat`, this describes what the backend accepts, not what the
-/// client sent. Unlike `RouteType`, it is only for LLM payload endpoints that
-/// can be converted or passed through; generic routes such as models,
-/// passthrough, and detect do not have a `ProviderFormat`.
+/// client sent. Unlike `RouteType`, it names individual LLM endpoints: the
+/// opaque (Detect) endpoints such as images and audio each have their own
+/// format, while generic routes such as models and passthrough have none.
 #[apply(schema!)]
 #[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ProviderFormat {
+	/// OpenAI `/chat/completions`
 	Completions,
+	/// Anthropic `/messages`
 	Messages,
+	/// OpenAI `/responses`
 	Responses,
+	/// OpenAI `/embeddings`
 	Embeddings,
+	/// Anthropic `/messages/count_tokens`
 	AnthropicTokenCount,
+	/// Gemini `models/{model}:generateContent` and `models/{model}:streamGenerateContent`
 	GenerateContent,
+	/// Gemini `models/{model}:countTokens`
 	GeminiCountTokens,
+	/// OpenAI `/realtime` (websockets)
 	Realtime,
+	/// Cohere `/rerank`
 	Rerank,
+	/// OpenAI `/decisions`
 	Decisions,
+	/// TypeSafe `/systemone`
 	SystemOne,
+	/// OpenAI `/images/generations`
+	ImageGenerations,
+	/// OpenAI `/images/edits`
+	ImageEdits,
+	/// OpenAI `/images/variations`
+	ImageVariations,
+	/// OpenAI `/audio/transcriptions`
+	AudioTranscriptions,
+	/// OpenAI `/audio/translations`
+	AudioTranslations,
+	/// OpenAI `/audio/speech`
+	AudioSpeech,
+	/// Mistral `/ocr`
+	Ocr,
 }
 
 impl ProviderFormat {
@@ -265,6 +306,21 @@ impl ProviderFormat {
 			Self::Rerank => InputFormat::Rerank,
 			Self::Decisions => InputFormat::Decisions,
 			Self::SystemOne => InputFormat::SystemOne,
+			Self::ImageGenerations
+			| Self::ImageEdits
+			| Self::ImageVariations
+			| Self::AudioTranscriptions
+			| Self::AudioTranslations
+			| Self::AudioSpeech
+			| Self::Ocr => InputFormat::Detect(DetectedEndpoint {
+				operation: Some(match self {
+					Self::AudioTranscriptions | Self::AudioTranslations => DetectedOperation::Transcription,
+					Self::AudioSpeech => DetectedOperation::Speech,
+					Self::Ocr => DetectedOperation::Ocr,
+					_ => DetectedOperation::Image,
+				}),
+				format: Some(self),
+			}),
 		}
 	}
 
@@ -281,6 +337,13 @@ impl ProviderFormat {
 			Self::Rerank => RouteType::Rerank,
 			Self::Decisions => RouteType::Decisions,
 			Self::SystemOne => RouteType::SystemOne,
+			Self::ImageGenerations
+			| Self::ImageEdits
+			| Self::ImageVariations
+			| Self::AudioTranscriptions
+			| Self::AudioTranslations
+			| Self::AudioSpeech
+			| Self::Ocr => RouteType::Detect,
 		}
 	}
 }
