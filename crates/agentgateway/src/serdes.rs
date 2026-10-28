@@ -108,6 +108,7 @@ impl FileInlineOrRemote {
 			FileInlineOrRemote::Remote { url } => Some(ResourceRef::Http {
 				url: url.clone(),
 				kind,
+				max_age: None,
 			}),
 		}
 	}
