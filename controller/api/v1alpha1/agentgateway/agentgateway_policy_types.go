@@ -1953,7 +1953,8 @@ type PromptGuardAuth struct {
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
 	// Where keys are inserted. Defaults to the `Authorization` header with the
-	// `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// `Bearer ` prefix, or the `Ocp-Apim-Subscription-Key` header for
+	// `azureContentSafety`. Applies to `key` and `secretRef`.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
 
