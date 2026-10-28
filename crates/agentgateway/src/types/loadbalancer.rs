@@ -751,6 +751,27 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			.unwrap_or_else(|| self.buckets[0].load_full())
 	}
 
+	/// Snapshot all configured endpoints, including evicted endpoints and fallback priorities.
+	pub fn all_endpoints(&self) -> Vec<Arc<T>> {
+		let _guard = self
+			.action_mutex
+			.lock()
+			.expect("endpoint action mutex poisoned");
+		self
+			.buckets
+			.iter()
+			.flat_map(|bucket| {
+				let group = bucket.load_full();
+				group
+					.active
+					.values()
+					.chain(group.rejected.values())
+					.map(|entry| entry.endpoint.clone())
+					.collect::<Vec<_>>()
+			})
+			.collect()
+	}
+
 	pub fn any<F>(&self, mut f: F) -> bool
 	where
 		F: FnMut(&T) -> bool,
@@ -1720,6 +1741,20 @@ mod tests {
 		// bucket 1 left empty
 		install(&eps, 2, build_group(&[], &["r2"]));
 		assert_eq!(collect_values(&eps), vec!["a0", "r2"]);
+	}
+
+	#[tokio::test]
+	async fn discovery_snapshot_includes_evicted_and_fallback_endpoints() {
+		let eps = EndpointSet::<&'static str>::new_empty(2);
+		install(&eps, 0, build_group(&["primary"], &["evicted"]));
+		install(&eps, 1, build_group(&["fallback"], &[]));
+		let mut values = eps
+			.all_endpoints()
+			.iter()
+			.map(|ep| **ep)
+			.collect::<Vec<_>>();
+		values.sort();
+		assert_eq!(values, ["evicted", "fallback", "primary"]);
 	}
 
 	// --- rebucket ---

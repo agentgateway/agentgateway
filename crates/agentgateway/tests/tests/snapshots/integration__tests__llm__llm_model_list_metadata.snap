@@ -1,17 +1,32 @@
 ---
 source: crates/agentgateway/tests/tests/llm.rs
+assertion_line: 730
 expression: models
 ---
 {
   "object": "list",
   "data": [
     {
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/decisions",
+        "/embeddings",
+        "/rerank",
+        "/responses"
+      ],
       "id": "local-model",
       "object": "model",
       "created": 0,
       "owned_by": "openai"
     },
     {
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/decisions",
+        "/embeddings",
+        "/rerank",
+        "/responses"
+      ],
       "id": "gpt-5.5",
       "object": "model",
       "created": 1776902400,
@@ -48,6 +63,13 @@ expression: models
       ]
     },
     {
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/decisions",
+        "/embeddings",
+        "/rerank",
+        "/responses"
+      ],
       "id": "openai/gpt-5-mini",
       "object": "model",
       "created": 1754006400,
@@ -81,6 +103,13 @@ expression: models
       ]
     },
     {
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/decisions",
+        "/embeddings",
+        "/rerank",
+        "/responses"
+      ],
       "id": "openai/gpt-5.5",
       "object": "model",
       "created": 1776902400,
@@ -117,6 +146,13 @@ expression: models
       ]
     },
     {
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/decisions",
+        "/embeddings",
+        "/rerank",
+        "/responses"
+      ],
       "id": "fast",
       "object": "model",
       "created": 1754006400,
@@ -150,6 +186,13 @@ expression: models
       ]
     },
     {
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/decisions",
+        "/embeddings",
+        "/rerank",
+        "/responses"
+      ],
       "id": "blend",
       "object": "model",
       "created": 0,
