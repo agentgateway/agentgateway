@@ -24,10 +24,11 @@ import {
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { WildcardModelSelector } from '@/components/WildcardModelSelector';
-import { modelLabel, providerLabel } from '@/config';
+import { providerLabel } from '@/config';
 import { hasKeyValue, keyLabel, maskKey } from '@/credentialDisplay';
 import { llmGatewayOrigin } from '@/gatewayUrls';
 import { useConfigDumpMode, useLlmConfigData } from '@/hooks';
+import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	isWildcardModelName,
 	modelProviderLabel,
@@ -88,9 +89,11 @@ export function ClientSetupPage() {
 	);
 	const modelOptions = useMemo(
 		() => [
-			...models.map(item => ({
+			...models.map((item, index) => ({
 				kind: 'model' as const,
 				name: item.name,
+				value: modelOptionValue(models, index),
+				description: modelSubtitle(item) || undefined,
 				icon: <ProviderIcon provider={modelProviderLabel(item, providers) as ProviderName} />,
 				searchText: `${item.name} ${modelProviderLabel(item, providers)} ${providerLabel(item.provider)}`,
 				config: item
@@ -98,6 +101,8 @@ export function ClientSetupPage() {
 			...virtualModels.map(item => ({
 				kind: 'virtual' as const,
 				name: item.name,
+				value: item.name,
+				description: 'Virtual model',
 				icon: <GitBranch size={16} />,
 				searchText: `${item.name} virtual`
 			}))
@@ -122,10 +127,10 @@ export function ClientSetupPage() {
 			modelTouched
 			? model
 			: (dumpModelNames[0] ?? '')
-		: modelOptions.some(item => item.name === model)
+		: modelOptions.some(item => item.value === model)
 			? model
-			: (modelOptions[0]?.name ?? '');
-	const selectedModelOption = modelOptions.find(item => item.name === selectedModel);
+			: (modelOptions[0]?.value ?? '');
+	const selectedModelOption = modelOptions.find(item => item.value === selectedModel);
 	const selectedModelConfig =
 		selectedModelOption?.kind === 'model' ? selectedModelOption.config : undefined;
 	const selectedCatalogProvider = selectedModelConfig
@@ -141,10 +146,15 @@ export function ClientSetupPage() {
 	const requestModel = dumpMode
 		? dumpRequestModel(selectedModel, specificModel)
 		: clientSetupRequestModel(selectedModelOption, selectedModel, specificModel, providers);
+	const matchHeaders = selectedModelConfig ? modelMatchHeaders(selectedModelConfig) : {};
+	const matchHeadersText = Object.entries(matchHeaders)
+		.map(([name, value]) => `${name}: ${value}`)
+		.join(', ');
 	const recipes = clientRecipes({
 		baseUrl: effectiveBaseUrl,
 		model: requestModel || 'model',
-		apiKey
+		apiKey,
+		headers: matchHeaders
 	});
 	const activeRecipe = recipes.find(recipe => recipe.id === selectedIntegration) ?? recipes[0];
 
@@ -204,7 +214,14 @@ export function ClientSetupPage() {
 							placeholder={dumpMode ? 'https://gateway.example.com' : derivedBaseUrl}
 						/>
 					</Field>
-					<FieldGroup label="Model">
+					<FieldGroup
+						label="Model"
+						hint={
+							matchHeadersText
+								? `Clients must send ${matchHeadersText} to reach this model.`
+								: undefined
+						}
+					>
 						{dumpMode ? (
 							<FreeformCombobox
 								ariaLabel="Model"
@@ -224,14 +241,9 @@ export function ClientSetupPage() {
 								placeholder="No models"
 								searchable
 								options={modelOptions.map(item => ({
-									value: item.name,
+									value: item.value,
 									label: item.kind === 'model' ? modelLabel(item.config) : item.name,
-									description:
-										item.kind === 'virtual'
-											? 'Virtual model'
-											: item.config.displayName?.trim()
-												? item.name
-												: undefined,
+									description: item.description,
 									icon: item.icon,
 									searchText: item.searchText
 								}))}
@@ -450,7 +462,12 @@ function CopyButton(props: { value: string }) {
 	);
 }
 
-function clientRecipes(args: { baseUrl: string; model: string; apiKey: string }): ClientRecipe[] {
+function clientRecipes(args: {
+	baseUrl: string;
+	model: string;
+	apiKey: string;
+	headers?: Record<string, string>;
+}): ClientRecipe[] {
 	const base = args.baseUrl.replace(/\/$/, '');
 	const v1 = `${base}/v1`;
 	const completions = `${v1}/chat/completions`;
@@ -459,6 +476,12 @@ function clientRecipes(args: { baseUrl: string; model: string; apiKey: string })
 	const curlAuthorization = args.apiKey
 		? `  -H ${JSON.stringify(`Authorization: Bearer ${args.apiKey}`)} ${continuation}\n`
 		: '';
+	// Single quotes keep the shell from expanding `$` or backticks in header values.
+	const curlMatchHeaders = Object.entries(args.headers ?? {})
+		.map(
+			([name, value]) => `  -H '${`${name}: ${value}`.replaceAll("'", `'\\''`)}' ${continuation}\n`
+		)
+		.join('');
 	const openCodeApiKey = args.apiKey
 		? `,
         "apiKey": "{env:AGENTGATEWAY_API_KEY}"`
@@ -480,7 +503,7 @@ export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, typ
 			icon: 'curl',
 			language: 'bash',
 			code: `curl ${JSON.stringify(completions)} ${continuation}
-${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
+${curlAuthorization}${curlMatchHeaders}  -H "Content-Type: application/json" ${continuation}
   -d '{
     "model": "${args.model}",
     "messages": [

@@ -218,11 +218,6 @@ export function modelIdentity(model: LlmModel): string {
 	return model.id || model.name;
 }
 
-// Label shown in the UI; requests always send model.name.
-export function modelLabel(model: LlmModel): string {
-	return model.displayName?.trim() || model.name;
-}
-
 export function upsertVirtualModel(
 	config: GatewayConfig,
 	model: LlmVirtualModel,

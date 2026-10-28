@@ -37,7 +37,6 @@ import {
 	makeEmptyModel,
 	makeEmptyVirtualModel,
 	modelIdentity,
-	modelLabel,
 	modelWarnings,
 	providerDisplayName,
 	providerLabel,
@@ -58,6 +57,7 @@ import {
 	useLlmConfigData,
 	useUpsertConfigResource
 } from '@/hooks';
+import { modelLabel, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	concreteModelName,
 	isWildcardModelName,
@@ -446,6 +446,8 @@ function ModelsEditorPage() {
 										);
 									}
 									const model = row.model;
+									const optionValue = modelOptionValue(models, models.indexOf(model));
+									const subtitle = modelSubtitle(model);
 									const warnings = modelWarnings(model);
 									const databaseBacked = isDatabaseConfigResource(
 										resources,
@@ -453,12 +455,10 @@ function ModelsEditorPage() {
 										modelIdentity(model)
 									);
 									return (
-										<tr key={`model:${modelIdentity(model)}`}>
+										<tr key={`model:${model.id ?? optionValue}`}>
 											<td className="strong">
 												{modelLabel(model)}
-												{model.displayName?.trim() ? (
-													<div className="model-name-pattern">{model.name}</div>
-												) : null}
+												{subtitle ? <div className="model-name-pattern">{subtitle}</div> : null}
 											</td>
 											{hybrid ? (
 												<td>
@@ -478,7 +478,7 @@ function ModelsEditorPage() {
 														className="icon-button"
 														aria-label="Open in playground"
 														to="/llm/playground"
-														search={{ model: model.name }}
+														search={{ model: optionValue }}
 													>
 														<Play size={16} />
 													</Link>
