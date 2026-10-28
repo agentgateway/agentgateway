@@ -681,6 +681,7 @@ pub mod from_completions {
 	use std::collections::HashMap;
 	use std::time::Instant;
 
+	use agent_core::strng;
 	use agent_http::Body;
 	use bytes::Bytes;
 	use itertools::Itertools;
@@ -689,6 +690,7 @@ pub mod from_completions {
 
 	use super::helpers;
 	use crate::bedrock::Provider;
+	use crate::conversion::completions::parse_data_url;
 	use crate::types::ResponseType;
 	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
@@ -736,8 +738,36 @@ pub mod from_completions {
 								cache_points_used,
 							);
 						},
-						completions::RequestUserMessageContentPart::InputAudio(_)
-						| completions::RequestUserMessageContentPart::File(_) => {},
+						completions::RequestUserMessageContentPart::File(file) => {
+							let file_data = file.file.file_data.as_deref().unwrap_or_default();
+							let Some((media_type, data)) = parse_data_url(file_data) else {
+								if let Some(file_id) = file.file.file_id.as_deref() {
+									return Err(AIError::UnsupportedConversion(strng::new(format!(
+										"bedrock path cannot resolve OpenAI file_id ({file_id}); send file.file_data as an inline data: URI"
+									))));
+								}
+								return Err(AIError::UnsupportedConversion(strng::literal!(
+									"file content part requires file.file_data as an inline base64 data: URI"
+								)));
+							};
+							let format = super::from_responses::derive_doc_format(
+								Some(media_type),
+								file.file.filename.as_deref(),
+							)?;
+							out.push(bedrock::ContentBlock::Document(bedrock::DocumentBlock {
+								format: format.to_string(),
+								name: super::from_responses::sanitize_doc_name(file.file.filename.as_deref()),
+								source: bedrock::DocumentSource {
+									bytes: data.to_string(),
+								},
+							}));
+							helpers::maybe_insert_cache_point(
+								&mut out,
+								file.prompt_cache_breakpoint.as_ref(),
+								cache_points_used,
+							);
+						},
+						completions::RequestUserMessageContentPart::InputAudio(_) => {},
 					}
 				}
 			},
@@ -2516,7 +2546,7 @@ pub mod from_responses {
 		}
 	}
 
-	fn derive_doc_format(
+	pub(super) fn derive_doc_format(
 		media_type: Option<&str>,
 		filename: Option<&str>,
 	) -> Result<&'static str, AIError> {
@@ -2537,7 +2567,7 @@ pub mod from_responses {
 	// Bedrock document names may only contain alphanumerics, whitespace, hyphens,
 	// parentheses, and square brackets, with no consecutive whitespace. Notably this
 	// excludes periods, so "notes.txt" must be rewritten before sending.
-	fn sanitize_doc_name(filename: Option<&str>) -> String {
+	pub(super) fn sanitize_doc_name(filename: Option<&str>) -> String {
 		let Some(name) = filename else {
 			return "document".to_string();
 		};
