@@ -4355,6 +4355,73 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 	);
 }
 
+#[tokio::test]
+async fn mcp_authentication_with_expired_signing_keys_is_unavailable() {
+	use crate::http::jwt::tests::{build_signed_token_with_payload, with_expired_signing_keys};
+
+	let (jwks, mut authn) = mcp_jwt_authentication(McpAuthenticationMode::Strict);
+	let provider = with_expired_signing_keys(
+		crate::http::jwt::Provider::from_jwks(
+			serde_json::from_value(jwks).unwrap(),
+			MCP_JWT_ISSUER.to_string(),
+			Some(vec!["mcp".to_string()]),
+			Default::default(),
+		)
+		.unwrap(),
+	);
+	authn.jwt_validator = Arc::new(crate::http::jwt::Jwt::from_providers(
+		vec![provider],
+		McpAuthenticationMode::Strict.into(),
+		crate::http::auth::AuthorizationLocation::bearer_header(),
+		false,
+	));
+	let exp = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+	let token = build_signed_token_with_payload(
+		MCP_JWT_KID,
+		serde_json::json!({ "iss": MCP_JWT_ISSUER, "aud": ["mcp"], "exp": exp }),
+	);
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			mock.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthentication(authn)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let response = reqwest::Client::new()
+		.post(format!("http://{io}/mcp"))
+		.bearer_auth(token)
+		.header("accept", "application/json, text/event-stream")
+		.json(&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "initialize",
+			"params": {
+				"protocolVersion": "2025-03-26",
+				"capabilities": {},
+				"clientInfo": {"name": "t", "version": "1"}
+			}
+		}))
+		.send()
+		.await
+		.unwrap();
+	// The gateway's keys are stale, not the client's token: no challenge to fetch a new token.
+	assert_eq!(response.status(), reqwest::StatusCode::SERVICE_UNAVAILABLE);
+	assert!(
+		!response
+			.headers()
+			.contains_key(http::header::WWW_AUTHENTICATE)
+	);
+}
+
 #[rstest::rstest]
 #[case::preserved(McpAuthenticationMode::Strict, true, &["gateway", "mcp"], reqwest::StatusCode::OK)]
 #[case::wrong_audience(McpAuthenticationMode::Strict, true, &["gateway"], reqwest::StatusCode::UNAUTHORIZED)]
