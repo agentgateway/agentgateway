@@ -1906,10 +1906,44 @@ pub mod from_messages {
 						None,
 					),
 					messages::ContentBlock::Document(messages::ContentDocumentBlock {
+						source,
 						cache_control,
+						title,
 						..
-					})
-					| messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
+					}) => {
+						let base64_source = (source.get("type").and_then(|v| v.as_str()) == Some("base64"))
+							.then(|| {
+								let media_type = source.get("media_type").and_then(|v| v.as_str())?;
+								let data = source.get("data").and_then(|v| v.as_str())?;
+								Some((media_type, data))
+							})
+							.flatten();
+						let Some((media_type, data)) = base64_source else {
+							// Other document source types (text, url, content) aren't supported by
+							// Bedrock Converse. Keep the breakpoint on the retained prefix when dropping.
+							helpers::insert_cache_point_on_retained_prefix(
+								&mut content,
+								&mut messages,
+								system_content.as_mut(),
+								cache_control.as_ref(),
+								&mut cache_points_used,
+							);
+							continue;
+						};
+						let format =
+							super::from_responses::derive_doc_format(Some(media_type), title.as_deref())?;
+						(
+							bedrock::ContentBlock::Document(bedrock::DocumentBlock {
+								format: format.to_string(),
+								name: super::from_responses::sanitize_doc_name(title.as_deref()),
+								source: bedrock::DocumentSource {
+									bytes: data.to_string(),
+								},
+							}),
+							cache_control,
+						)
+					},
+					messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
 						cache_control,
 						..
 					})

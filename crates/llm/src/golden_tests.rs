@@ -207,6 +207,7 @@ mod requests {
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
 		("cache_control_dropped_server_tools", &[BEDROCK]),
 		("system_message_mid_conversation", &[BEDROCK]),
+		("document_inline", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
 		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),

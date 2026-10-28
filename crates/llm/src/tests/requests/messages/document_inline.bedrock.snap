@@ -1,0 +1,68 @@
+---
+source: crates/llm/src/golden_tests.rs
+assertion_line: 104
+description: src/tests/requests/messages/document_inline.json
+info:
+  model: claude-sonnet-5
+  max_tokens: 64
+  messages:
+    - role: user
+      content:
+        - type: document
+          source:
+            type: base64
+            media_type: application/pdf
+            data: JVBERi0xLjQK
+          title: report.pdf
+          cache_control:
+            type: ephemeral
+        - type: text
+          text: What is this document about?
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "document": {
+              "format": "pdf",
+              "name": "report",
+              "source": {
+                "bytes": "JVBERi0xLjQK"
+              }
+            }
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          },
+          {
+            "text": "What is this document about?"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 64
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-5",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 64
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is this document about?"
+      }
+    ]
+  }
+}
