@@ -307,52 +307,66 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		endpoint_preference: Default::default(),
 	};
 
-	let req = messages::typed::Request {
-		model: "anthropic.claude-3-sonnet".to_string(),
-		messages: vec![messages::typed::Message {
-			role: messages::typed::Role::User,
-			content: vec![messages::typed::ContentBlock::Text(
-				messages::typed::ContentTextBlock {
-					text: "Hello".to_string(),
-					citations: None,
-					cache_control: None,
-				},
-			)],
-		}],
-		max_tokens: 100,
-		metadata: None,
-		system: None,
-		stop_sequences: vec![],
-		stream: false,
-		temperature: None,
-		top_k: None,
-		top_p: None,
-		tools: None,
-		tool_choice: None,
-		thinking: Some(messages::typed::ThinkingInput::Enabled {
-			budget_tokens: 1024,
-			display: None,
-		}),
-		output_config: Some(messages::typed::OutputConfig {
-			effort: Some(messages::typed::ThinkingEffort::High),
-			format: None,
-		}),
-		cache_control: None,
-	};
+	let catalog = crate::model_catalog::TestCatalog::new([(
+		"anthropic.claude-3-sonnet",
+		&[crate::model_catalog::tags::ADAPTIVE_THINKING][..],
+	)]);
+	for adaptive in [false, true] {
+		let req = messages::typed::Request {
+			model: "anthropic.claude-3-sonnet".to_string(),
+			messages: vec![messages::typed::Message {
+				role: messages::typed::Role::User,
+				content: vec![messages::typed::ContentBlock::Text(
+					messages::typed::ContentTextBlock {
+						text: "Hello".to_string(),
+						citations: None,
+						cache_control: None,
+					},
+				)],
+			}],
+			max_tokens: 100,
+			metadata: None,
+			system: None,
+			stop_sequences: vec![],
+			stream: false,
+			temperature: None,
+			top_k: None,
+			top_p: None,
+			tools: None,
+			tool_choice: None,
+			thinking: Some(messages::typed::ThinkingInput::Enabled {
+				budget_tokens: 1024,
+				display: Some(messages::typed::ThinkingDisplay::Omitted),
+			}),
+			output_config: Some(messages::typed::OutputConfig {
+				effort: Some(messages::typed::ThinkingEffort::High),
+				format: None,
+			}),
+			cache_control: None,
+		};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
-	assert_eq!(
-		out.additional_model_request_fields,
-		Some(json!({
-			"thinking": {
-				"type": "enabled",
-				"budget_tokens": 1024
-			},
-			"output_config": {
-				"effort": "high"
-			}
-		}))
-	);
+		let (out, _) = super::from_messages::translate_internal(
+			req,
+			&provider,
+			None,
+			if adaptive { Some(&catalog) } else { None },
+		)
+		.unwrap();
+		let thinking = if adaptive {
+			json!({"type": "adaptive", "display": "omitted"})
+		} else {
+			json!({"type": "enabled", "budget_tokens": 1024, "display": "omitted"})
+		};
+		assert_eq!(
+			out.additional_model_request_fields,
+			Some(json!({
+				"thinking": thinking,
+				"output_config": {
+					"effort": "high"
+				}
+			}))
+		);
+	}
 }
 
 #[test]
@@ -2066,76 +2080,5 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 			.to_string()
 			.contains("document format could not be determined"),
 		"unexpected error: {err}"
-	);
-}
-
-fn bedrock_thinking_for(
-	thinking: serde_json::Value,
-	catalog: crate::model_catalog::Catalog<'_>,
-) -> serde_json::Value {
-	let provider = Provider {
-		model_override: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-		endpoint_preference: Default::default(),
-	};
-	let req: messages::typed::Request = serde_json::from_value(json!({
-		"model": "claude-opus-4-7",
-		"max_tokens": 2048,
-		"messages": [{"role": "user", "content": "hi"}],
-		"thinking": thinking
-	}))
-	.unwrap();
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None, catalog).unwrap();
-	out.additional_model_request_fields.unwrap()["thinking"].clone()
-}
-
-#[test]
-fn test_adaptive_thinking_display_is_forwarded() {
-	assert_eq!(
-		bedrock_thinking_for(json!({"type": "adaptive", "display": "summarized"}), None),
-		json!({"type": "adaptive", "display": "summarized"})
-	);
-}
-
-#[test]
-fn test_enabled_thinking_display_is_forwarded() {
-	assert_eq!(
-		bedrock_thinking_for(
-			json!({"type": "enabled", "budget_tokens": 1024, "display": "omitted"}),
-			None
-		),
-		json!({"type": "enabled", "budget_tokens": 1024, "display": "omitted"})
-	);
-}
-
-#[test]
-fn test_enabled_thinking_upgraded_to_adaptive_keeps_display() {
-	let cat = crate::model_catalog::TestCatalog::new([(
-		"claude-opus-4-7",
-		&[crate::model_catalog::tags::ADAPTIVE_THINKING][..],
-	)]);
-	assert_eq!(
-		bedrock_thinking_for(
-			json!({"type": "enabled", "budget_tokens": 1024, "display": "summarized"}),
-			Some(&cat)
-		),
-		json!({"type": "adaptive", "display": "summarized"})
-	);
-}
-
-#[test]
-fn test_thinking_display_round_trips_through_typed_request() {
-	let req: messages::typed::Request = serde_json::from_value(json!({
-		"model": "claude-opus-4-7",
-		"max_tokens": 1024,
-		"messages": [{"role": "user", "content": "hi"}],
-		"thinking": {"type": "adaptive", "display": "summarized"}
-	}))
-	.unwrap();
-	assert_eq!(
-		serde_json::to_value(&req).unwrap()["thinking"],
-		json!({"type": "adaptive", "display": "summarized"})
 	);
 }

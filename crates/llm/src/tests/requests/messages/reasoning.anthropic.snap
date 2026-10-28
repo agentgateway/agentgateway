@@ -6,6 +6,7 @@ info:
   max_tokens: 1024
   thinking:
     type: adaptive
+    display: summarized
   output_config:
     effort: high
   output_format: markdown
@@ -41,7 +42,8 @@ info:
       "effort": "high"
     },
     "thinking": {
-      "type": "adaptive"
+      "type": "adaptive",
+      "display": "summarized"
     },
     "output_format": "markdown"
   },
