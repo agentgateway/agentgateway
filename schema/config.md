@@ -8676,7 +8676,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`<Guardrails>.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`<Guardrails>.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth).<br>Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.|
 |`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -9832,7 +9832,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`<Guardrails>.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`<Guardrails>.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth).<br>Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.|
 |`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|

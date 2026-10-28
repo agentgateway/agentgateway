@@ -5991,7 +5991,7 @@
           "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {
-          "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",
+          "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth).\nKey auth without a location uses the `Ocp-Apim-Subscription-Key` header.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"

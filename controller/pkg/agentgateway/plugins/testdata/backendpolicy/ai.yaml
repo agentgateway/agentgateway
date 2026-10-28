@@ -79,9 +79,6 @@ spec:
               policies:
                 auth:
                   key: test-content-safety-key
-                  location:
-                    header:
-                      name: Ocp-Apim-Subscription-Key
         request:
           - response:
               message: "regex rejected on request"
@@ -273,9 +270,6 @@ output:
                 inlinePolicies:
                 - auth:
                     key:
-                      authorizationLocation:
-                        header:
-                          name: Ocp-Apim-Subscription-Key
                       secret: test-content-safety-key
           prompts:
             append:

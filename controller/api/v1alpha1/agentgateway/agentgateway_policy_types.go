@@ -1794,8 +1794,7 @@ type AzureContentSafetyAuth struct {
 	Azure *AzureAuth `json:"azure,omitempty"`
 
 	// Inline Content Safety resource key. This option is the least secure;
-	// usage of a `Secret` is preferred. Azure expects resource keys in the
-	// `Ocp-Apim-Subscription-Key` header, so set `location` accordingly.
+	// usage of a `Secret` is preferred.
 	// +kubebuilder:validation:MaxLength=2048
 	// +optional
 	InlineKey *string `json:"key,omitempty"`
@@ -1806,10 +1805,8 @@ type AzureContentSafetyAuth struct {
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
-	// Where resource keys are inserted. Defaults to the `Authorization` header
-	// with the `Bearer ` prefix; Azure Content Safety expects
-	// `header: {name: Ocp-Apim-Subscription-Key}`. Applies to `key` and
-	// `secretRef`.
+	// Where resource keys are inserted. Defaults to the
+	// `Ocp-Apim-Subscription-Key` header. Applies to `key` and `secretRef`.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
 }
