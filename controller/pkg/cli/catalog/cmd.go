@@ -44,9 +44,10 @@ type importOptions struct {
 
 var importSources = map[string]func(ctx context.Context, opts importOptions) (*ModelCatalog, []string, error){}
 
-// defaultImportSources merge (in order) when --source is unset: models.dev rates + Bedrock tags + Vertex service tiers.
+// defaultImportSources merge (in order) when --source is unset: models.dev rates + Bedrock tags + Vertex service tiers +
+// OpenAI audio models.
 func defaultImportSources() []string {
-	return []string{modelsDevSourceName, bedrockMantleSourceName, vertexSourceName}
+	return []string{modelsDevSourceName, bedrockMantleSourceName, vertexSourceName, openaiPricingSourceName}
 }
 
 func importSourceNames() []string {
@@ -77,7 +78,7 @@ supplies pricing and aws-bedrock-mantle overlays Bedrock endpoint tags onto it).
 Examples:
 	agctl catalog import --out ./costs/catalog.json
 	agctl catalog import --source models.dev --providers anthropic,google,openai
-	agctl catalog import --source models.dev,aws-bedrock-mantle,vertex-pricing --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty`,
+	agctl catalog import --source models.dev,aws-bedrock-mantle,vertex-pricing,openai-pricing --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

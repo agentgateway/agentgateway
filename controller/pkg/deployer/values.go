@@ -42,6 +42,8 @@ type HelmEndpointPickerExtension struct {
 }
 
 type AgentgatewayHelmService struct {
+	Type           *string `json:"type,omitempty"`
+	ClusterIP      *string `json:"clusterIP,omitempty"`
 	LoadBalancerIP *string `json:"loadBalancerIP,omitempty"`
 }
 

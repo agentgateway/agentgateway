@@ -189,9 +189,11 @@ fn gemini_thought_signature_round_trips_through_messages_thinking_block() {
 	upstream["choices"][0]["message"]["tool_calls"][0]["extra_content"] = json!({
 		"google": {"thought_signature": signature}
 	});
-	let response =
-		super::from_messages::translate_response(&Bytes::from(serde_json::to_vec(&upstream).unwrap()))
-			.unwrap();
+	let response = super::from_messages::translate_response(
+		&Bytes::from(serde_json::to_vec(&upstream).unwrap()),
+		"input-model",
+	)
+	.unwrap();
 	let response: Value = serde_json::from_slice(&response.serialize().unwrap()).unwrap();
 	let content = response["content"].as_array().unwrap();
 	assert_eq!(content[0]["type"], "thinking");

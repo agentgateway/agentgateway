@@ -130,7 +130,7 @@ func TestModelServingRuleMatchesRoot(t *testing.T) {
 func TestModelReferenceIgnoresListenerHostname(t *testing.T) {
 	parent := &ParentInfo{
 		AllowedKinds: []gwv1.RouteGroupKind{toRouteKind(wellknown.AgentgatewayModelGVK)},
-		Hostnames:    []string{"other-namespace/models.example.com"},
+		Hostnames:    []string{"default/models.example.com"},
 	}
 
 	if err := ReferenceAllowed(

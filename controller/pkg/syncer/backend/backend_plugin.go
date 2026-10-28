@@ -10,6 +10,7 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -297,6 +298,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 	var mcpTargets []*api.MCPTarget
 	var backends []*api.Backend
 	var errs []error
+	serviceTargets := map[*api.MCPTarget]*corev1.Service{}
 	for _, target := range mcp.Targets {
 		start := len(mcpTargets)
 		if s := target.Static; s != nil {
@@ -381,12 +383,17 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			if err != nil {
 				return nil, err
 			}
-			mcpTargets = append(mcpTargets, targets...)
+			for _, t := range targets {
+				serviceTargets[t.target] = t.service
+				mcpTargets = append(mcpTargets, t.target)
+			}
 		}
 		if err := applyMCPTargetCondition(mcpTargets[start:], target.Condition); err != nil {
 			errs = append(errs, err)
 		}
 	}
+	mcpTargets, dedupeErrs := dedupeMCPTargets(be.Namespace, mcpTargets, serviceTargets)
+	errs = append(errs, dedupeErrs...)
 	// defaults to stateful session routing
 	sessionRouting := api.MCPBackend_STATEFUL
 	if mcp.SessionRouting == agentgateway.Stateless {

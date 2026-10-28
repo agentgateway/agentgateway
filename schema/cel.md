@@ -94,6 +94,7 @@
 |`llm.params.max_tokens`|integer||
 |`llm.params.encoding_format`|string||
 |`llm.params.dimensions`|integer||
+|`llm.params.reasoning_effort`|enum|The reasoning effort requested by the client: OpenAI `reasoning_effort` or<br>`reasoning.effort`, Anthropic `output_config.effort`, or Gemini `thinkingLevel`.<br>Unset when the request does not specify one, in which case the provider default applies.<br>Possible values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `null`.|
 |`llm.cost`|object|The realized USD cost of the request from the model cost catalog.<br>Unset when the model could not be priced.|
 |`llm.cost.total`|number||
 |`llm.cost.input`|number||

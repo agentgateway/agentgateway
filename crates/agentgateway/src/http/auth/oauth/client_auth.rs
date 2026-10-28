@@ -90,7 +90,7 @@ enum RawOAuthClientAuth {
 		#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
 		#[serde(
 			rename = "clientSecret",
-			deserialize_with = "crate::serdes::deser_key_from_file"
+			deserialize_with = "crate::serdes::deser_watched_secret"
 		)]
 		client_secret: SecretString,
 	},
@@ -106,7 +106,7 @@ enum RawOAuthClientAuth {
 		#[serde(
 			rename = "clientSecret",
 			default,
-			deserialize_with = "crate::serdes::deser_key_from_file_option"
+			deserialize_with = "crate::serdes::deser_watched_secret_option"
 		)]
 		client_secret: Option<SecretString>,
 	},
@@ -117,7 +117,7 @@ enum RawOAuthClientAuth {
 		client_id: String,
 		/// PEM-encoded private signing key (RSA or EC, matching `alg`).
 		#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
-		#[serde(deserialize_with = "crate::serdes::deser_key_from_file")]
+		#[serde(deserialize_with = "crate::serdes::deser_watched_secret")]
 		signing_key: SecretString,
 		/// PEM-encoded X.509 certificate chain, leaf first. The leaf public key must
 		/// correspond to `signing_key` for token endpoints to validate assertions.
@@ -147,7 +147,7 @@ struct RawDefaultClientSecretBasicAuth {
 	#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
 	#[serde(
 		rename = "clientSecret",
-		deserialize_with = "crate::serdes::deser_key_from_file"
+		deserialize_with = "crate::serdes::deser_watched_secret"
 	)]
 	client_secret: SecretString,
 }
@@ -261,7 +261,7 @@ impl fmt::Debug for PrivateKeyJwt {
 pub(super) struct RawPrivateKeyJwt {
 	/// PEM-encoded private signing key (RSA or EC, matching `alg`).
 	#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
-	#[serde(deserialize_with = "crate::serdes::deser_key_from_file")]
+	#[serde(deserialize_with = "crate::serdes::deser_watched_secret")]
 	pub(super) signing_key: SecretString,
 	/// PEM-encoded X.509 certificate chain, leaf first. The leaf public key must
 	/// correspond to `signing_key` for token endpoints to validate assertions.
@@ -287,7 +287,6 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 		if raw.assertion_audience.is_empty() {
 			return Err("oauth private_key_jwt assertion_audience must not be empty".into());
 		}
-		// TODO: file-based keys are loaded once at config load; consider reload/rotation (K8s secret remounts need a restart)
 		let signing_key_pem = raw.signing_key.expose_secret();
 		let signing_key = SigningKey::from_pem(raw.alg, signing_key_pem.trim().as_bytes())
 			.map_err(|e| format!("failed to parse oauth private_key_jwt signing_key: {e}"))?;
@@ -329,9 +328,7 @@ fn load_certificate_headers(
 	certificate_header: CertificateHeader,
 	signing_key_pem: &str,
 ) -> Result<CertificateHeaders, String> {
-	let certificate_pem = certificate
-		.0
-		.load()
+	let certificate_pem = crate::serdes::load_file_or_inline_during_parse(&certificate.0)
 		.map_err(|e| format!("failed to load oauth private_key_jwt certificate: {e}"))?;
 	let certificates = pem::parse_many(certificate_pem)
 		.map_err(|e| format!("failed to parse oauth private_key_jwt certificate: {e}"))?;

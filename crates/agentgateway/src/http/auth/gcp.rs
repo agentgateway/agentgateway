@@ -72,8 +72,7 @@ where
 {
 	Option::<FileOrInline>::deserialize(deserializer)?
 		.map(|input| {
-			input
-				.load()
+			crate::serdes::load_file_or_inline_during_parse(&input)
 				.map(|s| SecretString::from(s.trim().to_string()))
 				.map_err(|e| serde::de::Error::custom(e.to_string()))
 				.and_then(|credential| {

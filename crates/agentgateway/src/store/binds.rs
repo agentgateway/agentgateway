@@ -750,7 +750,7 @@ impl Store {
 		new.iter().any(|listener| {
 			old
 				.get(&listener.key)
-				.is_some_and(|old_listener| old_listener != listener)
+				.is_some_and(|old_listener| !old_listener.serving_eq(listener))
 		}) || old.iter().any(|listener| !new.contains(&listener.key))
 	}
 
@@ -1186,10 +1186,17 @@ impl Store {
 		pol
 	}
 
-	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
+	pub fn gateway_policies(&self, bind: &BindKey, listener: &Listener) -> GatewayPolicies {
+		let name = &listener.name;
+		// The serving listener may be a snapshot from connection setup; use the current inline policies.
+		let current = self.get_bind_listener(bind, &listener.key);
+		let inline = current
+			.as_deref()
+			.map_or(&listener.inline_policies, |l| &l.inline_policies);
 		// Gateway policy fields use first-writer-wins semantics. Visit policies at each
-		// attachment level oldest first so the oldest policy wins.
-		let rules = self
+		// attachment level oldest first so the oldest policy wins. Listener inline policies
+		// take precedence over policies attached to the listener.
+		let attached = self
 			.policies_for_target_oldest_first(&name.as_listener_target_ref())
 			.chain(
 				name
@@ -1205,6 +1212,7 @@ impl Store {
 			)
 			.chain(self.policies_for_target_oldest_first(&name.as_gateway_target_ref()))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
+		let rules = inline.iter().chain(attached);
 
 		let mut authz = Vec::new();
 		let mut pol = GatewayPolicies::default();
@@ -1831,7 +1839,7 @@ impl Store {
 		let listeners = self.listeners.entry(bind_name.clone()).or_default();
 		if listeners
 			.get(&listener_key)
-			.is_some_and(|current| current != &lis)
+			.is_some_and(|current| !current.serving_eq(&lis))
 			&& self.binds.contains_key(&bind_name)
 		{
 			serving_listener_changed = true;
@@ -2671,6 +2679,67 @@ mod tests {
 	}
 
 	#[test]
+	fn listener_inline_policies_take_precedence_and_track_store() {
+		fn cors(origin: &str) -> TrafficPolicy {
+			TrafficPolicy::CORS(RequestPolicy::single(
+				http::cors::Cors::try_from(http::cors::CorsSerde {
+					allow_credentials: false,
+					allow_headers: vec![],
+					allow_methods: vec![],
+					allow_origins: vec![origin.to_string()],
+					expose_headers: vec![],
+					max_age: None,
+				})
+				.unwrap(),
+			))
+		}
+		let selected_origin =
+			|pol: &GatewayPolicies| serde_json::to_value(&pol.cors).unwrap()["allowOrigins"][0].clone();
+
+		let bind = strng::literal!("8080/ns/gw");
+		let name = listener();
+		let mut store = Store::with_ipv6_enabled(true);
+		let target = PolicyTarget::Gateway(ListenerTarget {
+			gateway_name: name.gateway_name.clone(),
+			gateway_namespace: name.gateway_namespace.clone(),
+			listener_name: Some(name.listener_name.clone()),
+			port: None,
+		});
+		store.insert_policy(TargetedPolicy {
+			key: strng::literal!("attached"),
+			name: None,
+			target,
+			creation_timestamp: 0,
+			inheritance: Default::default(),
+			policy: (
+				cors("https://attached.example.com"),
+				agent::PolicyPhase::Gateway,
+			)
+				.into(),
+		});
+		let snapshot = Listener {
+			key: strng::literal!("gw.listener"),
+			name,
+			inline_policies: vec![cors("https://inline.example.com")],
+			..Default::default()
+		};
+		store.insert_listener(snapshot.clone(), bind.clone());
+		assert_eq!(
+			selected_origin(&store.gateway_policies(&bind, &snapshot)),
+			"https://inline.example.com"
+		);
+
+		// A connection may hold an older snapshot; the current listener's inline policies apply.
+		let mut updated = snapshot.clone();
+		updated.inline_policies = vec![];
+		store.insert_listener(updated, bind.clone());
+		assert_eq!(
+			selected_origin(&store.gateway_policies(&bind, &snapshot)),
+			"https://attached.example.com"
+		);
+	}
+
+	#[test]
 	fn moving_listener_before_binds_arrive_keeps_only_latest_assignment() {
 		let listener_key = strng::literal!("gw.http");
 		let listener = Listener {
@@ -2683,6 +2752,7 @@ mod tests {
 			},
 			hostname: strng::EMPTY,
 			protocol: ListenerProtocol::HTTP,
+			..Default::default()
 		};
 		let old_bind = strng::literal!("8080/ns/gw");
 		let new_bind = strng::literal!("8443/ns/gw");
@@ -2741,6 +2811,7 @@ mod tests {
 			},
 			hostname: strng::EMPTY,
 			protocol: ListenerProtocol::HTTP,
+			..Default::default()
 		};
 		let tls_listener = Listener {
 			key: tls_key.clone(),
@@ -2752,6 +2823,7 @@ mod tests {
 			},
 			hostname: strng::EMPTY,
 			protocol: ListenerProtocol::TLS(None),
+			..Default::default()
 		};
 		let bind_8080 = strng::literal!("8080/ns/gw");
 		let bind_8443 = strng::literal!("8443/ns/gw");
@@ -3343,6 +3415,7 @@ mod tests {
 				},
 				hostname: strng::literal!("example.com"),
 				protocol: ListenerProtocol::HTTP,
+				..Default::default()
 			}])),
 		};
 		let route = Route {
@@ -3404,6 +3477,7 @@ mod tests {
 				},
 				hostname: strng::literal!("example.com"),
 				protocol: ListenerProtocol::HTTP,
+				..Default::default()
 			}])),
 		}
 	}

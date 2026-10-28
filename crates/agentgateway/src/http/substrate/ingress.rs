@@ -59,6 +59,9 @@ impl ResumeError {
 			Self::Status(status) => {
 				let code = status.code();
 				let message = status.message();
+				if code == Code::ResourceExhausted && message == "no worker has room for the actor" {
+					return ProxyError::SubstrateIngressCapacityExhausted;
+				}
 				let reason = status_reason(&status)
 					.or_else(|| (code == Code::Unavailable).then(|| REASON_API_UNAVAILABLE.to_owned()));
 				let (http_status, body) = match code {
@@ -339,7 +342,6 @@ impl SubstrateIngress {
 					atespace: actor.atespace.clone(),
 					name: actor.name.clone(),
 				}),
-				boot: false,
 			};
 			let mut delay = self.request_parking.retry_interval();
 			let mut last_retry_status = None;
@@ -802,6 +804,38 @@ mod tests {
 	#[test]
 	fn default_connect_target_port_matches_atunnel_connect_ingress() {
 		assert_eq!(super::default_connect_target_port().get(), 8443);
+	}
+
+	#[tokio::test]
+	async fn capacity_error_preserves_client_message() {
+		for (status, expected) in [
+			(
+				Status::resource_exhausted("no worker has room for the actor"),
+				"no worker has room for the actor",
+			),
+			(
+				Status::resource_exhausted("secret backend detail"),
+				"ingress failed",
+			),
+			(
+				Status::unavailable("secret backend detail"),
+				"ingress failed",
+			),
+		] {
+			let error = super::ResumeError::Status(status).into_proxy_error(&super::ActorRef {
+				atespace: "my-space".to_owned(),
+				name: "my-actor".to_owned(),
+			});
+			let response = error.into_response_with_grpc(false);
+			assert_eq!(response.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
+			assert_eq!(
+				crate::http::read_resp_body(response)
+					.await
+					.unwrap()
+					.as_ref(),
+				expected.as_bytes()
+			);
+		}
 	}
 
 	#[test]

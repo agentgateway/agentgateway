@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use agent_core::version::BuildInfo;
 use axum::extract::{Path, Query, State};
-use axum::http::{StatusCode, Uri};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::sse::Event;
 use axum::response::{IntoResponse, Redirect, Response, Sse};
 use axum::routing::{get, post, put};
@@ -93,6 +93,10 @@ pub fn router(
 		.route("/api/auth/login", get(|| async { Redirect::to("/ui") }))
 		.route("/api/runtime", get(get_runtime))
 		.route("/api/config", get(get_config).post(write_config))
+		.route(
+			"/api/config/raw",
+			get(get_raw_config).post(write_raw_config),
+		)
 		.route("/api/config/effective", get(get_effective_config))
 		.route("/api/config/resources", get(list_config_resources))
 		.route(
@@ -487,18 +491,31 @@ async fn write_config(
 	))
 }
 
-async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), ErrorResponse> {
-	let config_source = app.cfg()?;
+/// Returns the configuration file exactly as it is on disk, comments included.
+async fn get_raw_config(State(app): State<App>) -> Result<String, ErrorResponse> {
+	Ok(app.cfg()?.read_to_string().await?)
+}
 
-	let file_path = match &config_source {
-		ConfigSource::File(path) => path,
-		ConfigSource::Static(_) => {
-			return Err(ErrorResponse::String(
-				"Cannot write to static config".to_string(),
-			));
-		},
-	};
-	let current = fs_err::tokio::read_to_string(file_path)
+/// Writes the request body verbatim as the configuration file after validating it.
+///
+/// Requiring `application/yaml` prevents cross-origin writes without a CORS preflight.
+async fn write_raw_config(
+	State(app): State<App>,
+	headers: HeaderMap,
+	body: String,
+) -> Result<Json<Value>, ErrorResponse> {
+	ensure_yaml_content_type(&headers)?;
+	app.ensure_writable()?;
+	let file_path = config_file_path(&app)?;
+	write_validated_config(&app, &file_path, body).await?;
+	Ok(Json(
+		serde_json::json!({"status": "success", "message": "Configuration written successfully"}),
+	))
+}
+
+async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), ErrorResponse> {
+	let file_path = config_file_path(app)?;
+	let current = fs_err::tokio::read_to_string(&file_path)
 		.await
 		.map_err(anyhow::Error::from)?;
 	let yaml_file_content = {
@@ -519,12 +536,46 @@ async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), Error
 			format!("{CONFIG_SCHEMA_HEADER}{content}")
 		}
 	};
+	write_validated_config(app, &file_path, yaml_file_content).await
+}
 
-	if let Err(e) = validate_config_in_task(app, yaml_file_content.clone()).await {
+const RAW_CONFIG_CONTENT_TYPE: &str = "application/yaml";
+
+fn ensure_yaml_content_type(headers: &HeaderMap) -> Result<(), ErrorResponse> {
+	let mime = headers
+		.get(http::header::CONTENT_TYPE)
+		.and_then(|value| value.to_str().ok())
+		.map(|value| value.split(';').next().unwrap_or_default().trim())
+		.unwrap_or_default();
+	if mime.eq_ignore_ascii_case(RAW_CONFIG_CONTENT_TYPE) {
+		return Ok(());
+	}
+	Err(ErrorResponse::Status(
+		StatusCode::UNSUPPORTED_MEDIA_TYPE,
+		format!("raw configuration must be sent as {RAW_CONFIG_CONTENT_TYPE}"),
+	))
+}
+
+fn config_file_path(app: &App) -> Result<std::path::PathBuf, ErrorResponse> {
+	match app.cfg()? {
+		ConfigSource::File(path) => Ok(path),
+		ConfigSource::Static(_) => Err(ErrorResponse::String(
+			"Cannot write to static config".to_string(),
+		)),
+	}
+}
+
+/// Validates the full YAML text and writes it to the configuration file only if it loads.
+async fn write_validated_config(
+	app: &App,
+	file_path: &std::path::Path,
+	yaml_file_content: String,
+) -> Result<(), ErrorResponse> {
+	let expanded = crate::types::local::expand_env(&yaml_file_content)?;
+	if let Err(e) = validate_config_in_task(app, expanded).await {
 		return Err(ErrorResponse::String(e.to_string()));
 	}
 
-	// Write the YAML content to the file
 	fs_err::tokio::write(file_path, yaml_file_content)
 		.await
 		.map_err(|e| ErrorResponse::Anyhow(e.into()))?;
@@ -872,8 +923,9 @@ async fn validate_materialized_config(
 	resources: &[crate::config_store::ConfigResource],
 ) -> Result<(), ErrorResponse> {
 	let base = app.cfg()?.read_to_string().await?;
-	let config_content = crate::config_store::materialize_config(base.as_str(), resources)
-		.map_err(resource_api_error)?;
+	let config_content =
+		crate::config_store::materialize_runtime_config(base.as_str(), resources.to_vec())
+			.map_err(resource_api_error)?;
 	validate_config_in_task(app, config_content)
 		.await
 		.map_err(|err| ErrorResponse::Status(StatusCode::UNPROCESSABLE_ENTITY, err.to_string()))?;
@@ -891,7 +943,7 @@ async fn validate_config_in_task(app: &App, config: String) -> anyhow::Result<()
 	// builds the generated config-conversion frames are particularly large, so start a new task to
 	// have Tokio poll the conversion from the scheduler root instead.
 	tokio::spawn(async move {
-		crate::types::local::NormalizedLocalConfig::from(&state, &resources, gateway, config.as_str())
+		crate::types::local::NormalizedLocalConfig::from_expanded(&state, &resources, gateway, config)
 			.await
 			.map(|_| ())
 	})
@@ -1515,6 +1567,122 @@ mod tests {
 			);
 			assert_eq!(fs_err::read_to_string(&path).unwrap(), written);
 		}
+	}
+
+	#[tokio::test]
+	async fn raw_config_round_trips_file_text_and_validates_before_writing() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path.clone()));
+
+		let original = "# yaml-language-server: $schema=./custom-schema.json\n# My gateway\nbinds:\n- port: 8080 # inline\n  listeners: []\n";
+		fs_err::write(&path, original).unwrap();
+		assert_eq!(get_raw_config(State(app.clone())).await.unwrap(), original);
+
+		// A comment-only change is written byte for byte.
+		let commented = format!("{original}# typed in the raw editor\n");
+		let _ = write_raw_config(State(app.clone()), yaml_headers(), commented.clone())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), commented);
+
+		// Line endings are kept as well.
+		let crlf = commented.replace('\n', "\r\n");
+		let _ = write_raw_config(State(app.clone()), yaml_headers(), crlf.clone())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), crlf);
+		assert_eq!(get_raw_config(State(app.clone())).await.unwrap(), crlf);
+
+		// The written text is not rewritten: no schema header is added and formatting is kept.
+		let unformatted = "binds:\n-   port: 9090\n    listeners: []\n";
+		let _ = write_raw_config(State(app.clone()), yaml_headers(), unformatted.to_string())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), unformatted);
+
+		// Invalid configuration is rejected without touching the file.
+		for invalid in ["binds:\n- port: invalid\n", "binds: [\n"] {
+			assert!(
+				write_raw_config(State(app.clone()), yaml_headers(), invalid.to_string())
+					.await
+					.is_err()
+			);
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), unformatted);
+		}
+
+		let read_only = test_app(true);
+		assert!(
+			write_raw_config(State(read_only), yaml_headers(), unformatted.to_string())
+				.await
+				.is_err()
+		);
+	}
+
+	#[tokio::test]
+	async fn raw_config_write_rejects_cross_origin_simple_request_content_types() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let original = "binds:\n- port: 8080\n  listeners: []\n";
+		fs_err::write(&path, original).unwrap();
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path.clone()));
+		let router = router(
+			app.state.clone(),
+			app.model_catalog.clone(),
+			app.config_resource_store.clone(),
+			app.resource_manager.clone(),
+			&EMPTY_ASSETS_DIR,
+		);
+		let post = |content_type: Option<&str>, body: &str| {
+			let mut request = axum::extract::Request::builder()
+				.method("POST")
+				.uri("/api/config/raw")
+				.header("origin", "https://attacker.example");
+			if let Some(content_type) = content_type {
+				request = request.header("content-type", content_type);
+			}
+			router.clone().oneshot(
+				request
+					.body(axum::body::Body::from(body.to_string()))
+					.unwrap(),
+			)
+		};
+
+		// CORS-safelisted content types must not reach the file.
+		let rewritten = "binds:\n- port: 9090\n  listeners: []\n";
+		for content_type in [
+			None,
+			Some("text/plain"),
+			Some("text/plain;charset=UTF-8"),
+			Some("application/x-www-form-urlencoded"),
+			Some("multipart/form-data"),
+		] {
+			let response = post(content_type, rewritten).await.unwrap();
+			assert_eq!(
+				response.status(),
+				StatusCode::UNSUPPORTED_MEDIA_TYPE,
+				"{content_type:?}"
+			);
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), original);
+		}
+
+		for content_type in ["application/yaml", "Application/YAML; charset=utf-8"] {
+			fs_err::write(&path, original).unwrap();
+			let response = post(Some(content_type), rewritten).await.unwrap();
+			assert_eq!(response.status(), StatusCode::OK, "{content_type}");
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), rewritten);
+		}
+	}
+
+	fn yaml_headers() -> HeaderMap {
+		let mut headers = HeaderMap::new();
+		headers.insert(
+			http::header::CONTENT_TYPE,
+			RAW_CONFIG_CONTENT_TYPE.parse().unwrap(),
+		);
+		headers
 	}
 
 	#[tokio::test]

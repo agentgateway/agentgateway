@@ -44,25 +44,17 @@ pub trait Handler {
 }
 
 /// Mock Substrate ate-api server for testing.
-pub struct AteApiMock<T> {
-	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
+#[derive(Clone)]
+pub struct AteApiMock {
+	handler: Arc<dyn Fn() -> Box<dyn Handler + Send + Sync> + Send + Sync>,
 }
 
-impl<T> Clone for AteApiMock<T> {
-	fn clone(&self) -> Self {
+impl AteApiMock {
+	pub fn new<T: Handler + Send + Sync + 'static>(
+		handler: impl Fn() -> T + Send + Sync + 'static,
+	) -> Self {
 		Self {
-			handler: self.handler.clone(),
-		}
-	}
-}
-
-impl<T> AteApiMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
-	pub fn new(handler: impl Fn() -> T + Send + Sync + 'static) -> Self {
-		Self {
-			handler: Arc::new(handler),
+			handler: Arc::new(move || Box::new(handler())),
 		}
 	}
 
@@ -76,10 +68,7 @@ where
 }
 
 #[tonic::async_trait]
-impl<T> Control for AteApiMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
+impl Control for AteApiMock {
 	async fn get_actor(&self, request: Request<GetActorRequest>) -> Result<Response<Actor>, Status> {
 		let mut handler = (self.handler)();
 		handler.metadata(request.metadata());

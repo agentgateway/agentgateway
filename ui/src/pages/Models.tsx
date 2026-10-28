@@ -30,6 +30,7 @@ import {
 	Tooltip
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
+import { WildcardModelSelector } from '@/components/WildcardModelSelector';
 import {
 	invalidProviderApiKey,
 	isDatabaseConfigResource,
@@ -56,13 +57,12 @@ import {
 	useLlmConfigData,
 	useUpsertConfigResource
 } from '@/hooks';
+import { modelLabel, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	concreteModelName,
 	isWildcardModelName,
 	resolvedProviderLabel,
-	selectedConfiguredModelName,
-	wildcardModelPrefix,
-	wildcardResolvedSuffix
+	selectedConfiguredModelName
 } from '@/modelResolution';
 import { DumpModelsView } from '@/pages/models/DumpModelsView';
 import { ModelMatchesEditor, normalizeMatches } from '@/pages/models/ModelMatchesEditor';
@@ -446,6 +446,8 @@ function ModelsEditorPage() {
 										);
 									}
 									const model = row.model;
+									const optionValue = modelOptionValue(models, models.indexOf(model));
+									const subtitle = modelSubtitle(model);
 									const warnings = modelWarnings(model);
 									const databaseBacked = isDatabaseConfigResource(
 										resources,
@@ -453,8 +455,11 @@ function ModelsEditorPage() {
 										modelIdentity(model)
 									);
 									return (
-										<tr key={`model:${modelIdentity(model)}`}>
-											<td className="strong">{model.name}</td>
+										<tr key={`model:${model.id ?? optionValue}`}>
+											<td className="strong">
+												{modelLabel(model)}
+												{subtitle ? <div className="model-name-pattern">{subtitle}</div> : null}
+											</td>
 											{hybrid ? (
 												<td>
 													<span className="badge">{databaseBacked ? 'Database' : 'File'}</span>
@@ -473,7 +478,7 @@ function ModelsEditorPage() {
 														className="icon-button"
 														aria-label="Open in playground"
 														to="/llm/playground"
-														search={{ model: model.name }}
+														search={{ model: optionValue }}
 													>
 														<Play size={16} />
 													</Link>
@@ -786,6 +791,23 @@ function ModelEditor(props: {
 							});
 						}}
 						placeholder={model.provider ? defaultIncomingModelMatch(model.provider) : 'openai/*'}
+					/>
+				</Field>
+				<Field
+					label="Display name"
+					path="displayName"
+					tooltip={props.help.field<LlmModel>(
+						'LocalLLMModels',
+						'displayName',
+						'Optional label for lists and pickers. Matching still uses the incoming model match.'
+					)}
+				>
+					<input
+						value={model.displayName ?? ''}
+						onChange={event =>
+							update({ model: { ...model, displayName: event.target.value || undefined } })
+						}
+						placeholder="Defaults to the model match"
 					/>
 				</Field>
 			</div>
@@ -1791,11 +1813,6 @@ function VirtualTargetSelector(props: {
 }) {
 	const selectedModelName = selectedConfiguredModelName(props.targetModel, props.baseModels);
 	const selectedModel = props.baseModels.find(model => model.name === selectedModelName);
-	const wildcard = Boolean(selectedModel && isWildcardModelName(selectedModel.name));
-	const wildcardPrefix = selectedModel ? wildcardModelPrefix(selectedModel.name) : '';
-	const resolvedSuffix = wildcard
-		? wildcardResolvedSuffix(props.targetModel, selectedModelName, wildcardPrefix)
-		: '';
 	const provider = selectedModel
 		? resolvedProviderLabel(selectedModel.provider, props.providers)
 		: null;
@@ -1811,17 +1828,15 @@ function VirtualTargetSelector(props: {
 				placeholder="No configured models"
 				onChange={value => props.onChange(concreteModelName(value, ''))}
 			/>
-			{wildcard ? (
-				<div className="target-resolved-composite">
-					{wildcardPrefix ? <span className="target-prefix">{wildcardPrefix}</span> : null}
-					<CatalogModelSelector
-						ariaLabel="Specific model"
-						value={resolvedSuffix}
-						provider={provider}
-						onChange={value => props.onChange(concreteModelName(selectedModelName, value))}
-						placeholder="claude-haiku-4-5"
-					/>
-				</div>
+			{selectedModel && isWildcardModelName(selectedModel.name) ? (
+				<WildcardModelSelector
+					ariaLabel="Specific model"
+					model={selectedModel}
+					value={props.targetModel}
+					provider={provider}
+					onChange={props.onChange}
+					placeholder="claude-haiku-4-5"
+				/>
 			) : null}
 		</div>
 	);

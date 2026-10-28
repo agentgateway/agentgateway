@@ -1380,6 +1380,35 @@ fn gen_ai_operation_failed(request: &RequestLog) -> bool {
 		})
 }
 
+fn mcp_outcome(request: &RequestLog, mcp: &MCPInfo) -> super::metrics::MCPOutcome {
+	use super::metrics::MCPOutcome;
+
+	if request.error.is_some()
+		|| request
+			.status
+			.is_some_and(|status| status.is_client_error() || status.is_server_error())
+	{
+		return MCPOutcome::gateway_error;
+	}
+	if mcp.error.is_some() {
+		return MCPOutcome::protocol_error;
+	}
+	if mcp.method_name.as_deref() == Some("tools/call") {
+		return match mcp.tool.as_ref().and_then(|tool| tool.result.as_ref()) {
+			Some(result) if result.get("isError").and_then(serde_json::Value::as_bool) == Some(true) => {
+				MCPOutcome::tool_error
+			},
+			Some(_) => MCPOutcome::success,
+			None => MCPOutcome::unknown,
+		};
+	}
+	if request.status.is_some_and(|status| status.is_success()) {
+		MCPOutcome::success
+	} else {
+		MCPOutcome::unknown
+	}
+}
+
 fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 	match input_format {
 		InputFormat::Completions | InputFormat::Messages | InputFormat::Responses => "chat",
@@ -1598,6 +1627,7 @@ impl Drop for DropOnLog {
 					.mcp_requests
 					.get_or_create(&MCPCall {
 						method: mcp.method_name.clone().map(RichStrng::from).into(),
+						outcome: mcp_outcome(&log, mcp),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
 						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
@@ -2964,6 +2994,33 @@ mod tests {
 		let mut encoded = String::new();
 		encode(&mut encoded, registry).unwrap();
 		encoded
+	}
+
+	#[test]
+	fn mcp_outcomes() {
+		use crate::telemetry::metrics::MCPOutcome::*;
+		let ok = Some(http::StatusCode::OK);
+		let bad = Some(http::StatusCode::BAD_GATEWAY);
+		for (status, is_error, rpc_error, expected) in [
+			(ok, Some(false), false, success),
+			(ok, Some(true), false, tool_error),
+			(ok, None, true, protocol_error),
+			(bad, Some(true), false, gateway_error),
+			(ok, None, false, unknown),
+		] {
+			let mut log = test_request_log();
+			log.status = status;
+			let mut mcp = MCPInfo {
+				method_name: Some("tools/call".into()),
+				..Default::default()
+			};
+			mcp.set_tool("server".into(), "echo".into());
+			mcp.tool.as_mut().unwrap().result = is_error.map(|e| serde_json::json!({"isError": e}));
+			if rpc_error {
+				mcp.capture_error(&rmcp::ErrorData::invalid_params("bad", None));
+			}
+			assert_eq!(mcp_outcome(&log, &mcp), expected);
+		}
 	}
 
 	#[test]

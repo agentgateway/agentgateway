@@ -51,6 +51,7 @@ fn setup_dfp_https() -> (TestBind, MemoryClient) {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
+			..Default::default()
 		}]),
 	);
 

@@ -570,8 +570,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 	}
 
 	gtw.Service = &AgentgatewayHelmService{}
-	// Extract loadBalancerIP from Gateway.spec.addresses and set it on the service
-	if err := SetLoadBalancerIPFromGatewayForAgentgateway(gw, gtw.Service); err != nil {
+	if err := SetServiceFromGatewayAddresses(gw, gtw.Service); err != nil {
 		return nil, err
 	}
 

@@ -13,7 +13,7 @@ service Control {
 
 message Actor {
   ResourceMetadata metadata = 1;
-  ActorStatus status = 7;
+  ActorStatus status = 5;
 }
 
 message ActorStatus {
@@ -50,7 +50,6 @@ message ObjectRef {
 
 message ResumeActorRequest {
   ObjectRef actor = 1;
-  bool boot = 2;
 }
 
 message ResumeActorResponse {
@@ -126,9 +125,9 @@ message GetActorEgressPolicyRequest {
 }
 
 message MintActorJwtRequest {
-  ObjectRef actor = 5;
-  repeated string audiences = 1;
-  int64 expiration_seconds = 8;
+  ObjectRef actor = 1;
+  repeated string audiences = 2;
+  int64 expiration_seconds = 3;
 }
 
 message MintActorJwtResponse {

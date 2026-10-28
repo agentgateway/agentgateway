@@ -33,6 +33,7 @@ pub(in crate::tests) fn https_bind() -> BindSnapshot {
 			name: Default::default(),
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
+			..Default::default()
 		}]),
 	)
 }
@@ -188,6 +189,7 @@ async fn tls_connection_drains_when_listener_changes() {
 			name: Default::default(),
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(agentgateway::types::agent::ServerTLSConfig::new_invalid()),
+			..Default::default()
 		},
 		BIND_KEY,
 	);
@@ -246,6 +248,34 @@ async fn tls_backend_connection() {
 	let res = send_http_version(&t, Version::HTTP_11).await;
 	assert_eq!(res.status(), 200);
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+}
+
+#[tokio::test]
+async fn tls_backend_invalid_does_not_connect() {
+	use agentgateway::http::backendtls::{BackendTLS, BackendTLSSource};
+
+	let mock = simple_mock().await;
+	let backend_tls = BackendTLS {
+		hostname_override: None,
+		source: BackendTLSSource::Invalid(strng::new("rejected")),
+		metadata: Default::default(),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![BackendTrafficPolicy::BackendTLS(backend_tls)],
+		})
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+
+	let res = send_http_version(&t, Version::HTTP_11).await;
+	assert_eq!(res.status(), 503);
+	assert_eq!(mock.received_requests().await.unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -462,6 +492,7 @@ fn tls_passthrough_bind() -> BindSnapshot {
 			hostname: strng::new("*.example.com"),
 			// No TLS config: passthrough
 			protocol: ListenerProtocol::TLS(None),
+			..Default::default()
 		}]),
 	)
 }

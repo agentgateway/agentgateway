@@ -248,11 +248,11 @@ impl LocalClient {
 		let config_content = self.config_content().await?;
 		let resources =
 			crate::resource_manager::ResourceFetcher::managed(self.resource_manager.clone());
-		let config = crate::types::local::NormalizedLocalConfig::from(
+		let config = crate::types::local::NormalizedLocalConfig::from_expanded(
 			&self.config,
 			&resources,
 			self.gateway.clone(),
-			config_content.as_str(),
+			config_content,
 		)
 		.await?;
 		let model_catalog = config
@@ -302,7 +302,7 @@ impl LocalClient {
 		{
 			return config_store::materialize_hybrid_config(&self.cfg, store).await;
 		}
-		self.cfg.read_to_string().await
+		crate::types::local::expand_env(&self.cfg.read_to_string().await?)
 	}
 
 	async fn reload_config_after_change(&self, prev: PreviousState) -> PreviousState {

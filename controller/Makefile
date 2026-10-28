@@ -710,7 +710,7 @@ kind-load: kind-load-testbox
 
 # Agent Gateway conformance test configuration
 AGW_CONFORMANCE_GATEWAY_CLASS ?= agentgateway
-AGW_CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/agw-$(VERSION)-report.yaml -organization=agentgateway -project=agentgateway -version=$(VERSION) -url=github.com/agentgateway/agentgateway -contact=github.com/agentgateway/agentgateway/issues/new/choose
+AGW_CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/agw-$(VERSION)-report.yaml -organization=agentgateway -project=agentgateway -version=$(VERSION) -url=https://github.com/agentgateway/agentgateway -contact=https://github.com/agentgateway/agentgateway/issues/new/choose
 AGW_CONFORMANCE_SKIP_TESTS ?=
 AGW_CONFORMANCE_SKIP_ARGS := $(if $(AGW_CONFORMANCE_SKIP_TESTS),-skip-tests=$(AGW_CONFORMANCE_SKIP_TESTS))
 AGW_CONFORMANCE_ARGS := -gateway-class=$(AGW_CONFORMANCE_GATEWAY_CLASS) $(AGW_CONFORMANCE_REPORT_ARGS) $(AGW_CONFORMANCE_SKIP_ARGS)

@@ -186,7 +186,7 @@ reqwest = { version = "0.13", default-features = false, features = [
     "charset",
     "rustls",
 ] }
-rstest = "0.27"
+rstest = "0.28"
 rust_decimal = { version = "1", default-features = false }
 mime_guess = "2.0"
 rustc_version = "0.4"
@@ -216,7 +216,6 @@ sse-stream = "0.3"
 sqlx = { version = "0.9", default-features = false, features = [
     "chrono",
     "json",
-    "macros",
     "migrate",
     "postgres",
     "runtime-tokio",
@@ -224,6 +223,8 @@ sqlx = { version = "0.9", default-features = false, features = [
     "tls-rustls-aws-lc-rs",
     "uuid",
 ] }
+# Enable only the macros we use, avoiding extra database-driver builds for the macros.
+sqlx-macros = { version = "0.9", default-features = false, features = ["derive", "migrate"] }
 sqlx-core = { version = "0.9", default-features = false, features = ["rustls-native-certs"] }
 stacker = "0.1"
 subtle = "2"
@@ -296,6 +297,12 @@ opt-level = 1
 # Unoptimized SQLite makes request-log analytics queries several times slower in dev builds.
 [profile.dev.package.libsqlite3-sys]
 opt-level = 1
+
+# Keep file/line backtraces while reducing test code generation.
+[profile.test.package.agentgateway]
+debug = "line-tables-only"
+# Smaller units reduce the amount of LLVM work after a local edit.
+codegen-units = 2048
 
 # Release optimized but without as many dependencies, suitable for incremental development
 [profile.quick-release-debug]

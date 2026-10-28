@@ -83,7 +83,7 @@ impl SqliteLogStore {
 	pub async fn from_pool(pool: SqlitePool) -> anyhow::Result<Self> {
 		let started = std::time::Instant::now();
 		tracing::info!("initializing request log database schema");
-		let mut migrator = sqlx::migrate!("./src/telemetry/log_store/sqlite_migrations");
+		let mut migrator = sqlx_macros::migrate!("./src/telemetry/log_store/sqlite_migrations");
 		migrator.dangerous_set_table_name(MIGRATIONS_TABLE);
 		migrator
 			.run(&pool)

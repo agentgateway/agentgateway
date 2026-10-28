@@ -3,10 +3,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use agent_core::telemetry::ValueBag;
+use futures_util::future::BoxFuture;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use opentelemetry::trace::{SpanContext, SpanId, SpanKind, Status, TraceId, TraceState};
 use opentelemetry::{InstrumentationScope, Key, KeyValue, TraceFlags};
+use opentelemetry_http::HttpError;
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::trace::{
@@ -470,43 +472,59 @@ pub(crate) struct PolicyOtelHttpClient {
 	pub(crate) policies: Vec<BackendTrafficPolicy>,
 }
 
-#[async_trait::async_trait]
 impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
-	async fn send_bytes(
+	fn send_bytes<'a, 'fut>(
+		&'a self,
+		request: http::Request<bytes::Bytes>,
+	) -> BoxFuture<'fut, Result<http::Response<bytes::Bytes>, HttpError>>
+	where
+		'a: 'fut,
+		Self: 'fut,
+	{
+		self.send_bytes_inner(request)
+	}
+}
+
+impl PolicyOtelHttpClient {
+	// Build the future outside async_trait's outlives bounds so rustc can reuse the
+	// Send proof for PolicyClient. See rust-lang/rust#157595.
+	fn send_bytes_inner(
 		&self,
 		request: http::Request<bytes::Bytes>,
-	) -> Result<http::Response<bytes::Bytes>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-		let client = self.policy_client.clone();
-		let backend_ref = self.backend_ref.clone();
-		let policies = self.policies.clone();
-		let handle = self.runtime.clone();
+	) -> BoxFuture<'_, Result<http::Response<bytes::Bytes>, HttpError>> {
+		Box::pin(async move {
+			let client = self.policy_client.clone();
+			let backend_ref = self.backend_ref.clone();
+			let policies = self.policies.clone();
+			let handle = self.runtime.clone();
 
-		let (mut head, body_bytes) = request.into_parts();
-		let mut uri_parts = head.uri.into_parts();
-		uri_parts.scheme = None;
-		uri_parts.authority = None;
-		head.uri = http::Uri::from_parts(uri_parts).map_err(Box::new)?;
-		let req = crate::http::Request::from_parts(head, crate::http::Body::from(body_bytes));
+			let (mut head, body_bytes) = request.into_parts();
+			let mut uri_parts = head.uri.into_parts();
+			uri_parts.scheme = None;
+			uri_parts.authority = None;
+			head.uri = http::Uri::from_parts(uri_parts).map_err(Box::new)?;
+			let req = crate::http::Request::from_parts(head, crate::http::Body::from(body_bytes));
 
-		handle
-			.spawn(async move {
-				let resp = client
-					.call_reference_with_policies_untraced(req, &backend_ref, &policies)
-					.await
-					.map_err(Box::new)?;
+			handle
+				.spawn(async move {
+					let resp = client
+						.call_reference_with_policies_untraced(req, &backend_ref, &policies)
+						.await
+						.map_err(Box::new)?;
 
-				// Release the body and extension pool guards on the Tokio runtime.
-				use http_body_util::BodyExt as _;
-				let (mut parts, body) = resp.into_parts();
-				parts.extensions.clear();
-				let collected = body.collect().await.map_err(Box::new)?;
-				Ok::<_, Box<dyn std::error::Error + Send + Sync>>(http::Response::from_parts(
-					parts,
-					collected.to_bytes(),
-				))
-			})
-			.await
-			.map_err(Box::new)?
+					// Release the body and extension pool guards on the Tokio runtime.
+					use http_body_util::BodyExt as _;
+					let (mut parts, body) = resp.into_parts();
+					parts.extensions.clear();
+					let collected = body.collect().await.map_err(Box::new)?;
+					Ok::<_, Box<dyn std::error::Error + Send + Sync>>(http::Response::from_parts(
+						parts,
+						collected.to_bytes(),
+					))
+				})
+				.await
+				.map_err(Box::new)?
+		})
 	}
 }
 

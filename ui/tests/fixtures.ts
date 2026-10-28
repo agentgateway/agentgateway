@@ -1,11 +1,12 @@
 import type { Page, Route } from '@playwright/test';
+import { dump, load } from 'js-yaml';
 
-import { mcpSettingsFields } from '../../src/config';
-import type { DumpModel, StoresDump } from '../../src/gateway-admin';
+import { mcpSettingsFields } from '@/config';
+import type { DumpModel, StoresDump } from '@/gateway-admin';
 
 export type TestConfig = Record<string, unknown>;
 
-export function bareConfig(): TestConfig {
+export function unconfiguredConfig(): TestConfig {
 	return {
 		config: {
 			logging: {
@@ -13,14 +14,14 @@ export function bareConfig(): TestConfig {
 					url: 'sqlite:///tmp/gw-logs.db'
 				}
 			}
-		},
-		binds: []
+		}
 	};
 }
 
 export function emptyConfig(): TestConfig {
 	return {
-		...bareConfig(),
+		...unconfiguredConfig(),
+		binds: [],
 		llm: {
 			port: 4000,
 			models: [],
@@ -44,8 +45,7 @@ export function emptyConfig(): TestConfig {
 					exposeHeaders: ['Mcp-Session-Id']
 				}
 			}
-		},
-		binds: []
+		}
 	};
 }
 
@@ -409,7 +409,9 @@ export async function mockXdsGateway(page: Page, dump: StoresDump = xdsDump()) {
 
 export async function mockGateway(page: Page, initialConfig: TestConfig = populatedConfig()) {
 	let config = structuredClone(initialConfig);
+	let rawConfig: string | null = null;
 	const postedConfigs: TestConfig[] = [];
+	const postedRawConfigs: string[] = [];
 	const chatRequests: Array<Record<string, unknown>> = [];
 	const chatUrls: string[] = [];
 	const mcpRequests: Array<Record<string, unknown>> = [];
@@ -441,6 +443,34 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 		}
 		if (route.request().method() === 'POST') {
 			config = route.request().postDataJSON() as TestConfig;
+			rawConfig = null;
+			postedConfigs.push(structuredClone(config));
+			await json(route, { status: 'ok', message: 'saved' });
+			return;
+		}
+		await route.fallback();
+	});
+
+	// The raw editor reads and writes the file text; the gateway validates it before saving.
+	await page.route('**/api/config/raw', async route => {
+		if (route.request().method() === 'GET') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/plain',
+				body: rawConfig ?? dump(config, { noRefs: true })
+			});
+			return;
+		}
+		if (route.request().method() === 'POST') {
+			// Cross-origin YAML writes require a CORS preflight.
+			const contentType = route.request().headers()['content-type'] ?? '';
+			if (!contentType.startsWith('application/yaml')) {
+				await route.fulfill({ status: 415, body: 'unsupported media type' });
+				return;
+			}
+			rawConfig = route.request().postData() ?? '';
+			config = load(rawConfig) as TestConfig;
+			postedRawConfigs.push(rawConfig);
 			postedConfigs.push(structuredClone(config));
 			await json(route, { status: 'ok', message: 'saved' });
 			return;
@@ -594,7 +624,7 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 	});
 
 	await page.route('**/api/logs/analytics/summary', async route => {
-		const now = new Date();
+		const now = new Date('2025-01-01T00:00:00.000Z');
 		await json(route, {
 			timeRange: {
 				from: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
@@ -715,6 +745,7 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 
 	return {
 		postedConfigs,
+		postedRawConfigs,
 		chatRequests,
 		chatUrls,
 		mcpRequests,
@@ -723,7 +754,7 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 	};
 }
 
-async function json(route: Route, body: unknown, headers: Record<string, string> = {}) {
+export async function json(route: Route, body: unknown, headers: Record<string, string> = {}) {
 	await route.fulfill({
 		status: 200,
 		contentType: 'application/json',

@@ -1,0 +1,23 @@
+- key: test-ns/conflict-mcp-backend/trusted
+  name:
+    name: conflict-mcp-backend
+    namespace: test-ns
+  static:
+    host: trusted.example.com
+    port: 8080
+- key: test-ns/conflict-mcp-backend
+  mcp:
+    targets:
+    - backend:
+        backend: test-ns/conflict-mcp-backend/trusted
+      name: trusted
+    - backend:
+        port: 8080
+        service:
+          hostname: dup.test-ns.svc.cluster.local
+          namespace: test-ns
+      name: dup-mcp
+      protocol: STREAMABLE_HTTP
+  name:
+    name: conflict-mcp-backend
+    namespace: test-ns

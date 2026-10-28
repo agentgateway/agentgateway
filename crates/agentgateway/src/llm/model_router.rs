@@ -167,7 +167,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
 			)
 			.expect("valid Bedrock model route regex"),
 		),
-		route_type: None,
+		route_type: Some(Detect),
 		operation: None,
 		template: "/model/{model}/${operation}",
 	});
@@ -201,7 +201,6 @@ fn serving_endpoint(path: &str) -> Option<&'static ServingEndpoint> {
 }
 
 pub fn classify_route(path: &str) -> Option<llm::RouteType> {
-	// Bedrock endpoints deliberately select the model's passthrough mode.
 	serving_endpoint(path).and_then(|endpoint| endpoint.route_type)
 }
 
@@ -677,12 +676,11 @@ impl ModelRouter {
 		};
 		Ok(Some(ResolvedBackend {
 			backend: model.backend.clone(),
-			route_type: classify_route(req.uri().path()).unwrap_or(
-				model
-					.policies
-					.passthrough
-					.unwrap_or(llm::RouteType::Passthrough),
-			),
+			route_type: model
+				.policies
+				.passthrough
+				.or_else(|| classify_route(req.uri().path()))
+				.unwrap_or(llm::RouteType::Passthrough),
 			llm_policy: model.policies.llm.clone(),
 		}))
 	}
@@ -991,7 +989,7 @@ fn rewrite_body_model(
 	Ok(())
 }
 
-fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
+pub(crate) fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 	let Some(path_and_query) = req.uri().path_and_query() else {
 		return Ok(());
 	};
@@ -1024,7 +1022,7 @@ fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 	Ok(())
 }
 
-fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
+pub(crate) fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
 		return rewrite_publishers_path_model(path, target);
 	}
@@ -1374,6 +1372,60 @@ mod tests {
 		let body: Value = serde_json::from_slice(&body).expect("valid JSON request body");
 		assert_eq!(body["model"], "economy-model");
 		assert_eq!(cached, body);
+	}
+
+	#[test]
+	fn passthrough_overrides_serving_endpoint() {
+		let model = |name: &str, passthrough| ModelRoute {
+			discovery: None,
+			id: None,
+			name: name.to_string(),
+			created: 0,
+			visibility: ModelVisibility::Public,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				passthrough,
+				llm: Arc::default(),
+				authorization: None,
+			},
+			backend_policies: vec![],
+		};
+		let router = ModelRouter::new(
+			vec![
+				model("default", None),
+				model("detect", Some(llm::RouteType::Detect)),
+				model("opaque", Some(llm::RouteType::Passthrough)),
+			],
+			vec![],
+		);
+		let route_type = |name: &str, path: &str| {
+			let req = ::http::Request::builder()
+				.uri(path)
+				.body(http::Body::empty())
+				.expect("valid request");
+			router
+				.resolve_concrete_model(name, false, &req)
+				.expect("authorized")
+				.expect("model exists")
+				.route_type
+		};
+		assert_eq!(
+			route_type("default", "/v1/chat/completions"),
+			llm::RouteType::Completions
+		);
+		assert_eq!(
+			route_type("detect", "/v1/chat/completions"),
+			llm::RouteType::Detect
+		);
+		assert_eq!(
+			route_type("opaque", "/v1/audio/speech"),
+			llm::RouteType::Passthrough
+		);
 	}
 
 	#[tokio::test]

@@ -202,17 +202,20 @@ async fn gateway_phase_oidc_callback_authenticates_and_strips_reserved_cookies()
 		.attach_gateway_policy(gateway_oidc_policy(format!("{}/token", mock.uri())))
 		.await;
 
-	let oidc = bind
-		.pi
-		.stores
-		.read_binds()
-		.gateway_policies(&agentgateway::types::agent::ListenerName::default())
-		.oidc
-		.iter()
-		.next()
-		.cloned()
-		.expect("compiled gateway oidc policy")
-		.pol;
+	let oidc = {
+		let binds = bind.pi.stores.read_binds();
+		let listener = binds
+			.get_bind_listener(&BIND_KEY, &LISTENER_KEY)
+			.expect("listener");
+		binds
+			.gateway_policies(&BIND_KEY, &listener)
+			.oidc
+			.iter()
+			.next()
+			.cloned()
+			.expect("compiled gateway oidc policy")
+			.pol
+	};
 
 	let io = bind.serve_http(BIND_KEY);
 	let login = send_request(io.clone(), Method::GET, "http://lo/private").await;

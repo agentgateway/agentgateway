@@ -90,6 +90,24 @@ pub(crate) fn is_known_client_request_method(method: &str) -> bool {
 	)
 }
 
+/// JSON-RPC classifies any message without a usable id as a notification, so a `tools/call` sent
+/// without an id (or with an unrepresentable one) would be forwarded with no request authorization.
+/// Only accept notifications in the MCP `notifications/` namespace.
+pub(crate) fn validate_client_message(
+	message: &rmcp::model::ClientJsonRpcMessage,
+) -> Result<(), Error> {
+	if matches!(message, rmcp::model::ClientJsonRpcMessage::Notification(_)) {
+		let method = streamablehttp::message_method(message).unwrap_or("unknown");
+		if !method.starts_with("notifications/") {
+			return Err(Error::InvalidParams(
+				None,
+				format!("{method} is not a notification"),
+			));
+		}
+	}
+	Ok(())
+}
+
 /// True for protocol versions in the modern (2026-07-28+) era, which negotiate via
 /// `server/discover` plus per-request `_meta` rather than a session-establishing `initialize`.
 pub(crate) fn is_modern_version(version: &ProtocolVersion) -> bool {

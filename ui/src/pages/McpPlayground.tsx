@@ -543,6 +543,8 @@ function McpResultView(props: { response: McpResponse }) {
 		payload && typeof payload === 'object' ? (payload as { result?: unknown }).result : undefined;
 	const error =
 		payload && typeof payload === 'object' ? (payload as { error?: unknown }).error : undefined;
+	const toolError =
+		result && typeof result === 'object' && (result as { isError?: unknown }).isError === true;
 	const tools = extractMcpTools(props.response.body);
 	const content =
 		result && typeof result === 'object' && Array.isArray((result as { content?: unknown }).content)
@@ -556,8 +558,8 @@ function McpResultView(props: { response: McpResponse }) {
 	return (
 		<div className="mcp-result-view">
 			<div className="mcp-result-status">
-				<span className={error ? 'badge bad' : 'badge ok'}>
-					{error ? 'error' : `HTTP ${props.response.status}`}
+				<span className={error || toolError ? 'badge bad' : 'badge ok'}>
+					{error ? 'error' : toolError ? 'tool error' : `HTTP ${props.response.status}`}
 				</span>
 				{props.response.sessionId ? <span className="mono">{props.response.sessionId}</span> : null}
 			</div>
@@ -583,7 +585,7 @@ function McpResultView(props: { response: McpResponse }) {
 				</div>
 			) : content.length > 0 || structuredContent !== undefined ? (
 				<div className="mcp-result-card">
-					<strong>Tool output</strong>
+					<strong>{toolError ? 'Tool error' : 'Tool output'}</strong>
 					{content.map((item, index) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						<ContentBlock block={item} key={index} />
@@ -597,7 +599,7 @@ function McpResultView(props: { response: McpResponse }) {
 				</div>
 			) : (
 				<div className="mcp-result-card">
-					<strong>Response</strong>
+					<strong>{toolError ? 'Tool error' : 'Response'}</strong>
 					<JsonBlock value={result ?? props.response.body} />
 				</div>
 			)}

@@ -8460,6 +8460,13 @@
         "target": {
           "description": "Backend that resolves credentials and policies used when connecting to it.",
           "$ref": "#/$defs/SimpleBackendReferenceWithPolicies"
+        },
+        "cacheTtl": {
+          "description": "How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -8636,10 +8643,10 @@
       "type": "object",
       "properties": {
         "attempts": {
-          "description": "Maximum number of retries after the original request.",
+          "description": "Maximum number of retries after the original request. `0` disables retries.",
           "type": "integer",
           "format": "uint8",
-          "minimum": 1,
+          "minimum": 0,
           "maximum": 255,
           "default": 1
         },
@@ -12840,6 +12847,13 @@
         "name": {
           "description": "name is the name of the model we are matching from a users request. If params.model is set, that\nwill be used in the request to the LLM provider. If not, the incoming model is used.",
           "type": "string"
+        },
+        "displayName": {
+          "description": "displayName is an optional label shown in the UI in place of name. It does not affect matching.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "visibility": {
           "description": "visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).",

@@ -1185,6 +1185,56 @@ llm:
 }
 
 #[tokio::test]
+async fn llm_model_router_rewrites_path_model() {
+	let mock = body_mock(llm_body!("response/bedrock/basic.json")).await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: internal-model
+    visibility: internal
+    provider: bedrock
+    params:
+      awsRegion: us-east-1
+      hostOverride: "{}"
+      pathPrefix: /
+    transformation:
+      model: '"global.openai.gpt-5.6-luna"'
+  virtualModels:
+  - name: gpt-5.6-luna
+    routing:
+      failover:
+        targets:
+        - model: internal-model
+          priority: 0
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let body = json!({"messages": [{"role": "user", "content": [{"text": "hi"}]}]});
+	let res = RequestBuilder::new(
+		Method::POST,
+		"http://lo/model/gpt-5.6-luna/converse?trace=true",
+	)
+	.json(&body)
+	.send(io)
+	.await
+	.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(
+		request.url.path(),
+		"/model/global.openai.gpt-5.6-luna/converse"
+	);
+	assert_eq!(request.url.query(), Some("trace=true"));
+	assert_eq!(request.body_json::<Value>().unwrap(), body);
+}
+
+#[tokio::test]
 async fn llm_model_router_rewrites_multipart_virtual_model() {
 	let mock = body_mock(include_bytes!(
 		"../../../llm/src/tests/response/completions/basic.json"

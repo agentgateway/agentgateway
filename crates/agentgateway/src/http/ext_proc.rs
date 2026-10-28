@@ -737,8 +737,9 @@ impl ExtProcInstance {
 		trailer_slot: Option<Arc<Mutex<Option<http::HeaderMap>>>>,
 		first_message: FirstExtProcMessage,
 		missing_body_message: &'static str,
+		downstream_dropped: Option<tokio::sync::oneshot::Receiver<()>>,
 	) {
-		tokio::task::spawn(Self::handle_body_stream(
+		let body_stream = Self::handle_body_stream(
 			metadata_context.clone(),
 			pending_body.take().expect(missing_body_message),
 			tx,
@@ -746,7 +747,17 @@ impl ExtProcInstance {
 			send_trailers,
 			trailer_slot,
 			first_message,
-		));
+		);
+		let Some(downstream_dropped) = downstream_dropped else {
+			tokio::task::spawn(body_stream);
+			return;
+		};
+		tokio::task::spawn(async move {
+			tokio::select! {
+				_ = body_stream => {},
+				_ = downstream_dropped => trace!("downstream dropped, stopping body stream"),
+			}
+		});
 	}
 
 	async fn recv_response_loop_message(
@@ -1048,6 +1059,7 @@ impl ExtProcInstance {
 				Some(request_trailers.clone()),
 				first_message,
 				"request body should be available before streaming starts",
+				None,
 			);
 			self.mark_protocol_config_sent_if(sends_protocol_config);
 			request_body_started_to_ext_proc = true;
@@ -1259,6 +1271,7 @@ impl ExtProcInstance {
 						Some(request_trailers.clone()),
 						first_message,
 						"request body should be available before streaming continuation starts",
+						None,
 					);
 					self.mark_protocol_config_sent_if(sends_protocol_config);
 				}
@@ -1578,7 +1591,10 @@ impl ExtProcInstance {
 		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
 		let body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
 		managed_body.replace_content(agent_http::RawBody::new(body).into());
-		let mut resp = http::Response::from_parts(parts, managed_body);
+		let (tx_downstream_dropped, rx_downstream_dropped) = tokio::sync::oneshot::channel::<()>();
+		let mut rx_downstream_dropped = Some(rx_downstream_dropped);
+		let mut resp =
+			http::Response::from_parts(parts, managed_body.with_drop_guard(tx_downstream_dropped));
 
 		// FULL_DUPLEX_STREAMED sends response body chunks as they arrive. The ext_proc server may
 		// buffer the response headers and complete body before sending any response, so do not wait
@@ -1598,6 +1614,7 @@ impl ExtProcInstance {
 				Some(response_trailers.clone()),
 				first_message,
 				"response body should be available before streaming starts",
+				rx_downstream_dropped.take(),
 			);
 			self.mark_protocol_config_sent_if(sends_protocol_config);
 		} else if !send_response_headers && had_body {
@@ -1631,6 +1648,7 @@ impl ExtProcInstance {
 					Some(response_trailers.clone()),
 					first_message,
 					"response body should be available before streaming starts",
+					rx_downstream_dropped.take(),
 				);
 				self.mark_protocol_config_sent_if(sends_protocol_config);
 			}
@@ -1747,6 +1765,7 @@ impl ExtProcInstance {
 							Some(response_trailers.clone()),
 							first_message,
 							"response body should be available before streaming continuation starts",
+							rx_downstream_dropped.take(),
 						);
 						self.mark_protocol_config_sent_if(sends_protocol_config);
 					}

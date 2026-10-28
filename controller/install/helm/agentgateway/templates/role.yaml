@@ -86,6 +86,16 @@ rules:
   - list
   - watch
 
+# CA certificates referenced by TLS validation. Only watched if the cluster serves the API.
+- apiGroups:
+  - certificates.k8s.io
+  resources:
+  - clustertrustbundles
+  verbs:
+  - get
+  - list
+  - watch
+
 # Status reports
 {{- if .Values.xBackend.enabled }}
 - apiGroups:

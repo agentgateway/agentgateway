@@ -96,6 +96,10 @@ message Listener {
   string hostname = 4;
   Protocol protocol = 5;
   TLSConfig tls = 6;
+  // Traffic policies applied to all requests on the listener, before route selection.
+  repeated TrafficPolicySpec traffic_policies = 7;
+  // If set, the listener's configuration is invalid, and every request on it fails.
+  optional string error = 8;
 }
 
 message Route {
@@ -339,7 +343,8 @@ message Timeout {
 
 message Retry {
   repeated int32 retry_status_codes = 1;
-  int32 attempts = 2;
+  // Number of retries after the original request. Unset defaults to 1; 0 disables retries.
+  optional int32 attempts = 2;
   google.protobuf.Duration backoff = 3;
   // CEL expression evaluated against the request before any attempt. When it evaluates
   // to false, retries are disabled (only the initial attempt is made). This avoids

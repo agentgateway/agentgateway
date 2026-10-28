@@ -1,5 +1,6 @@
 use ::http::HeaderMap;
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use http_body_util::BodyExt as _;
 use itertools::Itertools;
 use serde::de::DeserializeOwned;
@@ -458,10 +459,14 @@ enum ResponseGuardMutation {
 ///
 /// The trait is object-safe and `Send` so it can be boxed and driven from the
 /// `GuardedSseBody` future.
-#[async_trait::async_trait]
 pub trait StreamingEvaluator: Send {
 	/// Evaluate a text window. Returns `Some(Blocked)` if the content should be blocked.
-	async fn evaluate(&mut self, window: &str) -> anyhow::Result<Option<StreamingGuardrailOutcome>>;
+	// One lifetime avoids async_trait outlives bounds that make rustc repeat expensive Send proofs.
+	// https://github.com/rust-lang/rust/issues/157595
+	fn evaluate<'a>(
+		&'a mut self,
+		window: &'a str,
+	) -> BoxFuture<'a, anyhow::Result<Option<StreamingGuardrailOutcome>>>;
 
 	/// Returns the failure mode to apply when `evaluate` returns an error.
 	/// Guard types without an explicit `failure_mode` field default to `FailClosed`.

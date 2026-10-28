@@ -250,6 +250,7 @@ impl TCPProxy {
 					transport,
 					tcp: backend_call.backend_policies.tcp.clone(),
 					max_connection_duration: None,
+					backend: Some(selected_backend.backend.backend.name()),
 				},
 				dynamic_backend: matches!(selected_backend.backend.backend, Backend::Dynamic(_, _)),
 			})
@@ -630,6 +631,7 @@ mod tests {
 			},
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HBONE,
+			..Default::default()
 		})
 	}
 
@@ -873,6 +875,7 @@ mod tests {
 			},
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TLS(None), // Not HBONE
+			..Default::default()
 		});
 
 		let route = super::select_best_route(None, listener, &stores, &network, dst, None);

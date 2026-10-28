@@ -1541,6 +1541,87 @@ fn reasoning_effort_maps_to_thinking_level_on_gemini_3() {
 }
 
 #[test]
+fn reasoning_effort_maps_to_thinking_level_on_gemma_4() {
+	// Gemma 4 on the Gemini API only supports the binary `minimal` (off) / `high` (on)
+	// thinking levels and rejects thinkingBudget with "Thinking budget is not supported
+	// for this model." (agentgateway#4148). `none` maps to `minimal` because omitting
+	// thinkingConfig leaves Gemma 4 thinking enabled. Matching is by family substring,
+	// so any gemma-4-* variant (including a `models/` prefix) takes this path.
+	// Full Gemma 4 family as documented, plus a `models/`-prefixed variant to prove
+	// matching is by family substring rather than exact model id.
+	for model in [
+		"gemma-4-e2b-it",
+		"gemma-4-e4b-it",
+		"gemma-4-26b-a4b-it",
+		"gemma-4-31b-it",
+		"models/gemma-4-31b-it",
+	] {
+		for (effort, level) in [
+			("none", "minimal"),
+			("minimal", "minimal"),
+			("low", "minimal"),
+			("medium", "high"),
+			("high", "high"),
+			("xhigh", "high"),
+			("max", "high"),
+		] {
+			let g = to_gemini(json!({
+				"model": model,
+				"messages": [{ "role": "user", "content": "x" }],
+				"reasoning_effort": effort
+			}));
+			let tc = &g["generationConfig"]["thinkingConfig"];
+			assert_eq!(tc["thinkingLevel"], level, "{model} effort={effort}: {g}");
+			assert!(
+				tc.get("thinkingBudget").is_none(),
+				"{model} effort={effort} must not send thinkingBudget: {g}"
+			);
+		}
+	}
+}
+
+#[test]
+fn reasoning_effort_maps_to_thinking_level_on_gemini_4() {
+	// Gemini 4 (e.g. gemini-4-argon) rejects the legacy numeric thinkingBudget
+	// ("Thinking budget is not supported for this model. Use thinkingLevel
+	// instead.") and supports low/medium/high but has no `minimal` level, so
+	// `minimal` clamps up to `low`.
+	for (effort, level) in [
+		("minimal", "low"),
+		("low", "low"),
+		("medium", "medium"),
+		("high", "high"),
+		("xhigh", "high"),
+		("max", "high"),
+	] {
+		let g = to_gemini(json!({
+			"model": "gemini-4-argon",
+			"messages": [{ "role": "user", "content": "x" }],
+			"reasoning_effort": effort
+		}));
+		let tc = &g["generationConfig"]["thinkingConfig"];
+		assert_eq!(tc["thinkingLevel"], level, "effort={effort}: {g}");
+		assert!(
+			tc.get("thinkingBudget").is_none(),
+			"effort={effort} must not send thinkingBudget: {g}"
+		);
+	}
+}
+
+#[test]
+fn reasoning_effort_none_omits_thinking_config_on_gemini_4() {
+	// Gemini 4 has no off level, so `none` keeps the default behavior of
+	// omitting thinkingConfig instead of sending an unsupported `minimal`.
+	let g = to_gemini(json!({
+		"model": "gemini-4-argon",
+		"messages": [{ "role": "user", "content": "x" }],
+		"reasoning_effort": "none"
+	}));
+	let gc = g.get("generationConfig");
+	assert!(gc.is_none() || gc.unwrap().get("thinkingConfig").is_none());
+}
+
+#[test]
 fn reasoning_effort_maps_to_thinking_budget_on_gemini_25() {
 	for (effort, budget) in [("high", 4096), ("xhigh", 8192), ("max", 16384)] {
 		let g = to_gemini(json!({

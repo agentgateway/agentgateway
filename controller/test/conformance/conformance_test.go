@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -65,13 +64,13 @@ func TestConformance(t *testing.T) {
 	if err == nil {
 		options.UsableNetworkAddresses = []gwv1.GatewaySpecAddress{
 			{
-				Type:  ptr.Of(gwv1.IPAddressType),
+				Type:  new(gwv1.IPAddressType),
 				Value: ip,
 			},
 		}
 		options.UnusableNetworkAddresses = []gwv1.GatewaySpecAddress{
 			{
-				Type:  ptr.Of(gwv1.HostnameAddressType),
+				Type:  new(gwv1.HostnameAddressType),
 				Value: "bogus.example.com",
 			},
 		}
@@ -83,6 +82,8 @@ func TestConformance(t *testing.T) {
 		options.SkipTests = append(options.SkipTests, string(features.GatewayStaticAddressesFeature.Name))
 	}
 	options.Debug = true
+	// The cluster is torn down after the run, so don't wait on namespace deletion.
+	options.CleanupBaseResources = false
 
 	t.Logf("Running conformance tests with\nprofiles: %+v %v\n", profiles, options.RunTest)
 	conformance.RunConformanceWithOptions(t, options)

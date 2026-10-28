@@ -74,9 +74,9 @@ func GatewaysForDeployerTransformationFunc(
 			}
 		}
 
-		td := ptr.OrEmpty(slices.First(krt.PartialFetch(kctx, meshConfig.AsCollection(), func(mc ambient.MeshConfig) string {
+		td := ptr.OrEmpty(slices.First(krt.PartialFetchComparable(kctx, meshConfig.AsCollection(), func(mc ambient.MeshConfig) string {
 			return mc.TrustDomain
-		}, nil)))
+		})))
 
 		ir := &GatewayForDeployer{
 			Group:           gwv1.GroupVersion.Group,

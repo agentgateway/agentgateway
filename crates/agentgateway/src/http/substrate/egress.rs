@@ -19,6 +19,7 @@ use crate::{cel, *};
 
 const DEFAULT_CREDENTIAL_CACHE_CAPACITY: usize = 8192;
 const DEFAULT_CREDENTIAL_CACHE_TTL: Duration = Duration::from_secs(300);
+const CREDENTIAL_FETCH_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// The inner HTTP transport, independent of the actor's CONNECT transport or URI scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +53,14 @@ pub struct CredentialProvider {
 	pub uri_authority: String,
 	/// Backend that resolves credentials and policies used when connecting to it.
 	pub target: SimpleBackendReferenceWithPolicies,
+	/// How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub cache_ttl: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +71,7 @@ struct CredentialCache {
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct CredentialCacheKey {
 	actor_identity: String,
+	actor_uid: Option<String>,
 	uri: String,
 }
 
@@ -170,16 +180,13 @@ pub(crate) fn reject_upgrade(req: &Request) -> Result<(), ProxyError> {
 		.filter_map(|value| value.to_str().ok())
 		.flat_map(|value| value.split(','))
 		.any(|token| token.trim().eq_ignore_ascii_case("websocket"));
-	Err(ProxyError::SubstrateEgressDenied(
-		if websocket {
-			"WebSocket egress is not supported"
-		} else if req.method() == ::http::Method::CONNECT {
-			"CONNECT egress is not supported"
-		} else {
-			"HTTP upgrades, including CONNECT, are denied for actor egress"
-		}
-		.to_owned(),
-	))
+	Err(ProxyError::SubstrateEgressUpgradeDenied(if websocket {
+		"WebSocket egress is not supported"
+	} else if req.method() == ::http::Method::CONNECT {
+		"CONNECT egress is not supported"
+	} else {
+		"HTTP upgrades, including CONNECT, are denied for actor egress"
+	}))
 }
 
 impl SubstrateEgress {
@@ -228,6 +235,7 @@ impl SubstrateEgress {
 		audiences.sort_unstable();
 		let key = CredentialCacheKey {
 			actor_identity: actor_spiffe_uri(&identity.atespace, &identity.actor_name),
+			actor_uid: identity.actor_uid.clone(),
 			uri: format!("actor-jwt:{}:{audiences:?}", source.expiration_seconds),
 		};
 		let ttl = Duration::from_secs(
@@ -279,13 +287,11 @@ impl SubstrateEgress {
 		let actor_identity = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
 		let key = CredentialCacheKey {
 			actor_identity: actor_identity.clone(),
+			actor_uid: identity.actor_uid.clone(),
 			uri: uri.to_owned(),
 		};
-		if let Some(secret) =
-			self
-				.credential_cache
-				.get(&key, Instant::now(), DEFAULT_CREDENTIAL_CACHE_TTL)
-		{
+		let ttl = provider.cache_ttl.unwrap_or(DEFAULT_CREDENTIAL_CACHE_TTL);
+		if let Some(secret) = self.credential_cache.get(&key, Instant::now(), ttl) {
 			return Ok(secret);
 		}
 
@@ -303,7 +309,9 @@ impl SubstrateEgress {
 		);
 		let mut provider =
 			protos::credprovider::credential_provider_client::CredentialProviderClient::new(channel);
-		let response = provider.fetch_secret(request).await;
+		let response = tokio::time::timeout(CREDENTIAL_FETCH_TIMEOUT, provider.fetch_secret(request))
+			.await
+			.unwrap_or_else(|_| Err(tonic::Status::deadline_exceeded("FetchSecret timed out")));
 		if let Some(span) = span.as_deref_mut() {
 			span.record_grpc_result(&response);
 		}
@@ -312,9 +320,11 @@ impl SubstrateEgress {
 			.map_err(|status| credential_provider_error(uri, status))?
 			.into_inner();
 		let secret = credential_secret(response.opaque_bytes)?;
-		self
-			.credential_cache
-			.insert(key, secret.clone(), Instant::now());
+		if !ttl.is_zero() {
+			self
+				.credential_cache
+				.insert(key, secret.clone(), Instant::now());
+		}
 		Ok(secret)
 	}
 
@@ -463,8 +473,6 @@ async fn fetch_policy(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EgressTlsMode {
 	Intercept,
-	// Complete TLS, then return 403 before routing or applying request policies.
-	InterceptDenied,
 	Passthrough,
 }
 
@@ -504,7 +512,9 @@ fn tls_mode(
 		));
 	}
 	let Some(rule) = matching_destination_rule(policy, &sni, port, MatchPhase::ClientHello) else {
-		return Ok(EgressTlsMode::InterceptDenied);
+		return Err(ProxyError::SubstrateEgressDenied(
+			"actor egress policy denied TLS destination".to_owned(),
+		));
 	};
 	Ok(if rule.https.is_some() {
 		EgressTlsMode::Intercept
@@ -932,7 +942,7 @@ mod tests {
 	}
 
 	#[test]
-	fn tls_rejects_invalid_sni_and_intercepts_unmatched_destinations_for_denial() {
+	fn tls_rejects_invalid_sni_and_unmatched_destinations() {
 		let policy = protos::ateapi::EgressPolicy {
 			rules: vec![passthrough(&["*"], ports(&[443]))],
 			..Default::default()
@@ -940,10 +950,10 @@ mod tests {
 		for sni in ["", "127.0.0.1", "bad..example", "example.com.."] {
 			assert!(tls_mode(&policy, sni, 443).is_err(), "{sni}");
 		}
-		assert_eq!(
-			tls_mode(&policy, "api.example.com", 8443).unwrap(),
-			EgressTlsMode::InterceptDenied
-		);
+		assert!(matches!(
+			tls_mode(&policy, "api.example.com", 8443),
+			Err(ProxyError::SubstrateEgressDenied(_))
+		));
 		for rules in [
 			vec![],
 			vec![passthrough(&["*"], None)],
@@ -953,10 +963,10 @@ mod tests {
 				rules,
 				..Default::default()
 			};
-			assert_eq!(
-				tls_mode(&policy, "api.example.com", 443).unwrap(),
-				EgressTlsMode::InterceptDenied
-			);
+			assert!(matches!(
+				tls_mode(&policy, "api.example.com", 443),
+				Err(ProxyError::SubstrateEgressDenied(_))
+			));
 		}
 	}
 
@@ -1052,6 +1062,7 @@ mod tests {
 		let cache = CredentialCache::new(16);
 		let key = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/actor/default/example".to_owned(),
+			actor_uid: Some("uid-1".to_owned()),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		let now = Instant::now();
@@ -1067,22 +1078,27 @@ mod tests {
 	}
 
 	#[test]
-	fn credential_cache_is_partitioned_by_actor_identity_and_uri() {
+	fn credential_cache_is_partitioned_by_actor_identity_uid_and_uri() {
 		let cache = CredentialCache::new(16);
 		let now = Instant::now();
 		let key = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/actor/default/one".to_owned(),
+			actor_uid: Some("uid-1".to_owned()),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		cache.insert(key.clone(), b"one".to_vec(), now);
 
 		let another_actor = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/actor/default/two".to_owned(),
-			uri: key.uri.clone(),
+			..key.clone()
 		};
 		let another_uri = CredentialCacheKey {
-			actor_identity: key.actor_identity.clone(),
 			uri: "ate-secret://kubernetes.io/default/other".to_owned(),
+			..key.clone()
+		};
+		let another_uid = CredentialCacheKey {
+			actor_uid: Some("uid-2".to_owned()),
+			..key
 		};
 		assert_eq!(
 			cache.get(&another_actor, now, DEFAULT_CREDENTIAL_CACHE_TTL),
@@ -1090,6 +1106,10 @@ mod tests {
 		);
 		assert_eq!(
 			cache.get(&another_uri, now, DEFAULT_CREDENTIAL_CACHE_TTL),
+			None
+		);
+		assert_eq!(
+			cache.get(&another_uid, now, DEFAULT_CREDENTIAL_CACHE_TTL),
 			None
 		);
 	}

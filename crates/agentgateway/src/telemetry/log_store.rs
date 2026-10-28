@@ -608,7 +608,7 @@ pub struct TailEvent {
 	pub cursor: String,
 }
 
-#[derive(Clone, Debug, Default, Serialize, sqlx::FromRow)]
+#[derive(Clone, Debug, Default, Serialize, sqlx_macros::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsTotals {
 	pub requests: i64,

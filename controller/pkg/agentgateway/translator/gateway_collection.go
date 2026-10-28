@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
 	"istio.io/istio/pilot/pkg/util/protoconv"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/constants"
@@ -14,13 +15,16 @@ import (
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
+	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/annotations"
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
@@ -175,6 +179,8 @@ type GatewayListener struct {
 	ParentObject utils.TypedNamespacedName
 	ParentInfo   ParentInfo
 	TLSInfo      *TLSInfo
+	Filters      *gwv1.ListenerFilters
+	FilterResult ListenerFilterResult
 	Valid        bool
 	Conflict     ListenerConflict
 }
@@ -201,6 +207,9 @@ func (g *GatewayListener) Equals(other *GatewayListener) bool {
 	}
 	return g.Valid == other.Valid &&
 		g.Conflict == other.Conflict &&
+		apiequality.Semantic.DeepEqual(g.Filters, other.Filters) &&
+		g.FilterResult.Error == other.FilterResult.Error &&
+		slices.EqualFunc(g.FilterResult.Policies, other.FilterResult.Policies, func(a, b *api.TrafficPolicySpec) bool { return proto.Equal(a, b) }) &&
 		g.Name == other.Name &&
 		g.ParentGateway == other.ParentGateway &&
 		g.ParentObject == other.ParentObject &&
@@ -216,6 +225,9 @@ type GatewayCollectionConfig struct {
 	Grants                   ReferenceGrants
 	Secrets                  krt.Collection[*corev1.Secret]
 	ConfigMaps               krt.Collection[*corev1.ConfigMap]
+	ClusterTrustBundles      krt.Collection[*certificatesv1.ClusterTrustBundle]
+	References               plugins.ReferenceTypes
+	BackendRefGrantMode      apisettings.BackendRefGrantMode
 	KrtOpts                  krtutil.KrtOptions
 	EnableAgentgatewayModels bool
 
@@ -290,7 +302,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			// Attached Routes count starts at 0 and gets updated later in the status syncer
 			// when the real count is available after route processing
 
-			hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.Grants, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false, cfg.EnableAgentgatewayModels)
+			hostnames, tlsInfo, filterResult, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.ClusterTrustBundles, cfg.Grants, cfg.References, cfg.BackendRefGrantMode, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false, cfg.EnableAgentgatewayModels)
 			status.Listeners = updatedStatus
 
 			lstatus := status.Listeners[i]
@@ -336,6 +348,8 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Name:          name,
 				Valid:         programmed,
 				TLSInfo:       tlsInfo,
+				Filters:       l.Filters,
+				FilterResult:  filterResult,
 				ParentGateway: config.NamespacedName(obj),
 				ParentObject: utils.TypedNamespacedName{
 					Kind: wellknown.GatewayGVK.Kind,
@@ -545,6 +559,9 @@ func ListenerSetBuilder(
 	grants ReferenceGrants,
 	secrets krt.Collection[*corev1.Secret],
 	configMaps krt.Collection[*corev1.ConfigMap],
+	clusterTrustBundles krt.Collection[*certificatesv1.ClusterTrustBundle],
+	references plugins.ReferenceTypes,
+	backendRefGrantMode apisettings.BackendRefGrantMode,
 	enableAgentgatewayModels bool,
 ) (*gwv1.ListenerSetStatus, []*ListenerSet) {
 	result := []*ListenerSet{}
@@ -603,7 +620,7 @@ func ListenerSetBuilder(
 		l.Port = port
 		standardListener := convertListenerSetToListener(l)
 		originalStatus := slices.Map(status.Listeners, convertListenerSetStatusToStandardStatus)
-		hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, secrets, configMaps, grants, namespaces,
+		hostnames, tlsInfo, filterResult, updatedStatus, programmed := BuildListener(ctx, secrets, configMaps, clusterTrustBundles, grants, references, backendRefGrantMode, namespaces,
 			obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr, true, enableAgentgatewayModels)
 		status.Listeners = slices.Map(updatedStatus, convertStandardStatusToListenerSetStatus)
 
@@ -632,6 +649,8 @@ func ListenerSetBuilder(
 			Name:          name,
 			Valid:         programmed,
 			TLSInfo:       tlsInfo,
+			Filters:       l.Filters,
+			FilterResult:  filterResult,
 			ParentObject:  utils.TypedNamespacedName{Kind: wellknown.ListenerSetGVK.Kind, NamespacedName: config.NamespacedName(obj)},
 			ParentGateway: parentGwObj.NamespacedName,
 			ParentInfo:    pri,

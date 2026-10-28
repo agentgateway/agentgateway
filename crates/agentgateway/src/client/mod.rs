@@ -230,6 +230,8 @@ pub struct ConnectionConfig {
 	pub transport: Transport,
 	pub tcp: Option<types::backend::TCP>,
 	pub max_connection_duration: Option<Duration>,
+	/// The backend this connection serves. Part of the pool key, so backends do not share connections.
+	pub backend: Option<Strng>,
 }
 
 impl From<Transport> for ConnectionConfig {
@@ -238,6 +240,7 @@ impl From<Transport> for ConnectionConfig {
 			transport,
 			tcp: None,
 			max_connection_duration: None,
+			backend: None,
 		}
 	}
 }
@@ -343,6 +346,7 @@ impl Connector {
 			transport,
 			tcp,
 			max_connection_duration,
+			backend,
 		} = connection;
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
@@ -480,6 +484,18 @@ impl Connector {
 			socket
 				.ext_mut()
 				.insert(stream::ConnectionDeadline(connect_start + max_age));
+		}
+
+		if let (Some(m), Some(backend)) = (&self.metrics, backend) {
+			let gauge = m
+				.upstream_connections_active
+				.get_or_create(&metrics::BackendLabels {
+					backend: Some(backend).into(),
+				})
+				.clone();
+			socket
+				.ext_mut()
+				.insert(Arc::new(metrics::GaugeGuard::new(gauge)));
 		}
 
 		socket.with_logging(LoggingMode::Upstream);
@@ -649,6 +665,7 @@ impl Client {
 					transport,
 					tcp,
 					max_connection_duration: None,
+					backend: None,
 				},
 				dynamic_backend: false,
 			})
@@ -784,6 +801,19 @@ impl Client {
 					.headers_mut()
 					.insert(http::header::PROXY_AUTHORIZATION, h.clone());
 			}
+			let active = connection
+				.backend
+				.clone()
+				.zip(connector.metrics.as_ref())
+				.map(|(backend, m)| {
+					let gauge = m
+						.requests_active
+						.get_or_create(&metrics::BackendLabels {
+							backend: Some(backend).into(),
+						})
+						.clone();
+					metrics::GaugeGuard::new(gauge)
+				});
 			let key = PoolKey(target.clone(), dest, connection, version);
 			trace!(?req, ?key, "sending request");
 			req.extensions_mut().insert(key);
@@ -859,7 +889,7 @@ impl Client {
 				.insert(transport::BufferLimit::new(buffer_limit));
 			resp.extensions_mut().insert(ResolvedDestination(dest));
 			Ok(resp.map(|body| {
-				let mut body = http::Body::new(body);
+				let mut body = http::Body::new(body).with_drop_guard(active);
 				if let Some(deadline) = deadline {
 					body.set_deadline(deadline);
 				}
@@ -930,6 +960,7 @@ mod tests {
 					transport: Transport::Plain(ApplicationTransport::Plaintext),
 					tcp: None,
 					max_connection_duration: Some(max_age),
+					backend: None,
 				},
 			)
 			.await

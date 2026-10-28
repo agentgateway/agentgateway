@@ -16,6 +16,7 @@ import (
 	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/file"
+	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
@@ -254,6 +255,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		Services:             krttest.GetMockCollection[*corev1.Service](mock),
 		Secrets:              krttest.GetMockCollection[*corev1.Secret](mock),
 		ConfigMaps:           krttest.GetMockCollection[*corev1.ConfigMap](mock),
+		ClusterTrustBundles:  krttest.GetMockCollection[*certificatesv1.ClusterTrustBundle](mock),
 		EndpointSlices:       krttest.GetMockCollection[*discovery.EndpointSlice](mock),
 		WorkloadEntries:      krttest.GetMockCollection[*networkingclient.WorkloadEntry](mock),
 		ServiceEntries:       krttest.GetMockCollection[*networkingclient.ServiceEntry](mock),

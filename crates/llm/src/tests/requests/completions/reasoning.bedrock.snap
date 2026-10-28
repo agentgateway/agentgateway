@@ -36,7 +36,9 @@ info:
     "request_model": "gpt-3.5-turbo",
     "provider": "bedrock",
     "streaming": false,
-    "params": {},
+    "params": {
+      "reasoning_effort": "medium"
+    },
     "prompt": [
       {
         "role": "user",

@@ -3744,7 +3744,7 @@ fn completions_to_messages_response_allows_missing_openai_metadata() {
 		}"#,
 	);
 
-	conversion::completions::from_messages::translate_response(&body)
+	conversion::completions::from_messages::translate_response(&body, "")
 		.expect("messages response translation should not require OpenAI metadata");
 }
 

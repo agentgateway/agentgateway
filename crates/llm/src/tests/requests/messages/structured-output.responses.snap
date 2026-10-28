@@ -79,7 +79,8 @@ info:
     "params": {
       "temperature": 0.699999988079071,
       "top_p": 0.800000011920929,
-      "max_tokens": 100
+      "max_tokens": 100,
+      "reasoning_effort": "high"
     },
     "prompt": [
       {

@@ -640,7 +640,18 @@ pub struct Request {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub vendor_extensions: Option<RequestVendorExtensions>,
 
-	// Everything else (tools, reasoning, etc.) - passthrough
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reasoning: Option<RequestReasoning>,
+
+	// Everything else (tools, etc.) - passthrough
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct RequestReasoning {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub effort: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -927,6 +938,11 @@ impl RequestType for Request {
 				max_tokens: self.max_output_tokens.map(Into::into),
 				encoding_format: None,
 				dimensions: None,
+				reasoning_effort: self
+					.reasoning
+					.as_ref()
+					.and_then(|r| r.effort.as_deref())
+					.and_then(crate::ReasoningEffort::parse),
 			},
 			prompt: Default::default(),
 			provider_state: None,
@@ -1348,6 +1364,22 @@ impl ResponseType for Response {
 					},
 					&mut program.code,
 				);
+				continue;
+			}
+			if let OutputItem::Reasoning(reasoning) = o {
+				use async_openai::types::responses as sdk;
+				for sdk::SummaryPart::SummaryText(summary) in &mut reasoning.summary {
+					f(ContentScope::Messages.into(), &mut summary.text);
+				}
+				// encrypted_content may embed this text; a mask would not cover it and would break replay.
+				let content = crate::types::ResponseText {
+					scope: ContentScope::Messages,
+					signed: reasoning.encrypted_content.is_some(),
+				};
+				for sdk::ReasoningItemContent::ReasoningText(text) in reasoning.content.iter_mut().flatten()
+				{
+					f(content, &mut text.text);
+				}
 				continue;
 			}
 			let mut plain = |scope: ContentScope, text: &mut String| f(scope.into(), text);

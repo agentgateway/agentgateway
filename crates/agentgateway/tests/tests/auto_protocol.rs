@@ -26,6 +26,7 @@ async fn auto_protocol_plaintext_http() {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
+		..Default::default()
 	}]));
 
 	let t = setup_proxy_test("{}")
@@ -118,6 +119,7 @@ async fn auto_protocol_tls_rejected_for_http_only() {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
+		..Default::default()
 	}]));
 
 	let t = setup_proxy_test("{}")
@@ -148,12 +150,14 @@ async fn auto_protocol_mixed_listeners() {
 			name: Default::default(),
 			hostname: strng::new("http.local"),
 			protocol: ListenerProtocol::HTTP,
+			..Default::default()
 		},
 		Listener {
 			key: strng::new("https-listener"),
 			name: Default::default(),
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
+			..Default::default()
 		},
 	]));
 
@@ -206,6 +210,7 @@ async fn auto_protocol_peek_timeout() {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
+		..Default::default()
 	}]));
 
 	let t = setup_proxy_test("{}")
@@ -235,12 +240,14 @@ async fn auto_protocol_raw_tcp_fallback() {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TCP,
+			..Default::default()
 		},
 		Listener {
 			key: strng::literal!("http-listener"),
 			name: Default::default(),
 			hostname: strng::literal!("http.example.com"),
 			protocol: ListenerProtocol::HTTP,
+			..Default::default()
 		},
 	]));
 
@@ -270,6 +277,7 @@ async fn auto_protocol_raw_tcp_short_prefix() {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::TCP,
+		..Default::default()
 	}]));
 
 	let t = setup_proxy_test("{}")

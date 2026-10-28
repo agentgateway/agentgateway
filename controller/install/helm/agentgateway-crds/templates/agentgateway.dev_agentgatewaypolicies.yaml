@@ -10872,18 +10872,19 @@ spec:
                     description: Retry policy.
                     properties:
                       attempts:
+                        default: 1
                         description: |-
                           Attempts specifies the maximum number of times an individual request
-                          from the gateway to a backend should be retried.
+                          from the Gateway to a backend should be retried in addition to the
+                          initial request.
 
                           If the maximum number of retries has been attempted without a successful
                           response from the backend, the Gateway MUST return an error.
 
-                          When this field is unspecified, the number of times to attempt to retry
-                          a backend request is implementation-specific.
+                          An explicit zero value MUST disable retries.
 
                           Support: Extended
-                        minimum: 1
+                        minimum: 0
                         type: integer
                       backoff:
                         description: 'Minimum duration to wait between retry attempts,
@@ -10915,8 +10916,6 @@ spec:
 
                             Implementations MAY support specifying discrete values in the 400-499 range,
                             which are often inadvisable to retry.
-
-                            <gateway:experimental>
                           maximum: 599
                           minimum: 400
                           type: integer

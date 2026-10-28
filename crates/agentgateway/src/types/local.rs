@@ -76,6 +76,12 @@ pub fn default_standalone_config(database_url: &str) -> serde_json::Value {
 #[path = "local_tests.rs"]
 mod tests;
 
+pub fn expand_env(s: &str) -> anyhow::Result<String> {
+	// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
+	let s = s.replace("# yaml-language-server: $schema", "#");
+	Ok(shellexpand::full(&s)?.into_owned())
+}
+
 impl NormalizedLocalConfig {
 	pub async fn from(
 		config: &crate::Config,
@@ -83,9 +89,16 @@ impl NormalizedLocalConfig {
 		gateway_name: ListenerTarget,
 		s: &str,
 	) -> anyhow::Result<NormalizedLocalConfig> {
-		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
-		let s = s.replace("# yaml-language-server: $schema", "#");
-		let s = shellexpand::full(&s)?;
+		Self::from_expanded(config, resources, gateway_name, expand_env(s)?).await
+	}
+
+	/// Like `from`, for config that already had environment variables expanded.
+	pub async fn from_expanded(
+		config: &crate::Config,
+		resources: &crate::resource_manager::ResourceFetcher,
+		gateway_name: ListenerTarget,
+		s: String,
+	) -> anyhow::Result<NormalizedLocalConfig> {
 		let mut registration_config = config.clone();
 		let registration_policy = Arc::new(config.budget_policy.registration_policy());
 		registration_config.budget_policy = registration_policy.clone();
@@ -808,6 +821,10 @@ pub struct LocalLLMModels {
 	/// name is the name of the model we are matching from a users request. If params.model is set, that
 	/// will be used in the request to the LLM provider. If not, the incoming model is used.
 	name: String,
+	/// displayName is an optional label shown in the UI in place of name. It does not affect matching.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[allow(dead_code)]
+	display_name: Option<String>,
 	/// visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).
 	#[serde(
 		default,
@@ -934,7 +951,7 @@ pub struct SecretFromFile(
 	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
 	#[serde(
 		serialize_with = "ser_redact",
-		deserialize_with = "deser_key_from_file"
+		deserialize_with = "deser_watched_secret"
 	)]
 	SecretString,
 );
@@ -1750,6 +1767,15 @@ impl LocalBackend {
 			LocalBackend::MCP(tgt) => {
 				if tgt.targets.len() <= 1 && tgt.targets.iter().any(|target| target.condition.is_some()) {
 					bail!("mcp target condition requires at least two configured targets");
+				}
+				if let Some(dup) = tgt
+					.targets
+					.iter()
+					.map(|t| t.name.as_str())
+					.duplicates()
+					.next()
+				{
+					bail!("duplicate mcp target name {dup:?}");
 				}
 				let mut targets = vec![];
 				let mut backends = vec![];
@@ -3863,6 +3889,7 @@ async fn convert_gateway_listener(
 		name: name.clone(),
 		hostname: hostname.unwrap_or_else(|| strng::new("*")),
 		protocol,
+		..Default::default()
 	};
 	let mut all_policies = Vec::new();
 	if !policies.is_empty() {
@@ -4963,6 +4990,7 @@ async fn convert_llm_config(
 			Some(tls) => ListenerProtocol::HTTPS(tls),
 			None => ListenerProtocol::HTTP,
 		},
+		..Default::default()
 	};
 
 	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
@@ -5086,6 +5114,7 @@ async fn convert_mcp_config(
 		name: listener_name,
 		hostname: strng::new("*"),
 		protocol: ListenerProtocol::HTTP,
+		..Default::default()
 	};
 
 	let mut listener_set = ListenerSet::default();
@@ -5274,6 +5303,7 @@ async fn convert_listener(
 		name,
 		hostname,
 		protocol,
+		..Default::default()
 	};
 	Ok((l, rs, trs, all_policies, all_backends))
 }
@@ -5698,7 +5728,7 @@ pub(crate) async fn split_policies_for_target(
 	};
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(RequestPolicy::single(
-			p.try_into()?,
+			p.try_into(resources).await?,
 		)));
 	}
 	if let Some(p) = api_key {

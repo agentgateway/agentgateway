@@ -134,10 +134,17 @@ impl ResourceFetcher {
 				.await
 				.map(|r| r.content),
 			ResourceFetcherMode::FilesOnly => match normalized {
-				ResourceRef::File(path) => fs_err::tokio::read(&path)
-					.await
-					.with_context(|| format!("read resource file {}", path.display()))
-					.map(Bytes::from),
+				ResourceRef::File(path) => {
+					// CLI commands like `import` and `migrate` parse config without a runtime.
+					let content = if tokio::runtime::Handle::try_current().is_ok() {
+						fs_err::tokio::read(&path).await
+					} else {
+						fs_err::read(&path)
+					};
+					content
+						.with_context(|| format!("read resource file {}", path.display()))
+						.map(Bytes::from)
+				},
 				ResourceRef::Http { url, .. } => {
 					Err(anyhow!("resource fetcher cannot fetch HTTP resource {url}"))
 				},
@@ -1011,12 +1018,18 @@ mod tests {
 
 	#[tokio::test]
 	async fn failed_http_refresh_reschedules_a_retry_that_will_actually_fire() {
-		// A closed local port fails at connect time (like a real transient
-		// network blip), rather than a non-2xx status -- `fetch_direct` only
-		// treats transport-level failures as errors, not HTTP error statuses.
-		let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+		// A server that drops every connection fails at the transport level
+		// (like a real transient network blip), rather than a non-2xx status --
+		// `fetch_direct` only treats transport-level failures as errors, not HTTP
+		// error statuses. Keeping the listener bound prevents another test from
+		// reusing the port.
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 		let addr = listener.local_addr().unwrap();
-		drop(listener);
+		tokio::spawn(async move {
+			while let Ok((conn, _)) = listener.accept().await {
+				drop(conn);
+			}
+		});
 
 		let manager = ResourceManager::new(test_client()).unwrap();
 		let url: http::Uri = format!("http://{addr}/resource").parse().unwrap();
@@ -1089,6 +1102,18 @@ mod tests {
 		assert!(manager.is_active(&resource));
 		assert!(manager.inner.watched_files.contains(&abspath));
 		PARSE_FETCHER.with(|f| assert!(f.borrow().is_none()));
+	}
+
+	#[test]
+	fn parse_fetcher_reads_files_without_a_runtime() {
+		// `agentgateway migrate` parsing a config with a file-backed secret.
+		let dir = tempfile::tempdir().unwrap();
+		let file = dir.path().join("secret");
+		fs_err::write(&file, "s3cret").unwrap();
+
+		let content =
+			futures::executor::block_on(parse_fetcher().fetch(ResourceRef::File(file))).unwrap();
+		assert_eq!(content, Bytes::from("s3cret"));
 	}
 
 	#[tokio::test]

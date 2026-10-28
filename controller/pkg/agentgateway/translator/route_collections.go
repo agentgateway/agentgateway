@@ -1140,23 +1140,19 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 
 		parentRefs := extractParentReferenceInfo(ctx, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
-			if e.ParentKey.Kind == wellknown.ListenerSetGVK.Kind {
-				return new(&plugins.RouteAttachment{
-					From:         from,
-					To:           e.ParentKey,
-					Gateway:      e.ParentGateway,
-					ListenerName: string(e.ParentSection),
-				})
-			}
-			if e.ParentGateway.Name == "" {
+			parentKind := NormalizeReference(e.OriginalReference.Group, e.OriginalReference.Kind, wellknown.GatewayGVK.GroupKind())
+			if e.ParentGateway.Name == "" && parentKind != wellknown.ListenerSetGVK.GroupKind() {
 				return nil
 			}
+			parent := utils.TypedNamespacedName{Kind: wellknown.GatewayGVK.Kind, NamespacedName: e.ParentGateway}
+			switch parentKind {
+			case wellknown.GatewayGVK.GroupKind(), wellknown.ServiceGVK.GroupKind(), wellknown.ServiceEntryGVK.GroupKind():
+			default:
+				parent = e.ParentKey
+			}
 			return new(&plugins.RouteAttachment{
-				From: from,
-				To: utils.TypedNamespacedName{
-					Kind:           wellknown.GatewayGVK.Kind,
-					NamespacedName: e.ParentGateway,
-				},
+				From:         from,
+				To:           parent,
 				Gateway:      e.ParentGateway,
 				ListenerName: string(e.ParentSection),
 			})
@@ -1230,6 +1226,40 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 		}
 	}
 	return res
+}
+
+// ListenerFilterAncestorBackends returns the backends referenced by the filters of a Gateway's listeners, including
+// those attached through ListenerSets.
+func ListenerFilterAncestorBackends(ctx RouteContext, gateway types.NamespacedName, listeners []*GatewayListener) []*utils.AncestorBackend {
+	source := utils.TypedNamespacedName{NamespacedName: gateway, Kind: wellknown.GatewayGVK.Kind}
+	backends := sets.Set[utils.TypedNamespacedName]{}
+	for _, l := range listeners {
+		if l.Filters == nil {
+			continue
+		}
+		sourceGVK := wellknown.GatewayGVK
+		if l.ParentObject.Kind == wellknown.ListenerSetGVK.Kind {
+			sourceGVK = wellknown.ListenerSetGVK
+		}
+		for _, f := range l.Filters.Requests {
+			if f.ExternalAuth == nil {
+				continue
+			}
+			b := f.ExternalAuth.BackendRef
+			ref := NormalizeReference(b.Group, b.Kind, wellknown.ServiceGVK.GroupKind())
+			if !ancestorBackendAllowed(ctx, sourceGVK, l.ParentObject.Namespace, ref, b.Namespace, b.Name) {
+				continue
+			}
+			backends.Insert(utils.TypedNamespacedName{
+				Namespace: defaultString(b.Namespace, l.ParentObject.Namespace),
+				Name:      string(b.Name),
+				Kind:      ref.Kind,
+			})
+		}
+	}
+	return slices.Map(slices.SortBy(backends.UnsortedList(), utils.TypedNamespacedName.String), func(be utils.TypedNamespacedName) *utils.AncestorBackend {
+		return &utils.AncestorBackend{Gateway: gateway, Backend: be, Source: source}
+	})
 }
 
 func ancestorBackendAllowed(ctx RouteContext, sourceGVK schema.GroupVersionKind, sourceNamespace string, ref schema.GroupKind, refNamespace *gwv1.Namespace, refName gwv1.ObjectName) bool {

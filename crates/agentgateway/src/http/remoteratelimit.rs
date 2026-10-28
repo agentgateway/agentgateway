@@ -449,7 +449,7 @@ impl RemoteRateLimit {
 		if let Some(span) = span.as_deref_mut() {
 			span.record_grpc_result(&resp);
 		}
-		trace!("check response: {:?}", resp);
+		trace!(overall_code = ?resp.as_ref().map(|r| r.get_ref().overall_code()).map_err(|e| e.code()), "check response");
 		if let Err(ref error) = resp {
 			let ignore = self.failure_mode == FailureMode::FailOpen;
 			warn!(

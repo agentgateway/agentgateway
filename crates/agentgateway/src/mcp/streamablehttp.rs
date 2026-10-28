@@ -151,6 +151,7 @@ impl StreamableHttpService {
 				};
 			},
 		};
+		mcp::validate_client_message(&message)?;
 		let request_id = request_id(&message);
 		let protocol = validate_request_protocol(&part.headers, &message, request_id.clone())?;
 		validate_standard_headers(&part.headers, &message, &protocol)?;

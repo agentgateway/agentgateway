@@ -52,6 +52,7 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> (Arc<Listene
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
+			..Default::default()
 		}),
 		routes
 			.iter()
@@ -979,6 +980,7 @@ fn hbone_listener() -> Arc<Listener> {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HBONE,
+		..Default::default()
 	})
 }
 
@@ -1576,6 +1578,7 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
+		..Default::default()
 	});
 	let stores = Stores::with_ipv6_enabled(true);
 	for route in routes.into_iter().map(|(name, host, matches)| Route {

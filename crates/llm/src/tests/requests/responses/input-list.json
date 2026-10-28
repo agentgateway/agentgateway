@@ -8,7 +8,7 @@
       "type": "reasoning",
       "id": "rs_replay",
       "summary": [],
-      "encrypted_content": "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo"
+      "encrypted_content": "[{\"type\":\"redacted_thinking\",\"data\":\"cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo\"}]"
     },
     {
       "role": "assistant",
@@ -37,13 +37,7 @@
       "type": "reasoning",
       "id": "rs_signed",
       "summary": [],
-      "content": [
-        {
-          "type": "reasoning_text",
-          "text": "Let me check the signature."
-        }
-      ],
-      "encrypted_content": "SIG-xyz=="
+      "encrypted_content": "[{\"type\":\"thinking\",\"thinking\":\"Let me check the signature.\",\"signature\":\"SIG-xyz==\"}]"
     },
     {
       "role": "user",

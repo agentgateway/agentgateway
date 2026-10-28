@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"istio.io/istio/pkg/ptr"
-
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -484,9 +482,9 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	if tls.MaxTLSVersion != nil {
 		switch *tls.MaxTLSVersion {
 		case agentgateway.TLSVersion1_2:
-			spec.MaxVersion = ptr.Of(api.TLSConfig_TLS_V1_2)
+			spec.MaxVersion = new(api.TLSConfig_TLS_V1_2)
 		case agentgateway.TLSVersion1_3:
-			spec.MaxVersion = ptr.Of(api.TLSConfig_TLS_V1_3)
+			spec.MaxVersion = new(api.TLSConfig_TLS_V1_3)
 		default:
 			logger.Warn("unknown tls version for max", "version", tls.MaxTLSVersion)
 			spec.MaxVersion = nil
@@ -496,9 +494,9 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	if tls.MinTLSVersion != nil {
 		switch *tls.MinTLSVersion {
 		case agentgateway.TLSVersion1_2:
-			spec.MinVersion = ptr.Of(api.TLSConfig_TLS_V1_2)
+			spec.MinVersion = new(api.TLSConfig_TLS_V1_2)
 		case agentgateway.TLSVersion1_3:
-			spec.MinVersion = ptr.Of(api.TLSConfig_TLS_V1_3)
+			spec.MinVersion = new(api.TLSConfig_TLS_V1_3)
 		default:
 			logger.Warn("unknown tls version for min", "version", tls.MinTLSVersion)
 			spec.MinVersion = nil

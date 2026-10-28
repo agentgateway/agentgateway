@@ -309,7 +309,7 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 	ctx := context.Background()
 	objs, err := r.deployer.GetObjsToDeploy(ctx, gw)
 	if err != nil {
-		if errors.Is(err, deployer.ErrNoValidPorts) {
+		if errors.Is(err, deployer.ErrNoValidPorts) || errors.Is(err, deployer.ErrUnsupportedRoutability) {
 			// status is reported from translator, so return normally
 			return err
 		}
@@ -441,7 +441,7 @@ func (r *gatewayReconciler) updateStatus(gw *gwv1.Gateway, svcMeta *metav1.Objec
 
 func getDesiredAddresses(gw *gwv1.Gateway, svc *corev1.Service) []gwv1.GatewayStatusAddress {
 	var ret []gwv1.GatewayStatusAddress
-	seen := sets.New[gwv1.GatewayStatusAddress]()
+	seen := sets.New[string]()
 
 	if svc != nil && svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
 		if len(svc.Status.LoadBalancer.Ingress) == 0 {
@@ -449,7 +449,7 @@ func getDesiredAddresses(gw *gwv1.Gateway, svc *corev1.Service) []gwv1.GatewaySt
 		}
 		for _, ing := range svc.Status.LoadBalancer.Ingress {
 			if addr, ok := convertIngressAddr(ing); ok {
-				seen.Insert(addr)
+				seen.Insert(addr.Value)
 				ret = append(ret, addr)
 			}
 		}
@@ -457,27 +457,39 @@ func getDesiredAddresses(gw *gwv1.Gateway, svc *corev1.Service) []gwv1.GatewaySt
 		return ret
 	} else if svc != nil {
 		t := gwv1.IPAddressType
-		if len(svc.Spec.ClusterIPs) != 0 {
-			for _, ip := range svc.Spec.ClusterIPs {
-				ret = append(ret, gwv1.GatewayStatusAddress{
-					Type:  &t,
-					Value: ip,
-				})
+		var routability *gwv1.GatewayAddressRoutabilityType
+		if slices.ContainsFunc(gw.Spec.Addresses, func(a gwv1.GatewaySpecAddress) bool {
+			return a.Routability == gwv1.GatewayAddressRoutabilityCluster
+		}) {
+			routability = new(gwv1.GatewayAddressRoutabilityCluster)
+		}
+		clusterIPs := svc.Spec.ClusterIPs
+		if len(clusterIPs) == 0 && svc.Spec.ClusterIP != "" {
+			clusterIPs = []string{svc.Spec.ClusterIP}
+		}
+		for _, ip := range clusterIPs {
+			addr := gwv1.GatewayStatusAddress{
+				Type:        &t,
+				Value:       ip,
+				Routability: routability,
 			}
-		} else if svc.Spec.ClusterIP != "" {
-			ret = append(ret, gwv1.GatewayStatusAddress{
-				Type:  &t,
-				Value: svc.Spec.ClusterIP,
-			})
+			seen.Insert(addr.Value)
+			ret = append(ret, addr)
 		}
 	}
 
 	for _, specAddr := range gw.Spec.Addresses {
+		if specAddr.Value == "" {
+			continue
+		}
 		addr := gwv1.GatewayStatusAddress{
 			Type:  specAddr.Type,
 			Value: specAddr.Value,
 		}
-		if !seen.Has(addr) {
+		if specAddr.Routability != gwv1.GatewayAddressRoutabilityDefault {
+			addr.Routability = new(specAddr.Routability)
+		}
+		if !seen.Has(addr.Value) {
 			ret = append(ret, addr)
 		}
 	}
@@ -529,7 +541,7 @@ func updateGatewayAddresses(
 		func(gw *gwv1.Gateway) (gwv1.GatewayStatus, bool) {
 			// Check if an update is needed
 			if slices.EqualFunc(desired, gw.Status.Addresses, func(a gwv1.GatewayStatusAddress, b gwv1.GatewayStatusAddress) bool {
-				return a.Value == b.Value && ptr.Equal(a.Type, b.Type)
+				return a.Value == b.Value && ptr.Equal(a.Type, b.Type) && ptr.Equal(a.Routability, b.Routability)
 			}) {
 				return gw.Status, false
 			}

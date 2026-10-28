@@ -10,12 +10,7 @@ export function resolveModelName(
 	if (!model) return explicitModel?.trim() || '';
 	if (!isWildcardModelName(model.name)) return model.name;
 	const trimmed = explicitModel?.trim() ?? '';
-	const prefix = wildcardModelPrefix(model.name);
-	if (trimmed) {
-		if (prefix && trimmed.startsWith(prefix)) return trimmed;
-		return model.name.replace('*', trimmed);
-	}
-	return model.name;
+	return wildcardMatchesModel(model.name, trimmed) ? trimmed : model.name;
 }
 
 export function modelProviderLabel(model: LlmModel, providers: LlmProvider[] = []) {
@@ -43,6 +38,18 @@ export function isWildcardModelName(name: string) {
 export function wildcardModelPrefix(name: string) {
 	const wildcardIndex = name.indexOf('*');
 	return wildcardIndex >= 0 ? name.slice(0, wildcardIndex) : name;
+}
+
+/**
+ * The prefix that turns a catalog model ID into a name clients request from a wildcard model, or
+ * undefined when catalog IDs do not map to requestable names (a fixed or custom upstream model).
+ */
+export function wildcardCatalogPrefix(model: LlmModel): string | undefined {
+	if (model.params?.model) return undefined;
+	const expression = model.transformation?.model;
+	if (!expression) return '';
+	const prefix = wildcardModelPrefix(model.name);
+	return expression === `llmRequest.model.stripPrefix("${prefix}")` ? prefix : undefined;
 }
 
 export function wildcardResolvedSuffix(targetModel: string, wildcardName: string, prefix: string) {
@@ -75,7 +82,7 @@ export function concreteModelName(configuredModelName: string, specificModel: st
 	return `${wildcardModelPrefix(configuredModelName)}${specificModel}`;
 }
 
-function wildcardMatchesModel(pattern: string, model: string) {
+export function wildcardMatchesModel(pattern: string, model: string) {
 	if (pattern === '*') return Boolean(model.trim());
 	const wildcardIndex = pattern.indexOf('*');
 	if (wildcardIndex < 0) return pattern === model;

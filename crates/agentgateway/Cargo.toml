@@ -150,6 +150,7 @@ spiffe.workspace = true
 sse-stream.workspace = true
 subtle.workspace = true
 sqlx.workspace = true
+sqlx-macros.workspace = true
 sqlx-core.workspace = true
 thiserror.workspace = true
 tokio-rustls.workspace = true

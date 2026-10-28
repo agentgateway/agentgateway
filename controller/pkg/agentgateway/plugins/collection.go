@@ -9,8 +9,12 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/kube/kubetypes"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/slices"
+	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -45,7 +49,9 @@ type AgwCollections struct {
 	SecretsByNamespace    krt.Index[string, *corev1.Secret]
 	ConfigMaps            krt.Collection[*corev1.ConfigMap]
 	ConfigMapsByNamespace krt.Index[string, *corev1.ConfigMap]
-	EndpointSlices        krt.Collection[*discovery.EndpointSlice]
+	// ClusterTrustBundles is nil if the cluster does not serve the ClusterTrustBundle API.
+	ClusterTrustBundles krt.Collection[*certificatesv1.ClusterTrustBundle]
+	EndpointSlices      krt.Collection[*discovery.EndpointSlice]
 
 	// Istio resources for ambient mesh
 	WorkloadEntries krt.Collection[*networkingclient.WorkloadEntry]
@@ -97,6 +103,21 @@ type AgwCollections struct {
 	IstioCaAddress string
 }
 
+// servesClusterTrustBundles checks, once at startup, whether the cluster serves the ClusterTrustBundle API.
+func servesClusterTrustBundles(client apiclient.Client) bool {
+	gv := wellknown.ClusterTrustBundleGVR.GroupVersion().String()
+	resources, err := client.Kube().Discovery().ServerResourcesForGroupVersion(gv)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			logger.Warn("failed to discover ClusterTrustBundle API, disabling ClusterTrustBundle support", "err", err)
+		}
+		return false
+	}
+	return slices.ContainsFunc(resources.APIResources, func(r metav1.APIResource) bool {
+		return r.Name == wellknown.ClusterTrustBundleGVR.Resource
+	})
+}
+
 // NewAgwCollections initializes the core krt collections.
 // Collections that rely on plugins aren't initialized here,
 // and InitPlugins must be called.
@@ -139,6 +160,10 @@ func NewAgwCollections(
 		}),
 		krtOptions.ToOptions("informer/ConfigMaps")...,
 	)
+	var clusterTrustBundles krt.Collection[*certificatesv1.ClusterTrustBundle]
+	if servesClusterTrustBundles(client) {
+		clusterTrustBundles = krt.NewInformer[*certificatesv1.ClusterTrustBundle](client, krtOptions.ToOptions("informer/ClusterTrustBundles")...)
+	}
 	meshConfig := meshconfig.NewSingleton(
 		configMaps,
 		settings.IstioNamespace,
@@ -183,7 +208,8 @@ func NewAgwCollections(
 			}),
 			krtOptions.ToOptions("informer/Secrets")...,
 		),
-		ConfigMaps: configMaps,
+		ConfigMaps:          configMaps,
+		ClusterTrustBundles: clusterTrustBundles,
 		Services: krt.WrapClient(
 			kclient.NewFiltered[*corev1.Service](client, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}),
 			krtOptions.ToOptions("informer/Services")...),

@@ -20,7 +20,7 @@ func TestBuildXBackendHTTP2WithServerTLS(t *testing.T) {
 	backend.Spec.Protocol = &protocol
 	backend.Spec.TLS = &gwxv1a1.BackendTLS{
 		Mode: gwxv1a1.BackendTLSModeServerOnly,
-		Validation: gwv1.BackendTLSPolicyValidation{
+		Validation: &gwv1.BackendTLSPolicyValidation{
 			WellKnownCACertificates: new(gwv1.WellKnownCACertificatesSystem),
 			Hostname:                "api.example.com",
 			SubjectAltNames: []gwv1.SubjectAltName{{
@@ -61,7 +61,7 @@ func TestBuildXBackendProtocolValidation(t *testing.T) {
 			protocol: gwxv1a1.BackendProtocolH2C,
 			tls: &gwxv1a1.BackendTLS{
 				Mode:       gwxv1a1.BackendTLSModeServerOnly,
-				Validation: gwv1.BackendTLSPolicyValidation{WellKnownCACertificates: new(gwv1.WellKnownCACertificatesSystem), Hostname: "api.example.com"},
+				Validation: &gwv1.BackendTLSPolicyValidation{WellKnownCACertificates: new(gwv1.WellKnownCACertificatesSystem), Hostname: "api.example.com"},
 			},
 			want: "H2C cannot be combined with TLS",
 		},
@@ -85,7 +85,7 @@ func TestBuildXBackendMCPUsesStreamableHTTPDefaults(t *testing.T) {
 	backend.Spec.Protocol = &protocol
 	backend.Spec.TLS = &gwxv1a1.BackendTLS{
 		Mode: gwxv1a1.BackendTLSModeServerOnly,
-		Validation: gwv1.BackendTLSPolicyValidation{
+		Validation: &gwv1.BackendTLSPolicyValidation{
 			WellKnownCACertificates: new(gwv1.WellKnownCACertificatesSystem),
 			Hostname:                "api.example.com",
 		},
@@ -123,7 +123,7 @@ func TestBuildXBackendCrossNamespaceClientCertificateRequiresGrant(t *testing.T)
 			Name:      "client-cert",
 			Namespace: new(gwv1.Namespace("certs")),
 		},
-		Validation: gwv1.BackendTLSPolicyValidation{
+		Validation: &gwv1.BackendTLSPolicyValidation{
 			WellKnownCACertificates: new(gwv1.WellKnownCACertificatesSystem),
 			Hostname:                "api.example.com",
 		},
@@ -155,7 +155,7 @@ func externalXBackend(name string) *gwxv1a1.XBackend {
 		Name: name, Namespace: "default",
 		Spec: gwxv1a1.BackendSpec{
 			Type:             gwxv1a1.BackendTypeExternalHostname,
-			Port:             gwxv1a1.BackendPort{Port: 443},
+			Port:             gwxv1a1.BackendPort{Number: 443},
 			ExternalHostname: &gwxv1a1.ExternalHostnameBackend{Hostname: "api.example.com"},
 		},
 	}

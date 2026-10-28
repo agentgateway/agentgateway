@@ -71,7 +71,8 @@ info:
     "provider": "gemini-native",
     "streaming": false,
     "params": {
-      "temperature": 1.0
+      "temperature": 1.0,
+      "reasoning_effort": "high"
     },
     "prompt": [
       {

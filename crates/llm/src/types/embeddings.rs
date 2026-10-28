@@ -93,6 +93,7 @@ impl RequestType for Request {
 					typed::EncodingFormat::Float => strng::literal!("float"),
 				}),
 				dimensions: self.dimensions.map(|d| d as u64),
+				reasoning_effort: None,
 			},
 			prompt: Default::default(),
 			provider_state: None,

@@ -2715,6 +2715,62 @@ async fn legacy_session_keeps_ping_and_unknown_methods_do_not_return_404() {
 }
 
 #[tokio::test]
+async fn request_method_without_valid_id_is_rejected() {
+	// A missing or unrepresentable id parses as a notification; it must not be forwarded, since
+	// that would skip mcpAuthorization.
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let init_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	});
+	let init = mcp_json_post(&client, &url, &init_body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	let session_id = init.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	for id in [
+		"",
+		r#""id":null,"#,
+		r#""id":1.5,"#,
+		r#""id":18446744073709551616,"#,
+	] {
+		let body = format!(
+			r#"{{"jsonrpc":"2.0",{id}"method":"tools/call","params":{{"name":"echo","arguments":{{}}}}}}"#
+		);
+		let response = client
+			.post(&url)
+			.header("content-type", "application/json")
+			.header("accept", "application/json, text/event-stream")
+			.header("mcp-session-id", &session_id)
+			.header("mcp-protocol-version", "2025-06-18")
+			.body(body)
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(
+			response.status(),
+			reqwest::StatusCode::BAD_REQUEST,
+			"id: {id}"
+		);
+	}
+}
+
+#[tokio::test]
 async fn modern_malformed_known_method_envelope_is_not_method_not_found() {
 	// Typed-parse failures on the modern path go through the `unknown_method_error` fallback;
 	// it must not re-classify a known method (or a non-2.0 envelope) as a 404.
@@ -4313,53 +4369,18 @@ async fn mcp_authentication_after_route_jwt(
 ) {
 	use crate::http::jwt::tests::build_signed_token_with_payload;
 
-	const KID: &str = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
-	const ISSUER: &str = "https://issuer.example.com";
-	let jwks = serde_json::json!({
-		"keys": [{
-			"use": "sig",
-			"kty": "EC",
-			"kid": KID,
-			"crv": "P-256",
-			"alg": "ES256",
-			"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
-			"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
-		}]
-	});
+	let (jwks, authn) = mcp_jwt_authentication(mode);
 	let exp = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
 		.unwrap()
 		.as_secs()
 		+ 600;
 	let token = build_signed_token_with_payload(
-		KID,
-		serde_json::json!({ "iss": ISSUER, "aud": audiences, "exp": exp }),
+		MCP_JWT_KID,
+		serde_json::json!({ "iss": MCP_JWT_ISSUER, "aud": audiences, "exp": exp }),
 	);
 	let mock = mock_streamable_http_server(true).await;
-	let provider = crate::http::jwt::Provider::from_jwks(
-		serde_json::from_value(jwks.clone()).unwrap(),
-		ISSUER.to_string(),
-		Some(vec!["mcp".to_string()]),
-		Default::default(),
-	)
-	.unwrap();
-	let authn = crate::types::agent::McpAuthentication {
-		issuer: ISSUER.to_string(),
-		audiences: vec!["mcp".to_string()],
-		provider: None,
-		resource_metadata: crate::types::agent::ResourceMetadata {
-			extra: Default::default(),
-		},
-		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
-			vec![provider],
-			mode.into(),
-			crate::http::auth::AuthorizationLocation::bearer_header(),
-			false,
-		)),
-		mode,
-		client_id: None,
-		client_secret: None,
-	};
+
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend_policies(
@@ -4372,7 +4393,7 @@ async fn mcp_authentication_after_route_jwt(
 		.with_route(basic_route(mock.addr));
 	t.attach_route_policy(serde_json::json!({
 		"jwtAuth": {
-			"issuer": ISSUER,
+			"issuer": MCP_JWT_ISSUER,
 			"audiences": ["gateway"],
 			"jwks": jwks.to_string(),
 			"preserveToken": preserve_token,
@@ -4398,6 +4419,338 @@ async fn mcp_authentication_after_route_jwt(
 		.await
 		.unwrap();
 	assert_eq!(response.status(), expected_status);
+	if expected_status == reqwest::StatusCode::UNAUTHORIZED && preserve_token {
+		let challenge = response.headers()[http::header::WWW_AUTHENTICATE]
+			.to_str()
+			.unwrap();
+		assert!(challenge.contains("resource_metadata="));
+		assert!(challenge.contains("error=\"invalid_token\""));
+	}
+}
+
+#[rstest::rstest]
+#[case::backend(ExpiredExchangeCase::Backend)]
+#[case::target(ExpiredExchangeCase::Target)]
+#[case::prefixed(ExpiredExchangeCase::Prefixed)]
+#[case::list(ExpiredExchangeCase::List)]
+#[case::unprefixed(ExpiredExchangeCase::Unprefixed)]
+#[case::stripped(ExpiredExchangeCase::Stripped)]
+#[case::route(ExpiredExchangeCase::Route)]
+#[tokio::test]
+async fn expired_exchange_subject_is_rejected(#[case] scenario: ExpiredExchangeCase) {
+	use crate::http::jwt::tests::build_signed_token_with_payload;
+	use crate::types::agent::{Backend, BackendTarget, BackendWithPolicies, ResourceName};
+
+	let mode = if scenario == ExpiredExchangeCase::Stripped {
+		McpAuthenticationMode::Permissive
+	} else {
+		McpAuthenticationMode::Strict
+	};
+	let preserve_token = scenario != ExpiredExchangeCase::Stripped;
+	let audiences = &["gateway", "mcp"];
+	let target_policy = scenario != ExpiredExchangeCase::Backend;
+	let multiplexed = matches!(
+		scenario,
+		ExpiredExchangeCase::Prefixed | ExpiredExchangeCase::List | ExpiredExchangeCase::Unprefixed
+	);
+	let (jwks, authn) = mcp_jwt_authentication(mode);
+	let exp = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+	let token = build_signed_token_with_payload(
+		MCP_JWT_KID,
+		serde_json::json!({ "iss": MCP_JWT_ISSUER, "aud": audiences, "exp": exp }),
+	);
+	let mock = mock_streamable_http_server(true).await;
+
+	let token_endpoint = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::method("POST"))
+		.and(wiremock::matchers::path("/token"))
+		.respond_with(
+			wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+				"access_token": "upstream-token", "token_type": "Bearer", "expires_in": 3600,
+			})),
+		)
+		.mount(&token_endpoint)
+		.await;
+	let exchange = serde_json::from_value(serde_json::json!({
+		"host": token_endpoint.address().to_string(), "path": "/token",
+		"subjectToken": {"source": {"expression": "jwt.rawToken.unredacted()"}},
+		"cache": {"maxEntries": 0},
+	}))
+	.unwrap();
+	let exchange_policy =
+		BackendTrafficPolicy::backend_auth(BackendAuthKind::OAuthTokenExchange(Box::new(exchange)));
+	let route_authentication = scenario == ExpiredExchangeCase::Route;
+	let mut policies = if route_authentication {
+		vec![]
+	} else {
+		vec![BackendTrafficPolicy::McpAuthentication(authn.clone())]
+	};
+	let target_policies = if target_policy {
+		vec![exchange_policy]
+	} else {
+		policies.push(exchange_policy);
+		vec![]
+	};
+	let plain = mock_paging_streamable_http_server().await;
+	let mut t = if multiplexed {
+		let mut t = setup_proxy_test("{}")
+			.unwrap()
+			.with_multiplex_mcp_backend_failure_mode(
+				"mcp",
+				vec![
+					("exchanging", mock.addr, false),
+					("plain", plain.addr, false),
+				],
+				true,
+				FailureMode::FailOpen,
+			)
+			.with_route(basic_named_route(strng::new("/mcp")));
+		for policy in policies {
+			t.with_policy(TargetedPolicy {
+				key: "test/authentication".into(),
+				name: None,
+				creation_timestamp: 0,
+				target: PolicyTarget::Backend(BackendTarget::Backend {
+					name: "mcp".into(),
+					namespace: Default::default(),
+					section: None,
+					kind: None,
+				}),
+				inheritance: Default::default(),
+				policy: policy.into(),
+			});
+		}
+		if scenario == ExpiredExchangeCase::Unprefixed {
+			let inputs = t.inputs();
+			let mut backend = inputs
+				.stores
+				.read_binds()
+				.backend(&"/mcp".into())
+				.unwrap()
+				.as_ref()
+				.clone();
+			let Backend::MCP(_, ref mut mcp) = backend.backend else {
+				panic!("expected MCP backend");
+			};
+			mcp.prefix_mode = crate::types::agent::McpPrefixMode::Never;
+			inputs
+				.stores
+				.binds
+				.write()
+				.insert_backend(backend.backend.name(), backend);
+		}
+		let backend = Backend::Opaque(
+			ResourceName::new(strng::format!("basic-{}", mock.addr), "".into()),
+			crate::types::agent::Target::Address(mock.addr),
+		);
+		t.inputs().stores.binds.write().insert_backend(
+			backend.name(),
+			BackendWithPolicies {
+				backend,
+				inline_policies: target_policies,
+			},
+		);
+		t
+	} else {
+		setup_proxy_test("{}")
+			.unwrap()
+			.with_mcp_backend_and_target_policies(
+				mock.addr,
+				true,
+				false,
+				policies,
+				target_policies,
+				false,
+			)
+			.with_route(basic_route(mock.addr))
+	}
+	.with_bind(simple_bind());
+	if route_authentication {
+		t.with_policy(TargetedPolicy {
+			key: "test/route-authentication".into(),
+			name: None,
+			creation_timestamp: 0,
+			target: PolicyTarget::Route(crate::types::agent::RouteName {
+				name: "route".into(),
+				namespace: "".into(),
+				rule_name: None,
+				kind: None,
+			}),
+			inheritance: Default::default(),
+			policy: (
+				crate::types::agent::TrafficPolicy::JwtAuth(crate::store::RequestPolicy::single(
+					crate::types::agent::JwtAuthentication {
+						jwt: authn.jwt_validator.as_ref().clone(),
+						mcp: Some(authn),
+					},
+				)),
+				crate::types::agent::PolicyPhase::Route,
+			)
+				.into(),
+		});
+	} else {
+		t.attach_route_policy(serde_json::json!({
+			"jwtAuth": {
+				"issuer": MCP_JWT_ISSUER,
+				"audiences": ["gateway"],
+				"jwks": jwks.to_string(),
+				"preserveToken": preserve_token,
+			}
+		}))
+		.await;
+	}
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let response = reqwest::Client::new()
+		.post(format!("http://{io}/gateway-mcp"))
+		.bearer_auth(&token)
+		.header("accept", "application/json, text/event-stream")
+		.json(&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "initialize",
+			"params": {
+				"protocolVersion": "2025-03-26",
+				"capabilities": {},
+				"clientInfo": {"name": "t", "version": "1"}
+			}
+		}))
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let session_id = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+	response.bytes().await.unwrap();
+	let expired = build_signed_token_with_payload(
+		MCP_JWT_KID,
+		serde_json::json!({
+			"iss": MCP_JWT_ISSUER, "aud": audiences,
+			"exp": jsonwebtoken::get_current_timestamp() - 30,
+		}),
+	);
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/gateway-mcp");
+	let tool_name = if multiplexed && scenario != ExpiredExchangeCase::Unprefixed {
+		"exchanging_echo"
+	} else {
+		"echo"
+	};
+	let call = if scenario == ExpiredExchangeCase::List {
+		serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+	} else {
+		serde_json::json!({"jsonrpc": "2.0", "id": 2,
+			"method": "tools/call", "params": {"name": tool_name, "arguments": {}}})
+	};
+	let calls_before_expiry = token_endpoint.received_requests().await.unwrap().len();
+	let denied = mcp_json_post(&client, &url, &call)
+		.bearer_auth(&expired)
+		.header("mcp-session-id", &session_id)
+		.header("mcp-protocol-version", "2025-03-26")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(denied.status(), reqwest::StatusCode::UNAUTHORIZED);
+	let challenge = denied.headers()[http::header::WWW_AUTHENTICATE]
+		.to_str()
+		.unwrap();
+	assert!(challenge.contains(&format!(
+		"resource_metadata=\"http://{io}/.well-known/oauth-protected-resource/gateway-mcp\""
+	)));
+	assert!(challenge.contains("error=\"invalid_token\""));
+	assert_eq!(
+		denied.json::<serde_json::Value>().await.unwrap()["error"],
+		"invalid_token"
+	);
+	assert_eq!(
+		token_endpoint.received_requests().await.unwrap().len(),
+		calls_before_expiry
+	);
+
+	if multiplexed && scenario != ExpiredExchangeCase::Unprefixed {
+		let plain_call = serde_json::json!({"jsonrpc": "2.0", "id": 3,
+			"method": "tools/call", "params": {"name": "plain_paged_echo", "arguments": {}}});
+		let response = mcp_json_post(&client, &url, &plain_call)
+			.bearer_auth(&expired)
+			.header("mcp-session-id", &session_id)
+			.header("mcp-protocol-version", "2025-03-26")
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::OK);
+		assert!(read_response_message(response).await.get("error").is_none());
+	}
+	let retry = mcp_json_post(&client, &url, &call)
+		.bearer_auth(&token)
+		.header("mcp-session-id", &session_id)
+		.header("mcp-protocol-version", "2025-03-26")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(retry.status(), reqwest::StatusCode::OK);
+	assert!(read_response_message(retry).await.get("error").is_none());
+	assert!(token_endpoint.received_requests().await.unwrap().len() > calls_before_expiry);
+	assert_eq!(mock.init_count().await, 1);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ExpiredExchangeCase {
+	Backend,
+	Target,
+	Prefixed,
+	List,
+	Unprefixed,
+	Stripped,
+	Route,
+}
+
+const MCP_JWT_KID: &str = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
+const MCP_JWT_ISSUER: &str = "https://issuer.example.com";
+
+fn mcp_jwt_authentication(
+	mode: McpAuthenticationMode,
+) -> (serde_json::Value, crate::types::agent::McpAuthentication) {
+	let jwks = serde_json::json!({
+		"keys": [{
+			"use": "sig",
+			"kty": "EC",
+			"kid": MCP_JWT_KID,
+			"crv": "P-256",
+			"alg": "ES256",
+			"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+			"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+		}]
+	});
+	let provider = crate::http::jwt::Provider::from_jwks(
+		serde_json::from_value(jwks.clone()).unwrap(),
+		MCP_JWT_ISSUER.to_string(),
+		Some(vec!["mcp".to_string()]),
+		Default::default(),
+	)
+	.unwrap();
+	let authn = crate::types::agent::McpAuthentication {
+		issuer: MCP_JWT_ISSUER.to_string(),
+		audiences: vec!["mcp".to_string()],
+		provider: None,
+		resource_metadata: crate::types::agent::ResourceMetadata {
+			extra: Default::default(),
+		},
+		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+			vec![provider],
+			mode.into(),
+			crate::http::auth::AuthorizationLocation::bearer_header(),
+			false,
+		)),
+		mode,
+		client_id: None,
+		client_secret: None,
+	};
+	(jwks, authn)
 }
 
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParams>) {

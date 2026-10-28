@@ -289,6 +289,15 @@ impl RequestType for Request {
 				max_tokens: gc.and_then(|g| g.max_output_tokens).map(u64::from),
 				encoding_format: None,
 				dimensions: None,
+				reasoning_effort: gc
+					.and_then(|g| {
+						g.rest
+							.get("thinkingConfig")
+							.or_else(|| g.rest.get("thinking_config"))
+					})
+					.and_then(|t| t.get("thinkingLevel").or_else(|| t.get("thinking_level")))
+					.and_then(serde_json::Value::as_str)
+					.and_then(crate::ReasoningEffort::parse),
 			},
 			prompt: Default::default(),
 			provider_state: None,

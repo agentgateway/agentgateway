@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,13 +103,13 @@ func (f joinFixture) names() []string {
 
 func TestJoinExtraListenerSetsNoOpWhenUnset(t *testing.T) {
 	t.Run("option unset", func(t *testing.T) {
-		f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil)
+		f := newJoinFixture(t, testGateway(new(gwv1.NamespacesFromAll)), nil)
 		assert.True(t, f.base == f.admitted)
 		assert.Empty(t, f.rejected.List())
 	})
 
 	t.Run("builder returns nil", func(t *testing.T) {
-		f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil,
+		f := newJoinFixture(t, testGateway(new(gwv1.NamespacesFromAll)), nil,
 			WithExtraListenerSets(func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[*translator.ListenerSet] {
 				return nil
 			}))
@@ -121,7 +120,7 @@ func TestJoinExtraListenerSetsNoOpWhenUnset(t *testing.T) {
 
 // A selector policy is evaluated against the contribution's namespace, not the Gateway's.
 func TestJoinExtraListenerSetsHonoursNamespaceSelector(t *testing.T) {
-	gw := testGateway(ptr.Of(gwv1.NamespacesFromSelector))
+	gw := testGateway(new(gwv1.NamespacesFromSelector))
 	gw.Spec.AllowedListeners.Namespaces.Selector = &metav1.LabelSelector{
 		MatchLabels: map[string]string{"team": "platform"},
 	}
@@ -159,32 +158,32 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 	}{
 		{
 			name:    "name not derived from parent",
-			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			gateway: testGateway(new(gwv1.NamespacesFromAll)),
 			extra:   undrivedName,
 			reason:  gwv1.ListenerSetReasonInvalid,
 		},
 		{
 			name:         "parent is a listener set",
-			gateway:      testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			gateway:      testGateway(new(gwv1.NamespacesFromAll)),
 			listenerSets: realListenerSets,
 			extra:        testListenerSet("default", "real", "http"),
 			reason:       gwv1.ListenerSetReasonInvalid,
 		},
 		{
 			name:    "dotted section name derives a name a listener set listener owns",
-			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			gateway: testGateway(new(gwv1.NamespacesFromAll)),
 			extra:   dottedSection,
 			reason:  gwv1.ListenerSetReasonInvalid,
 		},
 		{
 			name:    "listener key does not match name",
-			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			gateway: testGateway(new(gwv1.NamespacesFromAll)),
 			extra:   mismatchedListenerKey,
 			reason:  gwv1.ListenerSetReasonInvalid,
 		},
 		{
 			name:    "empty section name",
-			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			gateway: testGateway(new(gwv1.NamespacesFromAll)),
 			extra:   emptySection,
 			reason:  gwv1.ListenerSetReasonInvalid,
 		},
@@ -211,7 +210,7 @@ func TestJoinExtraListenerSetsDropsUnparentedContributions(t *testing.T) {
 	orphan.ParentGateway = types.NamespacedName{Namespace: "default", Name: "missing"}
 	orphan.ParentInfo.ParentGateway = orphan.ParentGateway
 
-	f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil, staticExtra(orphan))
+	f := newJoinFixture(t, testGateway(new(gwv1.NamespacesFromAll)), nil, staticExtra(orphan))
 	assert.Equal(t, []string{baseListenerSet.Name}, f.names())
 	assert.Empty(t, f.rejected.List())
 }
@@ -229,7 +228,7 @@ func TestWithAllowedListenersResolver(t *testing.T) {
 				if gw.Annotations["example.com/allowed-listeners"] != "All" {
 					return nil
 				}
-				return &gwv1.AllowedListeners{Namespaces: &gwv1.ListenerNamespaces{From: ptr.Of(gwv1.NamespacesFromAll)}}
+				return &gwv1.AllowedListeners{Namespaces: &gwv1.ListenerNamespaces{From: new(gwv1.NamespacesFromAll)}}
 			},
 		))
 		assert.ElementsMatch(t, []string{baseListenerSet.Name, "other/b.http"}, f.names())
@@ -246,10 +245,10 @@ func TestWithAllowedListenersResolver(t *testing.T) {
 	})
 
 	t.Run("explicit spec denial is not overridden", func(t *testing.T) {
-		denied := testGateway(ptr.Of(gwv1.NamespacesFromNone))
+		denied := testGateway(new(gwv1.NamespacesFromNone))
 		f := newJoinFixture(t, denied, nil, extra, WithAllowedListenersResolver(
 			func(gw *gwv1.Gateway) *gwv1.AllowedListeners {
-				return &gwv1.AllowedListeners{Namespaces: &gwv1.ListenerNamespaces{From: ptr.Of(gwv1.NamespacesFromAll)}}
+				return &gwv1.AllowedListeners{Namespaces: &gwv1.ListenerNamespaces{From: new(gwv1.NamespacesFromAll)}}
 			},
 		))
 		assert.Equal(t, []string{baseListenerSet.Name}, f.names())

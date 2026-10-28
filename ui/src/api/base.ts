@@ -35,6 +35,16 @@ export async function requestApi(path: string, init?: RequestInit): Promise<Resp
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+	const response = await requestOk(path, init);
+	return response.json() as Promise<T>;
+}
+
+export async function requestText(path: string, init?: RequestInit): Promise<string> {
+	const response = await requestOk(path, init);
+	return response.text();
+}
+
+async function requestOk(path: string, init?: RequestInit): Promise<Response> {
 	const response = await requestApi(path, {
 		headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
 		...init
@@ -56,7 +66,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
 		}
 		throw new Error(message || 'request failed');
 	}
-	return response.json() as Promise<T>;
+	return response;
 }
 
 export function parseJsonOrText(text: string) {

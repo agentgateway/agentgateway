@@ -34,6 +34,9 @@ winning rule's effects. For HTTPS, the ClientHello SNI selects the certificate;
 the request authority is authorized independently. Upgrades in Substrate are
 denied (including CONNECT).
 
+Egress authorization failures return HTTP 403 with the body
+`actor egress policy denied`. Detailed failure reasons remain in gateway logs.
+
 WebSocket upgrades return HTTP 403 with the exact body
 `WebSocket egress is not supported` (no trailing newline), for both HTTP and
 intercepted HTTPS. This denial runs even on a rejection route without a
@@ -52,6 +55,9 @@ Do not read the target from `source.connectHeaders`: HTTP/2 carries it in
 `:authority`, not a Host header.
 A successful outer CONNECT is not evidence of an inner HTTP
 request's success; intercepted HTTPS must emit its own HTTP access record.
+
+When ingress exhausts its parking budget because no worker can fit the actor,
+it returns HTTP 503 with the body `no worker has room for the actor`.
 
 Both HTTP and TLS passthrough routes require dynamic backends. The gateway
 resolves the authorized HTTP authority or TLS SNI through DNS and uses the

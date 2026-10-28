@@ -2,7 +2,8 @@
   "model": "gpt-5.6-terra",
   "max_tokens": 1024,
   "thinking": {
-    "type": "adaptive"
+    "type": "adaptive",
+    "display": "summarized"
   },
   "output_config": {
     "effort": "high"

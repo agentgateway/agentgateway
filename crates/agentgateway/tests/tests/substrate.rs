@@ -4,6 +4,7 @@ use agentgateway::test_helpers::{ateapimock, credprovidermock, oteltracemock};
 use agentgateway::transport::stream::{SocketType, TLSConnectionInfo};
 use agentgateway::transport::tls::TlsInfo;
 use agentgateway::types::agent::{Backend, BackendWithPolicies, BindMode, TunnelProtocol};
+use futures::FutureExt;
 use protos::ateapi::{
 	Actor, ActorState, ActorStatus, EgressPolicy, ResourceMetadata, ResumeActorResponse,
 };
@@ -16,6 +17,28 @@ use crate::common::prelude::*;
 const ACTOR_UID: &str = "6f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f";
 // Port 1 is privileged and outside the ephemeral range: nothing in the test process listens there.
 const UNREACHABLE_ADDR: &str = "127.0.0.1:1";
+
+#[test]
+fn substrate_control_api_wire_tags() {
+	// Canonical Substrate tags: Actor.status=5 and MintActorJwtRequest fields=1,2,3.
+	let actor = <Actor as prost::Message>::decode(&b"\x2a\x04\x08\x02\x12\x00"[..]).unwrap();
+	let status = actor.status.unwrap();
+	assert_eq!(status.state, ActorState::Running as i32);
+	assert!(status.worker_assignment.is_some());
+
+	let request = protos::ateapi::MintActorJwtRequest {
+		actor: Some(protos::ateapi::ObjectRef {
+			atespace: "a".into(),
+			name: "b".into(),
+		}),
+		audiences: vec!["x".into()],
+		expiration_seconds: 1,
+	};
+	assert_eq!(
+		prost::Message::encode_to_vec(&request),
+		b"\x0a\x06\x0a\x01a\x12\x01b\x12\x01x\x18\x01",
+	);
+}
 
 async fn send_request(io: MemoryClient, method: Method, url: &str) -> Response {
 	let authority = url
@@ -1872,16 +1895,18 @@ async fn open_actor_egress_tunnel_protocol(
 
 #[cfg(feature = "crypto-aws-lc")]
 #[rstest::rstest]
-#[case(false, false, false)]
-#[case(false, true, false)]
-#[case(true, false, false)]
-#[case(true, true, false)]
-#[case(false, true, true)]
+#[case(false, false, false, None)]
+#[case(false, true, false, None)]
+#[case(false, true, false, Some("0s"))]
+#[case(true, false, false, None)]
+#[case(true, true, false, None)]
+#[case(false, true, true, None)]
 #[tokio::test]
 async fn substrate_egress_replaces_only_requested_credentials(
 	#[case] https: bool,
 	#[case] placeholder: bool,
 	#[case] actor_jwt: bool,
+	#[case] cache_ttl: Option<&str>,
 	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
 	#[values(false, true)] outer_http2: bool,
 ) {
@@ -2016,6 +2041,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 			} else {
 				ListenerProtocol::HTTP
 			},
+			..Default::default()
 		}]),
 	);
 	let mut gateway = crate::tests::dfp::setup_dfp_bind()
@@ -2044,14 +2070,18 @@ async fn substrate_egress_replaces_only_requested_credentials(
 			}
 		}))
 		.await;
+	let mut credential_provider_config = json!({
+		"uriAuthority": "kubernetes.io",
+		"target": { "host": credential_provider.address.to_string() }
+	});
+	if let Some(ttl) = cache_ttl {
+		credential_provider_config["cacheTtl"] = json!(ttl);
+	}
 	gateway
 		.attach_route_policy(json!({
 			"substrateEgress": {
 				"host": api.address.to_string(),
-				"credentialProviders": [{
-					"uriAuthority": "kubernetes.io",
-					"target": { "host": credential_provider.address.to_string() }
-				}]
+				"credentialProviders": [credential_provider_config]
 			}
 		}))
 		.await;
@@ -2119,10 +2149,20 @@ async fn substrate_egress_replaces_only_requested_credentials(
 		exchange(io, &request).await;
 		assert_eq!(mint_calls.load(Ordering::Relaxed), 2);
 	}
+	// A second request reuses the cached credential unless the provider's TTL is zero.
+	let repeated = placeholder && !actor_jwt && !https;
+	if repeated {
+		let io = open_actor_egress_tunnel_protocol(&gateway, port, outer_http2).await;
+		exchange(io, &request).await;
+		assert_eq!(
+			credential_calls.load(Ordering::Relaxed),
+			1 + usize::from(cache_ttl == Some("0s"))
+		);
+	}
 	let upstream_requests = upstream.received_requests().await.unwrap();
 	assert_eq!(
 		upstream_requests.len(),
-		if delayed_actor_jwt { 2 } else { 1 }
+		if delayed_actor_jwt || repeated { 2 } else { 1 }
 	);
 	assert_eq!(
 		upstream_requests[0]
@@ -2187,18 +2227,21 @@ async fn substrate_tls_gateway(
 				name: Default::default(),
 				hostname: "localhost".into(),
 				protocol: ListenerProtocol::HTTPS(crate::tests::tls::test_server_tls_config()),
+				..Default::default()
 			},
 			Listener {
 				key: tls_listener.clone(),
 				name: Default::default(),
 				hostname: Default::default(),
 				protocol: ListenerProtocol::TLS(None),
+				..Default::default()
 			},
 			Listener {
 				key: tcp_listener.clone(),
 				name: Default::default(),
 				hostname: Default::default(),
 				protocol: ListenerProtocol::TCP,
+				..Default::default()
 			},
 		]),
 	);
@@ -2525,13 +2568,17 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 					}
 					.try_into()
 					.unwrap();
-				let io = tokio_rustls::TlsConnector::from(tls.base_config().config)
+				let handshake = tokio_rustls::TlsConnector::from(tls.base_config().config)
 					.connect(
 						rustls_pki_types::ServerName::try_from("localhost").unwrap(),
 						io,
 					)
-					.await
-					.unwrap();
+					.await;
+				if !policy_allowed {
+					assert!(handshake.is_err(), "denied TLS handshake completed");
+					return Vec::new();
+				}
+				let io = handshake.unwrap();
 				exchange(io, &request).await
 			} else {
 				exchange(io, &request).await
@@ -2539,6 +2586,17 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 		})
 		.await
 		.expect("timed out waiting for HTTP response");
+		if https && !policy_allowed {
+			assert!(response.is_empty());
+			assert!(
+				tokio::time::timeout(Duration::from_millis(50), connections.recv())
+					.await
+					.is_err(),
+				"denied TLS opened an upstream connection"
+			);
+			assert!(upstream.received_requests().await.unwrap().is_empty());
+			continue;
+		}
 		let expected = if upgrading || !policy_allowed {
 			"HTTP/1.1 403 Forbidden\r\n"
 		} else {
@@ -2549,11 +2607,20 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			"{}",
 			String::from_utf8_lossy(&response)
 		);
-		if upgrading {
+		if upgrading || !policy_allowed {
 			let body = response
 				.split_at(response.windows(4).position(|b| b == b"\r\n\r\n").unwrap() + 4)
 				.1;
-			assert_eq!(body, b"authorization failed");
+			let expected = if !upgrading {
+				"actor egress policy denied"
+			} else if upgrade == "CONNECT" {
+				"CONNECT egress is not supported"
+			} else if upgrade.to_ascii_lowercase().contains("websocket") {
+				"WebSocket egress is not supported"
+			} else {
+				"HTTP upgrades, including CONNECT, are denied for actor egress"
+			};
+			assert_eq!(body, expected.as_bytes());
 		}
 		if upgrading || !policy_allowed {
 			assert!(
@@ -2569,42 +2636,6 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			upstream.received_requests().await.unwrap().len(),
 			usize::from(policy_allowed)
 		);
-		if https && !policy_allowed {
-			let connect = upgrading && upgrade == "CONNECT";
-			let log = if connect {
-				agent_core::telemetry::testing::eventually_find(&[
-					("scope", "request"),
-					("http.host", &connect_host),
-					("http.method", "CONNECT"),
-				])
-				.await
-				.unwrap()
-			} else {
-				find_request_log(&path).await
-			};
-			assert_eq!(
-				log["http.host"].as_str(),
-				Some(if connect {
-					connect_host.as_str()
-				} else {
-					"localhost"
-				}),
-				"{log:#?}"
-			);
-			assert_eq!(
-				log["http.method"].as_str(),
-				Some(if connect { "CONNECT" } else { "GET" }),
-				"{log:#?}"
-			);
-			assert_eq!(
-				log["http.path"].as_str(),
-				Some(if connect { "/" } else { path.as_str() }),
-				"{log:#?}"
-			);
-			assert_eq!(log["http.version"].as_str(), Some("HTTP/1.1"), "{log:#?}");
-			assert_eq!(log["gateway"].as_str(), Some("default/default"), "{log:#?}");
-			assert_eq!(log["listener"].as_str(), Some("default"), "{log:#?}");
-		}
 	}
 	forwarder.abort();
 }
@@ -2612,8 +2643,8 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 #[cfg(feature = "crypto-aws-lc")]
 #[rstest::rstest]
 #[case("unmatched-sni")]
-#[case("unmatched-sni-allowed-authority")]
 #[case("unmatched-port")]
+#[case("passthrough-port")]
 #[case("empty-policy")]
 #[case("http-rule")]
 #[case("before-network-authorization")]
@@ -2623,19 +2654,20 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 #[case("before-cors")]
 #[case("before-route-match")]
 #[tokio::test]
-async fn substrate_egress_https_denial_returns_403_without_dialing(
+async fn substrate_egress_tls_denial_closes_at_client_hello_without_dialing(
 	#[case] kind: &str,
 	#[values(false, true)] http2: bool,
 ) {
 	let (upstream, certs) = tls_mock().await;
-	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let listener = Arc::new(TcpListener::bind("127.0.0.1:0").await.unwrap());
 	let address = listener.local_addr().unwrap();
 	let port = address.port();
 	let upstream_address = *upstream.address();
 	let (connected, mut connections) = tokio::sync::mpsc::unbounded_channel();
-	let forwarder = tokio::spawn(async move {
+	let forwarding_listener = listener.clone();
+	let mut forwarder = tokio::spawn(async move {
 		loop {
-			let (mut downstream, _) = listener.accept().await.unwrap();
+			let (mut downstream, _) = forwarding_listener.accept().await.unwrap();
 			connected.send(()).unwrap();
 			tokio::spawn(async move {
 				let mut upstream = TcpStream::connect(upstream_address).await.unwrap();
@@ -2646,7 +2678,7 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 
 	let authz = simple_mock().await;
 
-	// The same destination must work when allowed, then return an HTTP denial
+	// The same destination must work when allowed, then fail the TLS handshake
 	// without even opening a TCP connection when its policy disallows it.
 	for allowed in [true, false] {
 		let hostname = if !allowed && kind.starts_with("unmatched-sni") {
@@ -2654,7 +2686,7 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 		} else {
 			"localhost"
 		};
-		let rule_port = if !allowed && kind == "unmatched-port" {
+		let rule_port = if !allowed && matches!(kind, "unmatched-port" | "passthrough-port") {
 			if port == 443 { 444 } else { 443 }
 		} else {
 			port
@@ -2663,7 +2695,15 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 			numbers: vec![i32::from(rule_port)],
 			..Default::default()
 		});
-		let rule = if !allowed && kind == "http-rule" {
+		let rule = if !allowed && kind == "passthrough-port" {
+			protos::ateapi::EgressRule {
+				tls_passthrough: Some(protos::ateapi::TlsPassthroughRule {
+					hostnames: vec![hostname.to_owned()],
+					ports,
+				}),
+				..Default::default()
+			}
+		} else if !allowed && kind == "http-rule" {
 			protos::ateapi::EgressRule {
 				http: Some(protos::ateapi::HttpRule {
 					hostnames: vec![hostname.to_owned()],
@@ -2704,14 +2744,17 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 		match kind {
 			"before-network-authorization" => {
 				gateway
-					.attach_frontend_policy(json!({
-						"networkAuthorization": { "rules": [if allowed { "true" } else { "false" }] }
-					}))
+					.attach_frontend_policy_with_port(
+						json!({
+							"networkAuthorization": { "rules": [if allowed { "true" } else { "false" }] }
+						}),
+						Some(port),
+					)
 					.await;
 			},
 			"before-network-ext-authz" => {
 				gateway
-					.attach_frontend_policy(json!({ "networkExtAuthz": authz_policy }))
+					.attach_frontend_policy_with_port(json!({ "networkExtAuthz": authz_policy }), Some(port))
 					.await;
 			},
 			"before-gateway-ext-authz" => {
@@ -2753,20 +2796,36 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 			),
 		)
 		.await
-		.expect("TLS handshake timed out")
-		.expect("gateway must complete TLS for HTTPS denial");
-		let authority = if !allowed && kind == "unmatched-sni-allowed-authority" {
-			hostname
-		} else {
-			"localhost"
-		};
-		let preflight = !allowed && kind == "before-cors";
+		.expect("TLS handshake timed out");
+		if !allowed {
+			let err = io.expect_err("gateway must reject denied TLS at ClientHello");
+			assert!(
+				matches!(
+					err.kind(),
+					std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionReset
+				),
+				"expected connection closure at ClientHello, got {err}"
+			);
+			assert!(
+				connections.try_recv().is_err(),
+				"denied TLS opened an upstream connection"
+			);
+			assert!(
+				listener.accept().now_or_never().is_none(),
+				"denied TLS queued an upstream connection"
+			);
+			assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+			assert_eq!(
+				authz.received_requests().await.unwrap().len(),
+				usize::from(kind.ends_with("ext-authz")),
+				"denied TLS must not call auth services"
+			);
+			continue;
+		}
+		let io = io.expect("allowed TLS handshake failed");
+		let authority = "localhost";
 		let request = ::http::Request::builder()
-			.method(if preflight {
-				Method::OPTIONS
-			} else {
-				Method::GET
-			})
+			.method(Method::GET)
 			.uri(format!("https://{authority}/https-denial"))
 			.header(header::HOST, authority)
 			.header(header::ORIGIN, "http://example.com")
@@ -2792,34 +2851,18 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 		})
 		.await
 		.unwrap();
-		assert_eq!(
-			response.status(),
-			if allowed {
-				StatusCode::OK
-			} else {
-				StatusCode::FORBIDDEN
-			}
-		);
+		assert_eq!(response.status(), StatusCode::OK);
 		if kind == "before-cors" {
 			assert_eq!(
 				response.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN),
-				allowed.then_some(&::http::HeaderValue::from_static("http://example.com"))
+				Some(&::http::HeaderValue::from_static("http://example.com"))
 			);
 		}
 		tokio::time::timeout(Duration::from_secs(3), response.into_body().collect())
 			.await
 			.unwrap()
 			.unwrap();
-		if allowed {
-			connections.recv().await.unwrap();
-		} else {
-			assert!(
-				tokio::time::timeout(Duration::from_millis(50), connections.recv())
-					.await
-					.is_err(),
-				"denied HTTPS opened an upstream connection"
-			);
-		}
+		connections.recv().await.unwrap();
 		assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
 		assert_eq!(
 			authz.received_requests().await.unwrap().len(),
@@ -2827,8 +2870,11 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 			"denied HTTPS must not call auth services"
 		);
 		connection.abort();
+		// Keep the listener open, but stop accepting before testing denial so
+		// an upstream dial cannot hide behind a delayed accept notification.
+		forwarder.abort();
+		assert!((&mut forwarder).await.unwrap_err().is_cancelled());
 	}
-	forwarder.abort();
 }
 
 #[cfg(feature = "crypto-aws-lc")]

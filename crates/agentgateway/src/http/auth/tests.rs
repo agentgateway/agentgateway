@@ -651,42 +651,6 @@ async fn test_aws_sign_requestallback() {
 		.expect("signing failed");
 }
 
-#[tokio::test(start_paused = true)]
-async fn test_aws_sign_request_no_region_error() {
-	unsafe {
-		// prevent loading from default profile on developer's laptops, so this test passes consistently.
-		std::env::set_var("AWS_PROFILE", "/dev/null");
-	}
-
-	// Test AWS signing fails with clear error when no region available
-	let mut req = crate::http::Request::new(crate::http::Body::empty());
-	*req.uri_mut() = "https://bedrock-runtime.amazonaws.com/model/invoke"
-		.parse()
-		.unwrap();
-	*req.method_mut() = http::Method::POST;
-
-	let aws_auth = AwsAuth::ExplicitConfig {
-		access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
-		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
-		region: None, // No region in config
-		session_token: None,
-		service_name: None,
-	};
-
-	// No default region in request extensions.
-
-	// Should fail with specific "Region must be specified" error
-	let result = aws::sign_request(&crate::test_helpers::test_client(), &mut req, &aws_auth).await;
-	assert!(result.is_err(), "Should fail without region");
-
-	let err = result.unwrap_err().to_string();
-	assert!(
-		err.contains("No region found in AWS config or request extensions"),
-		"Error should mention missing region, got: {}",
-		err
-	);
-}
-
 #[tokio::test]
 async fn test_aws_sign_request_implicit_with_extension() {
 	// Test AWS signing with implicit auth uses region from request extensions

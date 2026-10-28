@@ -9,9 +9,10 @@ use serde_json::{Map, Value};
 use tracing::{debug, trace, warn};
 
 use super::{AuthorizationLocation, BackendAuthError};
-use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT};
+use crate::http::{Request, jwt};
+use crate::mcp::auth::McpResourceChallenge;
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
@@ -348,6 +349,22 @@ impl OAuthTokenExchangeAuth {
 				debug!(source=?self.subject_token.source, "oauth token exchange subject token missing");
 				ProxyError::InvalidRequest
 			})?;
+		// The subject token need not pass through a JWT policy. Decode JWT-shaped tokens directly so
+		// an expired credential still produces the 401 clients use to refresh. This is only a local
+		// expiry check, not a trust decision; the authorization server still validates the token.
+		#[derive(serde::Deserialize)]
+		struct ExpClaim {
+			exp: Option<f64>,
+		}
+		let expired = decode_unverified_jwt_claims::<ExpClaim>(&subject_token)
+			.and_then(|claims| claims.exp)
+			.is_some_and(|exp| exp <= jsonwebtoken::get_current_timestamp() as f64);
+		if expired {
+			let err = ProxyError::JwtAuthenticationFailure(jwt::TokenError::Invalid(
+				jsonwebtoken::errors::ErrorKind::ExpiredSignature.into(),
+			));
+			return Err(McpResourceChallenge::wrap(req, err));
+		}
 		let actor = self
 			.actor_token
 			.as_ref()

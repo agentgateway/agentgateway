@@ -2601,6 +2601,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 				max_tokens: Some(1024),
 				encoding_format: None,
 				dimensions: None,
+				reasoning_effort: None,
 			},
 			cost: None,
 			cost_rates: None,

@@ -11,7 +11,10 @@
 		"moduleDetection": "force",
 		"noEmit": true,
 		"strict": true,
-		"types": ["node"]
+		"types": ["node"],
+		"paths": {
+			"@/*": ["./src/*"]
+		}
 	},
-	"include": ["vite.config.ts", "playwright.config.ts", "src/**/*.test.ts"]
+	"include": ["vite.config.ts", "src/**/*.test.ts"]
 }

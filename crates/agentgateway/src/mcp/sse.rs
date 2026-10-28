@@ -67,6 +67,7 @@ impl LegacySSEService {
 		})?;
 		let message = serde_json::from_slice::<ClientJsonRpcMessage>(&bytes)
 			.map_err(|err| mcp::Error::Deserialize(http::Error::new(err)))?;
+		mcp::validate_client_message(&message)?;
 		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&part);
 		*ctx.request.body_mut() = Some(bytes);
 

@@ -684,6 +684,23 @@
               ],
               "format": "uint64",
               "minimum": 0
+            },
+            "reasoning_effort": {
+              "description": "The reasoning effort requested by the client: OpenAI `reasoning_effort` or\n`reasoning.effort`, Anthropic `output_config.effort`, or Gemini `thinkingLevel`.\nUnset when the request does not specify one, in which case the provider default applies.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "none",
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                null
+              ]
             }
           }
         },

@@ -576,7 +576,8 @@ impl ExtAuthz {
 			span.record_grpc_result(&resp);
 		}
 
-		trace!("check response: {:?}", resp);
+		// Avoid logging header values, which may contain credentials added by the auth server.
+		trace!(status = ?resp.as_ref().map(|r| r.get_ref().status.as_ref().map(|s| s.code)).map_err(|e| e.code()), "check response");
 		let cr = match resp {
 			Ok(response) => response,
 			Err(e) => {

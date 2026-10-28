@@ -118,6 +118,9 @@ impl RequestType for Request {
 					.lookup(lookups::ENCODING_FORMAT, |v| v.as_str())
 					.map(Into::into),
 				dimensions: self.lookup(lookups::DIMENSIONS, |v| v.as_u64()),
+				reasoning_effort: self
+					.lookup(lookups::REASONING_EFFORT, |v| v.as_str())
+					.and_then(crate::ReasoningEffort::parse),
 			},
 			prompt: Default::default(),
 			provider_state: None,
@@ -540,6 +543,16 @@ mod lookups {
 	pub const MAX_TOKENS: [&[&str]; 2] = [&["max_completion_tokens"], &["max_tokens"]];
 	pub const ENCODING_FORMAT: [&[&str]; 1] = [&["encoding_format"]];
 	pub const DIMENSIONS: [&[&str]; 1] = [&["dimensions"]];
+	pub const REASONING_EFFORT: [&[&str]; 4] = [
+		// Completions
+		&["reasoning_effort"],
+		// Responses
+		&["reasoning", "effort"],
+		// Messages
+		&["output_config", "effort"],
+		// Gemini
+		&["generationConfig", "thinkingConfig", "thinkingLevel"],
+	];
 	pub const USAGE_INPUT_TOKENS: [&[&str]; 8] = [
 		&["usage", "input_tokens"],
 		&["message", "usage", "input_tokens"],

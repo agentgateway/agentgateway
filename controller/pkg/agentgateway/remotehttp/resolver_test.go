@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -55,7 +54,7 @@ func TestResolve(t *testing.T) {
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name: gwv1.ObjectName("oauth2-discovery"),
-				Kind: ptr.Of(gwv1.Kind("Service")),
+				Kind: new(gwv1.Kind("Service")),
 			},
 			defaultPort:      "8443",
 			wantURL:          "https://oauth2-discovery.default.svc.cluster.local:8443/",
@@ -71,7 +70,7 @@ func TestResolve(t *testing.T) {
 					Spec: agentgateway.AgentgatewayBackendSpec{
 						Static: &agentgateway.StaticBackend{Host: "dummy-idp.default", Port: 8443},
 						Policies: &agentgateway.BackendFull{
-							TLS: &agentgateway.BackendTLS{Sni: ptr.Of(agentgateway.SNI("backend.example.com"))},
+							TLS: &agentgateway.BackendTLS{Sni: new(agentgateway.SNI("backend.example.com"))},
 						},
 					},
 				},
@@ -84,7 +83,7 @@ func TestResolve(t *testing.T) {
 							Name:  gwv1.ObjectName("discovery-backend"),
 						}},
 						Backend: &agentgateway.BackendFull{
-							TLS: &agentgateway.BackendTLS{Sni: ptr.Of(agentgateway.SNI("policy.example.com"))},
+							TLS: &agentgateway.BackendTLS{Sni: new(agentgateway.SNI("policy.example.com"))},
 						},
 					},
 				},
@@ -131,7 +130,7 @@ func TestResolve(t *testing.T) {
 							Name:  gwv1.ObjectName("oauth2-discovery"),
 						}},
 						Backend: &agentgateway.BackendFull{
-							TLS: &agentgateway.BackendTLS{Sni: ptr.Of(agentgateway.SNI("whole.example.com"))},
+							TLS: &agentgateway.BackendTLS{Sni: new(agentgateway.SNI("whole.example.com"))},
 						},
 					},
 				},
@@ -144,18 +143,18 @@ func TestResolve(t *testing.T) {
 							Group:       gwv1.Group(""),
 							Kind:        gwv1.Kind("Service"),
 							Name:        gwv1.ObjectName("oauth2-discovery"),
-							SectionName: ptr.Of(gwv1.SectionName("8443")),
+							SectionName: new(gwv1.SectionName("8443")),
 						}},
 						Backend: &agentgateway.BackendFull{
-							TLS: &agentgateway.BackendTLS{Sni: ptr.Of(agentgateway.SNI("port.example.com"))},
+							TLS: &agentgateway.BackendTLS{Sni: new(agentgateway.SNI("port.example.com"))},
 						},
 					},
 				},
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name: gwv1.ObjectName("oauth2-discovery"),
-				Kind: ptr.Of(gwv1.Kind("Service")),
-				Port: ptr.Of(gwv1.PortNumber(8443)),
+				Kind: new(gwv1.Kind("Service")),
+				Port: new(gwv1.PortNumber(8443)),
 			},
 			wantURL:          "https://oauth2-discovery.default.svc.cluster.local:8443/",
 			wantTLSConfig:    true,
@@ -194,7 +193,7 @@ func TestResolve(t *testing.T) {
 							Group:       gwv1.Group(""),
 							Kind:        gwv1.Kind("Service"),
 							Name:        gwv1.ObjectName("oauth2-discovery"),
-							SectionName: ptr.Of(gwv1.SectionName("https")),
+							SectionName: new(gwv1.SectionName("https")),
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("port.example.com"),
@@ -205,8 +204,8 @@ func TestResolve(t *testing.T) {
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name: gwv1.ObjectName("oauth2-discovery"),
-				Kind: ptr.Of(gwv1.Kind("Service")),
-				Port: ptr.Of(gwv1.PortNumber(8443)),
+				Kind: new(gwv1.Kind("Service")),
+				Port: new(gwv1.PortNumber(8443)),
 			},
 			wantURL:          "https://oauth2-discovery.default.svc.cluster.local:8443/",
 			wantTLSConfig:    true,
@@ -226,8 +225,8 @@ func TestResolve(t *testing.T) {
 						}},
 						Backend: &agentgateway.BackendFull{
 							TLS: &agentgateway.BackendTLS{
-								InsecureSkipVerify: ptr.Of(agentgateway.InsecureTLSModeHostname),
-								Sni:                ptr.Of(agentgateway.SNI("oauth2-discovery.default.svc.cluster.local")),
+								InsecureSkipVerify: new(agentgateway.InsecureTLSModeHostname),
+								Sni:                new(agentgateway.SNI("oauth2-discovery.default.svc.cluster.local")),
 							},
 						},
 					},
@@ -235,8 +234,8 @@ func TestResolve(t *testing.T) {
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name: gwv1.ObjectName("oauth2-discovery"),
-				Kind: ptr.Of(gwv1.Kind("Service")),
-				Port: ptr.Of(gwv1.PortNumber(8443)),
+				Kind: new(gwv1.Kind("Service")),
+				Port: new(gwv1.PortNumber(8443)),
 			},
 			wantURL:             "https://oauth2-discovery.default.svc.cluster.local:8443/",
 			wantTLSConfig:       true,
@@ -329,7 +328,7 @@ func TestResolve(t *testing.T) {
 						Static: &agentgateway.StaticBackend{Host: "proxy.internal.example.com", Port: 8443},
 						Policies: &agentgateway.BackendFull{
 							TLS: &agentgateway.BackendTLS{
-								InsecureSkipVerify: ptr.Of(agentgateway.InsecureTLSModeAll),
+								InsecureSkipVerify: new(agentgateway.InsecureTLSModeAll),
 							},
 						},
 					},
@@ -373,8 +372,8 @@ func TestResolve(t *testing.T) {
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name: gwv1.ObjectName("oauth2-discovery"),
-				Kind: ptr.Of(gwv1.Kind("Service")),
-				Port: ptr.Of(gwv1.PortNumber(8443)),
+				Kind: new(gwv1.Kind("Service")),
+				Port: new(gwv1.PortNumber(8443)),
 			},
 			wantURL:          "https://oauth2-discovery.default.svc.cluster.local:8443/",
 			wantTLSConfig:    true,

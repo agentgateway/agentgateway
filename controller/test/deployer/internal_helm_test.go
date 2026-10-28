@@ -564,6 +564,10 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway-gateway-addresses",
 		},
 		{
+			Name:      "agentgateway with Cluster routability address",
+			InputFile: "agentgateway-gateway-addresses-cluster-routability",
+		},
+		{
 			Name:      "agentgateway with name exactly 63 characters",
 			InputFile: "agentgateway-long-gateway-name-exactly-63-chars",
 		},

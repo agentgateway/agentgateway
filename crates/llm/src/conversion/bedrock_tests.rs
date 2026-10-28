@@ -272,7 +272,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 		top_p: Some(0.8),
 		tools: None,
 		tool_choice: None,
-		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
+		thinking: Some(messages::typed::ThinkingInput::Adaptive { display: None }),
 		output_config: Some(messages::typed::OutputConfig {
 			effort: None,
 			format: None,
@@ -307,51 +307,66 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		endpoint_preference: Default::default(),
 	};
 
-	let req = messages::typed::Request {
-		model: "anthropic.claude-3-sonnet".to_string(),
-		messages: vec![messages::typed::Message {
-			role: messages::typed::Role::User,
-			content: vec![messages::typed::ContentBlock::Text(
-				messages::typed::ContentTextBlock {
-					text: "Hello".to_string(),
-					citations: None,
-					cache_control: None,
-				},
-			)],
-		}],
-		max_tokens: 100,
-		metadata: None,
-		system: None,
-		stop_sequences: vec![],
-		stream: false,
-		temperature: None,
-		top_k: None,
-		top_p: None,
-		tools: None,
-		tool_choice: None,
-		thinking: Some(messages::typed::ThinkingInput::Enabled {
-			budget_tokens: 1024,
-		}),
-		output_config: Some(messages::typed::OutputConfig {
-			effort: Some(messages::typed::ThinkingEffort::High),
-			format: None,
-		}),
-		cache_control: None,
-	};
+	let catalog = crate::model_catalog::TestCatalog::new([(
+		"anthropic.claude-3-sonnet",
+		&[crate::model_catalog::tags::ADAPTIVE_THINKING][..],
+	)]);
+	for adaptive in [false, true] {
+		let req = messages::typed::Request {
+			model: "anthropic.claude-3-sonnet".to_string(),
+			messages: vec![messages::typed::Message {
+				role: messages::typed::Role::User,
+				content: vec![messages::typed::ContentBlock::Text(
+					messages::typed::ContentTextBlock {
+						text: "Hello".to_string(),
+						citations: None,
+						cache_control: None,
+					},
+				)],
+			}],
+			max_tokens: 100,
+			metadata: None,
+			system: None,
+			stop_sequences: vec![],
+			stream: false,
+			temperature: None,
+			top_k: None,
+			top_p: None,
+			tools: None,
+			tool_choice: None,
+			thinking: Some(messages::typed::ThinkingInput::Enabled {
+				budget_tokens: 1024,
+				display: Some(messages::typed::ThinkingDisplay::Omitted),
+			}),
+			output_config: Some(messages::typed::OutputConfig {
+				effort: Some(messages::typed::ThinkingEffort::High),
+				format: None,
+			}),
+			cache_control: None,
+		};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
-	assert_eq!(
-		out.additional_model_request_fields,
-		Some(json!({
-			"thinking": {
-				"type": "enabled",
-				"budget_tokens": 1024
-			},
-			"output_config": {
-				"effort": "high"
-			}
-		}))
-	);
+		let (out, _) = super::from_messages::translate_internal(
+			req,
+			&provider,
+			None,
+			if adaptive { Some(&catalog) } else { None },
+		)
+		.unwrap();
+		let thinking = if adaptive {
+			json!({"type": "adaptive", "display": "omitted"})
+		} else {
+			json!({"type": "enabled", "budget_tokens": 1024, "display": "omitted"})
+		};
+		assert_eq!(
+			out.additional_model_request_fields,
+			Some(json!({
+				"thinking": thinking,
+				"output_config": {
+					"effort": "high"
+				}
+			}))
+		);
+	}
 }
 
 #[test]
@@ -403,7 +418,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 			name: "lookup".to_string(),
 			disable_parallel_tool_use: None,
 		}),
-		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
+		thinking: Some(messages::typed::ThinkingInput::Adaptive { display: None }),
 		output_config: None,
 		cache_control: None,
 	};
@@ -525,6 +540,7 @@ fn enabled_thinking_request_with_tool_choice(
 		tool_choice,
 		thinking: Some(messages::typed::ThinkingInput::Enabled {
 			budget_tokens: 1024,
+			display: None,
 		}),
 		output_config: None,
 		cache_control: None,

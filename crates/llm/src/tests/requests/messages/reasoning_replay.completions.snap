@@ -31,6 +31,13 @@ info:
           text: "6"
     - role: user
       content: Continue.
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Nothing to add.
+          signature: ""
+    - role: user
+      content: Are you there?
 ---
 {
   "request": {
@@ -82,6 +89,19 @@ info:
             "text": "Continue."
           }
         ]
+      },
+      {
+        "role": "assistant",
+        "reasoning_content": "Nothing to add."
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Are you there?"
+          }
+        ]
       }
     ],
     "model": "claude-3-7-sonnet-20250219-v1:0",
@@ -117,6 +137,14 @@ info:
       {
         "role": "user",
         "content": "Continue."
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": "Are you there?"
       }
     ]
   }

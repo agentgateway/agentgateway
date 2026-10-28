@@ -561,9 +561,9 @@ async fn apply_refreshes_expired_browser_session() {
 		assert_eq!(other.response_headers, response.response_headers);
 	}
 
+	// Keep the clock frozen so wall-clock time under load cannot push us past the 30s cache TTL.
 	tokio::time::pause();
 	tokio::time::advance(Duration::from_secs(29)).await;
-	tokio::time::resume();
 	let late_response = test_helpers::test_policy(&policy, &mut make_request())
 		.await
 		.expect("cached refresh");
@@ -585,6 +585,7 @@ async fn apply_refreshes_expired_browser_session() {
 		"/app"
 	);
 	assert_eq!(login_response.response_headers, response.response_headers);
+	tokio::time::resume();
 
 	assert_eq!(mock.received_requests().await.unwrap().len(), 1);
 
@@ -713,6 +714,10 @@ async fn apply_handles_refresh_failures() {
 				},
 				Err(err) => err.downcast().into_response_with_grpc(mode == "grpc"),
 			};
+			if mode == "navigate" {
+				// Freeze the clock once the failure is cached so later modes cannot outlive the 1s TTL.
+				tokio::time::pause();
+			}
 			assert_eq!(
 				direct.status(),
 				if mode == "grpc" {
@@ -754,7 +759,6 @@ async fn apply_handles_refresh_failures() {
 			}
 		}
 		assert_eq!(mock.received_requests().await.unwrap().len(), 1);
-		tokio::time::pause();
 		tokio::time::advance(Duration::from_secs(if clear_cookie { 31 } else { 2 })).await;
 		tokio::time::resume();
 		let mut req = request(Method::GET, "https://app.example.com/protected", None);

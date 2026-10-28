@@ -1,3 +1,5 @@
+//! Type-erased mock handlers let tests share gRPC and HTTP/2 server implementations.
+
 pub mod ateapimock;
 pub mod credprovidermock;
 pub mod extauthmock;
@@ -34,7 +36,8 @@ mod common {
 	use hyper::server::conn::http2;
 	use tokio::task::JoinHandle;
 	use tonic::body::Body;
-	use tower::BoxError;
+	use tower::util::BoxCloneSyncService;
+	use tower::{BoxError, ServiceExt};
 	use tracing::error;
 
 	pub struct MockInstance {
@@ -58,28 +61,7 @@ mod common {
 		S::Future: Send + 'static,
 		S::Error: Into<BoxError> + 'static,
 	{
-		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-		let addr = listener.local_addr().unwrap();
-		let task = tokio::spawn(async move {
-			while let Ok((socket, _)) = listener.accept().await {
-				let srv = srv.clone();
-				tokio::spawn(async move {
-					if let Err(err) = http2::Builder::new(::hyper_util::rt::TokioExecutor::new())
-						.serve_connection(
-							hyper_util::rt::TokioIo::new(socket),
-							super::hyper_tower::TowerToHyperService::new(srv),
-						)
-						.await
-					{
-						error!("Error serving connection: {:?}", err);
-					}
-				});
-			}
-		});
-		MockInstance {
-			address: addr,
-			handle: task,
-		}
+		spawn_service_on(srv, ([127, 0, 0, 1], 0).into()).await
 	}
 
 	pub async fn spawn_service_on<S>(srv: S, address: SocketAddr) -> MockInstance
@@ -92,6 +74,18 @@ mod common {
 		S::Future: Send + 'static,
 		S::Error: Into<BoxError> + 'static,
 	{
+		spawn_boxed_service(
+			BoxCloneSyncService::new(srv.map_err(|e| tonic::Status::from_error(e.into()))),
+			address,
+		)
+		.await
+	}
+
+	// Share the HTTP/2 connection machinery across mock service types.
+	async fn spawn_boxed_service(
+		srv: BoxCloneSyncService<hyper::Request<Body>, http::Response<Body>, tonic::Status>,
+		address: SocketAddr,
+	) -> MockInstance {
 		let listener = tokio::net::TcpListener::bind(address).await.unwrap();
 		let addr = listener.local_addr().unwrap();
 		let task = tokio::spawn(async move {

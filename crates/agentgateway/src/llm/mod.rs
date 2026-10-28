@@ -643,9 +643,16 @@ impl ChatTranslation {
 		match self.output {
 			ChatFormat::OpenAICompletions => match self.input {
 				InputFormat::Completions => {
-					AIProvider::parse_response::<types::completions::Response>(bytes)
+					let mut resp = serde_json::from_slice::<types::completions::Response>(bytes)
+						.map_err(logged_response_parsing(bytes))?;
+					if resp.model.is_empty() {
+						resp.model = ctx.model.to_string();
+					}
+					Ok(Box::new(resp))
 				},
-				InputFormat::Messages => conversion::completions::from_messages::translate_response(bytes),
+				InputFormat::Messages => {
+					conversion::completions::from_messages::translate_response(bytes, ctx.model)
+				},
 				InputFormat::Responses => conversion::openai_compat::to_responses::translate_response(
 					bytes,
 					ctx.model,
@@ -1812,17 +1819,20 @@ impl AIProvider {
 			.await?;
 		self.apply_model_alias(policies, &mut req);
 
-		// If a user doesn't request usage, we will not get token information which we need
+		// If a user doesn't request usage (or explicitly disables it), we will not get token information which we need
 		// We always set it.
 		// TODO?: this may impact the user, if they make assumptions about the stream NOT including usage.
 		// Notably, this adds a final SSE event.
 		// We could actually go remove that on the response, but it would mean we cannot do passthrough-parsing,
 		// so unless we have a compelling use case for it, for now we keep it.
-		if req.stream.unwrap_or_default() && req.stream_options.is_none() {
-			req.stream_options = Some(types::completions::StreamOptions {
-				include_usage: true,
-				rest: Default::default(),
-			});
+		if req.stream.unwrap_or_default() {
+			req
+				.stream_options
+				.get_or_insert_with(|| types::completions::StreamOptions {
+					include_usage: true,
+					rest: Default::default(),
+				})
+				.include_usage = true;
 		}
 		if matches!(
 			self,
@@ -2180,6 +2190,43 @@ impl AIProvider {
 			.await
 	}
 
+	/// A model in the path (Bedrock, Vertex, Gemini) is mutated like a multipart `model`: against a
+	/// stand-in object holding only `model`, with the result written back to the path.
+	/// Returns whether the request has a model in the path.
+	fn mutate_path_model(
+		policies: Option<&Policy>,
+		parts: &mut Parts,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<bool, AIError> {
+		let Some(original) = types::detect::extract_model_from_path(parts.uri.path()) else {
+			return Ok(false);
+		};
+		let Some(policies) = policies else {
+			return Ok(true);
+		};
+		let mutated = policies
+			.apply_request_body_mutations(serde_json::json!({ "model": original.as_str() }), log)?;
+		let model = mutated
+			.get("model")
+			.and_then(serde_json::Value::as_str)
+			.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
+		let model = policies
+			.resolve_model_alias(model)
+			.map_or(model, |m| m.as_str());
+		if model == original.as_str() {
+			return Ok(true);
+		}
+		if !agent_llm::model_path::is_safe_resource_name(model) {
+			return Err(AIError::UnsupportedModel);
+		}
+		if let Some(path) = model_router::rewrite_path_model(parts.uri.path(), model) {
+			let mut uri = parts.uri.clone().into_parts();
+			Self::set_path_and_query(&mut uri, &path).map_err(|_| AIError::UnsupportedModel)?;
+			parts.uri = ::http::Uri::from_parts(uri).map_err(|_| AIError::UnsupportedModel)?;
+		}
+		Ok(true)
+	}
+
 	pub async fn process_detect_request(
 		&self,
 		backend_info: &crate::http::auth::BackendInfo,
@@ -2198,13 +2245,15 @@ impl AIProvider {
 			.unwrap_or_default();
 		let multipart_boundary = model_router::multipart_boundary(&hreq);
 		let operation = model_router::classify_operation(hreq.uri().path());
-		let (parts, mut managed_body) = hreq.into_parts();
+		let (mut parts, mut managed_body) = hreq.into_parts();
 		let cached = managed_body.remove_extension::<json::ParsedJson>();
 		let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
 			return Err(AIError::RequestTooLarge);
 		};
 
-		let req = if is_json {
+		let path_model = Self::mutate_path_model(policies, &mut parts, log)?;
+
+		let mut req = if is_json {
 			if let Some(json::ParsedJson(value)) = cached {
 				match policies {
 					Some(p) => p.unmarshal_request_value(value, log),
@@ -2250,6 +2299,13 @@ impl AIProvider {
 		} else {
 			types::detect::Request::new_raw(bytes)
 		};
+		// The model lives in the path, so body mutations must not add it to the body.
+		if path_model
+			&& let types::detect::Request::Json(body) = &mut req
+			&& let Some(body) = body.as_object_mut()
+		{
+			body.remove("model");
+		}
 
 		self
 			.process_non_chat_request(

@@ -177,7 +177,8 @@ info:
     "provider": "responses",
     "streaming": false,
     "params": {
-      "max_tokens": 256
+      "max_tokens": 256,
+      "reasoning_effort": "medium"
     },
     "prompt": [
       {

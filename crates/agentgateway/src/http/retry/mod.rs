@@ -1,6 +1,5 @@
 mod body;
 
-use std::num::NonZeroU8;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,9 +12,9 @@ use crate::*;
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "RetryPolicy"))]
 pub struct Policy {
-	/// Maximum number of retries after the original request.
+	/// Maximum number of retries after the original request. `0` disables retries.
 	#[serde(default = "default_attempts")]
-	pub attempts: NonZeroU8,
+	pub attempts: u8,
 	/// Delay between retry attempts.
 	#[serde(
 		default,
@@ -63,8 +62,8 @@ where
 		.collect::<Result<Vec<_>, _>>()?;
 	Ok(boxed.into_boxed_slice())
 }
-fn default_attempts() -> NonZeroU8 {
-	NonZeroU8::new(1).unwrap()
+fn default_attempts() -> u8 {
+	1
 }
 
 #[cfg(test)]
@@ -80,7 +79,7 @@ mod tests {
 			"condition": "response.headers[\"x-req-failed\"] != \"\"",
 		}))
 		.unwrap();
-		assert_eq!(pol.attempts.get(), 3);
+		assert_eq!(pol.attempts, 3);
 		assert_eq!(
 			pol.precondition.as_ref().unwrap().original_expression,
 			"request.method == \"GET\""

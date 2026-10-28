@@ -605,6 +605,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`binds[].listeners[].routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`binds[].listeners[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -650,7 +651,7 @@
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`binds[].listeners[].routes[].policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`binds[].listeners[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
-|`binds[].listeners[].routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request.|
+|`binds[].listeners[].routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`binds[].listeners[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
 |`binds[].listeners[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`binds[].listeners[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -2163,6 +2164,7 @@
 |`policies[].policy.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`policies[].policy.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`policies[].policy.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`policies[].policy.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -2208,7 +2210,7 @@
 |`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`policies[].policy.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`policies[].policy.retry`|object|Retry matching failed upstream requests.|
-|`policies[].policy.retry.attempts`|integer|Maximum number of retries after the original request.|
+|`policies[].policy.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`policies[].policy.retry.backoff`|string|Delay between retry attempts.|
 |`policies[].policy.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`policies[].policy.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -3298,6 +3300,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`routeGroups[].routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`routeGroups[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -3343,7 +3346,7 @@
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`routeGroups[].routes[].policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`routeGroups[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
-|`routeGroups[].routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request.|
+|`routeGroups[].routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`routeGroups[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
 |`routeGroups[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`routeGroups[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -4924,6 +4927,7 @@
 |`routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -4969,7 +4973,7 @@
 |`routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`routes[].policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`routes[].policies.retry`|object|Retry matching failed upstream requests.|
-|`routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request.|
+|`routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`routes[].policies.retry.backoff`|string|Delay between retry attempts.|
 |`routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -5781,6 +5785,7 @@
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].id`|string|id is a stable identity for this model config entry. The name field remains the model match pattern.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
+|`llm.models[].displayName`|string|displayName is an optional label shown in the UI in place of name. It does not affect matching.|
 |`llm.models[].visibility`|enum|visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).<br>Possible values: `public`, `internal`.|
 |`llm.models[].params`|object|params customizes parameters for the outgoing request|
 |`llm.models[].params.model`|string|The model to send to the provider.<br>If unset, the same model will be used from the request.|
@@ -6638,6 +6643,7 @@
 |`mcp.policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`mcp.policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`mcp.policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`mcp.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -6683,7 +6689,7 @@
 |`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`mcp.policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`mcp.policies.retry`|object|Retry matching failed upstream requests.|
-|`mcp.policies.retry.attempts`|integer|Maximum number of retries after the original request.|
+|`mcp.policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`mcp.policies.retry.backoff`|string|Delay between retry attempts.|
 |`mcp.policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`mcp.policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|

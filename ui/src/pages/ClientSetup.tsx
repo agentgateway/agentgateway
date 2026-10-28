@@ -13,7 +13,6 @@ import piIcon from '@/assets/pi.svg';
 import githubCopilotIcon from '@/assets/providers/copilot.svg';
 import windsurfIcon from '@/assets/windsurf.svg';
 import { claudeSubscriptionWarning } from '@/claudeSubscription';
-import { CatalogModelSelector } from '@/components/CatalogModelSelector';
 import { FreeformCombobox } from '@/components/FreeformCombobox';
 import {
 	Dropdown,
@@ -24,16 +23,18 @@ import {
 	StatusBanner
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
+import { WildcardModelSelector } from '@/components/WildcardModelSelector';
 import { providerLabel } from '@/config';
 import { hasKeyValue, keyLabel, maskKey } from '@/credentialDisplay';
 import { llmGatewayOrigin } from '@/gatewayUrls';
 import { useConfigDumpMode, useLlmConfigData } from '@/hooks';
+import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	isWildcardModelName,
 	modelProviderLabel,
 	resolveModelName,
-	wildcardModelPrefix,
-	wildcardResolvedSuffix
+	wildcardMatchesModel,
+	wildcardModelPrefix
 } from '@/modelResolution';
 import { requestableDumpModelNames } from '@/pages/models/dumpModels';
 import type { LlmModel, LlmProvider, ProviderName } from '@/types';
@@ -88,9 +89,11 @@ export function ClientSetupPage() {
 	);
 	const modelOptions = useMemo(
 		() => [
-			...models.map(item => ({
+			...models.map((item, index) => ({
 				kind: 'model' as const,
 				name: item.name,
+				value: modelOptionValue(models, index),
+				description: modelSubtitle(item) || undefined,
 				icon: <ProviderIcon provider={modelProviderLabel(item, providers) as ProviderName} />,
 				searchText: `${item.name} ${modelProviderLabel(item, providers)} ${providerLabel(item.provider)}`,
 				config: item
@@ -98,6 +101,8 @@ export function ClientSetupPage() {
 			...virtualModels.map(item => ({
 				kind: 'virtual' as const,
 				name: item.name,
+				value: item.name,
+				description: 'Virtual model',
 				icon: <GitBranch size={16} />,
 				searchText: `${item.name} virtual`
 			}))
@@ -122,19 +127,12 @@ export function ClientSetupPage() {
 			modelTouched
 			? model
 			: (dumpModelNames[0] ?? '')
-		: modelOptions.some(item => item.name === model)
+		: modelOptions.some(item => item.value === model)
 			? model
-			: (modelOptions[0]?.name ?? '');
-	const selectedModelOption = modelOptions.find(item => item.name === selectedModel);
+			: (modelOptions[0]?.value ?? '');
+	const selectedModelOption = modelOptions.find(item => item.value === selectedModel);
 	const selectedModelConfig =
 		selectedModelOption?.kind === 'model' ? selectedModelOption.config : undefined;
-	const wildcardPrefix =
-		selectedModelConfig && isWildcardModelName(selectedModelConfig.name)
-			? wildcardModelPrefix(selectedModelConfig.name)
-			: '';
-	const specificModelSuffix = selectedModelConfig
-		? wildcardResolvedSuffix(specificModel, selectedModelConfig.name, wildcardPrefix)
-		: '';
 	const selectedCatalogProvider = selectedModelConfig
 		? modelProviderLabel(selectedModelConfig, providers)
 		: null;
@@ -148,10 +146,15 @@ export function ClientSetupPage() {
 	const requestModel = dumpMode
 		? dumpRequestModel(selectedModel, specificModel)
 		: clientSetupRequestModel(selectedModelOption, selectedModel, specificModel, providers);
+	const matchHeaders = selectedModelConfig ? modelMatchHeaders(selectedModelConfig) : {};
+	const matchHeadersText = Object.entries(matchHeaders)
+		.map(([name, value]) => `${name}: ${value}`)
+		.join(', ');
 	const recipes = clientRecipes({
 		baseUrl: effectiveBaseUrl,
 		model: requestModel || 'model',
-		apiKey
+		apiKey,
+		headers: matchHeaders
 	});
 	const activeRecipe = recipes.find(recipe => recipe.id === selectedIntegration) ?? recipes[0];
 
@@ -211,7 +214,14 @@ export function ClientSetupPage() {
 							placeholder={dumpMode ? 'https://gateway.example.com' : derivedBaseUrl}
 						/>
 					</Field>
-					<FieldGroup label="Model">
+					<FieldGroup
+						label="Model"
+						hint={
+							matchHeadersText
+								? `Clients must send ${matchHeadersText} to reach this model.`
+								: undefined
+						}
+					>
 						{dumpMode ? (
 							<FreeformCombobox
 								ariaLabel="Model"
@@ -231,13 +241,16 @@ export function ClientSetupPage() {
 								placeholder="No models"
 								searchable
 								options={modelOptions.map(item => ({
-									value: item.name,
-									label: item.name,
-									description: item.kind === 'virtual' ? 'Virtual model' : undefined,
+									value: item.value,
+									label: item.kind === 'model' ? modelLabel(item.config) : item.name,
+									description: item.description,
 									icon: item.icon,
 									searchText: item.searchText
 								}))}
-								onChange={setModel}
+								onChange={value => {
+									setModel(value);
+									setSpecificModel('');
+								}}
 							/>
 						)}
 					</FieldGroup>
@@ -266,18 +279,16 @@ export function ClientSetupPage() {
 					{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
 						<Field label="Specific model" hint="Model uses a wildcard; specify the specific model.">
 							{(id, hintId) => (
-								<div className="target-resolved-composite">
-									{wildcardPrefix ? <span className="target-prefix">{wildcardPrefix}</span> : null}
-									<CatalogModelSelector
-										id={id}
-										ariaLabel="Specific model"
-										aria-describedby={hintId}
-										value={specificModelSuffix}
-										provider={selectedCatalogProvider}
-										onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}
-										placeholder="Select or type a model"
-									/>
-								</div>
+								<WildcardModelSelector
+									id={id}
+									ariaLabel="Specific model"
+									aria-describedby={hintId}
+									model={selectedModelConfig}
+									value={specificModel}
+									provider={selectedCatalogProvider}
+									onChange={setSpecificModel}
+									placeholder="Select or type a model"
+								/>
 							)}
 						</Field>
 					) : null}
@@ -379,16 +390,12 @@ function clientSetupRequestModel(
 		return resolveModelName(option.config, specificModel, providers);
 	const normalized = normalizedClientSpecificModel(option.config, specificModel);
 	if (normalized) return resolveModelName(option.config, normalized, providers);
-	const prefix = wildcardModelPrefix(option.config.name);
-	return prefix ? `${prefix}<model>` : '<model>';
+	return option.config.name.replace('*', '<model>');
 }
 
 function normalizedClientSpecificModel(model: LlmModel, specificModel: string) {
 	const trimmed = specificModel.trim();
-	const prefix = wildcardModelPrefix(model.name);
-	if (!trimmed || trimmed === prefix) return '';
-	if (prefix && !trimmed.startsWith(prefix)) return '';
-	return trimmed;
+	return wildcardMatchesModel(model.name, trimmed) ? trimmed : '';
 }
 
 function ClientRecipeCard(props: {
@@ -455,7 +462,12 @@ function CopyButton(props: { value: string }) {
 	);
 }
 
-function clientRecipes(args: { baseUrl: string; model: string; apiKey: string }): ClientRecipe[] {
+function clientRecipes(args: {
+	baseUrl: string;
+	model: string;
+	apiKey: string;
+	headers?: Record<string, string>;
+}): ClientRecipe[] {
 	const base = args.baseUrl.replace(/\/$/, '');
 	const v1 = `${base}/v1`;
 	const completions = `${v1}/chat/completions`;
@@ -464,6 +476,12 @@ function clientRecipes(args: { baseUrl: string; model: string; apiKey: string })
 	const curlAuthorization = args.apiKey
 		? `  -H ${JSON.stringify(`Authorization: Bearer ${args.apiKey}`)} ${continuation}\n`
 		: '';
+	// Single quotes keep the shell from expanding `$` or backticks in header values.
+	const curlMatchHeaders = Object.entries(args.headers ?? {})
+		.map(
+			([name, value]) => `  -H '${`${name}: ${value}`.replaceAll("'", `'\\''`)}' ${continuation}\n`
+		)
+		.join('');
 	const openCodeApiKey = args.apiKey
 		? `,
         "apiKey": "{env:AGENTGATEWAY_API_KEY}"`
@@ -485,7 +503,7 @@ export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, typ
 			icon: 'curl',
 			language: 'bash',
 			code: `curl ${JSON.stringify(completions)} ${continuation}
-${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
+${curlAuthorization}${curlMatchHeaders}  -H "Content-Type: application/json" ${continuation}
   -d '{
     "model": "${args.model}",
     "messages": [

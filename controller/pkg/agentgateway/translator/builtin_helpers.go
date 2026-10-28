@@ -82,7 +82,7 @@ func ApplyRetries(rule *gwv1.HTTPRouteRule, route *api.Route) error {
 	}
 	if rule.Retry.Attempts != nil {
 		// Agentgateway stores this as a u8 so has a max of 255
-		tpRetry.Attempts = int32(min(*rule.Retry.Attempts, 255)) //nolint:gosec // G115: kubebuilder validation ensures 0 <= value, safe for int32
+		tpRetry.Attempts = new(int32(min(*rule.Retry.Attempts, 255))) //nolint:gosec // G115: kubebuilder validation ensures 0 <= value, safe for int32
 	}
 	route.TrafficPolicies = append(route.TrafficPolicies, &api.TrafficPolicySpec{
 		Kind: &api.TrafficPolicySpec_Retry{

@@ -1124,7 +1124,33 @@ pub async fn materialize_hybrid_config(
 ) -> anyhow::Result<String> {
 	let base = source.read_to_string().await?;
 	let resources = store.list(None).await?;
-	materialize_config(base.as_str(), &resources)
+	materialize_runtime_config(base.as_str(), resources)
+}
+
+/// Materialize the config to load. Environment variables are expanded in the file config only; UI
+/// managed values are kept literal, except for explicit provider API key environment variables.
+pub(crate) fn materialize_runtime_config(
+	base: &str,
+	mut resources: Vec<ConfigResource>,
+) -> anyhow::Result<String> {
+	let base = crate::types::local::expand_env(base)?;
+	for resource in &mut resources {
+		if !matches!(
+			resource.kind,
+			ConfigResourceKind::LlmProvider | ConfigResourceKind::LlmModel
+		) {
+			continue;
+		}
+		// API keys support environment variables, such as `$OPENAI_API_KEY` or `{file: $HOME/key}`.
+		let key = match resource.value.pointer_mut("/params/apiKey") {
+			Some(Value::Object(key)) => key.get_mut("file"),
+			key => key,
+		};
+		if let Some(Value::String(key)) = key {
+			*key = shellexpand::full(key)?.into_owned();
+		}
+	}
+	materialize_config(&base, &resources)
 }
 
 pub(crate) fn materialize_config(
@@ -2807,6 +2833,49 @@ mod tests {
 				.map(|resource| resource.id)
 				.collect::<Vec<_>>(),
 			vec!["new", "other"]
+		);
+	}
+
+	#[test]
+	fn runtime_config_keeps_resource_values_literal() {
+		let env_name = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+		let home = std::env::var(env_name).unwrap_or_else(|_| panic!("{env_name}"));
+		let braced_env = format!("${{{env_name}}}");
+		let env = format!("${env_name}");
+		let base = format!("binds:\n- port: 1\n  listeners:\n  - name: {braced_env}\n");
+		let resources = vec![
+			test_resource(
+				ConfigResourceKind::LlmProvider,
+				"openai",
+				json!({
+					"name": format!("$5 {braced_env}"),
+					"provider": "openAI",
+					"params": {"apiKey": format!("sk-{env}"), "model": env},
+				}),
+			),
+			test_resource(
+				ConfigResourceKind::LlmModel,
+				"model",
+				json!({"name": "model", "params": {"apiKey": {"file": format!("{env}/key")}}}),
+			),
+		];
+		let materialized = materialize_runtime_config(&base, resources).expect("materialize");
+		let value: Value = crate::yaml::from_str(&materialized).expect("parse");
+		assert_eq!(
+			value.pointer("/binds/0/listeners/0/name"),
+			Some(&json!(home))
+		);
+		assert_eq!(
+			value.pointer("/llm/providers/0"),
+			Some(&json!({
+				"name": format!("$5 {braced_env}"),
+				"provider": "openAI",
+				"params": {"apiKey": format!("sk-{home}"), "model": env},
+			}))
+		);
+		assert_eq!(
+			value.pointer("/llm/models/0/params/apiKey/file"),
+			Some(&json!(format!("{home}/key")))
 		);
 	}
 

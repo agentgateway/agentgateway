@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import { getBudgetStatus } from '@/api/budgetsApi';
-import { getConfig, getEffectiveConfig, writeConfig } from '@/api/configApi';
+import {
+	getConfig,
+	getEffectiveConfig,
+	getRawConfig,
+	writeConfig,
+	writeRawConfig
+} from '@/api/configApi';
 import { getConfigDump } from '@/api/configDumpApi';
 import {
 	type ConfigResourceKind,
@@ -58,6 +64,15 @@ export function useRawGatewayConfig(options?: { enabled?: boolean }) {
 	return useQuery({
 		queryKey: ['config'],
 		queryFn: getConfig,
+		enabled: options?.enabled ?? true,
+		retry: false
+	});
+}
+
+export function useRawConfigText(options?: { enabled?: boolean }) {
+	return useQuery({
+		queryKey: ['rawConfigText'],
+		queryFn: getRawConfig,
 		enabled: options?.enabled ?? true,
 		retry: false
 	});
@@ -217,23 +232,44 @@ async function requireWritableRuntime(queryClient: ReturnType<typeof useQueryCli
 function invalidateConfigViews(queryClient: ReturnType<typeof useQueryClient>) {
 	void queryClient.invalidateQueries({ queryKey: ['configResources'] });
 	void queryClient.invalidateQueries({ queryKey: ['config'] });
+	void queryClient.invalidateQueries({ queryKey: ['rawConfigText'] });
 	void queryClient.invalidateQueries({ queryKey: ['effectiveConfig'] });
 	void queryClient.invalidateQueries({ queryKey: ['runtime'] });
 	void queryClient.invalidateQueries({ queryKey: ['config_dump'] });
 	void queryClient.invalidateQueries({ queryKey: ['config_dump_mode'] });
 }
 
+async function requireWritableConfigFile(queryClient: ReturnType<typeof useQueryClient>) {
+	const runtime = await requireWritableRuntime(queryClient);
+	const overrideHybridFileWrite = takeHybridFileWriteOverride();
+	if (runtime.ui.configStoreMode === 'hybrid' && !overrideHybridFileWrite) {
+		throw new Error(
+			'File configuration is read-only in hybrid mode. Copy the diff and update the configuration file directly.'
+		);
+	}
+}
+
+/** Writes the configuration file text verbatim, keeping comments and formatting. */
+export function useUpdateRawConfig() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (text: string) => {
+			await requireWritableConfigFile(queryClient);
+			await writeRawConfig(text);
+			return text;
+		},
+		onSuccess: text => {
+			queryClient.setQueryData(['rawConfigText'], text);
+			invalidateConfigViews(queryClient);
+		}
+	});
+}
+
 export function useUpdateConfig() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (updater: (config: GatewayConfig) => GatewayConfig | undefined) => {
-			const runtime = await requireWritableRuntime(queryClient);
-			const overrideHybridFileWrite = takeHybridFileWriteOverride();
-			if (runtime.ui.configStoreMode === 'hybrid' && !overrideHybridFileWrite) {
-				throw new Error(
-					'File configuration is read-only in hybrid mode. Copy the diff and update the configuration file directly.'
-				);
-			}
+			await requireWritableConfigFile(queryClient);
 			const current = queryClient.getQueryData<GatewayConfig>(['config']) ?? (await getConfig());
 			const next = cloneConfig(current);
 			const returned = updater(next);

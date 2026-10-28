@@ -346,6 +346,55 @@ pub struct LLMRequestParams {
 	pub encoding_format: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub dimensions: Option<u64>,
+	/// The reasoning effort requested by the client: OpenAI `reasoning_effort` or
+	/// `reasoning.effort`, Anthropic `output_config.effort`, or Gemini `thinkingLevel`.
+	/// Unset when the request does not specify one, in which case the provider default applies.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[dynamic(with_value = "reasoning_effort_to_value")]
+	pub reasoning_effort: Option<ReasoningEffort>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningEffort {
+	None,
+	Minimal,
+	Low,
+	Medium,
+	High,
+	Xhigh,
+	Max,
+}
+
+impl ReasoningEffort {
+	/// Parses a provider effort or thinking level. Unknown values are None.
+	pub fn parse(effort: &str) -> Option<Self> {
+		Some(match effort.to_ascii_lowercase().as_str() {
+			"none" => Self::None,
+			"minimal" => Self::Minimal,
+			"low" => Self::Low,
+			"medium" => Self::Medium,
+			"high" => Self::High,
+			"xhigh" => Self::Xhigh,
+			"max" => Self::Max,
+			_ => return None,
+		})
+	}
+}
+
+fn reasoning_effort_to_value(effort: &Option<ReasoningEffort>) -> ::cel::Value<'_> {
+	let effort = match effort {
+		None => return ::cel::Value::Null,
+		Some(ReasoningEffort::None) => "none",
+		Some(ReasoningEffort::Minimal) => "minimal",
+		Some(ReasoningEffort::Low) => "low",
+		Some(ReasoningEffort::Medium) => "medium",
+		Some(ReasoningEffort::High) => "high",
+		Some(ReasoningEffort::Xhigh) => "xhigh",
+		Some(ReasoningEffort::Max) => "max",
+	};
+	::cel::Value::String(effort.into())
 }
 
 impl PartialEq for LLMRequestParams {

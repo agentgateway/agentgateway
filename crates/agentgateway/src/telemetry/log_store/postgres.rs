@@ -270,7 +270,7 @@ async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
 		.await
 		.context("failed to configure request log database migration lock timeout")?;
 
-	let mut migrator = sqlx::migrate!("./src/telemetry/log_store/postgres_migrations");
+	let mut migrator = sqlx_macros::migrate!("./src/telemetry/log_store/postgres_migrations");
 	// Keep request-log migrations independent from any other SQLx-managed schema that
 	// may share this database.
 	migrator.dangerous_set_table_name(MIGRATIONS_TABLE);

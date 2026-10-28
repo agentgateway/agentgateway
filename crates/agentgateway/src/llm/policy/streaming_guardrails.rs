@@ -25,6 +25,7 @@ use std::task::{Context, Poll};
 
 use ::http::HeaderMap;
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use http_body::Frame;
 use pin_project_lite::pin_project;
 use tokio_sse_codec::{Event, Frame as SseFrame, SseDecoder};
@@ -142,48 +143,52 @@ impl Drop for ResponseGuardEvaluator {
 	}
 }
 
-#[async_trait::async_trait]
 impl StreamingEvaluator for ResponseGuardEvaluator {
 	fn failure_mode(&self) -> FailureMode {
 		self.guard.failure_mode()
 	}
 
-	async fn evaluate(&mut self, window: &str) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
-		// Realtime reuses one evaluator for every response on a connection, so each window is
-		// folded into the log as the most severe action per guard.
-		let window_log = GuardrailLog::default();
-		let result = match PromptGuard::evaluate_streaming_response_window(
-			&self.guard,
-			window,
-			&self.client,
-			&self.http_headers,
-			self.original.as_deref(),
-			Some(&window_log),
-		)
-		.await
-		{
-			Ok((outcome, action)) => {
-				self.observe_action(action);
-				Ok(outcome)
-			},
-			Err(e) => {
-				let action = match self.failure_mode() {
-					FailureMode::FailClosed => GuardrailAction::Reject,
-					FailureMode::FailOpen => GuardrailAction::FailOpen,
-				};
-				super::record_guardrail(
-					Some(&window_log),
-					GuardrailPhase::Response,
-					self.guard.kind.name(),
-					action,
-					None,
-				);
-				self.observe_action(action);
-				Err(e)
-			},
-		};
-		super::merge_most_severe_guardrails(&self.guardrail_log, window_log);
-		result
+	fn evaluate<'a>(
+		&'a mut self,
+		window: &'a str,
+	) -> BoxFuture<'a, anyhow::Result<Option<StreamingGuardrailOutcome>>> {
+		Box::pin(async move {
+			// Realtime reuses one evaluator for every response on a connection, so each window is
+			// folded into the log as the most severe action per guard.
+			let window_log = GuardrailLog::default();
+			let result = match PromptGuard::evaluate_streaming_response_window(
+				&self.guard,
+				window,
+				&self.client,
+				&self.http_headers,
+				self.original.as_deref(),
+				Some(&window_log),
+			)
+			.await
+			{
+				Ok((outcome, action)) => {
+					self.observe_action(action);
+					Ok(outcome)
+				},
+				Err(e) => {
+					let action = match self.failure_mode() {
+						FailureMode::FailClosed => GuardrailAction::Reject,
+						FailureMode::FailOpen => GuardrailAction::FailOpen,
+					};
+					super::record_guardrail(
+						Some(&window_log),
+						GuardrailPhase::Response,
+						self.guard.kind.name(),
+						action,
+						None,
+					);
+					self.observe_action(action);
+					Err(e)
+				},
+			};
+			super::merge_most_severe_guardrails(&self.guardrail_log, window_log);
+			result
+		})
 	}
 }
 
@@ -562,27 +567,27 @@ mod tests {
 
 	struct PassEvaluator;
 
-	#[async_trait::async_trait]
 	impl StreamingEvaluator for PassEvaluator {
-		async fn evaluate(
-			&mut self,
-			_window: &str,
-		) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
-			Ok(None)
+		fn evaluate<'a>(
+			&'a mut self,
+			_window: &'a str,
+		) -> BoxFuture<'a, anyhow::Result<Option<StreamingGuardrailOutcome>>> {
+			Box::pin(async move { Ok(None) })
 		}
 	}
 
 	struct BlockEvaluator;
 
-	#[async_trait::async_trait]
 	impl StreamingEvaluator for BlockEvaluator {
-		async fn evaluate(
-			&mut self,
-			_window: &str,
-		) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
-			Ok(Some(StreamingGuardrailOutcome::Blocked(
-				Bytes::from_static(b"blocked"),
-			)))
+		fn evaluate<'a>(
+			&'a mut self,
+			_window: &'a str,
+		) -> BoxFuture<'a, anyhow::Result<Option<StreamingGuardrailOutcome>>> {
+			Box::pin(async move {
+				Ok(Some(StreamingGuardrailOutcome::Blocked(
+					Bytes::from_static(b"blocked"),
+				)))
+			})
 		}
 	}
 
@@ -590,18 +595,19 @@ mod tests {
 		pattern: regex::Regex,
 	}
 
-	#[async_trait::async_trait]
 	impl StreamingEvaluator for PatternEvaluator {
-		async fn evaluate(
-			&mut self,
-			window: &str,
-		) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
-			if self.pattern.is_match(window) {
-				return Ok(Some(StreamingGuardrailOutcome::Blocked(
-					Bytes::from_static(b"blocked"),
-				)));
-			}
-			Ok(None)
+		fn evaluate<'a>(
+			&'a mut self,
+			window: &'a str,
+		) -> BoxFuture<'a, anyhow::Result<Option<StreamingGuardrailOutcome>>> {
+			Box::pin(async move {
+				if self.pattern.is_match(window) {
+					return Ok(Some(StreamingGuardrailOutcome::Blocked(
+						Bytes::from_static(b"blocked"),
+					)));
+				}
+				Ok(None)
+			})
 		}
 	}
 
@@ -609,17 +615,16 @@ mod tests {
 		mode: crate::llm::policy::FailureMode,
 	}
 
-	#[async_trait::async_trait]
 	impl StreamingEvaluator for ErrorEvaluator {
 		fn failure_mode(&self) -> crate::llm::policy::FailureMode {
 			self.mode
 		}
 
-		async fn evaluate(
-			&mut self,
-			_window: &str,
-		) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
-			Err(anyhow::anyhow!("simulated evaluator error"))
+		fn evaluate<'a>(
+			&'a mut self,
+			_window: &'a str,
+		) -> BoxFuture<'a, anyhow::Result<Option<StreamingGuardrailOutcome>>> {
+			Box::pin(async move { Err(anyhow::anyhow!("simulated evaluator error")) })
 		}
 	}
 

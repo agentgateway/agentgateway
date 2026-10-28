@@ -174,6 +174,7 @@ pub struct CostCatalogLookupLabels {
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct MCPCall {
 	pub method: DefaultedUnknown<RichStrng>,
+	pub outcome: MCPOutcome,
 
 	pub resource_type: DefaultedUnknown<MCPOperation>,
 	pub server: DefaultedUnknown<RichStrng>,
@@ -184,6 +185,18 @@ pub struct MCPCall {
 
 	#[prometheus(flatten)]
 	pub custom: CustomField,
+}
+
+#[derive(
+	Clone, Copy, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue,
+)]
+#[allow(non_camel_case_types)]
+pub enum MCPOutcome {
+	success,
+	tool_error,
+	protocol_error,
+	gateway_error,
+	unknown,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
@@ -197,6 +210,11 @@ pub struct TCPLabels {
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct ConnectLabels {
 	pub transport: DefaultedUnknown<RichStrng>,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct BackendLabels {
+	pub backend: DefaultedUnknown<RichStrng>,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
@@ -271,6 +289,7 @@ pub struct BuildLabel {
 #[derive(Debug)]
 pub struct Metrics {
 	pub requests: Counter,
+	pub requests_active: Family<BackendLabels, Gauge>,
 	pub request_duration: Histogram<HTTPLabels>,
 	pub request_processing_duration: Histogram<MinimalHTTPLabels>,
 	pub substrate_route_duration: Histogram<SubstrateRouteLabels>,
@@ -295,6 +314,7 @@ pub struct Metrics {
 	pub requests_shed: Family<AdmissionLabels, counter::Counter>,
 
 	pub upstream_connect_duration: Histogram<ConnectLabels>,
+	pub upstream_connections_active: Family<BackendLabels, Gauge>,
 	pub upstream_call_duration: Histogram<OutboundCallLabels>,
 
 	// metrics for guardrail checks (allow/mask/reject) for request/response
@@ -449,6 +469,15 @@ impl Metrics {
 				"requests",
 				"The total number of HTTP requests sent",
 			),
+			requests_active: {
+				let m = Family::<BackendLabels, Gauge>::default();
+				registry.register(
+					"requests_active",
+					"Number of HTTP requests to a backend currently awaiting a complete response",
+					m.clone(),
+				);
+				m
+			},
 			guardrail_checks: {
 				let m = Family::<GuardrailLabels, _>::default();
 				registry.register(
@@ -576,6 +605,15 @@ impl Metrics {
 				);
 				m
 			},
+			upstream_connections_active: {
+				let m = Family::<BackendLabels, Gauge>::default();
+				registry.register(
+					"upstream_connections_active",
+					"Number of currently open upstream connections",
+					m.clone(),
+				);
+				m
+			},
 			upstream_call_duration: {
 				let m = histogram_family(histogram_mode, &HTTP_REQUEST_DURATION_BUCKET);
 				registry.register_with_unit(
@@ -602,6 +640,23 @@ impl Metrics {
 				"The total number of request retries",
 			),
 		}
+	}
+}
+
+/// Increments a gauge for as long as the guard is alive.
+#[derive(Debug)]
+pub struct GaugeGuard(Gauge);
+
+impl GaugeGuard {
+	pub fn new(gauge: Gauge) -> Self {
+		gauge.inc();
+		Self(gauge)
+	}
+}
+
+impl Drop for GaugeGuard {
+	fn drop(&mut self) {
+		self.0.dec();
 	}
 }
 

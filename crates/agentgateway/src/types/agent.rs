@@ -64,7 +64,7 @@ impl Bind {
 	}
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct BindSnapshot {
 	#[cfg_attr(feature = "schema", schemars(flatten))]
@@ -114,7 +114,7 @@ impl std::ops::DerefMut for BindSnapshot {
 pub type BindKey = Strng;
 
 #[apply(schema_ser_schema!)]
-#[derive(Eq, PartialEq)]
+#[derive(Default)]
 pub struct Listener {
 	pub key: ListenerKey,
 	// User facing name
@@ -124,9 +124,26 @@ pub struct Listener {
 	/// Can be a wildcard
 	pub hostname: Strng,
 	pub protocol: ListenerProtocol,
+	/// Gateway phase traffic policies applied to all requests on the listener.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
+	pub inline_policies: Vec<TrafficPolicy>,
+	/// If set, the listener's configuration is invalid, and every request on it fails.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub error: Option<Strng>,
 }
 
 impl Listener {
+	/// Reports whether the parts of the listener that affect how it is served are equal.
+	/// Inline policies and the error are excluded: they are resolved per request, so changing them
+	/// must not restart the serving listener.
+	pub fn serving_eq(&self, other: &Self) -> bool {
+		self.key == other.key
+			&& self.name == other.name
+			&& self.hostname == other.hostname
+			&& self.protocol == other.protocol
+	}
+
 	pub fn matches(&self, hostname: &str) -> bool {
 		self.hostname == hostname
 			|| self.hostname.is_empty()
@@ -697,10 +714,11 @@ pub fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
 	}
 	parsed.ok_or_else(|| anyhow!("no key"))
 }
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum ListenerProtocol {
 	/// HTTP
+	#[default]
 	HTTP,
 	/// HTTPS, terminating TLS then treating as HTTP
 	HTTPS(ServerTLSConfig),
@@ -2097,7 +2115,7 @@ pub struct OpenAPITarget {
 	pub prefix: String,
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(
 	feature = "schema",
@@ -4196,6 +4214,7 @@ jwtValidationOptions:
 			name: ListenerName::default(),
 			hostname: strng::new(hostname),
 			protocol,
+			..Default::default()
 		}
 	}
 

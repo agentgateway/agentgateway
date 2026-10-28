@@ -113,9 +113,12 @@ pub mod from_messages {
 		Ok(translate_internal(typed))
 	}
 
-	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
-		let resp = serde_json::from_slice::<completions::Response>(bytes)
+	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
+		let mut resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		if resp.model.is_empty() {
+			resp.model = model.to_string();
+		}
 		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
 			input_tokens: u.prompt_tokens as u64,
 			total_tokens: u.total_tokens as u64,
@@ -855,7 +858,7 @@ pub mod from_messages {
 			.as_ref()
 			.and_then(|cfg| cfg.effort)
 			.or_else(|| {
-				if let Some(messages::ThinkingInput::Enabled { budget_tokens }) = &thinking {
+				if let Some(messages::ThinkingInput::Enabled { budget_tokens, .. }) = &thinking {
 					Some(crate::types::anthropic_effort_for_thinking_budget(
 						*budget_tokens,
 					))
@@ -865,7 +868,7 @@ pub mod from_messages {
 			});
 		let reasoning_requested = match thinking {
 			Some(messages::ThinkingInput::Disabled {}) => false,
-			Some(messages::ThinkingInput::Adaptive {}) => true,
+			Some(messages::ThinkingInput::Adaptive { .. }) => true,
 			_ => output_effort.is_some(),
 		};
 		let reasoning_effort =

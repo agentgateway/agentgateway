@@ -16,7 +16,7 @@ metadata:
 spec:
   type: ExternalHostname
   port:
-    port: 443
+    number: 443
   externalHostname:
     hostname: attacker.example.com
 
@@ -69,16 +69,16 @@ status:
     namespace: default
   spec: null
   status:
-    parents:
-    - conditions:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: basic
+        namespace: default
+      conditions:
       - lastTransitionTime: fake
         message: Backend successfully accepted
         reason: Accepted
         status: "True"
         type: Accepted
       controllerName: agentgateway.dev/agentgateway
-      parentRef:
-        group: gateway.networking.k8s.io
-        kind: Gateway
-        name: basic
-        namespace: default

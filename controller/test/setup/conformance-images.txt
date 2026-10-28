@@ -10,6 +10,8 @@ registry.k8s.io/coredns/coredns:v1.12.2
 registry.k8s.io/coredns/coredns:v1.14.6
 registry.k8s.io/etcd:3.7.0-0
 registry.k8s.io/gateway-api-inference-extension/lwepp:v1.6.2
+registry.k8s.io/gateway-api/conformance/echo-basic:v0.1.0
+registry.k8s.io/gateway-api/conformance/echo-basic:v0.2.0
 registry.k8s.io/gateway-api/echo-advanced:v1.5.1
 registry.k8s.io/gateway-api/echo-basic:v1.5.1
 registry.k8s.io/gateway-api/echo-basic:v1.6.0-dev.2

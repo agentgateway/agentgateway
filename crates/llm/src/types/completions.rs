@@ -77,6 +77,7 @@ impl Request {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StreamOptions {
 	/// If set, an additional chunk will be streamed before the `data: [DONE]` message. The `usage` field on this chunk shows the token usage statistics for the entire request, and the `choices` field will always be an empty array. All other chunks will also include a `usage` field, but with a null value.
+	#[serde(default)]
 	pub include_usage: bool,
 
 	#[serde(flatten, default)]
@@ -85,6 +86,7 @@ pub struct StreamOptions {
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
+	#[serde(default)]
 	pub model: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<String>,
@@ -464,6 +466,15 @@ impl super::RequestType for Request {
 					.map(Into::into),
 				encoding_format: None,
 				dimensions: None,
+				reasoning_effort: self.reasoning_effort.as_ref().map(|effort| match effort {
+					typed::ReasoningEffort::None => crate::ReasoningEffort::None,
+					typed::ReasoningEffort::Minimal => crate::ReasoningEffort::Minimal,
+					typed::ReasoningEffort::Low => crate::ReasoningEffort::Low,
+					typed::ReasoningEffort::Medium => crate::ReasoningEffort::Medium,
+					typed::ReasoningEffort::High => crate::ReasoningEffort::High,
+					typed::ReasoningEffort::Xhigh => crate::ReasoningEffort::Xhigh,
+					typed::ReasoningEffort::Max => crate::ReasoningEffort::Max,
+				}),
 			},
 			prompt: Default::default(),
 			provider_state: None,
@@ -808,6 +819,7 @@ pub mod typed {
 		#[serde(default)]
 		pub created: u32,
 		/// The model used for the chat completion.
+		#[serde(default)]
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
 		#[serde(skip_serializing_if = "Option::is_none")]

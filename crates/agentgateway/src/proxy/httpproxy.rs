@@ -28,7 +28,7 @@ use crate::http::backendtls::{
 use crate::http::buffer::Buffer;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
-use crate::http::substrate::{ActorIdentity, EgressRequestProtocol, EgressTlsMode};
+use crate::http::substrate::{ActorIdentity, EgressRequestProtocol};
 use crate::http::transformation_cel::Transformation;
 use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
@@ -730,7 +730,6 @@ impl HTTPProxy {
 			.copy::<ActorIdentity>(req.extensions_mut())
 			.is_some()
 		{
-			connection.copy::<EgressTlsMode>(req.extensions_mut());
 			// Outer CONNECT TLS authenticates the actor but does not make inner HTTP HTTPS.
 			let protocol = if matches!(
 				self
@@ -830,35 +829,6 @@ impl HTTPProxy {
 			log.ate_actor_uid = actor.actor_uid.clone();
 			log.ate_atespace = Some(actor.atespace.clone());
 		}
-		if req.extensions().get::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied) {
-			normalize_uri(log.tls_info.as_ref(), &mut req)
-				.map_err(ProxyError::Processing)
-				.snapshot_on_err(log, &mut req)?;
-			log.bind_name = Some(self.bind_name.clone());
-			log.listener_name = self.selected_listener.as_ref().map(|l| l.name.clone());
-			log.host = http::get_host(&req).ok().map(str::to_owned);
-			log.scheme = Some(Scheme::HTTPS);
-			log.server_port = req.uri().port_u16();
-			log.method = Some(req.method().clone());
-			log.path = Some(
-				if req.method() == ::http::Method::CONNECT && req.uri().path().is_empty() {
-					"/".to_string()
-				} else {
-					req
-						.uri()
-						.path_and_query()
-						.map(ToString::to_string)
-						.unwrap_or_else(|| req.uri().path().to_string())
-				},
-			);
-			log.version = Some(req.version());
-			crate::http::substrate::reject_upgrade(&req).snapshot_on_err(log, &mut req)?;
-			return Err(ProxyError::SubstrateEgressDenied(
-				"actor egress policy denied TLS destination".to_owned(),
-			))
-			.snapshot_on_err(log, &mut req);
-		}
-
 		let selected_listener = self.selected_listener.clone();
 		let inputs = self.inputs.clone();
 		let bind_name = self.bind_name.clone();
@@ -970,10 +940,21 @@ impl HTTPProxy {
 			},
 		};
 
-		let gateway_policies = inputs
-			.stores
-			.read_binds()
-			.gateway_policies(&selected_listener.name);
+		let (listener_error, gateway_policies) = {
+			let binds = inputs.stores.read_binds();
+			// The serving listener may be a snapshot from connection setup; use the current error.
+			let listener_error = binds
+				.get_bind_listener(&bind_name, &selected_listener.key)
+				.map_or_else(|| selected_listener.error.clone(), |l| l.error.clone());
+			(
+				listener_error,
+				binds.gateway_policies(&bind_name, &selected_listener),
+			)
+		};
+		if let Some(e) = listener_error {
+			return Err(ProxyResponse::Error(ProxyError::InvalidListener(e)))
+				.snapshot_on_err(log, &mut req);
+		}
 		gateway_policies.register_cel_expressions(log.cel.ctx());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
 		// (for logging, etc) and also after we register the expressions since new fields may be available.
@@ -1156,18 +1137,13 @@ impl HTTPProxy {
 		}
 
 		// Backend mirrors are sent from apply_backend_policies, after backend authorization.
-		let route_request_mirrors = route_policies.request_mirror.select("request mirror", &req);
-		spawn_mirrors(
-			&inputs,
-			&self.policy_client(),
-			route_request_mirrors
-				.iter()
-				.flat_map(|mirrors| mirrors.iter()),
-			&req,
-		);
+		if let Some(mirrors) = route_policies.request_mirror.select("request mirror", &req) {
+			spawn_mirrors(&inputs, &self.policy_client(), &mirrors, &req);
+		}
 		let route_llm = route_policies.llm.select("llm", &req);
+		// Bodies up to the request buffer limit can be retried; `precondition` can opt out sooner.
+		let max_buffered_bytes = http::buffer_limit(&req);
 		let (head, body) = req.into_parts();
-		const MAX_BUFFERED_BYTES: usize = 64 * 1024;
 		let retries = route_retry;
 
 		// LLM token rate limiting reuses the rate-limit policy selected above in the normal
@@ -1177,11 +1153,10 @@ impl HTTPProxy {
 		llm_request_policies.llm = route_llm;
 		let llm_request_policies = Arc::new(llm_request_policies);
 
-		// attempts is the total number of attempts, not the retries
-		let attempts = if substrate_default_retry {
-			3
+		let max_retries = if substrate_default_retry {
+			2
 		} else {
-			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
+			retries.as_ref().map(|r| r.attempts).unwrap_or(0)
 		};
 		let retry_backoff = retries
 			.as_ref()
@@ -1192,21 +1167,22 @@ impl HTTPProxy {
 			.as_ref()
 			.and_then(|t| t.request_timeout);
 		let mut replay_state = None;
-		let body =
-			if attempts > 1 && http_body::Body::size_hint(&body).lower() <= MAX_BUFFERED_BYTES as u64 {
-				// If we are going to attempt a retry we will need to track the incoming bytes for replay
-				let (content, state) = body.into_replay_parts();
-				replay_state = Some(state);
-				Ok(
-					http::retry::ReplayBody::try_new(content, MAX_BUFFERED_BYTES)
-						.expect("body size was checked before separating replay state"),
-				)
-			} else {
-				if attempts > 1 {
-					debug!("initial body is too large to retry, disabling retries");
-				}
-				Err(body)
-			};
+		let body = if max_retries > 0
+			&& http_body::Body::size_hint(&body).lower() <= max_buffered_bytes as u64
+		{
+			// If we are going to attempt a retry we will need to track the incoming bytes for replay
+			let (content, state) = body.into_replay_parts();
+			replay_state = Some(state);
+			Ok(
+				http::retry::ReplayBody::try_new(content, max_buffered_bytes)
+					.expect("body size was checked before separating replay state"),
+			)
+		} else {
+			if max_retries > 0 {
+				debug!("initial body is too large to retry, disabling retries");
+			}
+			Err(body)
+		};
 		let mut substrate_state = None;
 		let mut next = match body {
 			Ok(retry) => Some(retry),
@@ -1242,10 +1218,10 @@ impl HTTPProxy {
 			},
 		};
 		let mut last_res: Option<Result<Response, SnapshottedProxyResponse>> = None;
-		for n in 0..attempts {
-			let last = n == attempts - 1;
+		for n in 0..=max_retries {
+			let last = n == max_retries;
 			let this = next.take().expect("next should be set");
-			debug!("attempt {n}/{}", attempts - 1);
+			debug!("attempt {n}/{max_retries}");
 			if matches!(this.is_capped(), None | Some(true)) {
 				// This could be either too much buffered, or it could mean we got a response before we read the request body.
 				debug!("buffered too much to attempt a retry");
@@ -1421,6 +1397,7 @@ impl HTTPProxy {
 					transport,
 					tcp: backend_call.backend_policies.tcp.clone(),
 					max_connection_duration: None,
+					backend: Some(selected_backend.backend.backend.name()),
 				},
 			)
 			.await?;
@@ -1920,6 +1897,9 @@ fn resolve_backend_tls(
 				peer_identity_mode: transport::tls::PeerIdentityMode::Spiffe,
 			})
 		},
+		BackendTLSSource::Invalid(err) => Err(ProxyError::Processing(anyhow!(
+			"backend TLS policy is invalid: {err}"
+		))),
 	}
 }
 
@@ -1977,6 +1957,7 @@ pub async fn build_transport(
 				transport,
 				tcp: call.backend_policies.tcp.clone(),
 				max_connection_duration: None,
+				backend: None,
 			}),
 			target: call.target.clone(),
 			token,
@@ -2954,6 +2935,8 @@ async fn make_backend_call(
 			if matches!(route_type, RouteType::Detect | RouteType::Passthrough)
 				&& let Some(provider_model) = llm.provider.override_model()
 			{
+				model_router::rewrite_uri_model(&mut req, provider_model.as_str())
+					.map_err(ProxyResponse::DirectResponse)?;
 				Box::pin(model_router::rewrite_multipart_request_model(
 					&mut req,
 					provider_model.as_str(),
@@ -3203,6 +3186,7 @@ async fn make_backend_call(
 				.http
 				.as_ref()
 				.and_then(|h| h.max_connection_duration),
+			backend: Some(backend.name()),
 		},
 		dynamic_backend: matches!(backend, Backend::Dynamic(_, _)),
 	};
@@ -4066,7 +4050,7 @@ mod tests {
 
 	fn retry_policy(codes: &[u16], condition: Option<&str>) -> crate::http::retry::Policy {
 		crate::http::retry::Policy {
-			attempts: std::num::NonZeroU8::new(2).unwrap(),
+			attempts: 2,
 			backoff: None,
 			codes: codes
 				.iter()
@@ -4625,10 +4609,10 @@ pub fn parse_grpc_status(headers: &HeaderMap) -> Option<u8> {
 		.and_then(|status| status.parse().ok())
 }
 
-fn spawn_mirrors<'a>(
+fn spawn_mirrors(
 	inputs: &Arc<ProxyInputs>,
 	client: &PolicyClient,
-	mirrors: impl IntoIterator<Item = &'a filters::RequestMirror>,
+	mirrors: &[filters::RequestMirror],
 	req: &Request,
 ) {
 	for mirror in mirrors {
@@ -5603,6 +5587,7 @@ mod route_chain_tests {
 				name: Default::default(),
 				hostname: Default::default(),
 				protocol: ListenerProtocol::HTTP,
+				..Default::default()
 			}])),
 		}
 	}

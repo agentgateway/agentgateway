@@ -713,7 +713,7 @@ func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, poli
 			errs = append(errs, fmt.Errorf("failed to parse retry attempts should be positive int32 (%d)", *a))
 		} else {
 			// Agentgateway stores this as a u8 so has a max of 255
-			translatedRetry.Attempts = int32(min(*retry.Attempts, 255)) //nolint:gosec // G115: max 255 so cannot fail
+			translatedRetry.Attempts = new(int32(min(*retry.Attempts, 255))) //nolint:gosec // G115: max 255 so cannot fail
 		}
 	}
 

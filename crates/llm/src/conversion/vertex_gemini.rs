@@ -1088,10 +1088,30 @@ pub mod from_completions {
 		});
 	}
 
-	/// Gemini 3.x takes a `thinkingLevel` string; Gemini 2.5 takes an integer
-	/// `thinkingBudget`. Detected by model name.
+	/// Model families that take a `thinkingLevel` string instead of an integer
+	/// `thinkingBudget`, matched as a substring of the target model name. Gemini 2.5
+	/// and older still take the budget. Gemini 4 rejects the budget outright ("Use
+	/// thinkingLevel instead."); Gemini 3 accepts both but levels are the documented
+	/// control.
+	const THINKING_LEVEL_FAMILIES: &[&str] = &["gemini-3", "gemini-4", "gemma-4"];
+
+	/// Subset of `THINKING_LEVEL_FAMILIES` that only supports toggling thinking on or
+	/// off via the binary `high` / `minimal` levels. Gemma 4 on the Gemini API rejects
+	/// `thinkingBudget` ("Thinking budget is not supported for this model.") and has no
+	/// `low`/`medium` levels.
+	/// See <https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api#thinking>.
+	const BINARY_THINKING_LEVEL_FAMILIES: &[&str] = &["gemma-4"];
+
+	/// Subset of `THINKING_LEVEL_FAMILIES` whose lowest supported level is `low`; they
+	/// reject `minimal`. Gemini 4 (e.g. gemini-4-argon) supports low/medium/high.
+	const NO_MINIMAL_THINKING_LEVEL_FAMILIES: &[&str] = &["gemini-4"];
+
+	fn matches_model_family(model: &str, families: &[&str]) -> bool {
+		families.iter().any(|family| model.contains(family))
+	}
+
 	fn uses_thinking_levels(model: &str) -> bool {
-		model.contains("gemini-3")
+		matches_model_family(model, THINKING_LEVEL_FAMILIES)
 	}
 
 	fn thinking_config(req: &types::completions::Request, model: &str) -> Option<vg::ThinkingConfig> {
@@ -1105,11 +1125,42 @@ pub mod from_completions {
 
 		let effort = req.reasoning_effort.as_ref()?;
 		if uses_thinking_levels(model) {
+			// Binary-level models clamp the shared scale to `minimal`/`high`. For them
+			// `none` sends `minimal` rather than omitting thinkingConfig, because they
+			// think by default when the config is absent and `minimal` is the only way
+			// to switch thinking off. Models without a `minimal` level clamp it up to
+			// `low`; for every other level model `none` omits thinkingConfig.
+			let binary = matches_model_family(model, BINARY_THINKING_LEVEL_FAMILIES);
+			let no_minimal = matches_model_family(model, NO_MINIMAL_THINKING_LEVEL_FAMILIES);
 			let level = match effort {
-				types::completions::typed::ReasoningEffort::None => return None,
-				types::completions::typed::ReasoningEffort::Minimal => "minimal",
-				types::completions::typed::ReasoningEffort::Low => "low",
-				types::completions::typed::ReasoningEffort::Medium => "medium",
+				types::completions::typed::ReasoningEffort::None => {
+					if binary {
+						"minimal"
+					} else {
+						return None;
+					}
+				},
+				types::completions::typed::ReasoningEffort::Minimal => {
+					if no_minimal {
+						"low"
+					} else {
+						"minimal"
+					}
+				},
+				types::completions::typed::ReasoningEffort::Low => {
+					if binary {
+						"minimal"
+					} else {
+						"low"
+					}
+				},
+				types::completions::typed::ReasoningEffort::Medium => {
+					if binary {
+						"high"
+					} else {
+						"medium"
+					}
+				},
 				types::completions::typed::ReasoningEffort::High
 				| types::completions::typed::ReasoningEffort::Xhigh
 				| types::completions::typed::ReasoningEffort::Max => "high",
