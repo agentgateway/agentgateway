@@ -2623,7 +2623,6 @@ impl SpanWriterInner {
 		let child = self.parent.new_span();
 
 		SpanWriteOnDrop {
-			pending_call: None,
 			upstream_calls: None,
 			name: Some(name.into()),
 			span_kind,
@@ -2638,7 +2637,6 @@ impl SpanWriterInner {
 }
 
 pub struct SpanWriteOnDrop {
-	pending_call: Option<crate::telemetry::upstream::PendingCall>,
 	upstream_calls: Option<crate::telemetry::upstream::UpstreamCalls>,
 	name: Option<Cow<'static, str>>,
 	span_kind: SpanKind,
@@ -2652,7 +2650,6 @@ pub struct SpanWriteOnDrop {
 impl Default for SpanWriteOnDrop {
 	fn default() -> Self {
 		Self {
-			pending_call: None,
 			upstream_calls: None,
 			name: None,
 			span_kind: SpanKind::Internal,
@@ -2697,24 +2694,6 @@ impl SpanWriteOnDrop {
 		}
 	}
 
-	pub(crate) fn record_grpc_call<T>(
-		&mut self,
-		req: &mut tonic::Request<T>,
-		target: String,
-		labels: OutboundCallLabels,
-	) {
-		if let Some(calls) = &self.upstream_calls {
-			let mut call = crate::telemetry::upstream::PendingCall::new(
-				calls.clone(),
-				labels,
-				target,
-				&req.metadata().clone().into_headers(),
-			);
-			req.extensions_mut().insert(call.share_headers());
-			self.pending_call = Some(call);
-		}
-	}
-
 	pub fn inject_grpc_context<T>(&self, req: &mut tonic::Request<T>) {
 		let Some(span) = &self.span else {
 			return;
@@ -2751,23 +2730,17 @@ impl SpanWriteOnDrop {
 
 	pub fn record_grpc_result<T>(&mut self, result: &Result<tonic::Response<T>, tonic::Status>) {
 		match result {
-			Ok(_) => self.record_grpc_status(tonic::Code::Ok),
+			Ok(_) => self.add_attribute(KeyValue::new("grpc.status", 0_i64)),
 			Err(status) => self.record_grpc_error(status),
 		}
 	}
 
 	pub fn record_grpc_status(&mut self, code: tonic::Code) {
-		if let Some(call) = self.pending_call.as_mut() {
-			call.set_grpc_status(code as i32);
-		}
 		self.add_attribute(KeyValue::new("grpc.status", i64::from(code as i32)));
 	}
 
 	pub fn record_grpc_error(&mut self, status: &tonic::Status) {
 		self.record_grpc_status(status.code());
-		if let Some(call) = self.pending_call.as_mut() {
-			call.set_error(status.to_string());
-		}
 		self.set_error(format!("{:?}", status.code()), status.to_string());
 	}
 }
@@ -3546,40 +3519,6 @@ mod tests {
 
 		log.grpc_status.store(Some(0));
 		assert!(!DropOnLog::default_unhealthy(&log));
-	}
-
-	#[test]
-	fn upstream_calls_are_enabled_by_late_logging_policy_without_tracing() {
-		let mut log = test_request_log();
-		assert!(log.span_writer().upstream_calls.is_none());
-		let expr = Expression::new_strict("size(upstreamCalls)").unwrap();
-		assert!(expr.attributes().contains(cel::Attributes::UpstreamCalls));
-		log.cel.ctx().register_log_expression(&expr);
-		let mut extensions = ::http::Extensions::new();
-		log.insert_span_writer(&mut extensions);
-		let writer = extensions.get::<SpanWriter>().unwrap();
-		assert!(!writer.is_enabled());
-		assert!(writer.upstream_calls.is_some());
-		let labels = OutboundCallLabels {
-			kind: OutboundCallKind::Policy,
-			subtype: OutboundCallSubtype::ExtAuthz,
-		};
-		let mut span = writer.start_outbound(labels);
-		let mut req = tonic::Request::new(());
-		span.record_grpc_call(&mut req, "authz".into(), labels);
-		let mut outgoing = ::http::Request::new(crate::http::Body::empty());
-		outgoing.extensions_mut().extend(req.extensions().clone());
-		outgoing
-			.headers_mut()
-			.insert("authorization", "Bearer backend".parse().unwrap());
-		crate::telemetry::upstream::CapturedHeaders::update(&outgoing);
-		span.record_grpc_result(&Ok::<_, tonic::Status>(tonic::Response::new(())));
-		drop(span);
-		let calls = log.upstream_calls.get().unwrap().take();
-		assert_eq!(calls.len(), 1);
-		assert_eq!(calls[0].response.grpc_status, Some(0));
-		assert_eq!(calls[0].request.headers["authorization"], "Bearer backend");
-		assert!(calls[0].error.is_none());
 	}
 
 	#[test]

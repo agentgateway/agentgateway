@@ -51,8 +51,10 @@ fn headers_to_value(headers: &http::HeaderMap) -> cel::Value<'_> {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[dynamic(rename_all = "camelCase")]
 pub struct UpstreamResponse {
-	/// HTTP status code. Empty for gRPC calls or when no response came back.
+	/// HTTP status code. Empty when no response came back.
 	pub code: Option<u16>,
+	/// gRPC status code, when the server sent it in the response headers (a trailers-only response).
+	/// Statuses sent in trailers, such as most successful calls, aren't recorded.
 	pub grpc_status: Option<i32>,
 }
 
@@ -75,28 +77,17 @@ struct OutboundRequest {
 pub(crate) struct UpstreamTarget(pub String);
 
 impl SpanWriter {
-	pub(crate) fn record_outbound(&self, req: &mut crate::http::Request, labels: OutboundCallLabels) {
+	pub(crate) fn record_outbound(&self, extensions: &mut http::Extensions, labels: OutboundCallLabels) {
 		// Mirrors run detached and can finish after the request is logged, so they aren't recorded.
 		if matches!(labels.kind, OutboundCallKind::Mirror) {
-			req.extensions_mut().remove::<OutboundRequest>();
+			extensions.remove::<OutboundRequest>();
 			return;
 		}
 		if let Some(calls) = &self.upstream_calls {
-			req.extensions_mut().insert(OutboundRequest {
+			extensions.insert(OutboundRequest {
 				calls: calls.clone(),
 				labels,
 			});
-		}
-	}
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct CapturedHeaders(Arc<Mutex<http::HeaderMap>>);
-
-impl CapturedHeaders {
-	pub fn update(req: &crate::http::Request) {
-		if let Some(headers) = req.extensions().get::<Self>() {
-			*headers.0.lock().unwrap() = req.headers().clone();
 		}
 	}
 }
@@ -105,7 +96,6 @@ pub(crate) struct PendingCall {
 	calls: UpstreamCalls,
 	start: Instant,
 	call: Option<UpstreamCall>,
-	shared_headers: Option<CapturedHeaders>,
 }
 
 impl PendingCall {
@@ -117,7 +107,6 @@ impl PendingCall {
 	) -> Self {
 		let mut this = Self {
 			calls,
-			shared_headers: None,
 			start: Instant::now(),
 			call: Some(UpstreamCall {
 				kind: labels.kind.as_str().to_owned(),
@@ -148,27 +137,17 @@ impl PendingCall {
 		))
 	}
 
-	pub fn share_headers(&mut self) -> CapturedHeaders {
-		let headers = CapturedHeaders(Arc::new(Mutex::new(
-			self.call.as_ref().unwrap().request.headers.clone(),
-		)));
-		self.shared_headers = Some(headers.clone());
-		headers
-	}
-
 	pub fn set_headers(&mut self, headers: &http::HeaderMap) {
 		self.call.as_mut().unwrap().request.headers = headers.clone();
 	}
 
-	pub fn set_status(&mut self, code: u16) {
+	pub fn set_response<B>(&mut self, resp: &http::Response<B>) {
 		let call = self.call.as_mut().unwrap();
-		call.response.code = Some(code);
-		call.error = None;
-	}
-
-	pub fn set_grpc_status(&mut self, code: i32) {
-		let call = self.call.as_mut().unwrap();
-		call.response.grpc_status = Some(code);
+		call.response.code = Some(resp.status().as_u16());
+		call.response.grpc_status = resp
+			.headers()
+			.get("grpc-status")
+			.and_then(|v| v.to_str().ok()?.parse().ok());
 		call.error = None;
 	}
 
@@ -180,9 +159,6 @@ impl PendingCall {
 impl Drop for PendingCall {
 	fn drop(&mut self) {
 		if let Some(mut call) = self.call.take() {
-			if let Some(headers) = &self.shared_headers {
-				call.request.headers = std::mem::take(&mut *headers.0.lock().unwrap());
-			}
 			call.duration = CelDuration::from_std(self.start.elapsed());
 			self.calls.0.lock().unwrap().push(call);
 		}
@@ -204,7 +180,7 @@ mod tests {
 		writer.upstream_calls = Some(UpstreamCalls::default());
 		let mut parent = http::Request::new(Body::empty());
 		writer.record_outbound(
-			&mut parent,
+			parent.extensions_mut(),
 			OutboundCallLabels {
 				kind: OutboundCallKind::Primary,
 				subtype: OutboundCallSubtype::Mcp,
@@ -213,7 +189,7 @@ mod tests {
 		let mut mirror = http::Request::new(Body::empty());
 		*mirror.extensions_mut() = parent.extensions().clone();
 		writer.record_outbound(
-			&mut mirror,
+			mirror.extensions_mut(),
 			OutboundCallLabels {
 				kind: OutboundCallKind::Mirror,
 				subtype: OutboundCallSubtype::Http,
@@ -244,22 +220,12 @@ mod tests {
 			.body(Body::empty())
 			.unwrap();
 		writer.record_outbound(
-			&mut req,
+			req.extensions_mut(),
 			OutboundCallLabels {
 				kind: OutboundCallKind::Policy,
 				subtype: OutboundCallSubtype::Oidc,
 			},
 		);
-		let mut grpc = PendingCall::new(
-			calls.clone(),
-			OutboundCallLabels {
-				kind: OutboundCallKind::Policy,
-				subtype: OutboundCallSubtype::Oidc,
-			},
-			"grpc".to_owned(),
-			req.headers(),
-		);
-		req.extensions_mut().insert(grpc.share_headers());
 		let t = setup_proxy_test("{}").unwrap();
 		let response = t
 			.pi
@@ -283,16 +249,13 @@ mod tests {
 			.await
 			.unwrap();
 		assert_eq!(response.status(), 200);
-		drop(grpc);
 		let records = calls.take();
-		assert_eq!(records.len(), 2);
-		for record in records {
-			assert_eq!(
-				record.request.headers["authorization"],
-				"Bearer backend-secret"
-			);
-			assert!(!record.request.headers.contains_key("proxy-authorization"));
-		}
+		assert_eq!(records.len(), 1);
+		assert_eq!(
+			records[0].request.headers["authorization"],
+			"Bearer backend-secret"
+		);
+		assert!(!records[0].request.headers.contains_key("proxy-authorization"));
 	}
 
 	#[tokio::test]

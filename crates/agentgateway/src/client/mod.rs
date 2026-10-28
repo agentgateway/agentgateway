@@ -782,7 +782,6 @@ impl Client {
 			}
 			let version = req.version();
 			let transport_name = connection.transport.name();
-			crate::telemetry::upstream::CapturedHeaders::update(&req);
 			if let Some(call) = upstream_call.as_mut() {
 				call.set_headers(req.headers());
 			}
@@ -839,7 +838,7 @@ impl Client {
 			};
 			if let Some(call) = upstream_call.as_mut() {
 				match &resp {
-					Ok(response) => call.set_status(response.status().as_u16()),
+					Ok(response) => call.set_response(response),
 					Err(error) => call.set_error(error.to_string()),
 				}
 			}

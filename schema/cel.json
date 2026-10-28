@@ -1510,7 +1510,7 @@
             "type": "object",
             "properties": {
               "code": {
-                "description": "HTTP status code. Empty for gRPC calls or when no response came back.",
+                "description": "HTTP status code. Empty when no response came back.",
                 "type": [
                   "integer",
                   "null"
@@ -1520,6 +1520,7 @@
                 "maximum": 65535
               },
               "grpcStatus": {
+                "description": "gRPC status code, when the server sent it in the response headers (a trailers-only response).\nStatuses sent in trailers, such as most successful calls, aren't recorded.",
                 "type": [
                   "integer",
                   "null"

@@ -3230,7 +3230,7 @@ async fn make_backend_call(
 	if let Some(log) = log.as_ref() {
 		log
 			.span_writer()
-			.record_outbound(&mut call.req, outbound_labels);
+			.record_outbound(call.req.extensions_mut(), outbound_labels);
 	}
 	let mut span = log.as_ref().and_then(|log| {
 		let writer = log.span_writer();
@@ -5225,7 +5225,7 @@ impl PolicyClient {
 				.as_ref()
 				.map(|context| context.span_writer.clone())
 		})?;
-		writer.record_outbound(req, labels);
+		writer.record_outbound(req.extensions_mut(), labels);
 		if !writer.is_enabled() {
 			return None;
 		}
@@ -5258,20 +5258,19 @@ impl PolicyClient {
 				.as_ref()
 				.map(|context| context.span_writer.clone())
 		})?;
-		if !writer.is_enabled() && writer.upstream_calls.is_none() {
+		writer.record_outbound(req.extensions_mut(), labels);
+		if !writer.is_enabled() {
 			return None;
 		}
 		let mut span = Box::new(writer.start_outbound(labels));
 		span.add_attribute(KeyValue::new("http.method", "POST"));
-		let hostport = resolve_simple_backend(backend_ref, self.inputs.as_ref())
-			.ok()
-			.map(|backend| backend.backend.hostport())
-			.unwrap_or_default();
-		if let Ok(authority) = Authority::try_from(hostport.as_str()) {
-			span.add_attribute(KeyValue::new("http.host", authority.host().to_owned()));
+		if let Ok(backend) = resolve_simple_backend(backend_ref, self.inputs.as_ref()) {
+			let hostport = backend.backend.hostport();
+			if let Ok(authority) = Authority::try_from(hostport.as_str()) {
+				span.add_attribute(KeyValue::new("http.host", authority.host().to_owned()));
+			}
 		}
 		span.add_attribute(KeyValue::new("http.path", path));
-		span.record_grpc_call(req, hostport, labels);
 		span.inject_grpc_context(req);
 		Some(span)
 	}
@@ -5401,7 +5400,7 @@ impl PolicyClient {
 		if let Some(labels) = self.outbound()
 			&& let Some(writer) = req.extensions().get::<SpanWriter>().cloned()
 		{
-			writer.record_outbound(&mut req, labels);
+			writer.record_outbound(req.extensions_mut(), labels);
 		}
 		let start = std::time::Instant::now();
 		let backend = Backend::from(backend.clone());
