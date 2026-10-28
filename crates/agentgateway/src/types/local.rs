@@ -4431,12 +4431,66 @@ impl LocalLLMModelRegistry {
 
 	fn validate_virtual_models(&self) -> anyhow::Result<()> {
 		for virtual_model in &self.virtual_models {
-			for target in virtual_model.routing_strategy()?.targets() {
-				if !self.model_matches(target)? {
+			let strategy = virtual_model.routing_strategy()?;
+			// Failover targets are compiled into a single backend, so they must be concrete models.
+			let failover = matches!(strategy, LocalLLMVirtualRoutingStrategy::Failover(_));
+			for target in strategy.targets() {
+				let nested = self.nested_virtual_model(virtual_model, target).is_some();
+				if failover && nested && !self.models.iter().any(|model| model.name == target) {
+					bail!(
+						"virtual model {} failover target {target} is a virtual model; failover targets must be concrete models",
+						virtual_model.name
+					);
+				}
+				if (failover || !nested) && !self.model_matches(target)? {
 					bail!("virtual model target {target} does not match any llm.models entry");
 				}
 			}
 		}
+		let mut done = HashSet::new();
+		for virtual_model in &self.virtual_models {
+			self.validate_no_cycle(virtual_model, &mut Vec::new(), &mut done)?;
+		}
+		Ok(())
+	}
+
+	/// Returns the virtual model a target refers to. A target with the virtual model's own name refers
+	/// to the concrete model it shadows.
+	fn nested_virtual_model(
+		&self,
+		virtual_model: &LocalLLMVirtualModel,
+		target: &str,
+	) -> Option<&LocalLLMVirtualModel> {
+		if target == virtual_model.name {
+			return None;
+		}
+		self.virtual_models.iter().find(|model| model.name == target)
+	}
+
+	fn validate_no_cycle<'a>(
+		&'a self,
+		virtual_model: &'a LocalLLMVirtualModel,
+		path: &mut Vec<&'a str>,
+		done: &mut HashSet<&'a str>,
+	) -> anyhow::Result<()> {
+		let name = virtual_model.name.as_str();
+		if done.contains(name) {
+			return Ok(());
+		}
+		if path.contains(&name) {
+			bail!("virtual model cycle: {} -> {name}", path.join(" -> "));
+		}
+		let strategy = virtual_model.routing_strategy()?;
+		if !matches!(strategy, LocalLLMVirtualRoutingStrategy::Failover(_)) {
+			path.push(name);
+			for target in strategy.targets() {
+				if let Some(next) = self.nested_virtual_model(virtual_model, target) {
+					self.validate_no_cycle(next, path, done)?;
+				}
+			}
+			path.pop();
+		}
+		done.insert(name);
 		Ok(())
 	}
 
@@ -4846,9 +4900,6 @@ async fn convert_llm_config(
 		let llm_policy = Arc::default();
 		let routing = match virtual_model.routing_strategy()? {
 			LocalLLMVirtualRoutingStrategy::Conditional(conditional) => {
-				for target in &conditional.targets {
-					resolved_models.resolve(&target.model)?;
-				}
 				llm::model_router::VirtualModelRouting::Conditional(
 					conditional
 						.targets
@@ -4862,9 +4913,6 @@ async fn convert_llm_config(
 				)
 			},
 			LocalLLMVirtualRoutingStrategy::Weighted(weighted) => {
-				for target in &weighted.targets {
-					resolved_models.resolve(&target.model)?;
-				}
 				llm::model_router::VirtualModelRouting::Weighted(
 					weighted
 						.targets
@@ -4878,9 +4926,6 @@ async fn convert_llm_config(
 				)
 			},
 			LocalLLMVirtualRoutingStrategy::Callout(callout) => {
-				if let VirtualModelCalloutFailureMode::Fallback(model) = &callout.failure_mode {
-					resolved_models.resolve(model)?;
-				}
 				llm::model_router::VirtualModelRouting::Callout(Arc::new(
 					callout.clone().with_configured_cache_store(),
 				))
