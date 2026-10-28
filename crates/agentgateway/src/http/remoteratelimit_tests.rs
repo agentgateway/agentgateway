@@ -842,7 +842,7 @@ fn rate_limit_exceeded_maps_to_429() {
 	);
 }
 
-const RATE_LIMIT_JSON_BODY: &str = r#"{"error":{"message":"Rate limit exceeded","type":"rate_limit_exceeded","code":"rate_limit_exceeded"}}"#;
+const RATE_LIMIT_JSON_BODY: &str = r#"{"error":{"message":"Rate limit exceeded","type":"rate_limit_error","code":"rate_limit_exceeded"}}"#;
 
 #[tokio::test]
 async fn rate_limit_json_body_local() {

@@ -189,7 +189,7 @@ fn rate_limit_exceeded_body() -> String {
 	serde_json::json!({
 		"error": {
 			"message": "Rate limit exceeded",
-			"type": "rate_limit_exceeded",
+			"type": "rate_limit_error",
 			"code": "rate_limit_exceeded",
 		}
 	})

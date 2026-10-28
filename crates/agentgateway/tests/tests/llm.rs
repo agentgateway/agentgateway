@@ -1965,7 +1965,7 @@ async fn llm_remote_ratelimit_response(#[case] check_requests: bool) {
 	assert_eq!(res.hdr("content-type"), "application/json");
 	assert_eq!(
 		read_body_raw(res.into_body()).await.as_ref(),
-		br#"{"error":{"message":"Rate limit exceeded","type":"rate_limit_exceeded","code":"rate_limit_exceeded"}}"#
+		br#"{"error":{"message":"Rate limit exceeded","type":"rate_limit_error","code":"rate_limit_exceeded"}}"#
 	);
 }
 
