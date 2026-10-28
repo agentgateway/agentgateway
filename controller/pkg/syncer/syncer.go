@@ -238,17 +238,18 @@ func (s *Syncer) buildFinalGatewayStatus(
 	routeAttachments krt.Collection[*plugins.RouteAttachment],
 	krtopts krtutil.KrtOptions,
 ) krt.StatusCollection[*gwv1.Gateway, gwv1.GatewayStatus] {
-	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
-		return []utils.TypedNamespacedName{o.To}
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "gateway", func(o *plugins.RouteAttachment) []types.NamespacedName {
+		// ListenerSet attachments are counted on the ListenerSet, not the Gateway.
+		// Delegated routes have no attribution target and do not contribute counts.
+		if o.To.Kind == wellknown.ListenerSetGVK.Kind || o.To.Kind == "" {
+			return nil
+		}
+		return []types.NamespacedName{o.Gateway}
 	})
 	return krt.NewCollection(
 		gatewayStatuses,
 		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus]) *krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus] {
-			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
-				Kind:      wellknown.GatewayGVK.Kind,
-				Namespace: i.Obj.Namespace,
-				Name:      i.Obj.Name,
-			}))
+			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, types.NamespacedName{Namespace: i.Obj.Namespace, Name: i.Obj.Name}))
 			counts := map[string]int32{}
 			for _, r := range routes {
 				counts[r.ListenerName]++

@@ -744,6 +744,15 @@ func ToInternalParentReference(p gwv1.ParentReference, localNamespace string, al
 	if !allowed.Contains(ref) {
 		return utils.TypedNamespacedName{}, fmt.Errorf("unsupported Parent: %v/%v", p.Group, p.Kind)
 	}
+	// Parent resolution keys omit the group, so built-in parent kinds are reserved.
+	for _, builtin := range []schema.GroupKind{
+		wellknown.GatewayGVK.GroupKind(), wellknown.ListenerSetGVK.GroupKind(),
+		wellknown.ServiceGVK.GroupKind(), wellknown.ServiceEntryGVK.GroupKind(),
+	} {
+		if ref.Kind == builtin.Kind && ref.Group != builtin.Group {
+			return utils.TypedNamespacedName{}, fmt.Errorf("unsupported Parent: %s: kind is reserved for group %q", ref, builtin.Group)
+		}
+	}
 	return utils.TypedNamespacedName{
 		Kind: ref.Kind,
 		Name: string(p.Name),

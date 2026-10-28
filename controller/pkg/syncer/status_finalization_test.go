@@ -2,6 +2,7 @@ package syncer_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -123,7 +124,8 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 		}),
 		syncer.WithBuildReferenceTypes(func(_ *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes {
 			base.AllowedParentReferences.Insert(schema.GroupKind{Group: "test.example", Kind: "TestListenerResource"})
-			base.AllowedParentReferences.Insert(schema.GroupKind{Group: "other.example", Kind: "TestListenerResource"})
+			base.AllowedParentReferences.Insert(schema.GroupKind{Group: "test.example", Kind: "Gateway"})
+			base.AllowedParentReferences.Insert(schema.GroupKind{Group: "test.example", Kind: "ListenerSet"})
 			return base
 		}),
 		syncer.WithCustomResourceCollections(func(cfg syncer.CustomResourceCollectionsConfig) {
@@ -139,13 +141,13 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 			inputs = cfg
 			require.NotNil(t, initial)
 			require.Equal(t, wellknown.DefaultAgwControllerName, cfg.ControllerName)
-			attachmentIndex := krt.NewIndex(cfg.RouteAttachments, "parent-ref", func(a *plugins.RouteAttachment) []plugins.RouteAttachmentParent {
-				return []plugins.RouteAttachmentParent{a.ParentRef}
+			attachmentIndex := krt.NewIndex(cfg.RouteAttachments, "to", func(a *plugins.RouteAttachment) []utils.TypedNamespacedName {
+				return []utils.TypedNamespacedName{a.To}
 			})
 			final = krt.NewCollection(initial, func(kctx krt.HandlerContext, i krt.ObjectWithStatus[*unstructured.Unstructured, finalizationTestStatus]) *krt.ObjectWithStatus[*unstructured.Unstructured, finalizationTestStatus] {
 				desired := i.Status
-				desired.AttachedRoutes = len(krt.Fetch(kctx, cfg.RouteAttachments, krt.FilterIndex(attachmentIndex, plugins.RouteAttachmentParent{
-					GroupKind: i.Obj.GroupVersionKind().GroupKind(),
+				desired.AttachedRoutes = len(krt.Fetch(kctx, cfg.RouteAttachments, krt.FilterIndex(attachmentIndex, utils.TypedNamespacedName{
+					Kind:      i.Obj.GetKind(),
 					Namespace: i.Obj.GetNamespace(), Name: i.Obj.GetName(),
 				})))
 				for _, listener := range krt.Fetch(kctx, cfg.GatewayListeners) {
@@ -169,11 +171,14 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 	for _, registration := range s.StatusCollections().SetQueue(queue) {
 		require.True(t, registration.WaitUntilSynced(stop))
 	}
+	gatewayKey := status.Resource{GroupVersionKind: wellknown.GatewayGVK, NamespacedName: exampleGateway}
 	check := func(want finalizationTestStatus) {
 		t.Helper()
 		require.Eventually(t, func() bool {
 			statuses := final.List()
-			return len(statuses) == 1 && statuses[0].Status == want
+			gwWrites := queue.statuses(gatewayKey)
+			return len(statuses) == 1 && statuses[0].Status == want && len(gwWrites) > 0 &&
+				int(gwWrites[len(gwWrites)-1].(*gwv1.GatewayStatus).Listeners[0].AttachedRoutes) == 1+want.AttachedRoutes
 		}, 5*time.Second, time.Millisecond)
 	}
 	check(finalizationTestStatus{AttachedRoutes: 1, Conflicts: 1, Rejected: 1})
@@ -182,10 +187,26 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 	extensionKey := status.Resource{Group: "test.example", Version: "v1", Kind: "TestListenerResource", NamespacedName: free.ParentObject.NamespacedName}
 	require.Len(t, queue.statuses(extensionKey), 1)
 	require.Equal(t, finalizationTestStatus{AttachedRoutes: 1, Conflicts: 1, Rejected: 1}, *queue.statuses(extensionKey)[0].(*finalizationTestStatus))
-	gatewayKey := status.Resource{GroupVersionKind: wellknown.GatewayGVK, NamespacedName: exampleGateway}
 	gwWrites := queue.statuses(gatewayKey)
 	require.NotEmpty(t, gwWrites)
 	require.Equal(t, int32(2), gwWrites[len(gwWrites)-1].(*gwv1.GatewayStatus).Listeners[0].AttachedRoutes)
+
+	for _, kind := range []gwv1.Kind{"Gateway", "ListenerSet"} {
+		collidingRoute := extensionRoute.DeepCopy()
+		collidingRoute.Name = "colliding-" + strings.ToLower(string(kind))
+		collidingRoute.Spec.ParentRefs[0].Kind = new(kind)
+		if kind == "Gateway" {
+			collidingRoute.Spec.ParentRefs[0].Name = "example"
+		}
+		routes.Reset([]*gwv1.HTTPRoute{extensionRoute, gatewayRoute, collidingRoute})
+		routeKey := status.Resource{GroupVersionKind: wellknown.HTTPRouteGVK, Namespace: collidingRoute.Namespace, Name: collidingRoute.Name}
+		require.Eventually(t, func() bool {
+			writes := queue.statuses(routeKey)
+			return len(writes) > 0 && len(writes[len(writes)-1].(*gwv1.HTTPRouteStatus).Parents) == 0
+		}, 5*time.Second, time.Millisecond)
+		require.Len(t, inputs.RouteAttachments.List(), 2)
+		check(finalizationTestStatus{AttachedRoutes: 1, Conflicts: 1, Rejected: 1})
+	}
 
 	routes.Reset([]*gwv1.HTTPRoute{gatewayRoute})
 	check(finalizationTestStatus{Conflicts: 1, Rejected: 1})
