@@ -1,3 +1,6 @@
+> [!NOTE]
+> Help guide the future of **agentgateway** — [Take the survey](https://forms.gle/de5T7wr4wRsj1mKD7).
+
 <div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/agentgateway/agentgateway/refs/heads/main/img/banner-light.svg" alt="agentgateway" width="400">
