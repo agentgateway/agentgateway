@@ -4,7 +4,6 @@ use agent_core::strng;
 use bytes::Bytes;
 use futures_util::stream;
 use headers::{ContentEncoding, HeaderMapExt};
-use itertools::Itertools;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
@@ -375,7 +374,11 @@ impl ModelRouter {
 			return ResolveResult::DirectResponse(response);
 		}
 		if is_model_list_request(req) {
-			return ResolveResult::DirectResponse(self.model_list_response(req, catalog));
+			return ResolveResult::DirectResponse(self.model_list_response(
+				req,
+				catalog,
+				&client.inputs.stores.binds.read(),
+			));
 		}
 		let requested_model = match requested_model(req).await {
 			Ok(requested_model) => requested_model,
@@ -409,7 +412,12 @@ impl ModelRouter {
 		}
 	}
 
-	fn model_list_response(&self, req: &Request, catalog: &llm::catalog::ModelCatalog) -> Response {
+	fn model_list_response(
+		&self,
+		req: &Request,
+		catalog: &llm::catalog::ModelCatalog,
+		binds: &crate::store::BindStore,
+	) -> Response {
 		let catalog = catalog.snapshot();
 		let expand = self.discovery == llm::discovery::Discovery::Catalog;
 		let data = self
@@ -433,17 +441,20 @@ impl ModelRouter {
 							model_name_matches(&model.name, name) && api_key_model_authorized(req, name)
 						})
 						.map(|(id, name)| {
-							llm::model_list::ModelInfo::new(
+							let protocols = backend_endpoints(&model.backend.target, id, &catalog, binds);
+							let mut info = llm::model_list::ModelInfo::new(
 								name.into_owned(),
 								model.created,
 								Some(discovery.provider.clone()),
 								catalog.model(&discovery.provider, id),
-							)
+							);
+							info.preferred_endpoints = protocols;
+							info
 						})
 						.collect::<Vec<_>>()
 				} else {
 					api_key_discoverable_models(req, &model.name)
-						.map(|name| model_info(model, name.to_owned(), &catalog))
+						.map(|name| model_info(model, name.to_owned(), &catalog, binds))
 						.collect()
 				}
 			})
@@ -452,9 +463,22 @@ impl ModelRouter {
 					.virtual_models
 					.iter()
 					.filter(|model| api_key_model_authorized(req, &model.name))
-					.map(|model| self.virtual_model_info(model, &catalog)),
+					.map(|model| self.virtual_model_info(model, &catalog, binds)),
 			)
-			.unique_by(|model| model.id.clone())
+			.fold(
+				indexmap::IndexMap::<String, llm::model_list::ModelInfo>::new(),
+				|mut models, model| {
+					if let Some(existing) = models.get_mut(&model.id) {
+						existing
+							.preferred_endpoints
+							.retain(|p| model.preferred_endpoints.contains(p));
+					} else {
+						models.insert(model.id.clone(), model);
+					}
+					models
+				},
+			)
+			.into_values()
 			.collect::<Vec<_>>();
 		let path = req.uri().path().trim_end_matches('/');
 		let body = match path
@@ -495,6 +519,7 @@ impl ModelRouter {
 		&self,
 		model: &VirtualModelRoute,
 		catalog: &llm::catalog::CatalogSnapshot,
+		binds: &crate::store::BindStore,
 	) -> llm::model_list::ModelInfo {
 		let targets: Vec<&str> = match &model.routing {
 			VirtualModelRouting::Weighted(targets) => targets.iter().map(|t| t.model.as_str()).collect(),
@@ -513,7 +538,19 @@ impl ModelRouter {
 					.iter()
 					.find(|route| model_name_matches(&route.name, target))
 				{
-					Some(route) => model_info(route, target.to_string(), catalog),
+					Some(route) => {
+						let mut info = model_info(route, target.to_string(), catalog, binds);
+						for other in self
+							.models
+							.iter()
+							.filter(|r| model_name_matches(&r.name, target))
+						{
+							let protocols =
+								model_info(other, target.to_string(), catalog, binds).preferred_endpoints;
+							info.preferred_endpoints.retain(|p| protocols.contains(p));
+						}
+						info
+					},
 					None => llm::model_list::ModelInfo::default(),
 				}
 			})
@@ -782,15 +819,63 @@ fn model_info(
 	route: &ModelRoute,
 	name: String,
 	catalog: &llm::catalog::CatalogSnapshot,
+	binds: &crate::store::BindStore,
 ) -> llm::model_list::ModelInfo {
+	let catalog_id = route.discovery.as_ref().and_then(|discovery| {
+		catalog
+			.model_ids(&discovery.provider)
+			.map(|ids| discovery.catalog_model(&name, ids))
+	});
+	let protocols = backend_endpoints(
+		&route.backend.target,
+		catalog_id.as_deref().unwrap_or(&name),
+		catalog,
+		binds,
+	);
 	let Some(discovery) = &route.discovery else {
-		return llm::model_list::ModelInfo::new(name, route.created, None, None);
+		let mut info = llm::model_list::ModelInfo::new(name, route.created, None, None);
+		info.preferred_endpoints = protocols;
+		return info;
 	};
-	let entry = catalog
-		.model_ids(&discovery.provider)
-		.map(|ids| discovery.catalog_model(&name, ids))
-		.and_then(|id| catalog.model(&discovery.provider, &id));
-	llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry)
+	let entry = catalog_id
+		.as_deref()
+		.and_then(|id| catalog.model(&discovery.provider, id));
+	let mut info =
+		llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry);
+	info.preferred_endpoints = protocols;
+	info
+}
+
+/// Native protocol metadata comes from configured providers, independently of request policies.
+fn backend_endpoints(
+	target: &crate::types::agent::RouteBackendTarget,
+	name: &str,
+	catalog: &llm::catalog::CatalogSnapshot,
+	binds: &crate::store::BindStore,
+) -> Vec<llm::PreferredEndpoint> {
+	use crate::types::agent::{Backend, RouteBackendTarget};
+	let RouteBackendTarget::Backend(key) = target else {
+		return Vec::new();
+	};
+	let Some(backend) = binds.backend(key) else {
+		return Vec::new();
+	};
+	let Backend::AI(_, ai) = &backend.backend else {
+		return Vec::new();
+	};
+	let mut common: Option<Vec<llm::PreferredEndpoint>> = None;
+	for named in ai.providers.all_endpoints() {
+		let model = named.provider.override_model();
+		let protocols = named
+			.provider
+			.preferred_endpoints(model.as_deref().unwrap_or(name), catalog);
+		if let Some(common) = &mut common {
+			common.retain(|p| protocols.contains(p));
+		} else {
+			common = Some(protocols);
+		}
+	}
+	common.unwrap_or_default()
 }
 
 fn is_responses_websocket(req: &Request) -> bool {

@@ -312,6 +312,15 @@ impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
 	}
 }
 
+impl agent_llm::model_catalog::ModelCatalogHandle for CatalogSnapshot {
+	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
+		self.model_has_tag(model_id, tag)
+	}
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
+		self.get_model_tags(model_id)
+	}
+}
+
 pub struct CatalogSnapshot {
 	catalog: Option<CatalogData>,
 	/// Precomputed `model_id -> tags` (merged across providers) for O(1) attribute lookups.

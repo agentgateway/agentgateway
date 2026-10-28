@@ -2328,3 +2328,132 @@ impl ratelimitmock::Handler for RecordingRateLimit {
 		ratelimitmock::ok_response()
 	}
 }
+
+#[tokio::test]
+async fn llm_model_preferred_endpoints() {
+	let config = r#"
+llm:
+  port: 0
+  models:
+  - name: multi
+    provider:
+      custom:
+        formats:
+        - type: responses
+        - type: embeddings
+        - type: completions
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: responses
+    provider:
+      custom:
+        formats:
+        - type: responses
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: embeddings
+    provider:
+      custom:
+        formats:
+        - type: embeddings
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: native-gemini
+    provider: gemini
+  - name: unknown
+    provider: openAI
+  - name: transformed
+    provider: copilot
+    params:
+      model: grok-2
+  - name: policy-independent
+    provider: anthropic
+    transformation:
+      model: request.headers["x-model"]
+  virtualModels:
+  - name: shared
+    routing:
+      weighted:
+        targets:
+        - model: multi
+          weight: 1
+        - model: responses
+          weight: 1
+  - name: disjoint
+    routing:
+      weighted:
+        targets:
+        - model: responses
+          weight: 1
+        - model: embeddings
+          weight: 1
+  - name: unresolved
+    routing:
+      failover:
+        targets:
+        - model: multi
+          priority: 0
+        - model: responses
+          priority: 1
+"#;
+	let t = setup_local_llm_config(config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	for (id, expected) in [
+		(
+			"multi",
+			json!(["/chat/completions", "/embeddings", "/responses"]),
+		),
+		(
+			"native-gemini",
+			json!([
+				"/embeddings",
+				"/models/{model}:countTokens",
+				"/models/{model}:generateContent"
+			]),
+		),
+		("responses", json!(["/responses"])),
+		("embeddings", json!(["/embeddings"])),
+		(
+			"transformed",
+			json!(["/embeddings", "/rerank", "/responses"]),
+		),
+		("shared", json!(["/responses"])),
+		("disjoint", Value::Null),
+		(
+			"unknown",
+			json!([
+				"/chat/completions",
+				"/decisions",
+				"/embeddings",
+				"/rerank",
+				"/responses"
+			]),
+		),
+		(
+			"policy-independent",
+			json!(["/messages", "/messages/count_tokens"]),
+		),
+		("unresolved", Value::Null),
+	] {
+		let model = models["data"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find(|m| m["id"] == id)
+			.unwrap();
+		assert_eq!(model["preferred_endpoints"], expected, "{id}");
+		assert!(model.get("preferred_invocation_protocols").is_none());
+		let res = send_request(
+			io.clone(),
+			Method::GET,
+			&format!("http://lo/v1/models/{id}"),
+		)
+		.await;
+		assert_eq!(res.status(), StatusCode::OK);
+		let single: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+		assert_eq!(&single, model, "single-model response for {id}");
+	}
+}
