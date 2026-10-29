@@ -17,7 +17,6 @@ pub use agent_llm::{
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
-pub use preferred_endpoints::PreferredEndpoint;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
 
@@ -35,7 +34,6 @@ use crate::*;
 pub mod model_list;
 pub mod model_router;
 pub mod model_transform;
-mod preferred_endpoints;
 pub mod router_callout;
 pub use agent_llm::{azure, bedrock, vertex};
 
