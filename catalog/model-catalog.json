@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-28T08:27:55Z"
+    "generatedAt": "2026-10-29T08:27:21Z"
   },
   "providers": {
     "anthropic": {
@@ -17656,6 +17656,7 @@
         },
         "stepfun-ai/Step-5-Preview": {
           "name": "Step 5 Preview",
+          "status": "deprecated",
           "released": "2026-09-16",
           "rates": {
             "input": "1",
@@ -18668,6 +18669,16 @@
             "output": "4.25",
             "cacheRead": "0.15"
           },
+          "tiers": [
+            {
+              "serviceTier": "priority",
+              "rates": {
+                "input": "1.875",
+                "output": "6.375",
+                "cacheRead": "0.225"
+              }
+            }
+          ],
           "limits": {
             "context": 1048576,
             "output": 131072
@@ -19580,6 +19591,7 @@
         },
         "gemini-2.5-flash-image": {
           "name": "Nano Banana",
+          "status": "deprecated",
           "released": "2025-08-26",
           "rates": {
             "input": "0.3",
@@ -19815,33 +19827,6 @@
             ]
           }
         },
-        "gemini-3-pro-image-preview": {
-          "name": "Nano Banana Pro",
-          "released": "2025-11-20",
-          "rates": {
-            "input": "2",
-            "output": "120"
-          },
-          "limits": {
-            "context": 131072,
-            "output": 32768
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text",
-              "image"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "toolCall": false,
-            "temperature": true
-          }
-        },
         "gemini-3.1-flash-image": {
           "name": "Nano Banana 2",
           "released": "2026-05-28",
@@ -19858,40 +19843,6 @@
               "text",
               "image",
               "video",
-              "pdf"
-            ],
-            "output": [
-              "text",
-              "image"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "toolCall": false,
-            "temperature": true
-          },
-          "reasoning": {
-            "effort": [
-              "minimal",
-              "high"
-            ]
-          }
-        },
-        "gemini-3.1-flash-image-preview": {
-          "name": "Nano Banana 2",
-          "released": "2026-02-26",
-          "rates": {
-            "input": "0.5",
-            "output": "60"
-          },
-          "limits": {
-            "context": 65536,
-            "output": 65536
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image",
               "pdf"
             ],
             "output": [
@@ -26302,6 +26253,41 @@
             "structuredOutput": true,
             "toolCall": true,
             "temperature": true
+          }
+        },
+        "deepseek-v4-1-flash-1017": {
+          "name": "DeepSeek V4.1 Flash 1017",
+          "released": "2026-10-17",
+          "rates": {
+            "input": "0.3",
+            "output": "1.2",
+            "cacheRead": "0.007"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "high",
+              "max"
+            ]
           }
         },
         "devstral-2512": {
