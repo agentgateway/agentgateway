@@ -506,7 +506,7 @@ impl ModelRouter {
 							model_name_matches(&model.name, name) && api_key_model_authorized(req, name)
 						})
 						.map(|(id, name)| llm::model_list::ModelInfo {
-							preferred_endpoints: discovery.preferred_endpoints(id, Some(catalog.as_ref())),
+							preferred_endpoints: discovery.preferred_endpoints(id, &catalog),
 							..llm::model_list::ModelInfo::new(
 								name.into_owned(),
 								model.created,
@@ -906,7 +906,7 @@ fn model_info(
 		.unwrap_or_else(|| discovery.model.as_deref().unwrap_or(&name).to_string());
 	let entry = catalog.model(&discovery.provider, &id);
 	llm::model_list::ModelInfo {
-		preferred_endpoints: discovery.preferred_endpoints(&id, Some(catalog)),
+		preferred_endpoints: discovery.preferred_endpoints(&id, catalog),
 		..llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry)
 	}
 }

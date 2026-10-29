@@ -626,12 +626,15 @@
             "null"
           ]
         },
-        "type": {
-          "description": "Kind of model (embedding, reranking, image, ...); absent means chat.",
+        "endpoints": {
+          "description": "Client endpoints the model serves; absent means a chat model.",
           "type": [
-            "string",
+            "array",
             "null"
-          ]
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "rates": {
           "description": "Base pricing rates for this model.",

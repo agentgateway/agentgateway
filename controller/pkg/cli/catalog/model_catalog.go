@@ -100,7 +100,9 @@ func (m *Model) overlayWith(overlay Model) {
 	m.Name = cmp.Or(overlay.Name, m.Name)
 	m.Status = cmp.Or(overlay.Status, m.Status)
 	m.Released = cmp.Or(overlay.Released, m.Released)
-	m.Type = cmp.Or(overlay.Type, m.Type)
+	if overlay.Endpoints != nil {
+		m.Endpoints = overlay.Endpoints
+	}
 	overlayNonZero(&m.Limits, overlay.Limits)
 	overlayNonZero(&m.Capabilities, overlay.Capabilities)
 	overlayNonZero(&m.Modalities, overlay.Modalities)
@@ -180,11 +182,11 @@ type Model struct {
 	Status string `json:"status,omitempty"`
 	// Released is the release date, as YYYY-MM-DD or YYYY-MM.
 	Released string `json:"released,omitempty"`
-	// Type is the kind of model (embedding, reranking, image, ...); absent means chat.
-	Type  string   `json:"type,omitempty"`
-	Rates Rates    `json:"rates,omitzero"`
-	Tiers []Tier   `json:"tiers,omitempty"`
-	Tags  []string `json:"tags,omitempty"`
+	// Endpoints are the client endpoints the model serves; absent means a chat model.
+	Endpoints []string `json:"endpoints,omitzero"`
+	Rates     Rates    `json:"rates,omitzero"`
+	Tiers     []Tier   `json:"tiers,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
 	// Limits are token limits. Context is the total window shared by input and output; Input,
 	// when set, is a tighter cap on the input alone.
 	Limits       Limits       `json:"limits,omitzero"`

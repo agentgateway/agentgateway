@@ -1,7 +1,7 @@
 use agent_core::prelude::Strng;
 
-use agent_llm::model_catalog::Catalog;
-
+use crate::llm::catalog::CatalogSnapshot;
+use crate::llm::custom::ProviderFormat;
 use crate::llm::model_transform::ModelTransformation;
 use crate::llm::{AIProvider, ChatFormat};
 use crate::{apply, cel, schema_enum, schema_ser_schema};
@@ -74,21 +74,53 @@ impl ModelDiscovery {
 	}
 
 	/// Client endpoints that reach the upstream model without cross-protocol conversion.
-	pub fn preferred_endpoints(&self, model: &str, catalog: Catalog<'_>) -> Vec<&'static str> {
+	pub fn preferred_endpoints(&self, model: &str, catalog: &CatalogSnapshot) -> Vec<&'static str> {
 		let Some(provider) = &self.provider_config else {
 			return Vec::new();
 		};
-		let mut endpoints = provider
-			.supported_chat_formats(model, catalog)
+		let chat = provider
+			.supported_chat_formats(model, Some(catalog))
 			.into_iter()
 			.filter_map(|format| match format {
 				ChatFormat::OpenAICompletions => Some("/chat/completions"),
 				ChatFormat::OpenAIResponses => Some("/responses"),
 				ChatFormat::AnthropicMessages => Some("/messages"),
-				ChatFormat::VertexGemini => Some("/models/{model}:generateContent"),
-				ChatFormat::BedrockConverse => None,
-			})
-			.collect::<Vec<_>>();
+				ChatFormat::VertexGemini | ChatFormat::BedrockConverse => None,
+			});
+		let mut endpoints = match catalog
+			.model(&self.provider, model)
+			.and_then(|m| m.endpoints.as_ref())
+		{
+			None => chat.collect::<Vec<_>>(),
+			Some(served) => {
+				// Vertex and Bedrock convert embeddings and reranking.
+				let converted = matches!(provider, AIProvider::Vertex(_) | AIProvider::Bedrock(_));
+				let other = provider
+					.supported_formats(model)
+					.into_iter()
+					.filter_map(|format| match format {
+						ProviderFormat::Embeddings if !converted => Some("/embeddings"),
+						ProviderFormat::Rerank if !converted => Some("/rerank"),
+						_ => None,
+					});
+				// Image and audio requests are forwarded unmodified, matching only OpenAI's paths.
+				let passthrough: &[&'static str] = if matches!(provider, AIProvider::OpenAI(_)) {
+					&[
+						"/images/generations",
+						"/images/edits",
+						"/audio/speech",
+						"/audio/transcriptions",
+					]
+				} else {
+					&[]
+				};
+				chat
+					.chain(other)
+					.chain(passthrough.iter().copied())
+					.filter(|e| served.iter().any(|s| s == e))
+					.collect()
+			},
+		};
 		endpoints.sort();
 		endpoints.dedup();
 		endpoints
