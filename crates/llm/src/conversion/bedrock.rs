@@ -678,7 +678,8 @@ pub mod from_embeddings {
 }
 
 pub mod from_completions {
-	use std::collections::HashMap;
+	use std::cell::RefCell;
+	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;
 
 	use agent_core::strng;
@@ -713,6 +714,7 @@ pub mod from_completions {
 	fn text_blocks_from_user_content(
 		content: &completions::RequestUserMessageContent,
 		cache_points_used: &mut usize,
+		used_doc_names: &RefCell<HashSet<String>>,
 	) -> Result<Vec<bedrock::ContentBlock>, AIError> {
 		let mut out = Vec::new();
 		match content {
@@ -754,9 +756,27 @@ pub mod from_completions {
 								Some(media_type),
 								file.file.filename.as_deref(),
 							)?;
+							// Bedrock requires document names to be unique within a request; track
+							// names already used so repeated filenames (or missing ones) get a
+							// numeric suffix.
+							let mut name =
+								super::from_responses::sanitize_doc_name(file.file.filename.as_deref());
+							{
+								let mut used = used_doc_names.borrow_mut();
+								if !used.insert(name.clone()) {
+									let mut i = 2;
+									name = loop {
+										let candidate = format!("{name} [{i}]");
+										if used.insert(candidate.clone()) {
+											break candidate;
+										}
+										i += 1;
+									};
+								}
+							}
 							out.push(bedrock::ContentBlock::Document(bedrock::DocumentBlock {
 								format: format.to_string(),
-								name: super::from_responses::sanitize_doc_name(file.file.filename.as_deref()),
+								name,
 								source: bedrock::DocumentSource {
 									bytes: data.to_string(),
 								},
@@ -991,6 +1011,7 @@ pub mod from_completions {
 			}
 		}
 		let mut cache_points_used = 0;
+		let used_doc_names = RefCell::new(HashSet::<String>::new());
 		let has_explicit_system_cache = system_parts.iter().any(|(_, marked)| marked.is_some());
 		let system_content = if system_parts.is_empty() {
 			None
@@ -1066,7 +1087,8 @@ pub mod from_completions {
 			let msg = match msg {
 				completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_) => None,
 				completions::RequestMessage::User(user) => {
-					let content = text_blocks_from_user_content(&user.content, &mut cache_points_used)?;
+					let content =
+						text_blocks_from_user_content(&user.content, &mut cache_points_used, &used_doc_names)?;
 					(!content.is_empty()).then_some(bedrock::Message {
 						role: bedrock::Role::User,
 						content,
@@ -1520,6 +1542,7 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
+	use std::cell::RefCell;
 	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;
 
@@ -1590,6 +1613,7 @@ pub mod from_messages {
 			}
 		}
 		let mut cache_points_used = 0;
+		let used_doc_names = RefCell::new(HashSet::<String>::new());
 		// Converse placement note (AWS docs):
 		// - Anthropic-specific params are sent via additionalModelRequestFields for Converse:
 		//   https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-call.html
@@ -1932,10 +1956,27 @@ pub mod from_messages {
 						};
 						let format =
 							super::from_responses::derive_doc_format(Some(media_type), title.as_deref())?;
+						// Bedrock requires document names to be unique within a request; track
+						// names already used so repeated titles (or missing ones) get a numeric
+						// suffix.
+						let mut name = super::from_responses::sanitize_doc_name(title.as_deref());
+						{
+							let mut used = used_doc_names.borrow_mut();
+							if !used.insert(name.clone()) {
+								let mut i = 2;
+								name = loop {
+									let candidate = format!("{name} [{i}]");
+									if used.insert(candidate.clone()) {
+										break candidate;
+									}
+									i += 1;
+								};
+							}
+						}
 						(
 							bedrock::ContentBlock::Document(bedrock::DocumentBlock {
 								format: format.to_string(),
-								name: super::from_responses::sanitize_doc_name(title.as_deref()),
+								name,
 								source: bedrock::DocumentSource {
 									bytes: data.to_string(),
 								},

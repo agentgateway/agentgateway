@@ -18,6 +18,15 @@
           }
         },
         {
+          "type": "document",
+          "source": {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": "JVBERi0xLjQK"
+          },
+          "title": "report.pdf"
+        },
+        {
           "type": "text",
           "text": "What is this document about?"
         }
