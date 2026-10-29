@@ -40,6 +40,39 @@ impl AIProvider {
 		catalog: &catalog::CatalogSnapshot,
 	) -> Vec<PreferredEndpoint> {
 		use custom::ProviderFormat as F;
+		if model.contains('*') {
+			// A pattern is not a model ID. Only advertise formats determined by the
+			// provider configuration alone; model-family and catalog rules need a concrete ID.
+			match self {
+				Self::Copilot(_) | Self::Vertex(_) => return vec![],
+				Self::Bedrock(p) => {
+					use super::bedrock::{BedrockEndpoint, BedrockEndpointPreference};
+					let runtime_only = match p.endpoint_preference {
+						BedrockEndpointPreference::RuntimeOnly => true,
+						BedrockEndpointPreference::RuntimePreferred => {
+							p.guardrail_identifier.is_some() || p.guardrail_version.is_some()
+						},
+						_ => false,
+					};
+					return if runtime_only && !p.native_chat(BedrockEndpoint::Runtime) {
+						vec![PreferredEndpoint::BedrockConverse]
+					} else {
+						vec![]
+					};
+				},
+				Self::Azure(p) if matches!(p.resource_type, super::azure::AzureResourceType::Foundry) => {
+					return vec![
+						PreferredEndpoint::OpenAIEmbeddings,
+						PreferredEndpoint::TypesafeSystemOne,
+					];
+				},
+				Self::OpenAI(_)
+				| Self::Anthropic(_)
+				| Self::Gemini(_)
+				| Self::Azure(_)
+				| Self::Custom(_) => {},
+			}
+		}
 		let mut protocols = BTreeSet::new();
 		for (input, output, protocol) in [
 			(
@@ -114,13 +147,14 @@ impl AIProvider {
 		}
 
 		// Vertex/Bedrock embeddings and reranking require cross-protocol conversion.
+		// Azure has no native rerank path; its path builder falls back to chat completions.
 		// Realtime is not exposed by the model-serving router.
 		for format in self.supported_formats(model) {
 			let protocol = match format {
 				F::Embeddings if !matches!(self, Self::Vertex(_) | Self::Bedrock(_)) => {
 					PreferredEndpoint::OpenAIEmbeddings
 				},
-				F::Rerank if !matches!(self, Self::Vertex(_) | Self::Bedrock(_)) => {
+				F::Rerank if !matches!(self, Self::Vertex(_) | Self::Bedrock(_) | Self::Azure(_)) => {
 					PreferredEndpoint::CohereRerank
 				},
 				F::AnthropicTokenCount if matches!(self, Self::Custom(_)) => {
@@ -354,6 +388,55 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn wildcards_only_advertise_model_independent_endpoints() {
+		let catalog = catalog::CatalogSnapshot::parse(r#"{"providers":{}}"#).unwrap();
+		for (config, expected) in [
+			(r#"{"copilot":{}}"#, ""),
+			(r#"{"vertex":{"projectId":"example"}}"#, ""),
+			(
+				r#"{"bedrock":{"region":"us-east-1","endpointPreference":"mantleOnly"}}"#,
+				"",
+			),
+			(
+				r#"{"bedrock":{"region":"us-east-1","endpointPreference":"runtimePreferred"}}"#,
+				"",
+			),
+			(
+				r#"{"bedrock":{"region":"us-east-1","endpointPreference":"runtimeOnly"}}"#,
+				"/model/{model}/converse",
+			),
+			(
+				r#"{"azure":{"resourceName":"example","resourceType":"foundry"}}"#,
+				"/embeddings /systemone",
+			),
+			(
+				r#"{"azure":{"resourceName":"example","resourceType":"openAI"}}"#,
+				"/chat/completions /responses /embeddings",
+			),
+			(
+				r#"{"openAI":{}}"#,
+				"/chat/completions /responses /embeddings /rerank /decisions",
+			),
+			(r#"{"anthropic":{}}"#, "/messages /messages/count_tokens"),
+			(
+				r#"{"gemini":{}}"#,
+				"/models/{model}:generateContent /models/{model}:countTokens /embeddings",
+			),
+		] {
+			let provider: AIProvider = serde_json::from_str(config).unwrap();
+			for pattern in ["*", "gpt-*", "claude-*", "gemini-*"] {
+				assert_wire_endpoints(&provider, pattern, &catalog, expected);
+			}
+		}
+		assert_wire_endpoints(
+			&custom(&[custom::ProviderFormat::Responses]),
+			"gpt-*",
+			&catalog,
+			"/responses",
+		);
+	}
+
 	#[rstest::rstest]
 	#[case::cohere(
 		custom::ProviderPreset::Cohere,
@@ -458,17 +541,17 @@ mod tests {
 			(
 				r#"{"azure":{"resourceName":"example","resourceType":"openAI"}}"#,
 				"deployment",
-				"/chat/completions /responses /embeddings /rerank",
+				"/chat/completions /responses /embeddings",
 			),
 			(
 				r#"{"azure":{"resourceName":"example","resourceType":"foundry"}}"#,
 				"gpt-4o",
-				"/chat/completions /responses /embeddings /rerank /systemone",
+				"/chat/completions /responses /embeddings /systemone",
 			),
 			(
 				r#"{"azure":{"resourceName":"example","resourceType":"foundry"}}"#,
 				"claude-sonnet-4",
-				"/messages /messages/count_tokens /embeddings /rerank /systemone",
+				"/messages /messages/count_tokens /embeddings /systemone",
 			),
 			(
 				r#"{"vertex":{"projectId":"example"}}"#,
