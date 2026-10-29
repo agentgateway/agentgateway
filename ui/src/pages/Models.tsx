@@ -1950,6 +1950,8 @@ function applyUpstreamMode(
 	customModelExpression: string
 ): LlmModel {
 	const next: LlmModel = structuredClone(model);
+	next.name = next.name.trim();
+	explicitModel = explicitModel.trim();
 	const transformation = { ...(next.transformation ?? {}) };
 	delete transformation.model;
 	const prefixExpression = stripPrefixExpression(stripPrefixCandidate(next.name));
