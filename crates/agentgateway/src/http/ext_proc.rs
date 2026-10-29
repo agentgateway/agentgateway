@@ -1508,36 +1508,41 @@ impl ExtProcInstance {
 		let response_trailers = Arc::new(Mutex::new(None));
 		let headers = resp_to_header_map(&response);
 		let send_response_headers = self.mode_state.response_header_mode == HeaderSendMode::Send;
-
-		let exec = cel::Executor::new_response(request, &response);
-		self.ensure_stream_started(&exec)?;
-		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let metadata_context = if self.metadata_context.is_none()
-			&& let Some(rd) = resolved_destination_metadata
-		{
-			Some(Arc::new(Metadata {
-				filter_metadata: HashMap::from([(
-					// This is gross, but the GIE project unfairly favors Envoy, so we have to adapt to its limitations.
-					"envoy.lb".to_string(),
-					serde_json::from_value(serde_json::json!({"x-gateway-destination-endpoint-served": rd}))
+		// Drop the executor before the first await so the response future does not store it.
+		let (metadata_context, attributes) = {
+			let exec = cel::Executor::new_response(request, &response);
+			self.ensure_stream_started(&exec)?;
+			// Wrap metadata_context in Arc for cheap cloning across body chunks
+			let metadata_context = if self.metadata_context.is_none()
+				&& let Some(rd) = resolved_destination_metadata
+			{
+				Some(Arc::new(Metadata {
+					filter_metadata: HashMap::from([(
+						// This is gross, but the GIE project unfairly favors Envoy, so we have to adapt to its limitations.
+						"envoy.lb".to_string(),
+						serde_json::from_value(
+							serde_json::json!({"x-gateway-destination-endpoint-served": rd}),
+						)
 						.unwrap(),
-				)]),
-			}))
-		} else {
-			build_processing_metadata_context(&exec, self.metadata_context.as_ref())
-				.map(|filter_metadata| Arc::new(Metadata { filter_metadata }))
+					)]),
+				}))
+			} else {
+				build_processing_metadata_context(&exec, self.metadata_context.as_ref())
+					.map(|filter_metadata| Arc::new(Metadata { filter_metadata }))
+			};
+			// response_attributes should only be sent on first ProcessingRequest
+			// this will need to be modified if we configure which Requests to send
+			let attributes = self
+				.resp_attributes
+				.as_ref()
+				.and_then(|attrs| {
+					eval_to_struct(&exec, attrs)
+						.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
+						.ok()
+				})
+				.unwrap_or_default();
+			(metadata_context, attributes)
 		};
-		// response_attributes should only be sent on first ProcessingRequest
-		// this will need to be modified if we configure which Requests to send
-		let attributes = self
-			.resp_attributes
-			.as_ref()
-			.and_then(|attrs| {
-				eval_to_struct(&exec, attrs)
-					.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
-					.ok()
-			})
-			.unwrap_or_default();
 		let max_response_bytes = http::response_buffer_limit(&response);
 		let (parts, body) = response.into_parts();
 		let end_of_stream = body.is_end_stream();
