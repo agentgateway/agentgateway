@@ -577,6 +577,27 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 	});
 });
 
+test('trims whitespace from a new model name and explicit model', async ({ page }) => {
+	const gateway = await mockGateway(page, populatedConfig());
+	await page.goto('/llm/models');
+
+	await page.getByRole('button', { name: 'Add model' }).first().click();
+	await page.getByRole('combobox', { name: 'Provider' }).click();
+	await page.getByRole('option', { name: 'openai-shared configured' }).click();
+	await page.getByLabel('Incoming model match').fill('  my-model ');
+	await page.getByRole('button', { name: 'Explicit', exact: true }).click();
+	await page.getByRole('textbox', { name: 'Explicit outgoing model' }).fill('  gpt-4o-mini ');
+	await page.getByRole('button', { name: 'Save model' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const latest = gateway.postedConfigs[0] as {
+		llm?: { models?: Array<{ name: string; params?: { model?: string | null } }> };
+	};
+	const added = latest.llm?.models?.find(model => model.name.trim() === 'my-model');
+	expect(added?.name).toBe('my-model');
+	expect(added?.params?.model).toBe('gpt-4o-mini');
+});
+
 test('XDS mode lists models from the config dump as read-only', async ({ page }) => {
 	const gateway = await mockXdsGateway(page);
 	await page.goto('/llm/models');
