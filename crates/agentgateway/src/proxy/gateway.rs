@@ -41,6 +41,10 @@ use crate::types::discovery::Service;
 use crate::types::frontend;
 use crate::{ProxyInputs, Stores, client};
 
+// Every in-flight request holds this future until it completes, so its size is paid per
+// concurrent request. A larger future usually means some value is now held across an await.
+const PROXY_REQUEST_FUTURE_SIZE: usize = 18 * 1024;
+
 #[cfg(test)]
 #[path = "gateway_test.rs"]
 mod tests;
@@ -1006,7 +1010,7 @@ impl Gateway {
 						dtrace::DebugTracer::maybe_scope(req, |req| async move {
 							proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
 						})
-						.assert_size::<{ 18 * 1024 }>(),
+						.assert_size::<{ PROXY_REQUEST_FUTURE_SIZE }>(),
 					)
 					.await?;
 					close_if_draining(

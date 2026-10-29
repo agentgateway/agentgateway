@@ -57,6 +57,18 @@ use crate::types::local::InternalBackend;
 use crate::types::{backend, frontend};
 use crate::{ProxyInputs, store, *};
 
+// Inline-awaited futures here can enlarge callers up to the per-request future; boxed ones
+// allocate on every call. A larger future usually means some value is now held across an await.
+const MAKE_BACKEND_CALL_FUTURE_SIZE: usize = 7 * 1024;
+const CONNECT_TUNNEL_FUTURE_SIZE: usize = 11 * 1024;
+const EXT_PROC_REQUEST_FUTURE_SIZE: usize = 4 * 1024;
+const EXT_PROC_RESPONSE_FUTURE_SIZE: usize = 4 * 1024;
+const INFERENCE_RESPONSE_FUTURE_SIZE: usize = 4 * 1024;
+const MCP_SERVE_FUTURE_SIZE: usize = 4 * 1024;
+const LLM_REQUEST_POLICIES_FUTURE_SIZE: usize = 3 * 1024;
+const LLM_PROCESS_RESPONSE_FUTURE_SIZE: usize = 4 * 1024;
+const LATE_BACKEND_AUTH_FUTURE_SIZE: usize = 2 * 1024;
+
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
 	route
 		.backends
@@ -336,7 +348,7 @@ async fn apply_request_policies(
 		.map(|p| p.build(c.clone()));
 	if let Some(x) = rp.ext_proc.as_mut() {
 		x.mutate_request(req)
-			.assert_size::<{ 4 * 1024 }>()
+			.assert_size::<{ EXT_PROC_REQUEST_FUTURE_SIZE }>()
 			.boxed()
 			.await?
 			.apply(rp.headers())?;
@@ -576,7 +588,7 @@ async fn apply_gateway_policies(
 		.map(|p| p.build(client.clone()));
 	if let Some(x) = ext_proc.as_mut() {
 		x.mutate_request(req)
-			.assert_size::<{ 4 * 1024 }>()
+			.assert_size::<{ EXT_PROC_REQUEST_FUTURE_SIZE }>()
 			.boxed()
 			.await?
 			.apply(response_policies.headers())?;
@@ -1131,7 +1143,7 @@ impl HTTPProxy {
 					response_policies,
 					&mut req,
 				)
-				.assert_size::<{ 11 * 1024 }>()
+				.assert_size::<{ CONNECT_TUNNEL_FUTURE_SIZE }>()
 				.await
 				.snapshot_on_err(log, &mut req);
 		}
@@ -1606,7 +1618,7 @@ impl HTTPProxy {
 			response_policies,
 			substrate_state,
 		)
-		.assert_size::<{ 7 * 1024 }>();
+		.assert_size::<{ MAKE_BACKEND_CALL_FUTURE_SIZE }>();
 
 		// Setup timeout
 		let call_result = if let Some(timeout) = timeout {
@@ -2846,7 +2858,7 @@ async fn make_backend_call(
 					.clone()
 					.mcp_state
 					.serve(inputs, name, backend, policies.as_ref().clone(), req, log)
-					.assert_size::<{ 4 * 1024 }>(),
+					.assert_size::<{ MCP_SERVE_FUTURE_SIZE }>(),
 			)
 			.await?;
 			return Ok(http::timeout::apply_response_idle_timeout(
@@ -3042,7 +3054,7 @@ async fn make_backend_call(
 								&llm_request,
 								&mut response_policies.rate_limit_headers,
 							)
-							.assert_size::<{ 3 * 1024 }>(),
+							.assert_size::<{ LLM_REQUEST_POLICIES_FUTURE_SIZE }>(),
 						)
 						.await?
 					};
@@ -3111,7 +3123,7 @@ async fn make_backend_call(
 				backend_call.backend_policies.backend_auth.as_ref(),
 				&mut req,
 			)
-			.assert_size::<{ 2 * 1024 }>()
+			.assert_size::<{ LATE_BACKEND_AUTH_FUTURE_SIZE }>()
 			.await?;
 			(
 				// Internal handlers consume request attributes such as validated JWT claims.
@@ -3137,7 +3149,7 @@ async fn make_backend_call(
 			backend_call.backend_policies.backend_auth.as_ref(),
 			&mut req,
 		)
-		.assert_size::<{ 2 * 1024 }>()
+		.assert_size::<{ LATE_BACKEND_AUTH_FUTURE_SIZE }>()
 		.await?;
 	}
 	if let Backend::Internal(_, internal) = backend {
@@ -3313,7 +3325,7 @@ async fn make_backend_call(
 					Some(&inputs.model_catalog),
 					resp,
 				)
-				.assert_size::<{ 4 * 1024 }>(),
+				.assert_size::<{ LLM_PROCESS_RESPONSE_FUTURE_SIZE }>(),
 		)
 		.await
 		.map_err(ProxyError::AIResponse)?
@@ -3325,7 +3337,7 @@ async fn make_backend_call(
 		let _ = Box::pin(
 			maybe_inference
 				.mutate_response(&mut resp)
-				.assert_size::<{ 4 * 1024 }>(),
+				.assert_size::<{ INFERENCE_RESPONSE_FUTURE_SIZE }>(),
 		)
 		.await?;
 	}
@@ -5059,7 +5071,7 @@ impl ResponsePolicies {
 		if is_upstream_response {
 			if let Some(x) = self.ext_proc.as_mut() {
 				x.mutate_response(resp, l.request_snapshot.as_deref())
-					.assert_size::<{ 4 * 1024 }>()
+					.assert_size::<{ EXT_PROC_RESPONSE_FUTURE_SIZE }>()
 					.boxed()
 					.await?
 					.apply(&mut self.response_headers)?;
@@ -5067,7 +5079,7 @@ impl ResponsePolicies {
 			};
 			if let Some(x) = self.gateway_ext_proc.as_mut() {
 				x.mutate_response(resp, l.request_snapshot.as_deref())
-					.assert_size::<{ 4 * 1024 }>()
+					.assert_size::<{ EXT_PROC_RESPONSE_FUTURE_SIZE }>()
 					.boxed()
 					.await?
 					.apply(&mut self.response_headers)?;
@@ -5442,7 +5454,7 @@ impl PolicyClient {
 					&mut response_policies,
 					&mut substrate_state,
 				)
-				.assert_size::<{ 7 * 1024 }>(),
+				.assert_size::<{ MAKE_BACKEND_CALL_FUTURE_SIZE }>(),
 			);
 			let result = dtrace::scope_future(self.dtrace_scope(), call).await;
 			result.map_err(ProxyResponse::downcast)

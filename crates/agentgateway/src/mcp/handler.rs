@@ -36,6 +36,11 @@ use crate::types::agent::{McpPrefixMode, McpServerOverrides, ResourceName};
 
 const DELIMITER: &str = "_";
 
+// Both futures are boxed on every MCP request that reaches them, so their size is allocated
+// per call. A larger future usually means some value is now held across an await.
+const GUARDRAILS_CALL_REQUEST_FUTURE_SIZE: usize = 4 * 1024;
+const GENERIC_STREAM_FUTURE_SIZE: usize = 3 * 1024;
+
 // Pagination state is carried by the client using the same base64/AES encoder as sessions.
 // Encode a list of per-target cursors; absent targets are finished.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -1189,7 +1194,7 @@ impl Relay {
 					ctx,
 					&self.policy_client,
 				)
-				.assert_size::<{ 4 * 1024 }>(),
+				.assert_size::<{ GUARDRAILS_CALL_REQUEST_FUTURE_SIZE }>(),
 			)
 			.await;
 			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
@@ -1390,7 +1395,7 @@ impl Relay {
 			service_name,
 			Box::pin(
 				us.generic_stream(service_name, r, &ctx)
-					.assert_size::<{ 3 * 1024 }>(),
+					.assert_size::<{ GENERIC_STREAM_FUTURE_SIZE }>(),
 			)
 			.await?,
 			cel,

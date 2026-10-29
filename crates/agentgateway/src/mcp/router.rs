@@ -22,6 +22,11 @@ use crate::types::agent::{
 };
 use crate::{ProxyInputs, cel, mcp};
 
+// Each MCP request boxes one of these and holds it until the response is ready.
+// A larger future usually means some value is now held across an await.
+const SSE_HANDLE_FUTURE_SIZE: usize = 20 * 1024;
+const STREAMABLE_HANDLE_FUTURE_SIZE: usize = 4 * 1024;
+
 #[derive(Debug, Clone)]
 pub struct App {
 	state: Stores,
@@ -187,7 +192,7 @@ impl App {
 							client: client.clone(),
 						},
 					)
-					.assert_size::<{ 20 * 1024 }>(),
+					.assert_size::<{ SSE_HANDLE_FUTURE_SIZE }>(),
 			)
 			.await
 		} else {
@@ -209,7 +214,7 @@ impl App {
 							client: client.clone(),
 						},
 					)
-					.assert_size::<{ 4 * 1024 }>(),
+					.assert_size::<{ STREAMABLE_HANDLE_FUTURE_SIZE }>(),
 			)
 			.await
 		};

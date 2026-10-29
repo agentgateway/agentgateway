@@ -33,6 +33,13 @@ use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCa
 use crate::types::agent::{McpPrefixMode, McpServerOverrides, McpTargetSpec};
 use crate::*;
 
+// Fanout boxes one of these per target; separate limits keep one transport from masking
+// another. A larger future usually means some value is now held across an await.
+const STDIO_SEND_MESSAGE_FUTURE_SIZE: usize = 6 * 1024;
+const SSE_SEND_MESSAGE_FUTURE_SIZE: usize = 6 * 1024;
+const STREAMABLE_SEND_REQUEST_FUTURE_SIZE: usize = 6 * 1024;
+const OPENAPI_SEND_MESSAGE_FUTURE_SIZE: usize = 6 * 1024;
+
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
 	/// Incoming HTTP body exposed as CEL request.body and request.bodyPrefix after
@@ -359,14 +366,26 @@ impl Upstream {
 			ctx.stamp_trace_context(&mut request.request.get_meta_mut().0);
 			match &self {
 				Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
-					Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?,
+					Box::pin(
+						c.send_message(request, &ctx)
+							.assert_size::<{ STDIO_SEND_MESSAGE_FUTURE_SIZE }>(),
+					)
+					.await?,
 				)),
 				Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
-					Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?,
+					Box::pin(
+						c.send_message(request, &ctx)
+							.assert_size::<{ SSE_SEND_MESSAGE_FUTURE_SIZE }>(),
+					)
+					.await?,
 				)),
 				Upstream::McpStreamable(c) => {
 					let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
-					let res = Box::pin(c.send_request(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?;
+					let res = Box::pin(
+						c.send_request(request, &ctx)
+							.assert_size::<{ STREAMABLE_SEND_REQUEST_FUTURE_SIZE }>(),
+					)
+					.await?;
 					if is_init {
 						let sid = match &res {
 							StreamableHttpPostResponse::Accepted => None,
@@ -377,9 +396,13 @@ impl Upstream {
 					}
 					res.try_into().map_err(Into::into)
 				},
-				Upstream::OpenAPI(c) => {
-					Ok(Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?)
-				},
+				Upstream::OpenAPI(c) => Ok(
+					Box::pin(
+						c.send_message(request, &ctx)
+							.assert_size::<{ OPENAPI_SEND_MESSAGE_FUTURE_SIZE }>(),
+					)
+					.await?,
+				),
 			}
 		}
 		.await;
