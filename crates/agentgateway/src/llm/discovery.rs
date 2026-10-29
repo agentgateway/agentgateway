@@ -1,6 +1,9 @@
 use agent_core::prelude::Strng;
 
+use agent_llm::model_catalog::Catalog;
+
 use crate::llm::model_transform::ModelTransformation;
+use crate::llm::{AIProvider, ChatFormat};
 use crate::{apply, cel, schema_enum, schema_ser_schema};
 
 #[apply(schema_enum!)]
@@ -22,6 +25,9 @@ pub struct ModelDiscovery {
 	/// The upstream model when it is fixed regardless of the served name.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	/// The configured provider, when known, used to advertise conversion-free client endpoints.
+	#[serde(skip)]
+	pub provider_config: Option<AIProvider>,
 }
 
 impl ModelDiscovery {
@@ -39,6 +45,7 @@ impl ModelDiscovery {
 			provider,
 			transformation,
 			model,
+			provider_config: None,
 		})
 	}
 
@@ -64,5 +71,26 @@ impl ModelDiscovery {
 		// the name unchanged (e.g. stripPrefix without the prefix). The catalog resolves provider
 		// aliases such as Vertex publisher prefixes.
 		target.to_string()
+	}
+
+	/// Client endpoints that reach the upstream model without cross-protocol conversion.
+	pub fn preferred_endpoints(&self, model: &str, catalog: Catalog<'_>) -> Vec<&'static str> {
+		let Some(provider) = &self.provider_config else {
+			return Vec::new();
+		};
+		let mut endpoints = provider
+			.supported_chat_formats(model, catalog)
+			.into_iter()
+			.filter_map(|format| match format {
+				ChatFormat::OpenAICompletions => Some("/chat/completions"),
+				ChatFormat::OpenAIResponses => Some("/responses"),
+				ChatFormat::AnthropicMessages => Some("/messages"),
+				ChatFormat::VertexGemini => Some("/models/{model}:generateContent"),
+				ChatFormat::BedrockConverse => None,
+			})
+			.collect::<Vec<_>>();
+		endpoints.sort();
+		endpoints.dedup();
+		endpoints
 	}
 }

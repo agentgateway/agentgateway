@@ -4787,7 +4787,11 @@ async fn convert_llm_config(
 				.as_ref()
 				.and_then(|p| p.get("model"))
 				.map(AsRef::as_ref),
-		);
+		)
+		.map(|d| llm::discovery::ModelDiscovery {
+			provider_config: Some(provider.clone()),
+			..d
+		});
 
 		// Create AI backend
 		let named_provider = NamedAIProvider {

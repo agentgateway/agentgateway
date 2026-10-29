@@ -505,8 +505,9 @@ impl ModelRouter {
 							// Now check it still matches the model match (e.g 'foo/*') and we are authorized for this model
 							model_name_matches(&model.name, name) && api_key_model_authorized(req, name)
 						})
-						.map(|(id, name)| {
-							llm::model_list::ModelInfo::new(
+						.map(|(id, name)| llm::model_list::ModelInfo {
+							preferred_endpoints: discovery.preferred_endpoints(id, Some(catalog.as_ref())),
+							..llm::model_list::ModelInfo::new(
 								name.into_owned(),
 								model.created,
 								Some(discovery.provider.clone()),
@@ -899,11 +900,15 @@ fn model_info(
 	let Some(discovery) = &route.discovery else {
 		return llm::model_list::ModelInfo::new(name, route.created, None, None);
 	};
-	let entry = catalog
+	let id = catalog
 		.model_ids(&discovery.provider)
 		.map(|ids| discovery.catalog_model(&name, ids))
-		.and_then(|id| catalog.model(&discovery.provider, &id));
-	llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry)
+		.unwrap_or_else(|| discovery.model.as_deref().unwrap_or(&name).to_string());
+	let entry = catalog.model(&discovery.provider, &id);
+	llm::model_list::ModelInfo {
+		preferred_endpoints: discovery.preferred_endpoints(&id, Some(catalog)),
+		..llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry)
+	}
 }
 
 fn is_responses_websocket(req: &Request) -> bool {
