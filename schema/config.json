@@ -12687,7 +12687,8 @@
         "fireworks",
         "meta",
         "perplexity",
-        "typesafe"
+        "typesafe",
+        "nebius"
       ]
     },
     "LocalLLMProviderDefaults": {

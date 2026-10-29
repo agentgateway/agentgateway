@@ -51,6 +51,7 @@ var modelsDevProviderIDs = map[string]string{
 	"fireworks-ai":     "fireworks",
 	"meta":             "meta",
 	"perplexity-agent": "perplexity",
+	"nebius":           "nebius",
 }
 
 type modelsDevProvider struct {

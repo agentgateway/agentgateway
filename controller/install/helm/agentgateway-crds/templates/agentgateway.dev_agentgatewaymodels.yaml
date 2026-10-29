@@ -5282,6 +5282,7 @@ spec:
                 - Huggingface
                 - Meta
                 - Mistral
+                - Nebius
                 - Ollama
                 - OpenAI
                 - Openrouter

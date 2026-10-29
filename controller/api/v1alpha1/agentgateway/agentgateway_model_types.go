@@ -282,6 +282,7 @@ const (
 	ModelProviderMeta        ModelProvider = "Meta"
 	ModelProviderPerplexity  ModelProvider = "Perplexity"
 	ModelProviderTypesafe    ModelProvider = "Typesafe"
+	ModelProviderNebius      ModelProvider = "Nebius"
 	ModelProviderCustom      ModelProvider = "Custom"
 )
 

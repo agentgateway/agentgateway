@@ -2661,6 +2661,7 @@ const (
 	AIBackend_PROVIDER_PRESET_META        AIBackend_ProviderPreset = 14
 	AIBackend_PROVIDER_PRESET_PERPLEXITY  AIBackend_ProviderPreset = 15
 	AIBackend_PROVIDER_PRESET_TYPESAFE    AIBackend_ProviderPreset = 16
+	AIBackend_PROVIDER_PRESET_NEBIUS      AIBackend_ProviderPreset = 17
 )
 
 // Enum value maps for AIBackend_ProviderPreset.
@@ -2683,6 +2684,7 @@ var (
 		14: "PROVIDER_PRESET_META",
 		15: "PROVIDER_PRESET_PERPLEXITY",
 		16: "PROVIDER_PRESET_TYPESAFE",
+		17: "PROVIDER_PRESET_NEBIUS",
 	}
 	AIBackend_ProviderPreset_value = map[string]int32{
 		"PROVIDER_PRESET_UNSPECIFIED": 0,
@@ -2702,6 +2704,7 @@ var (
 		"PROVIDER_PRESET_META":        14,
 		"PROVIDER_PRESET_PERPLEXITY":  15,
 		"PROVIDER_PRESET_TYPESAFE":    16,
+		"PROVIDER_PRESET_NEBIUS":      17,
 	}
 )
 
@@ -19786,7 +19789,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\xee#\n" +
+	"_qualifier\"\x8a$\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -19915,7 +19918,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x06RERANK\x10\a\x12\r\n" +
 	"\tDECISIONS\x10\b\x12\x0e\n" +
 	"\n" +
-	"SYSTEM_ONE\x10\t\"\x89\x04\n" +
+	"SYSTEM_ONE\x10\t\"\xa5\x04\n" +
 	"\x0eProviderPreset\x12\x1f\n" +
 	"\x1bPROVIDER_PRESET_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PROVIDER_PRESET_COHERE\x10\x01\x12\x1a\n" +
@@ -19934,7 +19937,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x19PROVIDER_PRESET_FIREWORKS\x10\r\x12\x18\n" +
 	"\x14PROVIDER_PRESET_META\x10\x0e\x12\x1e\n" +
 	"\x1aPROVIDER_PRESET_PERPLEXITY\x10\x0f\x12\x1c\n" +
-	"\x18PROVIDER_PRESET_TYPESAFE\x10\x10\"\xb9\x04\n" +
+	"\x18PROVIDER_PRESET_TYPESAFE\x10\x10\x12\x1a\n" +
+	"\x16PROVIDER_PRESET_NEBIUS\x10\x11\"\xb9\x04\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +

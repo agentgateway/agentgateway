@@ -71,6 +71,7 @@ export const providerNames: ProviderName[] = [
 	'fireworks',
 	'meta',
 	'perplexity',
+	'nebius',
 	'custom'
 ];
 
@@ -125,6 +126,7 @@ export function providerDisplayName(provider: ProviderName | string): string {
 		fireworks: 'Fireworks AI',
 		meta: 'Meta',
 		perplexity: 'Perplexity',
+		nebius: 'Nebius Token Factory',
 		custom: 'Custom'
 	};
 	return names[provider] ?? provider;

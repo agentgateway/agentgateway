@@ -68,6 +68,7 @@ pub enum ProviderPreset {
 	Meta,
 	Perplexity,
 	Typesafe,
+	Nebius,
 }
 
 impl ProviderPreset {
@@ -89,6 +90,7 @@ impl ProviderPreset {
 			Self::Meta => "https://api.meta.ai/v1",
 			Self::Perplexity => "https://api.perplexity.ai/v1",
 			Self::Typesafe => "https://api.typesafe.ai/v1",
+			Self::Nebius => "https://api.tokenfactory.nebius.com/v1",
 		}
 	}
 
@@ -194,6 +196,10 @@ impl ProviderPreset {
 			),
 			Self::Perplexity => ("perplexity", vec![format(Responses, None)]),
 			Self::Typesafe => ("typesafe", vec![format(SystemOne, None)]),
+			Self::Nebius => (
+				"nebius",
+				vec![format(Completions, None), format(Embeddings, None)],
+			),
 		};
 		Provider {
 			model_override: model,

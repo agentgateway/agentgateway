@@ -120,6 +120,7 @@ fn provider_preset_from_proto(
 		ProviderPreset::Meta => Ok(llm::custom::ProviderPreset::Meta),
 		ProviderPreset::Perplexity => Ok(llm::custom::ProviderPreset::Perplexity),
 		ProviderPreset::Typesafe => Ok(llm::custom::ProviderPreset::Typesafe),
+		ProviderPreset::Nebius => Ok(llm::custom::ProviderPreset::Nebius),
 		ProviderPreset::Unspecified => Err(ProtoError::Generic(format!(
 			"AI backend provider at index {provider_idx} requires a provider preset"
 		))),

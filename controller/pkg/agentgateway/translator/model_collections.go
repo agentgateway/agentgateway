@@ -962,6 +962,8 @@ func modelProviderPreset(provider agentgateway.ModelProvider) (api.AIBackend_Pro
 		return api.AIBackend_PROVIDER_PRESET_PERPLEXITY, true
 	case agentgateway.ModelProviderTypesafe:
 		return api.AIBackend_PROVIDER_PRESET_TYPESAFE, true
+	case agentgateway.ModelProviderNebius:
+		return api.AIBackend_PROVIDER_PRESET_NEBIUS, true
 	default:
 		return api.AIBackend_PROVIDER_PRESET_UNSPECIFIED, false
 	}
