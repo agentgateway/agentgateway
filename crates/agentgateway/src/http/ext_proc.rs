@@ -942,14 +942,19 @@ impl ExtProcInstance {
 	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
 		let headers = req_to_header_map(&req);
 
-		let exec = cel::Executor::new_request(&req);
-		self.ensure_stream_started(&exec)?;
-		// request_attributes should only be sent on first ProcessingRequest
-		// this will need to be modified if we configure which Requests to send
-		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let metadata_context = build_processing_metadata_context(&exec, self.metadata_context.as_ref())
-			.map(|filter_metadata| Arc::new(Metadata { filter_metadata }));
-		let attributes = build_request_attributes(&exec, self.req_attributes.as_ref());
+		// Drop the executor before the first await so the request future does not store it.
+		let (metadata_context, attributes) = {
+			let exec = cel::Executor::new_request(&req);
+			self.ensure_stream_started(&exec)?;
+			// request_attributes should only be sent on first ProcessingRequest
+			// this will need to be modified if we configure which Requests to send
+			// Wrap metadata_context in Arc for cheap cloning across body chunks
+			let metadata_context =
+				build_processing_metadata_context(&exec, self.metadata_context.as_ref())
+					.map(|filter_metadata| Arc::new(Metadata { filter_metadata }));
+			let attributes = build_request_attributes(&exec, self.req_attributes.as_ref());
+			(metadata_context, attributes)
+		};
 
 		let failure_mode = self.failure_mode;
 		let request_trailers = Arc::new(Mutex::new(None));
