@@ -441,7 +441,13 @@ impl ModelRouter {
 							model_name_matches(&model.name, name) && api_key_model_authorized(req, name)
 						})
 						.map(|(id, name)| {
-							let protocols = backend_endpoints(&model.backend.target, id, &catalog, binds);
+							let protocols = backend_endpoints(
+								&model.backend.target,
+								&name,
+								Some(discovery),
+								&catalog,
+								binds,
+							);
 							let mut info = llm::model_list::ModelInfo::new(
 								name.into_owned(),
 								model.created,
@@ -521,17 +527,31 @@ impl ModelRouter {
 		catalog: &llm::catalog::CatalogSnapshot,
 		binds: &crate::store::BindStore,
 	) -> llm::model_list::ModelInfo {
-		let targets: Vec<&str> = match &model.routing {
-			VirtualModelRouting::Weighted(targets) => targets.iter().map(|t| t.model.as_str()).collect(),
-			VirtualModelRouting::Conditional(targets) => {
-				targets.iter().map(|t| t.model.as_str()).collect()
+		let targets: Vec<(&str, bool)> = match &model.routing {
+			VirtualModelRouting::Weighted(targets) => targets
+				.iter()
+				.map(|t| (t.model.as_str(), t.invalid))
+				.collect(),
+			VirtualModelRouting::Conditional(targets) => targets
+				.iter()
+				.map(|t| (t.model.as_str(), t.invalid))
+				.collect(),
+			VirtualModelRouting::Failover { backend } => {
+				let mut info =
+					llm::model_list::ModelInfo::new(model.name.clone(), model.created, None, None);
+				info.preferred_endpoints =
+					backend_endpoints(&backend.target, &model.name, None, catalog, binds);
+				return info;
 			},
-			// Failover targets are compiled into a backend and callouts pick targets at request time.
-			VirtualModelRouting::Failover { .. } | VirtualModelRouting::Callout(_) => vec![],
+			// Callouts pick targets at request time.
+			VirtualModelRouting::Callout(_) => vec![],
 		};
 		let targets = targets
 			.into_iter()
-			.map(|target| {
+			.map(|(target, invalid)| {
+				if invalid {
+					return llm::model_list::ModelInfo::default();
+				}
 				// An unresolved target leaves its metadata unknown rather than being skipped.
 				match self
 					.models
@@ -828,7 +848,8 @@ fn model_info(
 	});
 	let protocols = backend_endpoints(
 		&route.backend.target,
-		catalog_id.as_deref().unwrap_or(&name),
+		&name,
+		route.discovery.as_ref(),
 		catalog,
 		binds,
 	);
@@ -850,6 +871,7 @@ fn model_info(
 fn backend_endpoints(
 	target: &crate::types::agent::RouteBackendTarget,
 	name: &str,
+	discovery: Option<&llm::discovery::ModelDiscovery>,
 	catalog: &llm::catalog::CatalogSnapshot,
 	binds: &crate::store::BindStore,
 ) -> Vec<llm::PreferredEndpoint> {
@@ -865,10 +887,35 @@ fn backend_endpoints(
 	};
 	let mut common: Option<Vec<llm::PreferredEndpoint>> = None;
 	for named in ai.providers.all_endpoints() {
-		let model = named.provider.override_model();
-		let protocols = named
-			.provider
-			.preferred_endpoints(model.as_deref().unwrap_or(name), catalog);
+		let model_override = named.provider.override_model();
+		let target = model_override
+			.as_deref()
+			.or_else(|| discovery.and_then(|d| d.model.as_deref()))
+			.unwrap_or(name);
+		// The override is applied before the model transformation. Resolve each provider
+		// separately using the compiled discovery transformation, never request-time CEL.
+		let model = match discovery {
+			Some(d)
+				if !matches!(
+					d.transformation,
+					llm::model_transform::ModelTransformation::Identity
+				) =>
+			{
+				catalog
+					.model_ids(&named.provider.provider())
+					.and_then(|mut ids| {
+						ids.find(|id| {
+							d.transformation
+								.apply(*id)
+								.is_some_and(|served| served == target)
+						})
+					})
+			},
+			_ => Some(target),
+		};
+		let protocols = model
+			.map(|model| named.provider.preferred_endpoints(model, catalog))
+			.unwrap_or_default();
 		if let Some(common) = &mut common {
 			common.retain(|p| protocols.contains(p));
 		} else {
@@ -1787,6 +1834,97 @@ mod tests {
 			.expect("error body");
 		let body: Value = serde_json::from_slice(&body).expect("error JSON");
 		assert_eq!(body["error"]["code"], "virtual_model_target_not_found");
+	}
+
+	#[test]
+	fn invalid_virtual_targets_do_not_inherit_wildcard_endpoints() {
+		use crate::types::agent::{Backend, ResourceName};
+		use crate::types::loadbalancer::EndpointSet;
+
+		let provider = llm::NamedAIProvider {
+			name: "provider".into(),
+			provider: serde_json::from_str(r#"{"anthropic":{}}"#).unwrap(),
+			provider_backend: None,
+			host_override: None,
+			path_override: None,
+			path_prefix: None,
+			tokenize: false,
+			inline_policies: vec![],
+		};
+		let backend = Backend::AI(
+			ResourceName::new("provider".into(), "".into()),
+			llm::AIBackend::new(EndpointSet::new(vec![vec![("provider".into(), provider)]])),
+		);
+		let key = backend.name();
+		let mut binds = crate::store::BindStore::default();
+		binds.insert_backend(key.clone(), backend.into());
+		let router = ModelRouter::new(
+			vec![ModelRoute {
+				name: "gpt-*".to_string(),
+				id: None,
+				discovery: None,
+				created: 0,
+				visibility: ModelVisibility::Public,
+				header_matches: vec![],
+				backend: RouteBackendReference {
+					weight: 1,
+					target: RouteBackendTarget::Backend(key),
+					inline_policies: vec![],
+				},
+				policies: ModelRoutePolicies {
+					passthrough: None,
+					llm: Arc::default(),
+					authorization: None,
+				},
+				backend_policies: vec![],
+			}],
+			vec![],
+		);
+		let catalog = llm::catalog::CatalogSnapshot::parse(r#"{"providers":{}}"#).unwrap();
+		for invalid in [false, true] {
+			let targets = [("gpt-valid", false), ("gpt-missing", invalid)];
+			for routing in [
+				VirtualModelRouting::Weighted(
+					targets
+						.iter()
+						.map(|(model, invalid)| WeightedTarget {
+							model: model.to_string(),
+							weight: 1,
+							invalid: *invalid,
+						})
+						.collect(),
+				),
+				VirtualModelRouting::Conditional(
+					targets
+						.iter()
+						.map(|(model, invalid)| ConditionalTarget {
+							model: model.to_string(),
+							when: None,
+							invalid: *invalid,
+						})
+						.collect(),
+				),
+			] {
+				let model = VirtualModelRoute {
+					name: "virtual".to_string(),
+					created: 0,
+					llm_policy: Arc::default(),
+					routing,
+				};
+				let info = router.virtual_model_info(&model, &catalog, &binds);
+				if invalid {
+					assert!(info.preferred_endpoints.is_empty());
+				} else {
+					assert_eq!(
+						info.preferred_endpoints,
+						[
+							llm::PreferredEndpoint::AnthropicMessages,
+							llm::PreferredEndpoint::AnthropicCountTokens,
+						]
+					);
+				}
+			}
+		}
 	}
 
 	#[tokio::test]
