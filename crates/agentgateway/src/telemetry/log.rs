@@ -39,8 +39,8 @@ use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, ErrorTypeLabel, GenAIErrorType, GenAILabels, GenAILabelsTokenUsage,
-	GenAIRequestDurationLabels, HTTPLabels, MCPCall, Metrics, OutboundCallLabels, RouteIdentifier,
-	SubstrateRouteLabels,
+	GenAIRequestDurationLabels, HTTPLabels, MCPCall, Metrics, OutboundCallKind, OutboundCallLabels,
+	RouteIdentifier, SubstrateRouteLabels,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, semconv, trc};
@@ -1196,6 +1196,7 @@ impl RequestLog {
 		}
 	}
 	pub fn insert_span_writer(&self, extensions: &mut ::http::Extensions) {
+		// Inserted without tracing too, since it carries the `upstreamCalls` recorder.
 		let writer = self.span_writer();
 		if writer.is_enabled() || writer.upstream_calls.is_some() {
 			extensions.insert(writer);
@@ -2574,6 +2575,25 @@ pub fn copy_span_writer(source: &::http::Extensions, target: &mut ::http::Extens
 impl SpanWriter {
 	pub(crate) fn is_enabled(&self) -> bool {
 		self.inner.is_some()
+	}
+
+	/// Marks an outbound request to be recorded in `upstreamCalls` when it is sent.
+	pub(crate) fn record_outbound(
+		&self,
+		extensions: &mut ::http::Extensions,
+		labels: OutboundCallLabels,
+	) {
+		// Mirrors run detached and can finish after the request is logged, so they aren't recorded.
+		if matches!(labels.kind, OutboundCallKind::Mirror) {
+			extensions.remove::<crate::telemetry::upstream::OutboundRequest>();
+			return;
+		}
+		if let Some(calls) = &self.upstream_calls {
+			extensions.insert(crate::telemetry::upstream::OutboundRequest {
+				calls: calls.clone(),
+				labels,
+			});
+		}
 	}
 
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {

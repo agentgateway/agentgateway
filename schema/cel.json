@@ -1481,7 +1481,23 @@
         "properties": {
           "kind": {
             "description": "Call category: `Primary` (backend request) or `Policy` (policy callout).",
-            "type": "string"
+            "oneOf": [
+              {
+                "description": "The primary backend call",
+                "type": "string",
+                "const": "Primary"
+              },
+              {
+                "description": "A callout as part of a policy execution",
+                "type": "string",
+                "const": "Policy"
+              },
+              {
+                "description": "A mirrored call",
+                "type": "string",
+                "const": "Mirror"
+              }
+            ]
           },
           "subtype": {
             "description": "Call subtype: `Http`, `Llm`, `Mcp`, `ExtAuthz`, `Substrate`, `ExtProc`,\n`Guardrail`, `RateLimit`, `Oidc`, `Callout`, or a custom subtype name.",
@@ -1520,12 +1536,14 @@
                 "maximum": 65535
               },
               "grpcStatus": {
-                "description": "gRPC status code, when the server sent it in the response headers (a trailers-only response).\nStatuses sent in trailers, such as most successful calls, aren't recorded.",
+                "description": "gRPC status code, from the response headers or trailers.\nTrailers that arrive after the access log is written aren't included.",
                 "type": [
                   "integer",
                   "null"
                 ],
-                "format": "int32"
+                "format": "uint8",
+                "minimum": 0,
+                "maximum": 255
               }
             }
           },

@@ -1,9 +1,13 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use bytes::Bytes;
+use http_body::Frame;
+
 use crate::cel::CelDuration;
-use crate::telemetry::log::SpanWriter;
-use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels};
+use crate::proxy::httpproxy::maybe_set_grpc_status;
+use crate::telemetry::log::AsyncLog;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, cel::DynamicType)]
 #[serde(rename_all = "camelCase")]
@@ -11,10 +15,13 @@ use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels};
 #[dynamic(rename_all = "camelCase")]
 pub struct UpstreamCall {
 	/// Call category: `Primary` (backend request) or `Policy` (policy callout).
-	pub kind: String,
+	#[dynamic(with_value = "kind_to_value")]
+	pub kind: OutboundCallKind,
 	/// Call subtype: `Http`, `Llm`, `Mcp`, `ExtAuthz`, `Substrate`, `ExtProc`,
 	/// `Guardrail`, `RateLimit`, `Oidc`, `Callout`, or a custom subtype name.
-	pub subtype: String,
+	#[dynamic(with_value = "subtype_to_value")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub subtype: OutboundCallSubtype,
 	/// The MCP target name for MCP calls, otherwise the connection address (host:port).
 	pub target: String,
 	pub request: UpstreamRequest,
@@ -23,6 +30,7 @@ pub struct UpstreamCall {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub duration: Option<CelDuration>,
 	/// Error description when the call fails. Exact wording may change between versions.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub error: Option<String>,
 }
 
@@ -40,6 +48,14 @@ pub struct UpstreamRequest {
 	pub headers: http::HeaderMap,
 }
 
+fn kind_to_value(kind: &OutboundCallKind) -> cel::Value<'_> {
+	cel::Value::String(kind.as_str().into())
+}
+
+fn subtype_to_value(subtype: &OutboundCallSubtype) -> cel::Value<'_> {
+	cel::Value::String(subtype.as_str().into())
+}
+
 fn headers_to_value(headers: &http::HeaderMap) -> cel::Value<'_> {
 	cel::Value::Dynamic(cel::types::dynamic::DynamicValue::new_owned(
 		crate::cel::Headers::new(headers),
@@ -53,49 +69,44 @@ fn headers_to_value(headers: &http::HeaderMap) -> cel::Value<'_> {
 pub struct UpstreamResponse {
 	/// HTTP status code. Empty when no response came back.
 	pub code: Option<u16>,
-	/// gRPC status code, when the server sent it in the response headers (a trailers-only response).
-	/// Statuses sent in trailers, such as most successful calls, aren't recorded.
-	pub grpc_status: Option<i32>,
+	/// gRPC status code, from the response headers or trailers.
+	/// Trailers that arrive after the access log is written aren't included.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub grpc_status: Option<u8>,
 }
 
+/// A recorded call, with the gRPC status that may still arrive in its response trailers.
+type RecordedCall = (UpstreamCall, AsyncLog<u8>);
+
 #[derive(Clone, Debug, Default)]
-pub struct UpstreamCalls(Arc<Mutex<Vec<UpstreamCall>>>);
+pub struct UpstreamCalls(Arc<Mutex<Vec<RecordedCall>>>);
 
 impl UpstreamCalls {
 	pub fn take(&self) -> Vec<UpstreamCall> {
 		std::mem::take(&mut *self.0.lock().unwrap())
+			.into_iter()
+			.map(|(mut call, grpc_status)| {
+				call.response.grpc_status = grpc_status.load();
+				call
+			})
+			.collect()
 	}
 }
 
 #[derive(Clone, Debug)]
-struct OutboundRequest {
-	calls: UpstreamCalls,
-	labels: OutboundCallLabels,
+pub(crate) struct OutboundRequest {
+	pub calls: UpstreamCalls,
+	pub labels: OutboundCallLabels,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct UpstreamTarget(pub String);
 
-impl SpanWriter {
-	pub(crate) fn record_outbound(&self, extensions: &mut http::Extensions, labels: OutboundCallLabels) {
-		// Mirrors run detached and can finish after the request is logged, so they aren't recorded.
-		if matches!(labels.kind, OutboundCallKind::Mirror) {
-			extensions.remove::<OutboundRequest>();
-			return;
-		}
-		if let Some(calls) = &self.upstream_calls {
-			extensions.insert(OutboundRequest {
-				calls: calls.clone(),
-				labels,
-			});
-		}
-	}
-}
-
 pub(crate) struct PendingCall {
 	calls: UpstreamCalls,
 	start: Instant,
 	call: Option<UpstreamCall>,
+	grpc_status: AsyncLog<u8>,
 }
 
 impl PendingCall {
@@ -107,10 +118,11 @@ impl PendingCall {
 	) -> Self {
 		let mut this = Self {
 			calls,
+			grpc_status: Default::default(),
 			start: Instant::now(),
 			call: Some(UpstreamCall {
-				kind: labels.kind.as_str().to_owned(),
-				subtype: labels.subtype.as_str().to_owned(),
+				kind: labels.kind,
+				subtype: labels.subtype,
 				target,
 				request: UpstreamRequest::default(),
 				response: UpstreamResponse::default(),
@@ -144,11 +156,13 @@ impl PendingCall {
 	pub fn set_response<B>(&mut self, resp: &http::Response<B>) {
 		let call = self.call.as_mut().unwrap();
 		call.response.code = Some(resp.status().as_u16());
-		call.response.grpc_status = resp
-			.headers()
-			.get("grpc-status")
-			.and_then(|v| v.to_str().ok()?.parse().ok());
 		call.error = None;
+		maybe_set_grpc_status(&self.grpc_status, resp.headers());
+	}
+
+	/// Returns a body observer that records a gRPC status sent in the response trailers.
+	pub fn trailer_observer(&self) -> GrpcTrailerObserver {
+		GrpcTrailerObserver(self.grpc_status.clone())
 	}
 
 	pub fn set_error(&mut self, error: String) {
@@ -160,7 +174,22 @@ impl Drop for PendingCall {
 	fn drop(&mut self) {
 		if let Some(mut call) = self.call.take() {
 			call.duration = CelDuration::from_std(self.start.elapsed());
-			self.calls.0.lock().unwrap().push(call);
+			self
+				.calls
+				.0
+				.lock()
+				.unwrap()
+				.push((call, self.grpc_status.clone()));
+		}
+	}
+}
+
+pub(crate) struct GrpcTrailerObserver(AsyncLog<u8>);
+
+impl agent_http::BodyObserver for GrpcTrailerObserver {
+	fn on_frame(&mut self, frame: &Frame<Bytes>) {
+		if let Some(trailers) = frame.trailers_ref() {
+			maybe_set_grpc_status(&self.0, trailers);
 		}
 	}
 }
@@ -171,7 +200,7 @@ mod tests {
 	use crate::cel::{Executor, Expression};
 	use crate::http::Body;
 	use crate::proxy::httpproxy::PolicyClient;
-	use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
+	use crate::telemetry::log::SpanWriter;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 
 	#[test]
@@ -255,7 +284,12 @@ mod tests {
 			records[0].request.headers["authorization"],
 			"Bearer backend-secret"
 		);
-		assert!(!records[0].request.headers.contains_key("proxy-authorization"));
+		assert!(
+			!records[0]
+				.request
+				.headers
+				.contains_key("proxy-authorization")
+		);
 	}
 
 	#[tokio::test]
@@ -300,7 +334,7 @@ mod tests {
 					r#"
 			upstreamCalls.all(c, c.kind == "Policy" && c.subtype == "Oidc" &&
 				c.request.headers.authorization == "Bearer outbound" &&
-				c.response.code == 401 && c.duration >= duration("0s") && c.error == null)
+				c.response.code == 401 && c.duration >= duration("0s") && !has(c.error))
 		"#
 				)
 				.unwrap()

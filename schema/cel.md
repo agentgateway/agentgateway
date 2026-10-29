@@ -210,14 +210,14 @@
 |`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|
 |`guardrails[].assessments`|array|Assessment detail reported by the guardrail provider, redacted to metadata<br>only. Content-bearing fields (such as the matched text) are never included.|
 |`upstreamCalls`|[]object|`upstreamCalls` lists the outbound calls made for this request, such as MCP target and policy calls.<br>It's only filled in for access log expressions that reference it.<br>Its request headers are the ones sent to the backend. `request.headers` still has the client's headers.|
-|`upstreamCalls[].kind`|string|Call category: `Primary` (backend request) or `Policy` (policy callout).|
+|`upstreamCalls[].kind`|enum|Call category: `Primary` (backend request) or `Policy` (policy callout).<br>Possible values: `Primary`, `Policy`, `Mirror`.|
 |`upstreamCalls[].subtype`|string|Call subtype: `Http`, `Llm`, `Mcp`, `ExtAuthz`, `Substrate`, `ExtProc`,<br>`Guardrail`, `RateLimit`, `Oidc`, `Callout`, or a custom subtype name.|
 |`upstreamCalls[].target`|string|The MCP target name for MCP calls, otherwise the connection address (host:port).|
 |`upstreamCalls[].request`|object||
 |`upstreamCalls[].request.headers`|object|Headers sent to the backend, after backend auth. Tunnel proxy credentials are left out.|
 |`upstreamCalls[].response`|object||
 |`upstreamCalls[].response.code`|integer|HTTP status code. Empty when no response came back.|
-|`upstreamCalls[].response.grpcStatus`|integer|gRPC status code, when the server sent it in the response headers (a trailers-only response).<br>Statuses sent in trailers, such as most successful calls, aren't recorded.|
+|`upstreamCalls[].response.grpcStatus`|integer|gRPC status code, from the response headers or trailers.<br>Trailers that arrive after the access log is written aren't included.|
 |`upstreamCalls[].duration`|string|Time from before DNS resolution through response headers, including connection setup.|
 |`upstreamCalls[].error`|string|Error description when the call fails. Exact wording may change between versions.|
 |`metadata`|object|`metadata` contains values set by transformation metadata expressions.|

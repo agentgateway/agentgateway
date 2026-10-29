@@ -5217,6 +5217,21 @@ impl PolicyClient {
 		})
 	}
 
+	fn record_outbound(&self, req: &mut Request) {
+		let Some(labels) = self.outbound() else {
+			return;
+		};
+		let writer = req.extensions().get::<SpanWriter>().cloned().or_else(|| {
+			self
+				.context
+				.as_ref()
+				.map(|context| context.span_writer.clone())
+		});
+		if let Some(writer) = writer {
+			writer.record_outbound(req.extensions_mut(), labels);
+		}
+	}
+
 	fn start_outbound_span(&self, req: &mut Request) -> Option<Box<SpanWriteOnDrop>> {
 		let labels = self.outbound()?;
 		let writer = req.extensions().get::<SpanWriter>().cloned().or_else(|| {
@@ -5225,7 +5240,6 @@ impl PolicyClient {
 				.as_ref()
 				.map(|context| context.span_writer.clone())
 		})?;
-		writer.record_outbound(req.extensions_mut(), labels);
 		if !writer.is_enabled() {
 			return None;
 		}
@@ -5258,7 +5272,6 @@ impl PolicyClient {
 				.as_ref()
 				.map(|context| context.span_writer.clone())
 		})?;
-		writer.record_outbound(req.extensions_mut(), labels);
 		if !writer.is_enabled() {
 			return None;
 		}
@@ -5393,15 +5406,10 @@ impl PolicyClient {
 
 	pub(crate) async fn call_with_explicit_policies_untraced(
 		&self,
-		mut req: Request,
+		req: Request,
 		backend: &SimpleBackend,
 		policies: BackendPolicies,
 	) -> Result<Response, ProxyError> {
-		if let Some(labels) = self.outbound()
-			&& let Some(writer) = req.extensions().get::<SpanWriter>().cloned()
-		{
-			writer.record_outbound(req.extensions_mut(), labels);
-		}
 		let start = std::time::Instant::now();
 		let backend = Backend::from(backend.clone());
 		let res = self
@@ -5442,6 +5450,7 @@ impl PolicyClient {
 		req
 			.extensions_mut()
 			.get_or_insert(BackendRequestTimeout(Duration::from_secs(10)));
+		self.record_outbound(&mut req);
 		if !matches!(
 			self.outbound(),
 			Some(OutboundCallLabels {
@@ -5483,6 +5492,7 @@ impl PolicyClient {
 		req
 			.extensions_mut()
 			.get_or_insert(BackendRequestTimeout(Duration::from_secs(10)));
+		self.record_outbound(&mut req);
 		Box::pin(async move {
 			let start = std::time::Instant::now();
 			let mut span = self.start_outbound_span(&mut req);

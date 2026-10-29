@@ -876,10 +876,14 @@ impl Client {
 				.extensions_mut()
 				.insert(transport::BufferLimit::new(buffer_limit));
 			resp.extensions_mut().insert(ResolvedDestination(dest));
+			let trailer_observer = upstream_call.as_ref().map(|call| call.trailer_observer());
 			Ok(resp.map(|body| {
 				let mut body = http::Body::new(body);
 				if let Some(deadline) = deadline {
 					body.set_deadline(deadline);
+				}
+				if let Some(observer) = trailer_observer {
+					body = body.with_observer(observer);
 				}
 				body
 			}))

@@ -9510,3 +9510,44 @@ async fn upstream_calls_proxy_fanout() {
 		);
 	}
 }
+
+#[tokio::test]
+async fn upstream_calls_proxy_grpc_policy() {
+	struct AllowAll;
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extauthmock::Handler for AllowAll {}
+	let authz = ExtAuthMock::new(|| AllowAll).spawn().await;
+	let upstream = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(upstream.addr, false, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(upstream.addr));
+	t.attach_route_policy(serde_json::json!({
+		"extAuthz": {"host": authz.address.to_string(), "protocol": {"grpc": {}}}
+	}))
+	.await;
+	enable_upstream_call_logs(&mut t);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let log = upstream_call_test_request(
+		io,
+		"tools/call",
+		serde_json::json!({"name": "echo", "arguments": {}, "_meta": task_meta()}),
+	)
+	.await;
+	let calls = log["upstream_calls"].as_array().unwrap();
+	let authz_calls = calls
+		.iter()
+		.filter(|c| c["subtype"] == "ExtAuthz")
+		.collect_vec();
+	assert_eq!(authz_calls.len(), 1, "{log}");
+	assert_eq!(authz_calls[0]["kind"], "Policy");
+	assert_eq!(authz_calls[0]["target"], authz.address.to_string());
+	assert_eq!(authz_calls[0]["response"]["code"], 200);
+	// Successful unary calls send grpc-status in the trailers.
+	assert_eq!(authz_calls[0]["response"]["grpcStatus"], 0);
+	assert_eq!(
+		authz_calls[0]["request"]["headers"]["content-type"],
+		"application/grpc"
+	);
+}

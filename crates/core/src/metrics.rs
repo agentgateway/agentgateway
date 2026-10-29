@@ -369,6 +369,31 @@ impl OutboundCallSubtype {
 	}
 }
 
+impl serde::Serialize for OutboundCallSubtype {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		serializer.serialize_str(self.as_str())
+	}
+}
+
+impl<'de> serde::Deserialize<'de> for OutboundCallSubtype {
+	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let s = String::deserialize(deserializer)?;
+		Ok(match s.as_str() {
+			"Http" => Self::Http,
+			"Llm" => Self::Llm,
+			"Mcp" => Self::Mcp,
+			"ExtAuthz" => Self::ExtAuthz,
+			"Substrate" => Self::Substrate,
+			"ExtProc" => Self::ExtProc,
+			"Guardrail" => Self::Guardrail,
+			"RateLimit" => Self::RateLimit,
+			"Oidc" => Self::Oidc,
+			"Callout" => Self::Callout,
+			_ => return Err(serde::de::Error::custom(format!("unknown subtype {s}"))),
+		})
+	}
+}
+
 impl EncodeLabelValue for OutboundCallSubtype {
 	fn encode(&self, encoder: &mut LabelValueEncoder) -> Result<(), Error> {
 		self.as_str().encode(encoder)
