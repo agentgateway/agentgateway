@@ -1053,7 +1053,7 @@ impl AIProvider {
 				if copilot::Provider::is_anthropic_model(request_model) {
 					vec![Messages]
 				} else {
-					vec![Completions, Responses, Rerank, Embeddings]
+					vec![Completions, Embeddings, Rerank, Responses, SystemOne]
 				}
 			},
 			AIProvider::Azure(p) => {

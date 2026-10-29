@@ -3700,6 +3700,152 @@ fn setup_request_azure_foundry_systemone(
 	assert_eq!(req.uri().to_string(), expected_uri);
 }
 
+#[rstest::rstest]
+#[case::anthropic("claude-sonnet-4", None)]
+#[case::decision("microsoft-decision-1", Some(custom::ProviderFormat::SystemOne))]
+fn copilot_decisions_capability(
+	#[case] model: &str,
+	#[case] expected: Option<custom::ProviderFormat>,
+) {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	assert_eq!(
+		provider.non_chat_provider_format_for(InputFormat::Decisions, model),
+		expected
+	);
+	assert!(
+		provider
+			.chat_translation(InputFormat::Completions, "microsoft-decision-1", None)
+			.is_err()
+	);
+}
+
+#[tokio::test]
+async fn copilot_uses_systemone_with_model_override() {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: Some(strng::new("microsoft-decision-1")),
+	});
+
+	let req = ::http::Request::builder()
+		.uri("/v1/decisions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			serde_json::to_vec(&json!({
+				"input": "I was charged twice for my subscription.",
+				"model": "decision-alias",
+				"questions": [{"instructions": "Is this a billing issue?", "name": "billing", "type": "predicate"}]
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Copilot Decisions should convert")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::SystemOneDecisions(_))
+	));
+	let body: Value = serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["model"], "microsoft-decision-1");
+
+	let mut native_body = body.clone();
+	native_body["model"] = json!("decision-alias");
+	let req = ::http::Request::builder()
+		.uri("/v1/systemone")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&native_body).unwrap()))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Copilot SystemOne should forward natively")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(llm_request.provider_state.is_none());
+	let native_body: Value =
+		serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(native_body, body);
+}
+
+#[rstest::rstest]
+#[case::default(
+	None,
+	None,
+	false,
+	"https://api.githubcopilot.com/v1/systemone?trace=repro"
+)]
+#[case::host_only(None, None, true, "https://proxy.example.com/v1/decisions?trace=repro")]
+#[case::path_override(
+	Some("/custom/systemone?version=42"),
+	Some("/proxy/"),
+	true,
+	"https://proxy.example.com/custom/systemone?version=42"
+)]
+#[case::prefixed_base_url(
+	None,
+	Some("/proxy/"),
+	true,
+	"https://proxy.example.com/proxy/v1/systemone?trace=repro"
+)]
+#[case::root_base_url(
+	None,
+	Some("/"),
+	true,
+	"https://proxy.example.com/v1/systemone?trace=repro"
+)]
+fn setup_request_copilot_systemone(
+	#[case] path_override: Option<&str>,
+	#[case] path_prefix: Option<&str>,
+	#[case] has_host_override: bool,
+	#[case] expected_uri: &str,
+) {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	for route in [RouteType::Decisions, RouteType::SystemOne] {
+		assert_eq!(
+			provider.default_connector_target(route),
+			Some(Target::Hostname(copilot::DEFAULT_HOST, 443))
+		);
+	}
+	let mut llm_request = llm_request_for_path("microsoft-decision-1");
+	llm_request.input_format = InputFormat::Decisions;
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/v1/decisions?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::SystemOne,
+			Some(&llm_request),
+			path_override,
+			path_prefix,
+			has_host_override,
+			None,
+			None,
+		)
+		.unwrap();
+	assert_eq!(req.uri().to_string(), expected_uri);
+}
+
 #[test]
 fn completions_response_missing_message_and_usage_fields() {
 	// Gemini's OpenAI-compat endpoint can omit `message` from choices and

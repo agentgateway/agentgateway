@@ -89,6 +89,7 @@ impl Provider {
 			m if m.starts_with("gpt-") => {
 				vec![ChatFormat::OpenAIResponses]
 			},
+			m if m.starts_with("microsoft-decision-") => vec![],
 			_ => vec![ChatFormat::OpenAICompletions],
 		}
 	}
@@ -99,11 +100,12 @@ pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 
 pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
-		RouteType::Messages => "/v1/messages",
-		RouteType::Responses => "/responses",
 		RouteType::Embeddings => "/embeddings",
-		RouteType::Rerank => "/rerank",
+		RouteType::Messages => "/v1/messages",
 		RouteType::Models => "/models",
+		RouteType::Rerank => "/rerank",
+		RouteType::Responses => "/responses",
+		RouteType::SystemOne => "/v1/systemone",
 		_ => "/chat/completions",
 	}
 }
@@ -112,6 +114,16 @@ pub fn path_suffix(route: RouteType) -> &'static str {
 mod tests {
 	use super::*;
 	use crate::model_catalog::{Catalog, TestCatalog, tags};
+
+	#[test]
+	fn catalog_format_tags_are_case_insensitive() {
+		let cat = TestCatalog::new([("grok-2", &[tags::OPENAI_COMPLETIONS][..])]);
+		let catalog: Catalog = Some(&cat);
+		assert_eq!(
+			Provider::supported_formats_for_model("Grok-2", catalog),
+			vec![ChatFormat::OpenAICompletions]
+		);
+	}
 
 	#[test]
 	fn catalog_format_tags_override_builtins() {
@@ -125,13 +137,9 @@ mod tests {
 	}
 
 	#[test]
-	fn catalog_format_tags_are_case_insensitive() {
-		let cat = TestCatalog::new([("grok-2", &[tags::OPENAI_COMPLETIONS][..])]);
-		let catalog: Catalog = Some(&cat);
-		assert_eq!(
-			Provider::supported_formats_for_model("Grok-2", catalog),
-			vec![ChatFormat::OpenAICompletions]
-		);
+	fn decision_model_has_no_chat_formats_and_uses_systemone_path() {
+		assert!(Provider::supported_formats_for_model("microsoft-decision-1", None).is_empty());
+		assert_eq!(path_suffix(RouteType::SystemOne), "/v1/systemone");
 	}
 
 	#[test]
