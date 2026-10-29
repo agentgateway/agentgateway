@@ -228,6 +228,9 @@ pub struct Model {
 	/// Release date, as YYYY-MM-DD or YYYY-MM.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub released: Option<String>,
+	/// Kind of model (embedding, reranking, image, ...); absent means chat.
+	#[serde(default, rename = "type", skip_serializing_if = "Option::is_none")]
+	pub model_type: Option<String>,
 	/// Base pricing rates for this model.
 	#[serde(default, skip_serializing_if = "Rates::is_empty")]
 	pub rates: Rates,

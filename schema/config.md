@@ -20,6 +20,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.name`|string|Human-readable display name.|
 |`config.modelCatalog[].inline.providers.*.models.*.status`|string|Lifecycle stage (alpha, beta, deprecated); absent means generally available.|
 |`config.modelCatalog[].inline.providers.*.models.*.released`|string|Release date, as YYYY-MM-DD or YYYY-MM.|
+|`config.modelCatalog[].inline.providers.*.models.*.type`|string|Kind of model (embedding, reranking, image, ...); absent means chat.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates`|object|Base pricing rates for this model.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.output`|string|Cost per 1M output (completion) tokens.|

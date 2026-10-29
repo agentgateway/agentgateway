@@ -626,6 +626,13 @@
             "null"
           ]
         },
+        "type": {
+          "description": "Kind of model (embedding, reranking, image, ...); absent means chat.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "rates": {
           "description": "Base pricing rates for this model.",
           "$ref": "#/$defs/Rates"

@@ -64,6 +64,7 @@ type modelsDevModel struct {
 	ID               string                     `json:"id"`
 	Name             string                     `json:"name"`
 	Family           string                     `json:"family"`
+	Type             string                     `json:"type"`
 	Status           string                     `json:"status"`
 	ReleaseDate      string                     `json:"release_date"`
 	Cost             *modelsDevCost             `json:"cost"`
@@ -233,6 +234,7 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(for
 		Name:     m.Name,
 		Status:   m.Status,
 		Released: m.ReleaseDate,
+		Type:     m.Type,
 		Limits:   m.Limit,
 		Capabilities: Capabilities{
 			Reasoning:        m.Reasoning,
