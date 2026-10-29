@@ -28,6 +28,22 @@ use crate::*;
 // https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#responses
 const GRPC_MESSAGE_ENCODE_SET: &AsciiSet = &CONTROLS.add(b' ').add(b'%');
 
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub struct SubstrateEgressError {
+	message: String,
+	reason: String,
+}
+
+impl SubstrateEgressError {
+	pub fn new(message: impl Into<String>, reason: impl Into<String>) -> Self {
+		Self {
+			message: message.into(),
+			reason: reason.into(),
+		}
+	}
+}
+
 #[allow(clippy::result_large_err)]
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyResponse {
@@ -55,6 +71,14 @@ impl ProxyResponse {
 }
 
 impl ProxyError {
+	pub fn egress_denied(message: impl Into<String>, reason: impl Into<String>) -> Self {
+		Self::SubstrateEgressDenied(SubstrateEgressError::new(message, reason))
+	}
+
+	pub fn egress_unavailable(message: impl Into<String>, reason: impl Into<String>) -> Self {
+		Self::SubstrateEgressUnavailable(SubstrateEgressError::new(message, reason))
+	}
+
 	pub fn as_reason(&self) -> ProxyResponseReason {
 		match self {
 			ProxyError::BindNotFound
@@ -279,11 +303,11 @@ pub enum ProxyError {
 	#[error("no worker has room for the actor")]
 	SubstrateIngressCapacityExhausted,
 	#[error("{0}")]
-	SubstrateEgressDenied(String),
+	SubstrateEgressDenied(SubstrateEgressError),
 	#[error("{0}")]
 	SubstrateEgressUpgradeDenied(&'static str),
 	#[error("{0}")]
-	SubstrateEgressUnavailable(String),
+	SubstrateEgressUnavailable(SubstrateEgressError),
 	#[error("rate limit exceeded")]
 	RateLimitExceeded {
 		limit: u64,
@@ -671,6 +695,18 @@ impl ProxyError {
 		}
 		if let ProxyError::SubstrateIngressFailed(_, _, Some(reason)) = &this
 			&& let Ok(value) = HeaderValue::try_from(reason.as_str())
+			&& let Some(hm) = rb.headers_mut()
+		{
+			hm.insert("ate-error-reason", value);
+		}
+		let egress_reason = match &this {
+			ProxyError::SubstrateEgressDenied(error) => Some(error.reason.as_str()),
+			ProxyError::SubstrateEgressUpgradeDenied(_) => Some("UNSUPPORTED_UPGRADE"),
+			ProxyError::SubstrateEgressUnavailable(error) => Some(error.reason.as_str()),
+			_ => None,
+		};
+		if let Some(reason) = egress_reason
+			&& let Ok(value) = HeaderValue::try_from(reason)
 			&& let Some(hm) = rb.headers_mut()
 		{
 			hm.insert("ate-error-reason", value);
@@ -1273,7 +1309,7 @@ mod tests {
 					"secret backend detail".into(),
 					None,
 				),
-				ProxyError::SubstrateEgressDenied("secret backend detail".into()),
+				ProxyError::egress_denied("secret backend detail", "EGRESS_DENIED"),
 				ProxyError::MCP(mcp::Error::SendError(None, "secret backend detail".into())),
 				ProxyError::MCP(mcp::Error::SendError(
 					Some(RequestId::Number(7)),

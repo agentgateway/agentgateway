@@ -198,8 +198,9 @@ impl TCPProxy {
 		let mut backend_call =
 			if let Some(target) = connection.ext::<httpproxy::DynamicBackendOverride>() {
 				if !matches!(selected_backend.backend.backend, Backend::Dynamic(_, _)) {
-					return Err(ProxyError::SubstrateEgressDenied(
-						"substrate egress requires a dynamic TCP route backend".to_owned(),
+					return Err(ProxyError::egress_denied(
+						"substrate egress requires a dynamic TCP route backend",
+						"EGRESS_POLICY_NOT_CONFIGURED",
 					));
 				}
 				BackendCall::new(target.0.clone(), backend_policies)

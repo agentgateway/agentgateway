@@ -6,7 +6,7 @@ use ::http::{HeaderName, HeaderValue};
 use quick_cache::sync::Cache;
 use tonic::Code;
 
-use super::{ActorIdentity, EgressActorResolution, TRACE_POLICY_KIND};
+use super::{ActorIdentity, EgressActorResolution, TRACE_POLICY_KIND, egress_error};
 use crate::http::{PolicyResponse, Request};
 use crate::proxy::httpproxy::{DynamicBackendOverride, PolicyClient};
 use crate::proxy::{ProxyError, ProxyResponse};
@@ -127,7 +127,10 @@ impl RequestPolicyTrait for SubstrateEgress {
 			.get::<ActorIdentity>()
 			.cloned()
 			.ok_or_else(|| {
-				ProxyError::SubstrateEgressDenied("missing CONNECT-authorized actor identity".to_owned())
+				ProxyError::egress_denied(
+					"missing CONNECT-authorized actor identity",
+					"ACTOR_IDENTITY_DENIED",
+				)
 			})?;
 		log.ate_actor_name = Some(identity.actor_name.clone());
 		log.ate_actor_uid = identity.actor_uid.clone();
@@ -212,8 +215,9 @@ impl SubstrateEgress {
 				("", Some(source)) => self.actor_jwt(client, identity, source).await?,
 				_ => {
 					return Err(
-						ProxyError::SubstrateEgressDenied(
-							"credential effect must specify exactly one credential source".to_owned(),
+						ProxyError::egress_denied(
+							"credential effect must specify exactly one credential source",
+							"CREDENTIAL_CONFIG_INVALID",
 						)
 						.into(),
 					);
@@ -329,14 +333,21 @@ impl SubstrateEgress {
 	}
 
 	fn provider_for_uri(&self, uri: &str) -> Result<&CredentialProvider, ProxyResponse> {
-		let name = provider_name(uri)
-			.ok_or_else(|| ProxyError::SubstrateEgressDenied(format!("invalid credential URI: {uri}")))?;
+		let name = provider_name(uri).ok_or_else(|| {
+			ProxyError::egress_denied(
+				format!("invalid credential URI: {uri}"),
+				"CREDENTIAL_CONFIG_INVALID",
+			)
+		})?;
 		self
 			.credential_providers
 			.iter()
 			.find(|provider| provider.uri_authority == name)
 			.ok_or_else(|| {
-				ProxyError::SubstrateEgressDenied(format!("no credential provider configured for {name}"))
+				ProxyError::egress_denied(
+					format!("no credential provider configured for {name}"),
+					"CREDENTIAL_PROVIDER_NOT_CONFIGURED",
+				)
 			})
 			.map_err(Into::into)
 	}
@@ -358,13 +369,17 @@ fn credential_header(
 	secret: Vec<u8>,
 ) -> Result<(HeaderName, HeaderValue), ProxyResponse> {
 	let name = HeaderName::from_str(&injection.header).map_err(|error| {
-		ProxyError::SubstrateEgressDenied(format!("invalid credential header: {error}"))
+		ProxyError::egress_denied(
+			format!("invalid credential header: {error}"),
+			"CREDENTIAL_CONFIG_INVALID",
+		)
 	})?;
 	if protected_credential_header(&name) {
 		return Err(
-			ProxyError::SubstrateEgressDenied(format!(
-				"credential effects cannot modify protected header {name}"
-			))
+			ProxyError::egress_denied(
+				format!("credential effects cannot modify protected header {name}"),
+				"CREDENTIAL_CONFIG_INVALID",
+			)
 			.into(),
 		);
 	}
@@ -372,7 +387,10 @@ fn credential_header(
 	let mut value = injection.prefix.as_bytes().to_vec();
 	value.extend(&secret);
 	let mut value = HeaderValue::from_bytes(&value).map_err(|error| {
-		ProxyError::SubstrateEgressUnavailable(format!("credential header value is invalid: {error}"))
+		ProxyError::egress_unavailable(
+			format!("credential header value is invalid: {error}"),
+			"CREDENTIAL_INVALID",
+		)
 	})?;
 	value.set_sensitive(true);
 	Ok((name, value))
@@ -397,21 +415,35 @@ fn protected_credential_header(name: &HeaderName) -> bool {
 fn credential_provider_error(uri: &str, status: tonic::Status) -> ProxyError {
 	let provider = provider_name(uri).unwrap_or("unknown");
 	match status.code() {
-		Code::Unavailable | Code::DeadlineExceeded => ProxyError::SubstrateEgressUnavailable(format!(
-			"credential provider {provider} unavailable: {status}"
-		)),
-		_ => {
-			ProxyError::SubstrateEgressDenied(format!("credential provider {provider} denied: {status}"))
+		Code::Unavailable | Code::DeadlineExceeded => {
+			ProxyError::SubstrateEgressUnavailable(egress_error(
+				format!("credential provider {provider} unavailable: {status}"),
+				&status,
+				"CREDENTIAL_PROVIDER_UNAVAILABLE",
+			))
 		},
+		_ => ProxyError::SubstrateEgressDenied(egress_error(
+			format!("credential provider {provider} denied: {status}"),
+			&status,
+			"CREDENTIAL_PROVIDER_DENIED",
+		)),
 	}
 }
 
 fn actor_jwt_error(status: tonic::Status) -> ProxyError {
 	match status.code() {
 		Code::Unavailable | Code::DeadlineExceeded => {
-			ProxyError::SubstrateEgressUnavailable(format!("actor JWT issuer unavailable: {status}"))
+			ProxyError::SubstrateEgressUnavailable(egress_error(
+				format!("actor JWT issuer unavailable: {status}"),
+				&status,
+				"ACTOR_JWT_UNAVAILABLE",
+			))
 		},
-		_ => ProxyError::SubstrateEgressDenied(format!("actor JWT denied: {status}")),
+		_ => ProxyError::SubstrateEgressDenied(egress_error(
+			format!("actor JWT denied: {status}"),
+			&status,
+			"ACTOR_JWT_DENIED",
+		)),
 	}
 }
 
@@ -420,8 +452,9 @@ fn credential_secret(secret: Vec<u8>) -> Result<Vec<u8>, ProxyResponse> {
 	let secret = secret.strip_suffix(b"\r").unwrap_or(secret);
 	if secret.is_empty() || secret.iter().any(|byte| byte.is_ascii_control()) {
 		return Err(
-			ProxyError::SubstrateEgressUnavailable(
-				"credential provider returned an unusable secret".to_owned(),
+			ProxyError::egress_unavailable(
+				"credential provider returned an unusable secret",
+				"CREDENTIAL_INVALID",
 			)
 			.into(),
 		);
@@ -461,11 +494,17 @@ async fn fetch_policy(
 	drop(span);
 	match response {
 		Ok(response) => Ok(response.into_inner()),
-		Err(status) if matches!(status.code(), Code::Unavailable | Code::DeadlineExceeded) => Err(
-			ProxyError::SubstrateEgressUnavailable(format!("actor egress policy unavailable: {status}")),
-		),
-		Err(status) => Err(ProxyError::SubstrateEgressDenied(format!(
-			"actor egress policy denied: {status}"
+		Err(status) if matches!(status.code(), Code::Unavailable | Code::DeadlineExceeded) => {
+			Err(ProxyError::SubstrateEgressUnavailable(egress_error(
+				format!("actor egress policy unavailable: {status}"),
+				&status,
+				"EGRESS_POLICY_UNAVAILABLE",
+			)))
+		},
+		Err(status) => Err(ProxyError::SubstrateEgressDenied(egress_error(
+			format!("actor egress policy denied: {status}"),
+			&status,
+			"EGRESS_POLICY_DENIED",
 		))),
 	}
 }
@@ -485,7 +524,10 @@ pub(crate) async fn authorize_tls(
 		return Ok(None);
 	};
 	let policy = connection.get::<EgressActorResolution>().ok_or_else(|| {
-		ProxyError::SubstrateEgressDenied("missing actor egress control API".to_owned())
+		ProxyError::egress_denied(
+			"missing actor egress control API",
+			"EGRESS_POLICY_NOT_CONFIGURED",
+		)
 	})?;
 	let port = connection
 		.get::<TCPConnectionInfo>()
@@ -507,13 +549,15 @@ fn tls_mode(
 ) -> Result<EgressTlsMode, ProxyError> {
 	let sni = sni.strip_suffix('.').unwrap_or(sni).to_ascii_lowercase();
 	if !valid_hostname(&sni) {
-		return Err(ProxyError::SubstrateEgressDenied(
-			"missing or invalid TLS SNI".to_owned(),
+		return Err(ProxyError::egress_denied(
+			"missing or invalid TLS SNI",
+			"DESTINATION_DENIED",
 		));
 	}
 	let Some(rule) = matching_destination_rule(policy, &sni, port, MatchPhase::ClientHello) else {
-		return Err(ProxyError::SubstrateEgressDenied(
-			"actor egress policy denied TLS destination".to_owned(),
+		return Err(ProxyError::egress_denied(
+			"actor egress policy denied TLS destination",
+			"DESTINATION_DENIED",
 		));
 	};
 	Ok(if rule.https.is_some() {
@@ -538,13 +582,16 @@ fn matching_rule<'a>(
 		.extensions()
 		.get::<cel::DestinationContext>()
 		.ok_or_else(|| {
-			ProxyError::SubstrateEgressDenied("missing egress destination context".to_owned())
+			ProxyError::egress_denied(
+				"missing egress destination context",
+				"EGRESS_CONTEXT_MISSING",
+			)
 		})?;
 	let protocol = req
 		.extensions()
 		.get::<EgressRequestProtocol>()
 		.ok_or_else(|| {
-			ProxyError::SubstrateEgressDenied("missing egress protocol context".to_owned())
+			ProxyError::egress_denied("missing egress protocol context", "EGRESS_CONTEXT_MISSING")
 		})?;
 	let phase = match protocol {
 		EgressRequestProtocol::Http => MatchPhase::HttpRequest,
@@ -557,7 +604,11 @@ fn matching_rule<'a>(
 		phase,
 	)
 	.ok_or_else(|| {
-		ProxyError::SubstrateEgressDenied("actor egress policy denied destination".to_owned()).into()
+		ProxyError::egress_denied(
+			"actor egress policy denied destination",
+			"DESTINATION_DENIED",
+		)
+		.into()
 	})
 }
 
@@ -1035,6 +1086,10 @@ mod tests {
 			)
 			.into_response_with_grpc(false);
 			assert_eq!(response.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
+			assert_eq!(
+				response.headers()["ate-error-reason"],
+				"CREDENTIAL_PROVIDER_UNAVAILABLE"
+			);
 		}
 
 		let response = credential_provider_error(
@@ -1043,6 +1098,10 @@ mod tests {
 		)
 		.into_response_with_grpc(false);
 		assert_eq!(response.status(), ::http::StatusCode::FORBIDDEN);
+		assert_eq!(
+			response.headers()["ate-error-reason"],
+			"CREDENTIAL_PROVIDER_DENIED"
+		);
 	}
 
 	#[test]

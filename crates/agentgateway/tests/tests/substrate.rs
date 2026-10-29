@@ -1652,6 +1652,23 @@ async fn substrate_egress_connect_status_at(
 	certificate_uri: &str,
 	payload: &[u8],
 ) -> StatusCode {
+	let response = substrate_egress_connect_response_at(api_address, certificate_uri, payload).await;
+	if response.starts_with("HTTP/1.1 200 OK\r\n") {
+		StatusCode::OK
+	} else if response.starts_with("HTTP/1.1 403 Forbidden\r\n") {
+		StatusCode::FORBIDDEN
+	} else if response.starts_with("HTTP/1.1 503 Service Unavailable\r\n") {
+		StatusCode::SERVICE_UNAVAILABLE
+	} else {
+		panic!("unexpected CONNECT response: {response}")
+	}
+}
+
+async fn substrate_egress_connect_response_at(
+	api_address: std::net::SocketAddr,
+	certificate_uri: &str,
+	payload: &[u8],
+) -> String {
 	let upstream = simple_mock().await;
 
 	let mut outer = simple_bind();
@@ -1689,26 +1706,50 @@ async fn substrate_egress_connect_status_at(
 		.await
 		.unwrap();
 	let mut response = Vec::new();
-	loop {
+	while !response.windows(4).any(|window| window == b"\r\n\r\n") {
 		let mut chunk = [0; 1024];
 		let n = io.read(&mut chunk).await.unwrap();
 		assert!(n > 0, "CONNECT response unexpectedly closed");
 		response.extend_from_slice(&chunk[..n]);
-		if response.windows(4).any(|window| window == b"\r\n\r\n") {
-			break;
+	}
+	let headers_end = response
+		.windows(4)
+		.position(|window| window == b"\r\n\r\n")
+		.unwrap()
+		+ 4;
+	if response.starts_with(b"HTTP/1.1 200 OK\r\n") {
+		io.write_all(payload).await.unwrap();
+	} else {
+		let content_length = String::from_utf8_lossy(&response[..headers_end])
+			.lines()
+			.filter_map(|line| line.split_once(':'))
+			.find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+			.map(|(_, value)| value.trim().parse::<usize>().unwrap())
+			.expect("denied CONNECT response has a content length");
+		let total_length = headers_end + content_length;
+		if response.len() < total_length {
+			let received = response.len();
+			response.resize(total_length, 0);
+			tokio::time::timeout(
+				Duration::from_secs(3),
+				io.read_exact(&mut response[received..]),
+			)
+			.await
+			.expect("timed out reading denied CONNECT body")
+			.unwrap();
 		}
 	}
-	let response = String::from_utf8(response).unwrap();
-	if response.starts_with("HTTP/1.1 200 OK\r\n") {
-		io.write_all(payload).await.unwrap();
-		StatusCode::OK
-	} else if response.starts_with("HTTP/1.1 403 Forbidden\r\n") {
-		StatusCode::FORBIDDEN
-	} else if response.starts_with("HTTP/1.1 503 Service Unavailable\r\n") {
-		StatusCode::SERVICE_UNAVAILABLE
-	} else {
-		panic!("unexpected CONNECT response: {response}")
-	}
+	String::from_utf8(response).unwrap()
+}
+
+fn response_header<'a>(response: &'a str, name: &str) -> Option<&'a str> {
+	response
+		.split("\r\n\r\n")
+		.next()?
+		.lines()
+		.filter_map(|line| line.split_once(':'))
+		.find(|(header, _)| header.eq_ignore_ascii_case(name))
+		.map(|(_, value)| value.trim())
 }
 
 #[tokio::test]
@@ -2289,6 +2330,78 @@ async fn substrate_tls_gateway(
 		.attach_route_policy(json!({ "substrateEgress": { "host": api.address.to_string() } }))
 		.await;
 	(gateway, api)
+}
+
+#[tokio::test]
+async fn substrate_egress_connect_denial_has_reason_without_changing_response() {
+	let api = ateapimock::AteApiMock::new(|| EgressHandler {
+		uid: "uid-1",
+		state: Some(ActorState::Running as i32),
+		error: Some(tonic::Code::NotFound),
+	})
+	.spawn()
+	.await;
+	let response = substrate_egress_connect_response_at(
+		api.address,
+		"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
+		b"",
+	)
+	.await;
+
+	assert!(
+		response.starts_with("HTTP/1.1 403 Forbidden\r\n"),
+		"{response}"
+	);
+	assert_eq!(
+		response_header(&response, "ate-error-reason"),
+		Some("ACTOR_IDENTITY_DENIED")
+	);
+	assert_eq!(
+		response.split_once("\r\n\r\n").unwrap().1,
+		"actor egress policy denied"
+	);
+}
+
+#[tokio::test]
+async fn substrate_egress_http_destination_denial_has_reason_without_changing_response() {
+	let upstream = simple_mock().await;
+	let port = upstream.address().port();
+	let (gateway, _api) = substrate_tls_gateway(
+		Ok(EgressPolicy::default()),
+		ActorState::Running,
+		*upstream.address(),
+		None,
+	)
+	.await;
+	let mut inner = simple_bind();
+	inner.address = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+	inner.mode = BindMode::Internal;
+	inner.protocol = BindProtocol::auto;
+	let gateway = gateway.with_bind(inner);
+	let mut io = open_actor_egress_tunnel(&gateway, port).await;
+	io.write_all(b"GET /denied HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+		.await
+		.unwrap();
+	let mut response = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut response))
+		.await
+		.expect("timed out waiting for egress refusal")
+		.unwrap();
+	let response = String::from_utf8(response).unwrap();
+
+	assert!(
+		response.starts_with("HTTP/1.1 403 Forbidden\r\n"),
+		"{response}"
+	);
+	assert_eq!(
+		response_header(&response, "ate-error-reason"),
+		Some("DESTINATION_DENIED")
+	);
+	assert_eq!(
+		response.split_once("\r\n\r\n").unwrap().1,
+		"actor egress policy denied"
+	);
+	assert!(upstream.received_requests().await.unwrap().is_empty());
 }
 
 #[cfg(feature = "crypto-aws-lc")]

@@ -305,8 +305,11 @@ async fn apply_request_policies(
 		.await?;
 	if req.extensions().get::<ActorIdentity>().is_some() && egress.is_none() {
 		return Err(
-			ProxyError::SubstrateEgressDenied("missing substrate egress request policy".to_owned())
-				.into(),
+			ProxyError::egress_denied(
+				"missing substrate egress request policy",
+				"EGRESS_POLICY_NOT_CONFIGURED",
+			)
+			.into(),
 		);
 	}
 	pol

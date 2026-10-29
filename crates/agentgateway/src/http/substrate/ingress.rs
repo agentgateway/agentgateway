@@ -9,10 +9,9 @@ use prometheus_client::metrics::gauge::Gauge;
 use quick_cache::sync::Cache;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tonic::{Code, Status};
-use tonic_types::{ErrorDetail, StatusExt};
 
 use super::ateattr::{ResumeDisposition, RouteOutcome};
-use super::{ActorRef, CACHE_CAPACITY, TRACE_POLICY_KIND, valid_resource_name};
+use super::{ActorRef, CACHE_CAPACITY, TRACE_POLICY_KIND, status_reason, valid_resource_name};
 use crate::http::{PolicyResponse, Request, Response};
 use crate::proxy::dtrace::{Severity, pol_event};
 use crate::proxy::httpproxy::PolicyClient;
@@ -33,7 +32,6 @@ const DEFAULT_ACTOR_PORT: u16 = 80;
 const DEFAULT_CONNECT_TARGET_PORT: NonZeroU16 = NonZeroU16::new(8443).unwrap();
 const TARGET_PORT_HEADER: &str = "x-ate-target-port";
 pub(crate) const STALE_ASSIGNMENT_HEADER: &str = "x-ate-assignment-stale";
-const ERROR_INFO_DOMAIN: &str = "ate.dev";
 const REASON_API_UNAVAILABLE: &str = "API_UNAVAILABLE";
 const REASON_LOT_FULL: &str = "LOT_FULL";
 const REASON_TERMINAL_STATE: &str = "TERMINAL_STATE";
@@ -104,20 +102,6 @@ impl ResumeError {
 		};
 		ProxyError::SubstrateIngressFailed(status, body, reason)
 	}
-}
-
-fn status_reason(status: &Status) -> Option<String> {
-	status
-		.get_error_details_vec()
-		.into_iter()
-		.find_map(|detail| match detail {
-			ErrorDetail::ErrorInfo(info)
-				if info.domain == ERROR_INFO_DOMAIN && !info.reason.is_empty() =>
-			{
-				Some(info.reason)
-			},
-			_ => None,
-		})
 }
 
 #[derive(Debug, Clone)]

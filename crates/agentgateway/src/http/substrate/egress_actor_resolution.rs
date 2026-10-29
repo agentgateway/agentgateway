@@ -2,7 +2,7 @@ use protos::ateapi::ActorState;
 use tonic::Code;
 use x509_parser::extensions::GeneralName;
 
-use super::{ActorRef, TRACE_POLICY_KIND, valid_resource_name};
+use super::{ActorRef, TRACE_POLICY_KIND, egress_error, valid_resource_name};
 use crate::http::Request;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::proxy::{ProxyError, ProxyResponse};
@@ -35,24 +35,38 @@ impl EgressActorResolution {
 			.and_then(|tls| tls.src_identity.as_ref())
 			.and_then(|identity| identity.certificate.as_deref())
 			.ok_or_else(|| {
-				ProxyError::SubstrateEgressDenied("missing authenticated actor certificate".to_owned())
+				ProxyError::egress_denied(
+					"missing authenticated actor certificate",
+					"ACTOR_IDENTITY_DENIED",
+				)
 			})?;
 		let pem = pem::parse(certificate.as_bytes()).map_err(|error| {
-			ProxyError::SubstrateEgressDenied(format!("invalid actor certificate: {error}"))
+			ProxyError::egress_denied(
+				format!("invalid actor certificate: {error}"),
+				"ACTOR_IDENTITY_DENIED",
+			)
 		})?;
 		let (_, certificate) =
 			x509_parser::parse_x509_certificate(pem.contents()).map_err(|error| {
-				ProxyError::SubstrateEgressDenied(format!("invalid actor certificate: {error}"))
+				ProxyError::egress_denied(
+					format!("invalid actor certificate: {error}"),
+					"ACTOR_IDENTITY_DENIED",
+				)
 			})?;
 		// TLS already authenticated this certificate. Require the worker identity here:
 		// a certificate issued directly to an actor must not authorize a tunnel.
 		if certificate.is_ca() {
-			return Err(ProxyError::SubstrateEgressDenied(
-				"actor certificate is a CA certificate".to_owned(),
+			return Err(ProxyError::egress_denied(
+				"actor certificate is a CA certificate",
+				"ACTOR_IDENTITY_DENIED",
 			));
 		}
-		let invalid_identity =
-			|| ProxyError::SubstrateEgressDenied("invalid worker-for-actor SPIFFE identity".to_owned());
+		let invalid_identity = || {
+			ProxyError::egress_denied(
+				"invalid worker-for-actor SPIFFE identity",
+				"ACTOR_IDENTITY_DENIED",
+			)
+		};
 		let sans = certificate
 			.subject_alternative_name()
 			.map_err(|_| invalid_identity())?
@@ -67,8 +81,9 @@ impl EgressActorResolution {
 			});
 		let uri = uris.next().ok_or_else(invalid_identity)?;
 		if uris.next().is_some() {
-			return Err(ProxyError::SubstrateEgressDenied(
-				"actor certificate has multiple URI SANs".to_owned(),
+			return Err(ProxyError::egress_denied(
+				"actor certificate has multiple URI SANs",
+				"ACTOR_IDENTITY_DENIED",
 			));
 		}
 		// Matches Substrate's resources.ActorRefFromWorkerForActorSPIFFEID.
@@ -122,16 +137,22 @@ impl EgressActorResolution {
 			Ok(response) => response.into_inner(),
 			Err(status) if matches!(status.code(), Code::Unavailable | Code::DeadlineExceeded) => {
 				return Err(
-					ProxyError::SubstrateEgressUnavailable(format!(
-						"actor identity check unavailable: {status}"
+					ProxyError::SubstrateEgressUnavailable(egress_error(
+						format!("actor identity check unavailable: {status}"),
+						&status,
+						"ACTOR_IDENTITY_UNAVAILABLE",
 					))
 					.into(),
 				);
 			},
 			Err(status) => {
 				return Err(
-					ProxyError::SubstrateEgressDenied(format!("actor identity check denied: {status}"))
-						.into(),
+					ProxyError::SubstrateEgressDenied(egress_error(
+						format!("actor identity check denied: {status}"),
+						&status,
+						"ACTOR_IDENTITY_DENIED",
+					))
+					.into(),
 				);
 			},
 		};
@@ -142,7 +163,7 @@ impl EgressActorResolution {
 			Some(ActorState::Running | ActorState::Resuming)
 		) {
 			return Err(
-				ProxyError::SubstrateEgressDenied("actor is not running or resuming".to_owned()).into(),
+				ProxyError::egress_denied("actor is not running or resuming", "ACTOR_NOT_RUNNING").into(),
 			);
 		}
 		Ok(ActorIdentity {
