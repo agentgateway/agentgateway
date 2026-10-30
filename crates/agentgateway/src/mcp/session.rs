@@ -205,7 +205,7 @@ impl Session {
 		cel: &rbac::CelExecWrapper,
 		ctx: &IncomingRequestContext,
 		meta: Option<&RequestMetaObject>,
-	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
+	) -> Result<(Cow<'a, str>, Cow<'b, str>), UpstreamError> {
 		let (service_name, prompt) = self
 			.relay
 			.resolve_resource_name(ResolveKind::Prompt, name, ctx, meta)
