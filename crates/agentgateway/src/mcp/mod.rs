@@ -7,6 +7,7 @@ mod mergestream;
 mod rbac;
 mod router;
 mod session;
+mod skills;
 mod sse;
 mod streamablehttp;
 mod subscriptions;
@@ -63,13 +64,16 @@ impl agent_http::BodyExtension for CachedRequest {}
 /// Application-defined "over quota" code (MCP defines none); shared with the guardrail mapping.
 pub(crate) const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
 
-/// Method names of rmcp's typed `ClientRequest` variants. Keep this list in sync with rmcp rev
-/// bumps; only `CustomRequest` and failed typed parses consult it, so drift cannot 404 typed
-/// requests.
+/// Method names of rmcp's typed `ClientRequest` variants, plus the skills methods. Keep this list
+/// in sync with rmcp rev bumps; only `CustomRequest` and failed typed parses consult it, so drift
+/// cannot 404 typed requests.
 pub(crate) fn is_known_client_request_method(method: &str) -> bool {
 	matches!(
 		method,
-		DiscoverRequestMethod::VALUE
+		skills::LIST
+			| skills::GET
+			| skills::RESOURCES_DIRECTORY_READ
+			| DiscoverRequestMethod::VALUE
 			| PingRequestMethod::VALUE
 			| InitializeResultMethod::VALUE
 			| CompleteRequestMethod::VALUE

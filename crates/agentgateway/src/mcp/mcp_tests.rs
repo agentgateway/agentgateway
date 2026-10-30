@@ -2625,6 +2625,108 @@ async fn modern_unknown_method_without_meta_returns_404() {
 	);
 }
 
+// Includes `_meta` at every level: rmcp used to decode any result carrying `_meta` as a
+// `CallToolResult`, dropping the skills payload.
+fn skills_result(method: &str) -> serde_json::Value {
+	let skill = |name: &str| {
+		serde_json::json!({
+			"uri": format!("skill://{name}/SKILL.md"),
+			"frontmatter": {"name": name, "description": "A skill.", "license": "MIT"},
+			"resources": [
+				{"uri": format!("skill://{name}/SKILL.md"), "digest": "sha256:d248", "size": 149},
+				{"uri": format!("skill://{name}/references/checklist.md"), "digest": "sha256:dbab", "size": 65}
+			],
+			"_meta": {"example.com/owner": "team-a"}
+		})
+	};
+	match method {
+		"skills/list" => serde_json::json!({
+			// Negative TTLs are invalid but seen in practice; the gateway replaces cache hints anyway.
+			"resultType": "complete", "skills": [skill("code-review"), skill("secret")],
+			"nextCursor": "page2", "ttlMs": -1, "cacheScope": "public",
+			"_meta": {"example.com/trace": "abc"}
+		}),
+		"skills/get" => serde_json::json!({
+			"resultType": "complete", "skill": skill("code-review"), "ttlMs": 300000, "cacheScope": "public",
+			"_meta": {"example.com/trace": "abc"}
+		}),
+		_ => serde_json::json!({
+			"resultType": "complete",
+			"resources": [
+				{"uri": "skill://code-review/references/checklist.md", "name": "checklist.md", "mimeType": "text/markdown"},
+				{"uri": "skill://code-review/references/private.md", "name": "private.md", "mimeType": "text/markdown"}
+			],
+			"ttlMs": -1
+		}),
+	}
+}
+
+#[tokio::test]
+async fn modern_skills_methods_single_target_authorization() {
+	let mock = mock_modern_streamable_http_server().await;
+	let deny_secret = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(
+				r#"mcp.resource.name.startsWith("skill://secret/") || mcp.resource.name.endsWith("/private.md")"#,
+			)
+			.unwrap(),
+		)],
+		vec![],
+	)));
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(deny_secret)],
+	)
+	.await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let send = |method: &'static str, mut params: serde_json::Value| {
+		params["_meta"] = modern_meta();
+		let body = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
+		let req = mcp_json_post(&client, &url, &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", method);
+		async move { read_response_message(req.send().await.unwrap()).await }
+	};
+
+	// The denied skill is filtered out; the filtered listing is no longer shareable.
+	let list = send("skills/list", serde_json::json!({"cursor": "page1"})).await;
+	let mut expected = skills_result("skills/list");
+	expected["skills"].as_array_mut().unwrap().pop();
+	expected["ttlMs"] = 0.into();
+	expected["cacheScope"] = "private".into();
+	assert_eq!(list["result"], expected);
+
+	let get = send(
+		"skills/get",
+		serde_json::json!({"uri": "skill://code-review/SKILL.md"}),
+	)
+	.await;
+	assert_eq!(get["result"], skills_result("skills/get"));
+
+	let denied = send(
+		"skills/get",
+		serde_json::json!({"uri": "skill://secret/SKILL.md"}),
+	)
+	.await;
+	assert_eq!(denied["error"]["code"], -32602, "{denied}");
+
+	// The directory itself is allowed, but its denied child must not be listed.
+	let dir = send(
+		"resources/directory/read",
+		serde_json::json!({"uri": "skill://code-review/references"}),
+	)
+	.await;
+	let mut expected = skills_result("resources/directory/read");
+	expected["resources"].as_array_mut().unwrap().pop();
+	expected["ttlMs"] = 0.into();
+	expected["cacheScope"] = "private".into();
+	assert_eq!(dir["result"], expected);
+}
+
 #[tokio::test]
 async fn modern_body_only_removed_method_is_invalid_protocol_not_404() {
 	// Removed-method rejection uses the header version only, while completeness checks use
@@ -5408,6 +5510,7 @@ async fn mock_streamable_http_server_with_discover_versions(
 							}
 						}]
 					}),
+					m @ ("skills/list" | "skills/get" | "resources/directory/read") => skills_result(m),
 					_ => {
 						return Ok(axum::Json(serde_json::json!({
 								"jsonrpc": "2.0",
@@ -7554,10 +7657,13 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 	// A discover fanout where only the modern target answered must still
 	// advertise the legacy target's extensions.
 	let mut modern_caps = ServerCapabilities::default();
-	modern_caps.extensions = Some(extension_caps(&[(
-		"example.com/other",
-		serde_json::json!({}),
-	)]));
+	modern_caps.extensions = Some(extension_caps(&[
+		("example.com/other", serde_json::json!({})),
+		(
+			crate::mcp::skills::EXTENSION,
+			serde_json::json!({"directoryRead": true}),
+		),
+	]));
 	let discover_merge = relay.merge_discover(true);
 	let result = discover_merge(
 		vec![(
@@ -7583,6 +7689,10 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 		"discover must include extensions recorded from the legacy target's initialize"
 	);
 	assert!(extensions.contains_key("example.com/other"));
+	assert!(
+		!extensions.contains_key(crate::mcp::skills::EXTENSION),
+		"skills cannot be routed when multiplexing"
+	);
 }
 
 #[test]

@@ -761,6 +761,48 @@ impl Session {
 						ctr.params.task_id = original_id;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
+					// Skills are only routed to a single unprefixed target; skill URIs are not rewritten,
+					// so multiplexed backends do not advertise the extension (see `merged_extensions`).
+					ClientRequest::CustomRequest(cr)
+						if matches!(
+							cr.method.as_str(),
+							mcp::skills::LIST | mcp::skills::GET | mcp::skills::RESOURCES_DIRECTORY_READ
+						) =>
+					{
+						let Some(service_name) = self.relay.upstreams.default_target_name.as_deref() else {
+							return Err(UpstreamError::InvalidMethod(cr.method.clone()));
+						};
+						let invalid =
+							|_| UpstreamError::InvalidRequest(format!("invalid params for method: {method}"));
+						let params = || cr.params.clone().unwrap_or_default();
+						match cr.method.as_str() {
+							mcp::skills::LIST => {
+								Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_skills())).await
+							},
+							mcp::skills::GET => {
+								let uri = serde_json::from_value::<mcp::skills::GetSkillRequestParams>(params())
+									.map_err(invalid)?
+									.uri;
+								self.authorize_resource_request(service_name, &uri, &method, &log, &cel)?;
+								Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+							},
+							_ => {
+								let uri =
+									serde_json::from_value::<mcp::skills::ReadResourceDirectoryRequestParams>(
+										params(),
+									)
+									.map_err(invalid)?
+									.uri;
+								self.authorize_resource_request(service_name, &uri, &method, &log, &cel)?;
+								Box::pin(
+									self
+										.relay
+										.send_fanout(r, ctx, self.relay.merge_resource_directory()),
+								)
+								.await
+							},
+						}
+					},
 					ClientRequest::CustomRequest(_) => {
 						let method = r.request.method();
 						if mcp::is_known_client_request_method(method) {

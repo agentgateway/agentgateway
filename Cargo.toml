@@ -5,6 +5,8 @@ wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "79e5f488d
 async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "fa0cf6c879b0ce30658df604d76d0b42f27b134c" }
 # Pending https://github.com/bldr-project/yaml-serde-edit/pull/1
 yaml-serde-edit = { git = "https://github.com/howardjohn/yaml-serde-edit", rev = "683e137f6760f47bb0db3d124c211433a4819f54" }
+# Pending CallToolResult no longer shadowing CustomResult when `_meta` is present
+rmcp = { git = "https://github.com/howardjohn/rust-sdk", rev = "9930a77fe1e239078c0a1c13bbe999eba75cdc2d" }
 # TODO: remove once https://github.com/goliajp/rust-tiktoken/pull/15 is released
 tiktoken = { git = "https://github.com/howardjohn/rust-tiktoken", rev = "14ea59ef50aed1d2935bbce06d8811427b7b972f" }
 
