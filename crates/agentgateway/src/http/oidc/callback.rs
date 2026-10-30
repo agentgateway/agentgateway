@@ -169,10 +169,10 @@ pub(super) async fn handle_callback(
 			&claims.inner,
 		)),
 	};
-	let encoded = policy.session.encode_browser_session(&session)?;
+	let session_value = policy.browser_session_store.save(&session).await?;
 	let session_cookie = policy.session.set_cookie(
 		&policy.session.cookie_name,
-		&encoded,
+		&session_value,
 		policy.redirect_uri.https,
 		policy.session.ttl,
 	);
