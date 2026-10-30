@@ -319,7 +319,8 @@ type VirtualModel struct {
 }
 
 type WeightedModelRouting struct {
-	// Concrete model targets and their relative weights.
+	// Model targets and their relative weights. Targets may be concrete or
+	// virtual models.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +required
@@ -359,8 +360,9 @@ type FailoverModelTarget struct {
 }
 
 type ConditionalModelRouting struct {
-	// Concrete model targets evaluated in order. The first matching condition is
-	// selected. One final target may omit when to act as the fallback.
+	// Model targets evaluated in order. The first matching condition is
+	// selected. One final target may omit when to act as the fallback. Targets
+	// may be concrete or virtual models.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +kubebuilder:validation:XValidation:message="conditional targets without when must be last",rule="self.filter(e, !has(e.when)).size() <= 1 && (!self.exists(e, !has(e.when)) || !has(self[size(self) - 1].when))"

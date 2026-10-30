@@ -1,0 +1,524 @@
+# public-gateway: entry (conditional) -> pool (weighted) -> ha (failover) -> guarded (concrete)
+# guarded is attached only to internal-gateway, so public-gateway reaches its guardrail webhook
+# only through the nested virtual models. The webhook's backend policy must be generated for both.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: internal-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guardrail-webhook
+  namespace: default
+spec:
+  ports:
+  - port: 8443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: guardrail-webhook-policy
+  namespace: default
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: guardrail-webhook
+  backend:
+    http:
+      requestTimeout: 5s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: guarded
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: internal-gateway
+    sectionName: llm
+  match:
+    model: gpt-5-mini
+  provider: OpenAI
+  policies:
+    transformations:
+    - field: max_tokens
+      expression: "256"
+    promptGuard:
+      request:
+      - webhook:
+          action: Reject
+          backendRef:
+            group: ""
+            kind: Service
+            name: guardrail-webhook
+            port: 8443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: ha
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: public-gateway
+    sectionName: llm
+  virtualModel:
+    failover:
+      targets:
+      - modelRef:
+          name: guarded
+        priority: 0
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: pool
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: public-gateway
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: ha
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: entry
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: public-gateway
+    sectionName: llm
+  virtualModel:
+    conditional:
+      targets:
+      - modelRef:
+          name: pool
+
+---
+# Output
+output:
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - inlinePolicies:
+            - ai:
+                promptGuard:
+                  request:
+                  - webhook:
+                      action: REJECT_AUDIT_ACTION_REJECT
+                      backend:
+                        port: 8443
+                        service:
+                          hostname: guardrail-webhook.default.svc.cluster.local
+                          namespace: default
+            name: backend
+            openai: {}
+      key: default/guarded/backend.llm
+      name:
+        name: guarded
+        namespace: default
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/internal-gateway
+      port: 80
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/internal-gateway
+      key: default/internal-gateway.llm
+      name:
+        gatewayName: internal-gateway
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      aiPolicy:
+        transformations:
+          max_tokens: "256"
+      concreteModel:
+        backend:
+          backend: default/guarded/backend.llm
+        discoveryProvider: openai
+      key: default/guarded.llm
+      listenerKey: default/internal-gateway.llm
+      match:
+        model: gpt-5-mini
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          requestTimeout: 5s
+      key: default/guardrail-webhook-policy:backend-http:default/guardrail-webhook.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: guardrail-webhook.default.svc.cluster.local
+          namespace: default
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - inlinePolicies:
+            - ai:
+                promptGuard:
+                  request:
+                  - webhook:
+                      action: REJECT_AUDIT_ACTION_REJECT
+                      backend:
+                        port: 8443
+                        service:
+                          hostname: guardrail-webhook.default.svc.cluster.local
+                          namespace: default
+            - ai:
+                transformations:
+                  max_tokens: "256"
+            name: guarded
+            openai:
+              model: gpt-5-mini
+      key: default/ha/failover.llm
+      name:
+        name: ha
+        namespace: default
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/public-gateway
+      port: 80
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/public-gateway
+      key: default/public-gateway.llm
+      name:
+        gatewayName: public-gateway
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/entry.llm
+      listenerKey: default/public-gateway.llm
+      match:
+        model: entry
+      virtualModel:
+        conditional:
+          targets:
+          - model: pool
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/ha.llm
+      listenerKey: default/public-gateway.llm
+      match:
+        model: ha
+      virtualModel:
+        failover:
+          backend:
+            backend: default/ha/failover.llm
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/pool.llm
+      listenerKey: default/public-gateway.llm
+      match:
+        model: pool
+      virtualModel:
+        weighted:
+          targets:
+          - model: ha
+            weight: 1
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          requestTimeout: 5s
+      key: default/guardrail-webhook-policy:backend-http:default/guardrail-webhook.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: guardrail-webhook.default.svc.cluster.local
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: entry
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: public-gateway
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: guarded
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: internal-gateway
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: ha
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: public-gateway
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: pool
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: public-gateway
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: internal-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: public-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 3
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
