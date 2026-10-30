@@ -989,6 +989,11 @@
         "mode": {
           "$ref": "#/$defs/ConfigStoreMode",
           "default": "file"
+        },
+        "resyncInterval": {
+          "description": "Interval for periodic full config resyncs from the database, in addition to change\nnotifications. Bounds how long a replica can serve stale config after silently losing\nstore change notifications (for example, a Postgres `LISTEN` connection dropped by a\nfailover without the close reaching the replica). Set to \"0s\" to disable.\nDefaults to 5 minutes.",
+          "type": "string",
+          "default": "5m0s"
         }
       },
       "additionalProperties": false

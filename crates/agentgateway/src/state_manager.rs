@@ -165,13 +165,17 @@ impl LocalClient {
 			.as_ref()
 			.map(config_store::ConfigResourceStore::subscribe_changes);
 		tokio::task::spawn(async move {
+			let mut retry = Box::pin(tokio::time::sleep(RELOAD_RETRY_DELAY));
+			let mut retry_armed = false;
 			loop {
 				tokio::select! {
 					changed = watched.changed_invalidated() => {
 						let Some(invalidated) = changed else {
 							break;
 						};
-						next_state = lc.reload_config_after_change(next_state).await;
+						let (nxt, ok) = lc.reload_config_after_change(next_state).await;
+						next_state = nxt;
+						record_reload_outcome(ok, &mut retry, &mut retry_armed);
 						if invalidated {
 							match crate::util::watch_files_with_options(vec![path.clone()], watch_options) {
 								Ok(new_watched) => watched = new_watched,
@@ -188,7 +192,9 @@ impl LocalClient {
 						}
 						let resource = resource_changes.borrow().resource.clone();
 						info!(resource, "resource changed, reloading");
-						next_state = lc.reload_config_after_change(next_state).await;
+						let (nxt, ok) = lc.reload_config_after_change(next_state).await;
+						next_state = nxt;
+						record_reload_outcome(ok, &mut retry, &mut retry_armed);
 					}
 					changed = async {
 						match &mut config_store_changes {
@@ -200,7 +206,15 @@ impl LocalClient {
 							break;
 						}
 						info!("config resource changed, reloading");
-						next_state = lc.reload_config_after_change(next_state).await;
+						let (nxt, ok) = lc.reload_config_after_change(next_state).await;
+						next_state = nxt;
+						record_reload_outcome(ok, &mut retry, &mut retry_armed);
+					}
+					_ = &mut retry, if retry_armed => {
+						warn!("retrying previously failed config reload");
+						let (nxt, ok) = lc.reload_config_after_change(next_state).await;
+						next_state = nxt;
+						record_reload_outcome(ok, &mut retry, &mut retry_armed);
 					}
 				}
 			}
@@ -217,6 +231,8 @@ impl LocalClient {
 			.as_ref()
 			.map(config_store::ConfigResourceStore::subscribe_changes);
 		tokio::task::spawn(async move {
+			let mut retry = Box::pin(tokio::time::sleep(RELOAD_RETRY_DELAY));
+			let mut retry_armed = false;
 			loop {
 				tokio::select! {
 					changed = resource_changes.changed() => {
@@ -225,7 +241,9 @@ impl LocalClient {
 						}
 						let resource = resource_changes.borrow().resource.clone();
 						info!(resource, "resource changed, reloading");
-						next_state = lc.reload_config_after_change(next_state).await;
+						let (nxt, ok) = lc.reload_config_after_change(next_state).await;
+						next_state = nxt;
+						record_reload_outcome(ok, &mut retry, &mut retry_armed);
 					}
 					changed = async {
 						match &mut config_store_changes {
@@ -237,7 +255,15 @@ impl LocalClient {
 							break;
 						}
 						info!("config resource changed, reloading");
-						next_state = lc.reload_config_after_change(next_state).await;
+						let (nxt, ok) = lc.reload_config_after_change(next_state).await;
+						next_state = nxt;
+						record_reload_outcome(ok, &mut retry, &mut retry_armed);
+					}
+					_ = &mut retry, if retry_armed => {
+						warn!("retrying previously failed config reload");
+						let (nxt, ok) = lc.reload_config_after_change(next_state).await;
+						next_state = nxt;
+						record_reload_outcome(ok, &mut retry, &mut retry_armed);
 					}
 				}
 			}
@@ -305,13 +331,15 @@ impl LocalClient {
 		crate::types::local::expand_env(&self.cfg.read_to_string().await?)
 	}
 
-	async fn reload_config_after_change(&self, prev: PreviousState) -> PreviousState {
+	/// Reloads the config and reports whether it succeeded, so the watch loops can
+	/// schedule a quick retry after a failure.
+	async fn reload_config_after_change(&self, prev: PreviousState) -> (PreviousState, bool) {
 		debug!("Config dependency changed, reloading...");
 		match self.reload_config(prev.clone()).await {
 			Ok(nxt) => {
 				self.metrics.config_synchronized.set(1);
 				debug!("Config reloaded successfully");
-				nxt
+				(nxt, true)
 			},
 			Err(e) => {
 				self.metrics.config_synchronized.set(0);
@@ -320,9 +348,32 @@ impl LocalClient {
 					.config_reload_status
 					.record_failure(e.to_string());
 				error!("Failed to reload config: {}", e);
-				prev
+				(prev, false)
 			},
 		}
+	}
+}
+
+/// Delay before retrying a failed config reload. Reload failures are often transient
+/// (for example, a database pool whose connections were killed by the same failover that
+/// dropped the change-notification listener); retrying quickly keeps recovery close to
+/// one retry delay instead of waiting for the next change notification or periodic
+/// resync tick.
+const RELOAD_RETRY_DELAY: Duration = Duration::from_secs(5);
+
+/// Arms `retry` after a failed reload, or disarms it after a successful one.
+fn record_reload_outcome(
+	ok: bool,
+	retry: &mut std::pin::Pin<Box<tokio::time::Sleep>>,
+	retry_armed: &mut bool,
+) {
+	if ok {
+		*retry_armed = false;
+	} else {
+		retry
+			.as_mut()
+			.reset(tokio::time::Instant::now() + RELOAD_RETRY_DELAY);
+		*retry_armed = true;
 	}
 }
 
@@ -747,5 +798,98 @@ frontendPolicies:
 			.unwrap();
 		let _ = local_client.reload_config_after_change(prev).await;
 		assert!(config.config_reload_status.last_error().is_none());
+	}
+
+	#[tokio::test]
+	async fn failed_reload_is_retried_without_new_change_events() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		fs_err::tokio::write(&path, local_config("first"))
+			.await
+			.unwrap();
+		let db_path = dir.path().join("config.db");
+
+		let mut config = test_config();
+		config.storage.mode = crate::ConfigStoreMode::Hybrid;
+		config.xds.local_config = Some(ConfigSource::File(path.clone()));
+		let config = Arc::new(config);
+
+		let pool = crate::database::DatabasePool::connect_with_max_connections(
+			&format!("sqlite://{}", db_path.display()),
+			None,
+		)
+		.await
+		.unwrap();
+		let store = crate::config_store::ConfigResourceStore::from_pool(pool, Duration::ZERO)
+			.await
+			.unwrap();
+
+		let stores = test_stores();
+		let mut registry = prometheus_client::registry::Registry::default();
+		let metrics = Arc::new(agent_xds::Metrics::new(&mut registry));
+		let client = test_client();
+		let resource_manager = crate::resource_manager::ResourceManager::new(client.clone()).unwrap();
+		let model_catalog = crate::llm::catalog::ModelCatalog::empty();
+		let local_client = LocalClient {
+			config: config.clone(),
+			cfg: ConfigSource::File(path.clone()),
+			config_resource_store: Some(store.clone()),
+			model_catalog: model_catalog.clone(),
+			stores,
+			client,
+			resource_manager,
+			gateway: config.gateway(),
+			metrics,
+		};
+
+		local_client.clone().run().await.unwrap();
+		wait_for_catalog_model(&model_catalog, "first").await;
+
+		// Break the config store so the next reload fails.
+		match store.pool() {
+			crate::database::DatabasePool::Sqlite(pool) => {
+				sqlx::query("DROP TABLE agw_config_resources")
+					.execute(&pool)
+					.await
+					.unwrap();
+			},
+			crate::database::DatabasePool::Postgres(_) => unreachable!("sqlite store"),
+		}
+
+		// One change event arrives while the store is broken; this reload fails.
+		replace_config(&path, "second").await;
+		tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				if config.config_reload_status.last_error().is_some() {
+					return;
+				}
+				tokio::time::sleep(Duration::from_millis(20)).await;
+			}
+		})
+		.await
+		.expect("reload should fail while the config store table is missing");
+
+		// Repair the store. No further change events are produced: the file is not
+		// touched again and the store's watch channel is never notified.
+		crate::config_store::ConfigResourceStore::from_pool(store.pool(), Duration::ZERO)
+			.await
+			.expect("recreate config store schema");
+
+		// The failed reload must be retried on its own and pick up the pending config.
+		tokio::time::timeout(Duration::from_secs(15), async {
+			loop {
+				if model_catalog
+					.list_models()
+					.providers
+					.iter()
+					.any(|provider| provider.models.iter().any(|model| model == "second"))
+				{
+					return;
+				}
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+		})
+		.await
+		.expect("failed reload should be retried without new change events");
 	}
 }
