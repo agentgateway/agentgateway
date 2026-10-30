@@ -160,7 +160,6 @@ dependencies = [
  "tokio-util",
  "tokio_sse_codec",
  "tracing",
- "tracing-subscriber",
  "vector-map",
 ]
 

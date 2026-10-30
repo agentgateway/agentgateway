@@ -2419,7 +2419,7 @@ impl AIProvider {
 			| AIProvider::Azure(_)
 			| AIProvider::Gemini(_)
 			| AIProvider::Anthropic(_) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
-			AIProvider::Copilot(_) => copilot::Provider::translate_embeddings_request(req),
+			AIProvider::Copilot(_) => conversion::copilot::from_embeddings::translate(req),
 			AIProvider::Vertex(p) => conversion::vertex::from_embeddings::translate(req, p),
 			AIProvider::Bedrock(_) => conversion::bedrock::from_embeddings::translate(req),
 		}
@@ -3143,10 +3143,11 @@ impl AIProvider {
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Copilot(_) => {
-				let (resp, normalized) =
-					copilot::Provider::translate_embeddings_response(&bytes, &req.request_model)?;
-				let llm_resp = resp.to_llm_response(LogContentFields::default());
-				Ok((llm_resp, Bytes::from(normalized)))
+				let translated =
+					conversion::copilot::from_embeddings::translate_response(&bytes, &req.request_model)?;
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
+				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
+				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Vertex(p) if !p.is_anthropic_model(&req.request_model) => {
 				let translated =
