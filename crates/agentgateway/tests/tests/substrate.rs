@@ -1952,6 +1952,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 				hostnames: vec!["localhost".to_owned()],
 				ports,
 				effects,
+				upstream_tls: None,
 			}),
 			..Default::default()
 		}
@@ -2330,6 +2331,7 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 					hostnames,
 					ports,
 					effects: None,
+					upstream_tls: None,
 				}),
 				..Default::default()
 			},
@@ -2467,6 +2469,7 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 				hostnames: vec!["localhost".to_owned()],
 				ports,
 				effects: None,
+				upstream_tls: None,
 			}),
 			..Default::default()
 		}
@@ -2718,6 +2721,7 @@ async fn substrate_egress_tls_denial_closes_at_client_hello_without_dialing(
 					hostnames: vec![hostname.to_owned()],
 					ports,
 					effects: None,
+					upstream_tls: None,
 				}),
 				..Default::default()
 			}

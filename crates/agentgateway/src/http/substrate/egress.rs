@@ -7,6 +7,7 @@ use quick_cache::sync::Cache;
 use tonic::Code;
 
 use super::{ActorIdentity, EgressActorResolution, TRACE_POLICY_KIND};
+use crate::http::backendtls::ClientCertificate;
 use crate::http::{PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::{DynamicBackendOverride, PolicyClient};
@@ -164,6 +165,17 @@ impl RequestPolicyTrait for SubstrateEgress {
 				req,
 			)
 			.await?;
+		if let Some(source) = matched_rule
+			.https
+			.as_ref()
+			.and_then(|rule| rule.upstream_tls.as_ref())
+			.and_then(|tls| tls.client_certificate.as_ref())
+		{
+			let certificate = self
+				.provider_client_certificate(client, &identity, source)
+				.await?;
+			req.extensions_mut().insert(certificate);
+		}
 		Ok(PolicyResponse::default())
 	}
 }
@@ -321,6 +333,80 @@ impl SubstrateEgress {
 			self
 				.credential_cache
 				.insert(key, secret.clone(), Instant::now());
+		}
+		Ok(secret)
+	}
+
+	async fn provider_client_certificate(
+		&self,
+		client: &PolicyClient,
+		identity: &ActorIdentity,
+		source: &protos::ateapi::ClientCertificateSource,
+	) -> Result<ClientCertificate, ProxyError> {
+		use protos::ateapi::client_certificate_source::Source;
+		let Some(Source::Credential(source)) = &source.source else {
+			return Err(ProxyError::SubstrateEgressDenied(
+				"actor client certificate sources are not supported".to_owned(),
+			));
+		};
+		let certificate_provider = self.provider_for_uri(&source.certificate_uri)?;
+		let key_provider = self.provider_for_uri(&source.private_key_uri)?;
+		let certificate = self
+			.fetch_pem_secret(
+				client,
+				identity,
+				certificate_provider,
+				&source.certificate_uri,
+			)
+			.await?;
+		let key = self
+			.fetch_pem_secret(client, identity, key_provider, &source.private_key_uri)
+			.await?;
+		ClientCertificate::from_pem(&certificate, &key).map_err(|error| {
+			ProxyError::SubstrateEgressDenied(format!(
+				"credential provider returned an invalid client certificate: {error}"
+			))
+		})
+	}
+
+	/// Fetches a PEM credential without caching so provider authorization and rotation apply to every request.
+	async fn fetch_pem_secret(
+		&self,
+		client: &PolicyClient,
+		identity: &ActorIdentity,
+		provider: &CredentialProvider,
+		uri: &str,
+	) -> Result<Vec<u8>, ProxyError> {
+		let actor_identity = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
+		let policy_client =
+			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
+		let channel = provider.target.grpc_channel(policy_client.clone());
+		let mut request = tonic::Request::new(protos::credprovider::FetchSecretRequest {
+			uri: uri.to_owned(),
+			actor_spiffe_id: actor_identity,
+		});
+		let mut span = policy_client.start_grpc_span(
+			&mut request,
+			provider.target.target.as_ref(),
+			"/substrate.credprovider.v1.CredentialProvider/FetchSecret",
+		);
+		let mut provider =
+			protos::credprovider::credential_provider_client::CredentialProviderClient::new(channel);
+		let response = tokio::time::timeout(CREDENTIAL_FETCH_TIMEOUT, provider.fetch_secret(request))
+			.await
+			.unwrap_or_else(|_| Err(tonic::Status::deadline_exceeded("FetchSecret timed out")));
+		if let Some(span) = span.as_deref_mut() {
+			span.record_grpc_result(&response);
+		}
+		drop(span);
+		let secret = response
+			.map_err(|status| credential_provider_error(uri, status))?
+			.into_inner()
+			.opaque_bytes;
+		if secret.is_empty() {
+			return Err(ProxyError::SubstrateEgressDenied(
+				"credential provider returned an empty client certificate secret".to_owned(),
+			));
 		}
 		Ok(secret)
 	}
@@ -679,6 +765,7 @@ mod tests {
 					hostnames,
 					ports,
 					effects: None,
+					upstream_tls: None,
 				}),
 				..Default::default()
 			},

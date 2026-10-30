@@ -88,6 +88,26 @@ message HTTPSRule {
   // Defaults to port 443 when absent.
   Ports ports = 2;
   HttpRuleEffects effects = 3;
+  UpstreamTls upstream_tls = 4;
+}
+
+message UpstreamTls {
+  ClientCertificateSource client_certificate = 1;
+}
+
+message ClientCertificateSource {
+  oneof source {
+    ActorClientCertificateSource actor_certificate = 1;
+    CredentialClientCertificateSource credential = 2;
+  }
+}
+
+// Reserved for the Substrate egress gateway's actor certificate issuer.
+message ActorClientCertificateSource {}
+
+message CredentialClientCertificateSource {
+  string certificate_uri = 1;
+  string private_key_uri = 2;
 }
 
 message TLSPassthroughRule {

@@ -1407,12 +1407,12 @@ impl HTTPProxy {
 		// has been established. Backend TLS applies to the gateway-to-backend leg.
 		let transport = build_backend_transport(
 			&self.inputs,
-			&backend_call,
-			req
+			&backend_call, req
 				.extensions()
 				.get::<WaypointService>()
 				.is_some()
 				.then_some(HboneSourceRole::Waypoint),
+			None,
 		)
 		.await?;
 		let upstream = self
@@ -1910,12 +1910,16 @@ fn resolve_backend_tls(
 	http_version_override: Option<::http::Version>,
 ) -> Result<VersionedBackendTLS, ProxyError> {
 	match &backend_tls.source {
-		BackendTLSSource::Static(per_alpn_config) => Ok(VersionedBackendTLS {
-			hostname_override: backend_tls.hostname_override.clone(),
-			config: per_alpn_config.config_for(http_version_override),
-			expected_identities: None,
-			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
-		}),
+		BackendTLSSource::Static(per_alpn_config) => {
+			let config = per_alpn_config.config_for(http_version_override);
+			Ok(VersionedBackendTLS {
+				hostname_override: backend_tls.hostname_override.clone(),
+				config,
+				expected_identities: None,
+				peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
+				client_certificate: None,
+			})
+		},
 		BackendTLSSource::Spiffe(spiffe_tls) => {
 			let spiffe = inputs.spiffe.as_ref().ok_or_else(|| {
 				ProxyError::Processing(anyhow!(
@@ -1931,6 +1935,7 @@ fn resolve_backend_tls(
 				config,
 				expected_identities: None,
 				peer_identity_mode: transport::tls::PeerIdentityMode::Spiffe,
+				client_certificate: None,
 			})
 		},
 		BackendTLSSource::Invalid(err) => Err(ProxyError::Processing(anyhow!(
@@ -2093,7 +2098,41 @@ async fn build_backend_transport(
 	inputs: &ProxyInputs,
 	backend_call: &BackendCall,
 	hbone_source: Option<HboneSourceRole>,
+	client_certificate: Option<&http::backendtls::ClientCertificate>,
 ) -> Result<Transport, ProxyError> {
+	if let Some(certificate) = client_certificate {
+		let tls = backend_call
+			.backend_policies
+			.backend_tls
+			.as_ref()
+			.ok_or_else(|| {
+				ProxyError::SubstrateEgressDenied(
+					"provider client certificate requires HTTPS backend TLS".to_owned(),
+				)
+			})?;
+		if tls.has_client_identity() {
+			return Err(ProxyError::SubstrateEgressDenied(
+				"provider client certificate conflicts with the configured backend TLS identity".to_owned(),
+			));
+		}
+		let version = backend_call
+			.backend_policies
+			.http
+			.as_ref()
+			.and_then(|http| http.version)
+			.or(backend_call.http_version_override);
+		let tls = resolve_backend_tls(inputs, tls.clone(), version)?;
+		return build_transport(
+			inputs,
+			backend_call,
+			hbone_source,
+			None,
+			backend_call.backend_policies.tunnel.as_ref(),
+			version,
+		)
+		.await
+		.map(|transport| replace_application_tls(transport, certificate.apply_to(&tls)));
+	}
 	build_transport(
 		inputs,
 		backend_call,
@@ -2108,6 +2147,39 @@ async fn build_backend_transport(
 			.or(backend_call.http_version_override),
 	)
 	.await
+}
+
+fn replace_application_tls(transport: Transport, tls: VersionedBackendTLS) -> Transport {
+	let application = ApplicationTransport::Tls(tls);
+	match transport {
+		Transport::Plain(_) => Transport::Plain(application),
+		Transport::Tunnel(_, config) => Transport::Tunnel(application, config),
+		Transport::Hbone(_, port, identities, headers) => {
+			Transport::Hbone(application, port, identities, headers)
+		},
+		Transport::DoubleHbone {
+			gateway_address,
+			gateway_identities,
+			waypoint_identities,
+			headers,
+			..
+		} => Transport::DoubleHbone {
+			gateway_address,
+			gateway_identities,
+			waypoint_identities,
+			inner: application,
+			headers,
+		},
+		Transport::HboneWaypoint {
+			waypoint_address,
+			identities,
+			..
+		} => Transport::HboneWaypoint {
+			waypoint_address,
+			identities,
+			inner: application,
+		},
+	}
 }
 
 fn get_backend_policies(
@@ -3227,7 +3299,11 @@ async fn make_backend_call(
 		});
 		return Ok(resp);
 	}
-	let mut transport = build_backend_transport(&inputs, &backend_call, hbone_source).await?;
+	let client_certificate = req
+		.extensions()
+		.get::<http::backendtls::ClientCertificate>();
+	let mut transport =
+		build_backend_transport(&inputs, &backend_call, hbone_source, client_certificate).await?;
 	if callout && !matches!(backend, Backend::Service(..)) {
 		transport = inputs
 			.upstream
