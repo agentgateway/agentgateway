@@ -1080,6 +1080,119 @@ async fn test_get_server_prefix_multiple_servers_err() {
 	assert!(result.is_err(), "multiple servers should yield error");
 }
 
+#[tokio::test]
+async fn call_tool_connect_failure_reports_jsonrpc_error_not_plain_503() {
+	// Nothing listens on 127.0.0.1:1, so every upstream call is refused. The
+	// failure must surface as an error the session layer can attach the request
+	// id to (Unavailable -> JSON-RPC error, HTTP 503), not as a raw ProxyError
+	// that becomes an id-less plain-text 503 and kills the client session
+	// (#4121).
+	use std::borrow::Cow;
+	use std::sync::Arc;
+
+	use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+	use rmcp::model::*;
+
+	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	let encoder = config.session_encoder.clone();
+	let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+	let client = Client::new(
+		&client::Config {
+			resolver_cfg: ResolverConfig::default(),
+			resolver_opts: ResolverOpts::default(),
+		},
+		None,
+		BackendConfig::default(),
+		None,
+	);
+	let pi = Arc::new(ProxyInputs {
+		cfg: Arc::new(config),
+		stores: stores.clone(),
+		metrics: Arc::new(crate::metrics::Metrics::new(
+			metrics::sub_registry(&mut Registry::default()),
+			Default::default(),
+			Default::default(),
+		)),
+		model_catalog: crate::llm::catalog::ModelCatalog::empty(),
+		admin: None,
+		stats: None,
+		upstream: client.clone(),
+		ca: None,
+		spiffe: None,
+		mcp_state: mcp::router::App::new(stores, encoder),
+		admission: Default::default(),
+	});
+	let client = PolicyClient::new(pi);
+	let backend = SimpleBackend::Opaque(
+		ResourceName::new(strng::literal!("refused"), "".into()),
+		Target::Hostname("127.0.0.1".into(), 1),
+	);
+	let upstream_client = super::super::McpHttpClient::new(
+		client,
+		backend,
+		BackendPolicies::default(),
+		false,
+		"test-target".to_string(),
+	);
+	let test_tool_get = Tool::new(
+		Cow::Borrowed("get_user"),
+		Cow::Borrowed("Get user details"),
+		Arc::new(
+			json!({
+				"type": "object",
+				"properties": {
+					"path": {
+						"type": "object",
+						"properties": {"user_id": {"type": "string"}},
+						"required": ["user_id"]
+					}
+				},
+				"required": ["path"]
+			})
+			.as_object()
+			.unwrap()
+			.clone(),
+		),
+	);
+	let upstream_call_get = UpstreamOpenAPICall {
+		method: "GET".to_string(),
+		path: "/users/{user_id}".to_string(),
+		allowed_headers: HashSet::new(),
+		content_type: None,
+	};
+	let handler = Handler::new(
+		upstream_client,
+		vec![(test_tool_get, upstream_call_get)],
+		"".to_string(),
+	);
+
+	let request = JsonRpcRequest {
+		jsonrpc: JsonRpcVersion2_0,
+		id: RequestId::Number(42),
+		request: ClientRequest::CallToolRequest(CallToolRequest::new(
+			CallToolRequestParams::new("get_user").with_arguments(
+				json!({ "path": { "user_id": "u1" } })
+					.as_object()
+					.unwrap()
+					.clone(),
+			),
+		)),
+	};
+	let result = handler
+		.send_message(request, &IncomingRequestContext::empty())
+		.await;
+	match result {
+		Err(super::UpstreamError::Unavailable(message)) => {
+			assert!(
+				!message.is_empty(),
+				"error should carry the connect failure"
+			);
+		},
+		Err(other) => panic!("expected Unavailable, got: {other:?}"),
+		Ok(_) => panic!("expected the refused connection to fail the call"),
+	}
+}
+
 fn tool_schema_for<'a>(
 	tools: &'a [(Tool, UpstreamOpenAPICall)],
 	tool_name: &str,

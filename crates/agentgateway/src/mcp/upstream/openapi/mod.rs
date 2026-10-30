@@ -704,9 +704,22 @@ impl Handler {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
 			ClientRequest::CallToolRequest(ctr) => {
-				let res = self
+				let res = match self
 					.call_tool(ctr.params.name.as_ref(), ctr.params.arguments, ctx)
-					.await?;
+					.await
+				{
+					Ok(res) => res,
+					// A connect-level failure (refused, tunnel, TLS) used to escape as an
+					// id-less plain-text 503, which streamable HTTP clients treat as a dead
+					// connection and drop the whole session. Report it as an error carrying
+					// the request id instead — still a 503, but parseable as a failed call.
+					// Backend 5xx keeps its existing path (#4121).
+					Err(UpstreamError::Proxy(p)) => {
+						warn!(error = %p, "OpenAPI upstream call failed");
+						return Err(UpstreamError::Unavailable(p.to_string()));
+					},
+					Err(e) => return Err(e),
+				};
 				Messages::from_result(id, res)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
