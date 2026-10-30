@@ -48,3 +48,4 @@ vector-map.workspace = true
 [dev-dependencies]
 insta.workspace = true
 rstest.workspace = true
+tracing-subscriber.workspace = true

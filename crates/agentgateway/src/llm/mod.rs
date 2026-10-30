@@ -2416,10 +2416,10 @@ impl AIProvider {
 		match self {
 			AIProvider::Custom(_)
 			| AIProvider::OpenAI(_)
-			| AIProvider::Copilot(_)
 			| AIProvider::Azure(_)
 			| AIProvider::Gemini(_)
 			| AIProvider::Anthropic(_) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+			AIProvider::Copilot(_) => copilot::Provider::translate_embeddings_request(req),
 			AIProvider::Vertex(p) => conversion::vertex::from_embeddings::translate(req, p),
 			AIProvider::Bedrock(_) => conversion::bedrock::from_embeddings::translate(req),
 		}
@@ -3143,17 +3143,8 @@ impl AIProvider {
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Copilot(_) => {
-				let mut resp: serde_json::Map<String, serde_json::Value> =
-					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
-				resp
-					.entry("object".to_string())
-					.or_insert_with(|| serde_json::Value::String("list".to_string()));
-				resp
-					.entry("model".to_string())
-					.or_insert_with(|| serde_json::Value::String(req.request_model.to_string()));
-				let normalized = serde_json::to_vec(&resp).map_err(AIError::ResponseParsing)?;
-				let resp: types::embeddings::Response =
-					serde_json::from_slice(&normalized).map_err(logged_response_parsing(&normalized))?;
+				let (resp, normalized) =
+					copilot::Provider::translate_embeddings_response(&bytes, &req.request_model)?;
 				let llm_resp = resp.to_llm_response(LogContentFields::default());
 				Ok((llm_resp, Bytes::from(normalized)))
 			},
