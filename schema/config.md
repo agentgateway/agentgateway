@@ -10124,3 +10124,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`<Guardrails>.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`<Guardrails>.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
+
+## Config resources
+
+Values accepted by the `/api/config/resources/{kind}` API. The JSON schema for each kind is the definition of the same name, such as `config.json#/$defs/llm.provider`.
+
+|Kind|Value|ID|
+|-|-|-|
+|`modelCatalog`|`base` and `custom` catalogs, merged ahead of `config.modelCatalog[]`|`default`|
+|`llm.provider`|An item of `llm.providers[]`|`name`|
+|`llm.model`|An item of `llm.models[]`|`id`, or `name` if unset|
+|`llm.virtualModel`|An item of `llm.virtualModels[]`|`name`|
+|`llm.apiKey`|An item of `llm.policies.apiKey.keys[]`. Metadata prefixed with `agentgateway.dev/` is managed by agentgateway|Generated, and stored in `metadata` under `agentgateway.dev/id`|
+|`llm.policy`|`llm.policies.<id>`. `apiKey` must not include `keys`; use `llm.apiKey`|Field name, such as `apiKey`|
+|`mcp.target`|An item of `mcp.targets[]`|`name`|
+|`mcp.policy`|`mcp.policies.<id>`|Field name|
+|`llm.settings`|`llm.gateways`, `llm.port`, `llm.tls`|`default`|
+|`mcp.settings`|`mcp.gateways`, `mcp.port`, `mcp.statefulMode`, `mcp.prefixMode`, `mcp.failureMode`, `mcp.sseKeepAlive`, `mcp.dnsRebindingProtection`, `mcp.server`|`default`|
+|`traffic.gateway`|`gateways.<id>`|Gateway name|
+|`traffic.route`|An item of `routes[]`|`name`|
+|`traffic.tcpRoute`|An item of `tcpRoutes[]`|`name`|
+|`ui.policy`|`ui.policies.<id>`|Field name|
+|`frontend.policy`|`frontendPolicies.<id>`|Field name|

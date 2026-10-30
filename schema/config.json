@@ -13781,6 +13781,171 @@
         }
       },
       "additionalProperties": false
+    },
+    "modelCatalog": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "description": "Base model catalog.",
+          "$ref": "#/$defs/Catalog"
+        },
+        "custom": {
+          "description": "Custom model catalog, taking precedence over the base catalog.",
+          "$ref": "#/$defs/Catalog"
+        }
+      },
+      "additionalProperties": false,
+      "description": "`base` and `custom` catalogs, merged ahead of `config.modelCatalog[]`. ID: `default`."
+    },
+    "llm.provider": {
+      "$ref": "#/$defs/LocalLLMProvider",
+      "description": "An item of `llm.providers[]`. ID: `name`."
+    },
+    "llm.model": {
+      "$ref": "#/$defs/LocalLLMModels",
+      "description": "An item of `llm.models[]`. ID: `id`, or `name` if unset."
+    },
+    "llm.virtualModel": {
+      "$ref": "#/$defs/LocalLLMVirtualModel",
+      "description": "An item of `llm.virtualModels[]`. ID: `name`."
+    },
+    "llm.apiKey": {
+      "$ref": "#/$defs/LocalAPIKey",
+      "description": "An item of `llm.policies.apiKey.keys[]`. Metadata prefixed with `agentgateway.dev/` is managed by agentgateway. ID: Generated, and stored in `metadata` under `agentgateway.dev/id`."
+    },
+    "llm.policy": {
+      "$ref": "#/$defs/LocalLLMPolicy",
+      "description": "`llm.policies.<id>`. `apiKey` must not include `keys`; use `llm.apiKey`. ID: Field name, such as `apiKey`."
+    },
+    "mcp.target": {
+      "$ref": "#/$defs/LocalMcpTarget",
+      "description": "An item of `mcp.targets[]`. ID: `name`."
+    },
+    "mcp.policy": {
+      "$ref": "#/$defs/FilterOrPolicy",
+      "description": "`mcp.policies.<id>`. ID: Field name."
+    },
+    "llm.settings": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.",
+          "$ref": "#/$defs/LocalGatewayRefs",
+          "default": []
+        },
+        "port": {
+          "description": "port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "tls": {
+          "description": "tls defines the TLS settings to serve the LLM routes under when using `port`. Deprecated; use `gateways` instead.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTLSServerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "`llm.gateways`, `llm.port`, `llm.tls`. ID: `default`."
+    },
+    "mcp.settings": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways attaches the MCP routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the MCP routes attach to it unless port is set.",
+          "$ref": "#/$defs/LocalGatewayRefs",
+          "default": []
+        },
+        "port": {
+          "description": "port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "statefulMode": {
+          "$ref": "#/$defs/McpStatefulMode"
+        },
+        "prefixMode": {
+          "description": "How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpPrefixMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failureMode": {
+          "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpBackendFailureMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sseKeepAlive": {
+          "description": "Interval at which SSE keep-alive comments are sent on long-lived MCP streams.\nDisabled when unset. Set this when a load balancer or API gateway sits in front\nof agentgateway and reaps connections that carry no traffic.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dnsRebindingProtection": {
+          "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
+          "type": "boolean"
+        },
+        "server": {
+          "description": "Overrides for the MCP `serverInfo` and gateway instructions reported to clients on\n`initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall\nback to the normal defaults.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerOverrides"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "`mcp.gateways`, `mcp.port`, `mcp.statefulMode`, `mcp.prefixMode`, `mcp.failureMode`, `mcp.sseKeepAlive`, `mcp.dnsRebindingProtection`, `mcp.server`. ID: `default`."
+    },
+    "traffic.gateway": {
+      "$ref": "#/$defs/LocalGateway",
+      "description": "`gateways.<id>`. ID: Gateway name."
+    },
+    "traffic.route": {
+      "$ref": "#/$defs/LocalAttachedRoute",
+      "description": "An item of `routes[]`. ID: `name`."
+    },
+    "traffic.tcpRoute": {
+      "$ref": "#/$defs/LocalAttachedTCPRoute",
+      "description": "An item of `tcpRoutes[]`. ID: `name`."
+    },
+    "ui.policy": {
+      "$ref": "#/$defs/LocalUIPolicy",
+      "description": "`ui.policies.<id>`. ID: Field name."
+    },
+    "frontend.policy": {
+      "$ref": "#/$defs/LocalFrontendPolicies",
+      "description": "`frontendPolicies.<id>`. ID: Field name."
     }
   }
 }

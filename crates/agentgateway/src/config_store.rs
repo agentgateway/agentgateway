@@ -115,7 +115,7 @@ pub enum ConfigResourceKind {
 }
 
 impl ConfigResourceKind {
-	pub(crate) const ALL: [Self; 15] = [
+	pub const ALL: [Self; 15] = [
 		Self::ModelCatalog,
 		Self::LlmProvider,
 		Self::LlmModel,
@@ -133,7 +133,7 @@ impl ConfigResourceKind {
 		Self::FrontendPolicy,
 	];
 
-	pub(crate) fn settings_fields(self) -> Option<(&'static str, &'static [&'static str])> {
+	pub fn settings_fields(self) -> Option<(&'static str, &'static [&'static str])> {
 		match self {
 			Self::LlmSettings => Some(("llm", &["gateways", "port", "tls"])),
 			Self::McpSettings => Some(("mcp", &MCP_SETTINGS_FIELDS)),
