@@ -2328,3 +2328,241 @@ impl ratelimitmock::Handler for RecordingRateLimit {
 		ratelimitmock::ok_response()
 	}
 }
+
+#[tokio::test]
+async fn llm_model_preferred_endpoints() {
+	let config = r#"
+llm:
+  port: 0
+  discovery: disabled
+  models:
+  - name: gpt-*
+    provider: copilot
+  - name: fixed-*
+    provider: copilot
+    params:
+      model: gpt-4o
+  - name: custom-*
+    provider:
+      custom:
+        formats:
+        - type: responses
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: multi
+    provider:
+      custom:
+        formats:
+        - type: responses
+        - type: embeddings
+        - type: completions
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: responses
+    provider:
+      custom:
+        formats:
+        - type: responses
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: embeddings
+    provider:
+      custom:
+        formats:
+        - type: embeddings
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: native-gemini
+    provider: gemini
+  - name: unknown
+    provider: openAI
+  - name: transformed
+    provider: copilot
+    params:
+      model: grok-2
+  - name: policy-independent
+    provider: anthropic
+    transformation:
+      model: request.headers["x-model"]
+  virtualModels:
+  - name: shared
+    routing:
+      weighted:
+        targets:
+        - model: multi
+          weight: 1
+        - model: responses
+          weight: 1
+  - name: disjoint
+    routing:
+      weighted:
+        targets:
+        - model: responses
+          weight: 1
+        - model: embeddings
+          weight: 1
+  - name: failover-shared
+    routing:
+      failover:
+        targets:
+        - model: multi
+          priority: 0
+        - model: responses
+          priority: 1
+  - name: failover-disjoint
+    routing:
+      failover:
+        targets:
+        - model: responses
+          priority: 0
+        - model: embeddings
+          priority: 1
+"#;
+	let t = setup_local_llm_config(config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	for (id, expected) in [
+		("gpt-*", Value::Null),
+		(
+			"fixed-*",
+			json!(["/chat/completions", "/embeddings", "/rerank"]),
+		),
+		("custom-*", json!(["/responses"])),
+		(
+			"multi",
+			json!(["/chat/completions", "/embeddings", "/responses"]),
+		),
+		(
+			"native-gemini",
+			json!([
+				"/embeddings",
+				"/models/{model}:countTokens",
+				"/models/{model}:generateContent"
+			]),
+		),
+		("responses", json!(["/responses"])),
+		("embeddings", json!(["/embeddings"])),
+		(
+			"transformed",
+			json!(["/embeddings", "/rerank", "/responses"]),
+		),
+		("shared", json!(["/responses"])),
+		("disjoint", Value::Null),
+		(
+			"unknown",
+			json!([
+				"/chat/completions",
+				"/decisions",
+				"/embeddings",
+				"/rerank",
+				"/responses"
+			]),
+		),
+		(
+			"policy-independent",
+			json!(["/messages", "/messages/count_tokens"]),
+		),
+		("failover-shared", json!(["/responses"])),
+		("failover-disjoint", Value::Null),
+	] {
+		let model = models["data"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find(|m| m["id"] == id)
+			.unwrap();
+		assert_eq!(model["preferred_endpoints"], expected, "{id}");
+		assert!(model.get("preferred_invocation_protocols").is_none());
+		let res = send_request(
+			io.clone(),
+			Method::GET,
+			&format!("http://lo/v1/models/{id}"),
+		)
+		.await;
+		assert_eq!(res.status(), StatusCode::OK);
+		let single: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+		assert_eq!(&single, model, "single-model response for {id}");
+	}
+}
+
+#[tokio::test]
+async fn llm_model_endpoints_use_transformed_overrides() {
+	let mut t = setup_local_llm_config(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: responses-alias
+    provider: copilot
+    params:
+      model: public/grok-2
+    transformation:
+      model: llmRequest.model.stripPrefix('public/')
+  - name: completions-alias
+    provider: copilot
+    params:
+      model: public/gpt-4o
+    transformation:
+      model: llmRequest.model.stripPrefix('public/')
+  - name: unknown-alias
+    provider: copilot
+    params:
+      model: public/uncatalogued
+    transformation:
+      model: llmRequest.model.stripPrefix('public/')
+  - name: public/*
+    provider: copilot
+    transformation:
+      model: llmRequest.model.stripPrefix('public/')
+"#,
+	)
+	.await;
+	Arc::get_mut(&mut t.pi).unwrap().model_catalog =
+		agentgateway::llm::catalog::ModelCatalog::new(vec![agentgateway::ModelCatalogSource::Inline {
+			inline: r#"{"providers":{"copilot":{"models":{"grok-2":{},"gpt-4o":{}}}}}"#.to_string(),
+		}])
+		.await
+		.unwrap();
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	for (id, expected) in [
+		(
+			"responses-alias",
+			json!(["/embeddings", "/rerank", "/responses"]),
+		),
+		(
+			"completions-alias",
+			json!(["/chat/completions", "/embeddings", "/rerank"]),
+		),
+		("unknown-alias", Value::Null),
+		(
+			"public/grok-2",
+			json!(["/embeddings", "/rerank", "/responses"]),
+		),
+		(
+			"public/gpt-4o",
+			json!(["/chat/completions", "/embeddings", "/rerank"]),
+		),
+	] {
+		let model = models["data"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find(|m| m["id"] == id)
+			.unwrap();
+		assert_eq!(model["preferred_endpoints"], expected, "{id}");
+		let res = send_request(
+			io.clone(),
+			Method::GET,
+			&format!("http://lo/v1/models/{id}"),
+		)
+		.await;
+		assert_eq!(res.status(), StatusCode::OK);
+		let single: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+		assert_eq!(&single, model);
+	}
+}

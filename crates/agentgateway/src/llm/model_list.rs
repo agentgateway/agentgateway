@@ -7,6 +7,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::Serialize;
 
+use super::PreferredEndpoint;
 use crate::llm::catalog::{Capabilities, Limits, Modalities, Model, Reasoning};
 
 /// What is known about one listed model.
@@ -20,6 +21,9 @@ pub struct ModelInfo {
 	pub modalities: Modalities,
 	pub capabilities: Capabilities,
 	pub reasoning: Reasoning,
+	/// Sorted, unique client protocols that avoid cross-protocol conversion.
+	/// Empty means unknown; it is omitted from the wire response.
+	pub preferred_endpoints: Vec<PreferredEndpoint>,
 }
 
 impl ModelInfo {
@@ -45,6 +49,7 @@ impl ModelInfo {
 			modalities: m.modalities.clone(),
 			capabilities: m.capabilities.clone(),
 			reasoning: m.reasoning.clone(),
+			preferred_endpoints: Vec::new(),
 		}
 	}
 
@@ -94,6 +99,12 @@ impl ModelInfo {
 			created,
 			provider: Some(strng::literal!("virtual")),
 			name: None,
+			preferred_endpoints: first
+				.preferred_endpoints
+				.iter()
+				.filter(|p| rest.iter().all(|t| t.preferred_endpoints.contains(p)))
+				.copied()
+				.collect(),
 			limits: Limits {
 				context: min(|l| l.context),
 				input: min(|l| l.input.or(l.context)),
@@ -152,6 +163,8 @@ struct List<'a> {
 
 #[derive(Serialize)]
 struct Entry<'a> {
+	#[serde(skip_serializing_if = "<[PreferredEndpoint]>::is_empty")]
+	preferred_endpoints: &'a [PreferredEndpoint],
 	id: &'a str,
 	object: &'static str,
 	created: u64,
@@ -231,6 +244,7 @@ impl<'a> Entry<'a> {
 		}
 		params.sort();
 		Self {
+			preferred_endpoints: &m.preferred_endpoints,
 			id: &m.id,
 			object: "model",
 			created: m.created,
