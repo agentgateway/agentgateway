@@ -41,6 +41,10 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_GoogleModelArmor{
 				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor),
 			}
+		} else if req.AzureContentSafety != nil {
+			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_AzureContentSafety{
+				AzureContentSafety: processAzureContentSafety(ctx, namespace, req.AzureContentSafety),
+			}
 		}
 
 		if req.CustomResponse != nil {
@@ -98,6 +102,10 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 		} else if resp.GoogleModelArmor != nil {
 			pgResp.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_GoogleModelArmor{
 				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, resp.GoogleModelArmor),
+			}
+		} else if resp.AzureContentSafety != nil {
+			pgResp.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_AzureContentSafety{
+				AzureContentSafety: processAzureContentSafety(ctx, namespace, resp.AzureContentSafety),
 			}
 		}
 
@@ -352,6 +360,43 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	}
 
 	return pgArmor
+}
+
+func processAzureContentSafety(ctx PolicyCtx, namespace string, acs *agentgateway.AzureContentSafety) *api.BackendPolicySpec_Ai_AzureContentSafety {
+	if acs == nil {
+		return nil
+	}
+
+	pgACS := &api.BackendPolicySpec_Ai_AzureContentSafety{
+		Endpoint:    acs.Endpoint,
+		Action:      mapRejectAuditAction(acs.Action),
+		FailureMode: guardrailFailureMode(acs.FailureMode),
+	}
+
+	if at := acs.AnalyzeText; at != nil {
+		pgACS.AnalyzeText = &api.BackendPolicySpec_Ai_AzureContentSafety_AnalyzeText{
+			SeverityThreshold:  at.SeverityThreshold,
+			ApiVersion:         at.APIVersion,
+			BlocklistNames:     at.BlocklistNames,
+			HaltOnBlocklistHit: at.HaltOnBlocklistHit,
+		}
+	}
+	if dj := acs.DetectJailbreak; dj != nil {
+		pgACS.DetectJailbreak = &api.BackendPolicySpec_Ai_AzureContentSafety_DetectJailbreak{
+			ApiVersion: dj.APIVersion,
+		}
+	}
+
+	if acs.Policies != nil {
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, acs.Policies)
+		if err != nil {
+			logger.Warn("failed to translate policy", "err", err)
+		} else {
+			pgACS.InlinePolicies = pols
+		}
+	}
+
+	return pgACS
 }
 
 type backendSimplePolicy interface {

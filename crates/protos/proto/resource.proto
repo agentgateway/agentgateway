@@ -1423,20 +1423,32 @@ message BackendPolicySpec {
     }
 
     message AzureContentSafety {
+      // Analyze Text API settings (harm categories and blocklists).
+      message AnalyzeText {
+        // Severity threshold (0-6). Content at or above this level is blocked. Default: 2.
+        optional int32 severity_threshold = 1;
+
+        // API version to use (default: "2024-09-01")
+        optional string api_version = 2;
+
+        // Blocklist names to check against
+        repeated string blocklist_names = 3;
+
+        // When true, further analysis stops if a blocklist is hit
+        optional bool halt_on_blocklist_hit = 4;
+      }
+
+      // Detect Text Jailbreak API settings. Only applied to request guards.
+      message DetectJailbreak {
+        // API version to use (default: "2024-02-15-preview")
+        optional string api_version = 1;
+      }
+
       // The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")
       string endpoint = 1;
 
-      // Severity threshold (0-6). Content at or above this level is blocked. Default: 2.
-      optional int32 severity_threshold = 2;
-
-      // API version to use (default: "2024-09-01")
-      optional string api_version = 3;
-
-      // Blocklist names to check against
-      repeated string blocklist_names = 4;
-
-      // When true, further analysis stops if a blocklist is hit
-      optional bool halt_on_blocklist_hit = 5;
+      reserved 2, 3, 4, 5;
+      reserved "severity_threshold", "api_version", "blocklist_names", "halt_on_blocklist_hit";
 
       repeated BackendPolicySpec inline_policies = 6;
 
@@ -1446,6 +1458,15 @@ message BackendPolicySpec {
       // REJECT (default) rejects flagged content; AUDIT records the would-be
       // rejection without blocking.
       RejectAuditAction action = 8;
+
+      // When set, content is checked with the Analyze Text API.
+      AnalyzeText analyze_text = 9;
+
+      // When set, request content is checked with the Detect Text Jailbreak API.
+      DetectJailbreak detect_jailbreak = 10;
+
+      // Behavior on provider errors. Defaults to FAIL_CLOSED.
+      Webhook.FailureMode failure_mode = 11;
     }
 
     // Response sent when rejecting a request

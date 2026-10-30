@@ -313,6 +313,24 @@ func (p *GoogleModelArmorPolicy) BackendSimple() *BackendSimple {
 	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
 }
 
+// AzureContentSafetyPolicy configures calls to Azure AI Content Safety.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type AzureContentSafetyPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to Azure AI Content Safety. When omitted,
+	// implicit Azure authentication is used.
+	// +optional
+	Auth *AzureContentSafetyAuth `json:"auth,omitempty"`
+}
+
+func (p *AzureContentSafetyPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
 type Health struct {
 	// CEL expression that determines whether a response indicates an unhealthy backend.
 	// When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
@@ -1763,6 +1781,45 @@ func (a *GoogleModelArmorAuth) BackendAuth() *BackendAuth {
 	}
 	return &BackendAuth{
 		GCP: a.GCP,
+	}
+}
+
+// AzureContentSafetyAuth configures credentials for Azure AI Content Safety requests.
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;azure
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) : true",message="location may only be set for key or secretRef auth"
+type AzureContentSafetyAuth struct {
+	// Azure authentication method for Content Safety. Use `azure: {}` for
+	// implicit Azure credential discovery.
+	// +optional
+	Azure *AzureAuth `json:"azure,omitempty"`
+
+	// Inline Content Safety resource key. This option is the least secure;
+	// usage of a `Secret` is preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the Content Safety resource key, defaulting to a
+	// Kubernetes `Secret`. By default, the value is read from the
+	// `Authorization` key; set `secretRef.key` to override it.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where resource keys are inserted. Defaults to the
+	// `Ocp-Apim-Subscription-Key` header. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+func (a *AzureContentSafetyAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		Azure:     a.Azure,
+		Location:  a.Location,
 	}
 }
 

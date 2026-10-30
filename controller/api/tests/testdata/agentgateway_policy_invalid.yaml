@@ -1828,3 +1828,102 @@ spec:
         name: otel-collector
         port: 4317
       path: /v1/traces
+---
+_err: at least one of analyzeText or detectJailbreak must be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-no-checks
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+---
+_err: azureContentSafety.detectJailbreak is only supported on request guards
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-response-jailbreak
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        response:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            detectJailbreak: {}
+---
+_err: exactly one
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-and-model-armor
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            analyzeText: {}
+          googleModelArmor:
+            templateId: template
+            projectId: project
+---
+_err: location may only be set for key or secretRef auth
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-azure-location
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            analyzeText: {}
+            policies:
+              auth:
+                azure: {}
+                location:
+                  header:
+                    name: Ocp-Apim-Subscription-Key
+---
+_err: should be less than or equal to 6
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-severity-too-high
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            analyzeText:
+              severityThreshold: 7

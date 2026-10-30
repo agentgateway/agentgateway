@@ -1414,6 +1414,28 @@ func (this *BackendPolicySpec_Ai_AzureContentSafety) UnmarshalJSON(b []byte) err
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_AzureContentSafety_AnalyzeText
+func (this *BackendPolicySpec_Ai_AzureContentSafety_AnalyzeText) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_Ai_AzureContentSafety_AnalyzeText
+func (this *BackendPolicySpec_Ai_AzureContentSafety_AnalyzeText) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_AzureContentSafety_DetectJailbreak
+func (this *BackendPolicySpec_Ai_AzureContentSafety_DetectJailbreak) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_Ai_AzureContentSafety_DetectJailbreak
+func (this *BackendPolicySpec_Ai_AzureContentSafety_DetectJailbreak) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_RequestRejection
 func (this *BackendPolicySpec_Ai_RequestRejection) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

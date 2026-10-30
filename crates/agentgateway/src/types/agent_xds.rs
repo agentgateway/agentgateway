@@ -1088,24 +1088,9 @@ fn convert_backend_ai_policy(
 							.iter()
 							.map(|policy| backend_policy_from_proto(policy, diagnostics))
 							.collect::<Result<Vec<_>, _>>()?;
-						llm::policy::RequestGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
-							endpoint: strng::new(&acs.endpoint),
-							action: convert_reject_audit(acs.action),
-							failure_mode: Default::default(),
-							policies: pols,
-							cached_azure_auth: Default::default(),
-							analyze_text: Some(llm::policy::AnalyzeTextConfig {
-								severity_threshold: acs.severity_threshold,
-								api_version: acs.api_version.as_ref().map(strng::new),
-								blocklist_names: if acs.blocklist_names.is_empty() {
-									None
-								} else {
-									Some(acs.blocklist_names.clone())
-								},
-								halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
-							}),
-							detect_jailbreak: None,
-						})
+						llm::policy::RequestGuardKind::AzureContentSafety(convert_azure_content_safety(
+							acs, pols,
+						))
 					},
 				};
 				Ok(llm::policy::RequestGuard {
@@ -1175,24 +1160,10 @@ fn convert_backend_ai_policy(
 						.iter()
 						.filter_map(|p| backend_policy_from_proto(p, diagnostics).ok())
 						.collect::<Vec<_>>();
-					llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
-						endpoint: strng::new(&acs.endpoint),
-						action: convert_reject_audit(acs.action),
-						failure_mode: Default::default(),
-						policies: pols,
-						cached_azure_auth: Default::default(),
-						analyze_text: Some(llm::policy::AnalyzeTextConfig {
-							severity_threshold: acs.severity_threshold,
-							api_version: acs.api_version.as_ref().map(strng::new),
-							blocklist_names: if acs.blocklist_names.is_empty() {
-								None
-							} else {
-								Some(acs.blocklist_names.clone())
-							},
-							halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
-						}),
-						detect_jailbreak: None,
-					})
+					let mut acs = convert_azure_content_safety(acs, pols);
+					// Jailbreak detection only applies to requests.
+					acs.detect_jailbreak = None;
+					llm::policy::ResponseGuardKind::AzureContentSafety(acs)
 				},
 			};
 			let scope = match convert_content_scopes(&reqp.scope, llm::policy::default_response_scope) {
@@ -4270,6 +4241,38 @@ fn convert_guardrail_failure_mode(mode: i32) -> llm::policy::FailureMode {
 	}
 }
 
+fn convert_azure_content_safety(
+	acs: &proto::agent::backend_policy_spec::ai::AzureContentSafety,
+	policies: Vec<BackendTrafficPolicy>,
+) -> llm::policy::AzureContentSafety {
+	llm::policy::AzureContentSafety {
+		endpoint: strng::new(&acs.endpoint),
+		action: convert_reject_audit(acs.action),
+		failure_mode: convert_guardrail_failure_mode(acs.failure_mode),
+		policies,
+		cached_azure_auth: Default::default(),
+		analyze_text: acs
+			.analyze_text
+			.as_ref()
+			.map(|at| llm::policy::AnalyzeTextConfig {
+				severity_threshold: at.severity_threshold,
+				api_version: at.api_version.as_ref().map(strng::new),
+				blocklist_names: if at.blocklist_names.is_empty() {
+					None
+				} else {
+					Some(at.blocklist_names.clone())
+				},
+				halt_on_blocklist_hit: at.halt_on_blocklist_hit,
+			}),
+		detect_jailbreak: acs
+			.detect_jailbreak
+			.as_ref()
+			.map(|dj| llm::policy::DetectJailbreakConfig {
+				api_version: dj.api_version.as_ref().map(strng::new),
+			}),
+	}
+}
+
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
@@ -4573,6 +4576,83 @@ mod tests {
 		)
 		.unwrap_err();
 		assert!(err.to_string().contains("non-default scope"), "{err}");
+	}
+
+	#[test]
+	fn azure_content_safety_from_proto() {
+		use proto::agent::backend_policy_spec::ai::azure_content_safety::{
+			AnalyzeText, DetectJailbreak,
+		};
+		use proto::agent::backend_policy_spec::ai::{
+			AzureContentSafety, PromptGuard, RejectAuditAction, RequestGuard, ResponseGuard, webhook,
+		};
+
+		let acs = AzureContentSafety {
+			endpoint: "test.cognitiveservices.azure.com".to_string(),
+			action: RejectAuditAction::Audit as i32,
+			failure_mode: webhook::FailureMode::FailOpen as i32,
+			analyze_text: Some(AnalyzeText {
+				severity_threshold: Some(4),
+				api_version: Some("2024-09-01".to_string()),
+				blocklist_names: vec!["list-a".to_string()],
+				halt_on_blocklist_hit: Some(true),
+			}),
+			detect_jailbreak: Some(DetectJailbreak {
+				api_version: Some("2024-02-15-preview".to_string()),
+			}),
+			..Default::default()
+		};
+		let ai = Ai {
+			prompt_guard: Some(PromptGuard {
+				request: vec![RequestGuard {
+					rejection: None,
+					kind: Some(Kind::AzureContentSafety(acs.clone())),
+					scope: vec![],
+				}],
+				response: vec![ResponseGuard {
+					rejection: None,
+					kind: Some(response_guard::Kind::AzureContentSafety(acs)),
+					scope: vec![],
+				}],
+				..Default::default()
+			}),
+			..Default::default()
+		};
+
+		let pg = convert_backend_ai_policy(&ai, &mut Diagnostics::default())
+			.unwrap()
+			.prompt_guard
+			.unwrap();
+		let llm::policy::RequestGuardKind::AzureContentSafety(req) = &pg.request[0].kind else {
+			panic!("expected azure content safety request guard");
+		};
+		assert_eq!(req.endpoint.as_str(), "test.cognitiveservices.azure.com");
+		assert_eq!(req.action, llm::policy::RejectAuditAction::Audit);
+		assert_eq!(req.failure_mode, llm::policy::FailureMode::FailOpen);
+		let at = req.analyze_text.as_ref().unwrap();
+		assert_eq!(at.severity_threshold, Some(4));
+		assert_eq!(at.api_version.as_deref(), Some("2024-09-01"));
+		assert_eq!(at.blocklist_names, Some(vec!["list-a".to_string()]));
+		assert_eq!(at.halt_on_blocklist_hit, Some(true));
+		assert_eq!(
+			req
+				.detect_jailbreak
+				.as_ref()
+				.unwrap()
+				.api_version
+				.as_deref(),
+			Some("2024-02-15-preview")
+		);
+
+		let llm::policy::ResponseGuardKind::AzureContentSafety(resp) = &pg.response[0].kind else {
+			panic!("expected azure content safety response guard");
+		};
+		assert_eq!(resp.failure_mode, llm::policy::FailureMode::FailOpen);
+		assert!(resp.analyze_text.is_some());
+		assert!(
+			resp.detect_jailbreak.is_none(),
+			"jailbreak detection is request-only"
+		);
 	}
 
 	#[test]
