@@ -759,6 +759,12 @@ pub mod from_completions {
 	// Cross-checked against litellm/types/llms/vertex_ai.py Schema TypedDict (both MIT-licensed).
 
 	/// Schema fields Gemini accepts. `enum` is dropped on non-string types.
+	///
+	/// `exclusiveMinimum`/`exclusiveMaximum` are not in this list: neither the
+	/// Gemini API nor the Vertex Schema proto defines them (v1beta `Schema` has
+	/// only `minimum`/`maximum`, fields 11/12), and a request carrying them is
+	/// rejected with a 400. They are stripped rather than converted to
+	/// `minimum`/`maximum`, which would silently widen the bound (#4242).
 	const ALLOWED_SCHEMA_FIELDS: &[&str] = &[
 		"type",
 		"format",
@@ -776,8 +782,6 @@ pub mod from_completions {
 		"pattern",
 		"minimum",
 		"maximum",
-		"exclusiveMinimum",
-		"exclusiveMaximum",
 		"minItems",
 		"maxItems",
 		"minProperties",
