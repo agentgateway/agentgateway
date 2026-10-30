@@ -128,6 +128,10 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		setupLog.Error(err, "unable to add agentgateway Syncer runnable")
 		return nil, err
 	}
+	if err := cfg.Manager.Add(agwSyncer.ProxyFeedbackWriter()); err != nil {
+		setupLog.Error(err, "unable to add proxy feedback writer runnable")
+		return nil, err
+	}
 
 	agwStatusSyncer := syncer.NewAgwStatusSyncer(
 		cfg.AgwControllerName,

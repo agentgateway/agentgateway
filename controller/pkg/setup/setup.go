@@ -300,8 +300,8 @@ func (s *setup) Start(ctx context.Context) error {
 			xdsMux := cmux.New(s.XDSListener)
 			tlsListener := xdsMux.Match(cmux.TLS())
 			plaintextListener := xdsMux.Match(cmux.Any())
-			runXDSServer(ctx, tlsListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.Registrations...)
-			runXDSServer(ctx, plaintextListener, authenticators, s.GlobalSettings.XdsAuth, nil, agw.NackPublisher, agw.Registrations...)
+			runXDSServer(ctx, tlsListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.ProxyFeedback, agw.Registrations...)
+			runXDSServer(ctx, plaintextListener, authenticators, s.GlobalSettings.XdsAuth, nil, agw.NackPublisher, agw.ProxyFeedback, agw.Registrations...)
 			context.AfterFunc(ctx, xdsMux.Close)
 			go func() {
 				if err := xdsMux.Serve(); err != nil && err != cmux.ErrListenerClosed && err != cmux.ErrServerClosed {
@@ -309,9 +309,9 @@ func (s *setup) Start(ctx context.Context) error {
 				}
 			}()
 		} else if s.GlobalSettings.IsXdsTLSEnabled() {
-			runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.Registrations...)
+			runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.ProxyFeedback, agw.Registrations...)
 		} else if s.GlobalSettings.IsXdsPlaintextEnabled() {
-			runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, nil, agw.NackPublisher, agw.Registrations...)
+			runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, nil, agw.NackPublisher, agw.ProxyFeedback, agw.Registrations...)
 		}
 	}
 

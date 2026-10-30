@@ -1577,9 +1577,10 @@ fn backend_auth_kind_from_proto(
 					kind: "oauthTokenExchange",
 					reason,
 				},
-				None => BackendAuthKind::OAuthTokenExchange(Box::new(
-					auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics)?,
-				)),
+				None => match auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics) {
+					Ok(auth) => BackendAuthKind::OAuthTokenExchange(Box::new(auth)),
+					Err(error) => invalid_backend_auth("oauthTokenExchange", error, diagnostics),
+				},
 			}
 		},
 		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(mut s)) => {
@@ -1588,9 +1589,10 @@ fn backend_auth_kind_from_proto(
 					kind: "crossAppAccess",
 					reason,
 				},
-				None => BackendAuthKind::CrossAppAccess(Box::new(
-					auth::oauth::CrossAppAccessAuth::from_proto(s, diagnostics)?,
-				)),
+				None => match auth::oauth::CrossAppAccessAuth::from_proto(s, diagnostics) {
+					Ok(auth) => BackendAuthKind::CrossAppAccess(Box::new(auth)),
+					Err(error) => invalid_backend_auth("crossAppAccess", error, diagnostics),
+				},
 			}
 		},
 		Some(proto::agent::backend_auth_policy::Kind::JwtSign(jwt_sign)) => {
@@ -1609,6 +1611,21 @@ fn backend_auth_kind_from_proto(
 		},
 		None => return Ok(None),
 	}))
+}
+
+/// Rejecting the xDS resource would keep a fresh proxy unready and, on an update, leave the
+/// previous policy in place. Accept it with a warning instead, and keep an auth kind that
+/// rejects the requests that use it.
+fn invalid_backend_auth(
+	kind: &'static str,
+	error: ProtoError,
+	diagnostics: &mut Diagnostics,
+) -> BackendAuthKind {
+	let reason = error.to_string();
+	diagnostics.add_warning(format!(
+		"{kind} configuration is invalid; requests using this policy will be rejected: {reason}"
+	));
+	BackendAuthKind::Invalid { kind, reason }
 }
 
 fn listener_protocol_from_proto(
@@ -4758,21 +4775,149 @@ mod tests {
 			token_endpoint_path: Some("missing-leading-slash".to_string()),
 			..Default::default()
 		}
-	))]
-	#[case::cross_app_access(proto::agent::backend_auth_policy::Kind::CrossAppAccess(
-		proto::agent::CrossAppAccessAuth::default()
-	))]
-	fn backend_auth_proxy_validation_failure_is_rejected(
+	), "oauthTokenExchange", "must start with /")]
+	#[case::cross_app_access(
+		proto::agent::backend_auth_policy::Kind::CrossAppAccess(
+			proto::agent::CrossAppAccessAuth::default()
+		),
+		"crossAppAccess",
+		"missing required field"
+	)]
+	fn backend_auth_proxy_validation_failure_becomes_invalid(
 		#[case] kind: proto::agent::backend_auth_policy::Kind,
+		#[case] variant: &str,
+		#[case] detail: &str,
 	) {
-		let result = backend_auth_kind_from_proto(
+		let mut diagnostics = Diagnostics::default();
+		let kind = backend_auth_kind_from_proto(
 			proto::agent::BackendAuthPolicy {
 				kind: Some(kind),
 				..Default::default()
 			},
-			&mut Diagnostics::default(),
-		);
-		assert!(result.is_err(), "{result:?}");
+			&mut diagnostics,
+		)
+		.expect("proxy validation failure must not reject the xDS resource")
+		.expect("backend auth kind must be retained");
+
+		let serialized = serde_json::to_value(&kind).unwrap();
+		assert_eq!(serialized["invalid"]["kind"], variant, "{serialized}");
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1, "{warnings:?}");
+		assert!(warnings[0].contains(variant), "{warnings:?}");
+		assert!(warnings[0].contains(detail), "{warnings:?}");
+	}
+
+	const TEST_EC_SIGNING_KEY: &str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg8vzpi1sZ7oaBgeTD
+VWsl9p/gozcpT/HlS4oEEuJEnauhRANCAASaGYTRrMZziCMEUyqX7Ti0/F6MSTi4
+m3ImPOZA7+P/Z9JgKSu1v5GeNDfsY6paTdIOWYv8aI0RuyLdjU55Rzar
+-----END PRIVATE KEY-----";
+
+	#[rstest::rstest]
+	#[case::malformed_signing_key(
+		"-----BEGIN PRIVATE KEY-----\nKEY-MATERIAL-MARKER\n-----END PRIVATE KEY-----",
+		proto::agent::JwtSigningAlg::Es256,
+		"",
+		"signing_key"
+	)]
+	#[case::signing_key_alg_mismatch(
+		TEST_EC_SIGNING_KEY,
+		proto::agent::JwtSigningAlg::Rs256,
+		"",
+		"signing_key"
+	)]
+	#[case::malformed_certificate(
+		TEST_EC_SIGNING_KEY,
+		proto::agent::JwtSigningAlg::Es256,
+		"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----",
+		"certificate"
+	)]
+	fn invalid_private_key_jwt_is_retained_as_invalid(
+		#[values("oauthTokenExchange", "crossAppAccess")] variant: &str,
+		#[case] signing_key: &str,
+		#[case] alg: proto::agent::JwtSigningAlg,
+		#[case] certificate: &str,
+		#[case] want: &str,
+	) {
+		use proto::agent::o_auth_client_auth::private_key_jwt::CertificateHeader;
+
+		let private_key_jwt = proto::agent::OAuthClientAuth {
+			client_id: "client".to_string(),
+			method: proto::agent::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+			private_key_jwt: Some(proto::agent::o_auth_client_auth::PrivateKeyJwt {
+				signing_key: signing_key.to_string(),
+				certificate: certificate.to_string(),
+				certificate_header: if certificate.is_empty() {
+					CertificateHeader::Unspecified
+				} else {
+					CertificateHeader::X5c
+				} as i32,
+				alg: alg as i32,
+				assertion_audience: "https://idp.example/token".to_string(),
+				..Default::default()
+			}),
+			..Default::default()
+		};
+		let endpoint = |name: &str, client_auth: proto::agent::OAuthClientAuth| {
+			Some(proto::agent::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::agent::BackendReference {
+					kind: Some(proto::agent::backend_reference::Kind::Backend(format!(
+						"default/{name}"
+					))),
+					..Default::default()
+				}),
+				client_auth: Some(client_auth),
+				..Default::default()
+			})
+		};
+		let secret_post = proto::agent::OAuthClientAuth {
+			client_id: "client".to_string(),
+			method: proto::agent::o_auth_client_auth::Method::ClientSecretPost as i32,
+			..Default::default()
+		};
+		let kind = match variant {
+			"oauthTokenExchange" => proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
+				proto::agent::OAuthTokenExchange {
+					client_auth: Some(private_key_jwt),
+					..Default::default()
+				},
+			),
+			"crossAppAccess" => {
+				proto::agent::backend_auth_policy::Kind::CrossAppAccess(proto::agent::CrossAppAccessAuth {
+					identity_provider: endpoint("idp", private_key_jwt),
+					resource_authorization_server: endpoint("resource-as", secret_post),
+					audience: "https://resource.example".to_string(),
+					..Default::default()
+				})
+			},
+			other => unreachable!("unexpected variant {other}"),
+		};
+		let mut diagnostics = Diagnostics::default();
+		let kind = backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(kind),
+				..Default::default()
+			},
+			&mut diagnostics,
+		)
+		.expect("invalid client credential must not reject the xDS resource")
+		.expect("backend auth kind must be retained");
+
+		let serialized = serde_json::to_string(&kind).unwrap();
+		assert!(serialized.contains("\"invalid\""), "{serialized}");
+		assert!(serialized.contains(variant), "{serialized}");
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1, "{warnings:?}");
+		assert!(warnings[0].contains(want), "{warnings:?}");
+		for key_line in signing_key
+			.lines()
+			.filter(|line| !line.starts_with("-----"))
+		{
+			assert!(
+				!serialized.contains(key_line) && !warnings[0].contains(key_line),
+				"key material leaked: {serialized} {warnings:?}"
+			);
+		}
 	}
 
 	fn conditional_traffic_policy(
