@@ -35,7 +35,16 @@ the request authority is authorized independently. Upgrades in Substrate are
 denied (including CONNECT).
 
 Egress authorization failures return HTTP 403 with the body
-`actor egress policy denied`. Detailed failure reasons remain in gateway logs.
+`actor egress policy denied`. Refusals with an HTTP response include an
+`ate-error-reason` header so clients can distinguish destination, identity,
+policy, and credential failures without parsing the response body. Local reason
+codes include `DESTINATION_DENIED`, `ACTOR_IDENTITY_DENIED`,
+`ACTOR_NOT_RUNNING`, `EGRESS_POLICY_NOT_CONFIGURED`,
+`CREDENTIAL_PROVIDER_NOT_CONFIGURED`, `CREDENTIAL_CONFIG_INVALID`, and
+`UNSUPPORTED_UPGRADE`. Provider, JWT issuer, and policy API failures use their
+own fallback codes or pass through a trusted `ate.dev` `ErrorInfo.reason`.
+The HTTP status and body are unchanged. A refusal during the inner TLS
+ClientHello happens after CONNECT and cannot include an HTTP response header.
 
 WebSocket upgrades return HTTP 403 with the exact body
 `WebSocket egress is not supported` (no trailing newline), for both HTTP and
