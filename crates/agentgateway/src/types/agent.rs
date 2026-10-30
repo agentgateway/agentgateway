@@ -3203,7 +3203,7 @@ pub struct LocalMcpAuthentication {
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 	/// If omitted, the JWKS URL is derived from the issuer and provider.
 	#[serde(default)]
-	pub jwks: Option<FileInlineOrRemote>,
+	pub jwks: Option<http::jwt::JwksSource>,
 	/// Controls whether MCP requests must include a valid JWT.
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
@@ -3267,17 +3267,19 @@ impl LocalMcpAuthentication {
 
 	pub fn as_jwt(&self) -> anyhow::Result<http::jwt::LocalJwtConfig> {
 		let jwks = match &self.jwks {
-			None => FileInlineOrRemote::Remote {
+			None => http::jwt::JwksSource::Remote {
 				url: self.derived_jwks_url()?,
+				max_age: None,
 			},
-			Some(FileInlineOrRemote::Remote { url }) => FileInlineOrRemote::Remote {
+			Some(http::jwt::JwksSource::Remote { url, max_age }) => http::jwt::JwksSource::Remote {
 				url: if !url.to_string().is_empty() {
 					url.clone()
 				} else {
 					self.derived_jwks_url()?
 				},
+				max_age: *max_age,
 			},
-			Some(jwks @ (FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. })) => {
+			Some(jwks @ (http::jwt::JwksSource::Inline(_) | http::jwt::JwksSource::File { .. })) => {
 				jwks.clone()
 			},
 		};
@@ -4065,7 +4067,7 @@ jwtValidationOptions:
 
 		match jwt_config {
 			http::jwt::LocalJwtConfig::Single { jwks, .. } => match jwks {
-				FileInlineOrRemote::Remote { url } => {
+				http::jwt::JwksSource::Remote { url, .. } => {
 					assert_eq!(
 						url.to_string(),
 						"https://authentik.example.com/application/o/mcp/jwks/"

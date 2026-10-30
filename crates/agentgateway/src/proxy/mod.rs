@@ -410,7 +410,10 @@ impl ProxyError {
 
 	pub fn is_client_bearer_token_rejection(&self) -> bool {
 		match self {
-			Self::JwtAuthenticationFailure(crate::http::jwt::TokenError::CredentialRemoval(_)) => false,
+			Self::JwtAuthenticationFailure(
+				crate::http::jwt::TokenError::CredentialRemoval(_)
+				| crate::http::jwt::TokenError::ExpiredSigningKeys,
+			) => false,
 			Self::JwtAuthenticationFailure(_) => true,
 			Self::McpAuthenticationFailure(inner, _) => inner.is_client_bearer_token_rejection(),
 			_ => false,
@@ -514,6 +517,10 @@ impl ProxyError {
 			ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::CredentialRemoval(_)) => {
 				StatusCode::INTERNAL_SERVER_ERROR
 			},
+			// The gateway's own keys are stale; no client credential can succeed until a refetch does.
+			ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::ExpiredSigningKeys) => {
+				StatusCode::SERVICE_UNAVAILABLE
+			},
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::OidcFailure(ref error) => match error {
 				http::oidc::Error::AuthenticationRequired => StatusCode::UNAUTHORIZED,
@@ -549,6 +556,14 @@ impl ProxyError {
 				) =>
 			{
 				StatusCode::INTERNAL_SERVER_ERROR
+			},
+			ProxyError::McpAuthenticationFailure(ref inner, _)
+				if matches!(
+					inner.as_ref(),
+					ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::ExpiredSigningKeys)
+				) =>
+			{
+				StatusCode::SERVICE_UNAVAILABLE
 			},
 			ProxyError::McpAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
@@ -811,7 +826,7 @@ fn invalid_token_description(error: &http::jwt::TokenError) -> Option<&'static s
 		| TokenError::InvalidHeader(_)
 		| TokenError::MissingKeyId
 		| TokenError::UnknownKeyId(_) => Some("The bearer token is invalid"),
-		TokenError::Missing | TokenError::CredentialRemoval(_) => None,
+		TokenError::Missing | TokenError::ExpiredSigningKeys | TokenError::CredentialRemoval(_) => None,
 	}
 }
 
@@ -1036,6 +1051,19 @@ mod tests {
 				.get(hyper::header::WWW_AUTHENTICATE)
 				.unwrap(),
 			"Bearer"
+		);
+	}
+
+	#[test]
+	fn expired_signing_keys_are_unavailable_not_a_token_rejection() {
+		let error = ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::ExpiredSigningKeys);
+		assert!(!error.is_client_bearer_token_rejection());
+		let response = error.into_response_with_grpc(false);
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+		assert!(
+			!response
+				.headers()
+				.contains_key(hyper::header::WWW_AUTHENTICATE)
 		);
 	}
 
