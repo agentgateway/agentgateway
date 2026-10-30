@@ -241,7 +241,13 @@ tonic-types = "0.14"
 tonic-prost = { version = "0.14" }
 tonic-prost-build = { version = "0.14", features = ["transport"] }
 tower = { version = "0.5" }
-tower-http = { version = "0.7", features = ["cors"] }
+tower-http = { version = "0.7", features = [
+    "compression-br",
+    "compression-deflate",
+    "compression-gzip",
+    "compression-zstd",
+    "cors",
+] }
 tower-serve-static = "0.1"
 tower-service = "0.3"
 tracing = "0.1"

@@ -3174,6 +3174,9 @@ pub struct FilterOrPolicy {
 	/// Buffer request and response bodies.
 	#[serde(default)]
 	buffer: Option<http::buffer::Buffer>,
+	/// Compress responses and decompress request bodies.
+	#[serde(default)]
+	compression: Option<http::compression::Compression>,
 	/// Set request timeout limits.
 	#[serde(default)]
 	timeout: Option<timeout::Policy>,
@@ -5594,6 +5597,7 @@ pub(crate) async fn split_policies_for_target(
 		substrate_ingress,
 		substrate_egress,
 		buffer,
+		compression,
 		timeout,
 		retry,
 		delay,
@@ -5796,6 +5800,9 @@ pub(crate) async fn split_policies_for_target(
 	// Traffic policies
 	if let Some(p) = buffer {
 		route_policies.push(TrafficPolicy::Buffer(RequestPolicy::single(p)));
+	}
+	if let Some(p) = compression {
+		route_policies.push(TrafficPolicy::Compression(RequestPolicy::single(p)));
 	}
 	if let Some(p) = timeout {
 		route_policies.push(TrafficPolicy::Timeout(p));

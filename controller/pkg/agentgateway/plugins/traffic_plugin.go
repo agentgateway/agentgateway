@@ -65,6 +65,7 @@ const (
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
 	directResponseSuffix           = ":direct-response"
 	bufferSuffix                   = ":buffer"
+	compressionSuffix              = ":compression"
 )
 
 var logger = logging.New("agentgateway/plugins")
@@ -618,6 +619,10 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("buffer")(processBufferPolicy(traffic.Buffer, basePolicyName, policyName))
 	}
 
+	if traffic.Compression != nil {
+		appendPolicy("compression")(processCompressionPolicy(traffic.Compression, basePolicyName, policyName), nil)
+	}
+
 	if traffic.JWTAuthentication != nil {
 		appendPolicy("jwtAuthentication")(processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
@@ -675,6 +680,49 @@ func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, pol
 		"agentgateway_policy", bufferPolicy.Name)
 
 	return bufferPolicy, errors.Join(errs...)
+}
+
+func translateCompressionAlgorithms(algorithms []agentgateway.CompressionAlgorithm) []api.TrafficPolicySpec_Compression_Algorithm {
+	out := make([]api.TrafficPolicySpec_Compression_Algorithm, 0, len(algorithms))
+	for _, a := range algorithms {
+		switch a {
+		case agentgateway.CompressionAlgorithmBrotli:
+			out = append(out, api.TrafficPolicySpec_Compression_BROTLI)
+		case agentgateway.CompressionAlgorithmDeflate:
+			out = append(out, api.TrafficPolicySpec_Compression_DEFLATE)
+		case agentgateway.CompressionAlgorithmZstd:
+			out = append(out, api.TrafficPolicySpec_Compression_ZSTD)
+		default:
+			out = append(out, api.TrafficPolicySpec_Compression_GZIP)
+		}
+	}
+	return out
+}
+
+// processCompressionPolicy leaves empty algorithm lists empty; the proxy defaults them to gzip.
+func processCompressionPolicy(compression *agentgateway.Compression, basePolicyName string, policyName types.NamespacedName) *api.Policy {
+	translated := &api.TrafficPolicySpec_Compression{}
+	if r := compression.Response; r != nil {
+		translated.Response = &api.TrafficPolicySpec_Compression_ResponseCompression{
+			Algorithms: translateCompressionAlgorithms(r.Algorithms),
+		}
+	}
+	if r := compression.Request; r != nil {
+		translated.Request = &api.TrafficPolicySpec_Compression_RequestDecompression{
+			AcceptedAlgorithms: translateCompressionAlgorithms(r.AcceptedAlgorithms),
+		}
+	}
+	return &api.Policy{
+		Key:  basePolicyName + compressionSuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policyName),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Compression_{
+					Compression: translated,
+				},
+			},
+		},
+	}
 }
 
 func translatePolicyInheritance(strategy *agentgateway.PolicyStrategy) api.Policy_Inheritance {

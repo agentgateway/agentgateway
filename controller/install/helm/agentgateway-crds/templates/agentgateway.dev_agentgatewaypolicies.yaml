@@ -8315,6 +8315,60 @@ spec:
                         be set
                       rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
                         >= 1'
+                  compression:
+                    description: Compresses responses sent to the client and decompresses
+                      request bodies before forwarding.
+                    properties:
+                      request:
+                        description: |-
+                          Decompresses request bodies before body-aware policies (rate limiting, ext_proc,
+                          transformations) run and before forwarding to the backend. Authentication and
+                          authorization run first and observe the encoded body.
+                        properties:
+                          acceptedAlgorithms:
+                            description: |-
+                              Algorithms decoded from request bodies. Bodies using any other (or more than one) encoding
+                              are forwarded untouched.
+                              If unset, defaults to Gzip.
+                            items:
+                              enum:
+                              - Gzip
+                              - Brotli
+                              - Deflate
+                              - Zstd
+                              type: string
+                            maxItems: 4
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-type: set
+                        type: object
+                      response:
+                        description: |-
+                          Compresses response bodies when the client advertises support in Accept-Encoding.
+                          Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) are compressed.
+                        properties:
+                          algorithms:
+                            description: |-
+                              Algorithms that may be negotiated with the client's Accept-Encoding header.
+                              If unset, defaults to Gzip.
+                            items:
+                              enum:
+                              - Gzip
+                              - Brotli
+                              - Deflate
+                              - Zstd
+                              type: string
+                            maxItems: 4
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-type: set
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: at least one of the fields in [request response] must
+                        be set
+                      rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
+                        >= 1'
                   cors:
                     description: CORS configuration for the policy.
                     properties:
@@ -11293,7 +11347,7 @@ spec:
                 - message: phase PreRouting only supports extAuth, authorization,
                     transformation, extProc, jwtAuthentication, basicAuthentication,
                     apiKeyAuthentication and cors
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.buffer),has(self.csrf),has(self.delay),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.buffer),has(self.compression),has(self.csrf),has(self.delay),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:
