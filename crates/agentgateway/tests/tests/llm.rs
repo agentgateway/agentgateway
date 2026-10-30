@@ -79,6 +79,62 @@ async fn llm_copilot_explicit_auth(#[case] credential: &str) {
 }
 
 #[tokio::test]
+async fn llm_streaming_response_transformation_sees_llm_context() {
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(wiremock::ResponseTemplate::new(200).set_body_raw(
+			llm_body!("response/completions/stream-content_filter.json").to_vec(),
+			"text/event-stream",
+		))
+		.mount(&mock)
+		.await;
+	let (_mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation: None,
+		}),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"transformations": {
+				"response": {
+					"set": {
+						"x-llm-provider": "llm.provider",
+						"x-llm-request-model": "llm.requestModel",
+						"x-llm-streaming": "string(llm.streaming)"
+					}
+				}
+			}
+		}))
+		.await;
+
+	let mut body: Value =
+		serde_json::from_slice(llm_body!("requests/completions/basic.json")).unwrap();
+	body["stream"] = json!(true);
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&body).unwrap()))
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let header = |name: &str| {
+		res
+			.headers()
+			.get(name)
+			.map(|v| v.to_str().unwrap().to_string())
+	};
+	assert_eq!(header("x-llm-provider").as_deref(), Some("openai"));
+	assert_eq!(header("x-llm-request-model").as_deref(), Some("replaceme"));
+	assert_eq!(header("x-llm-streaming").as_deref(), Some("true"));
+	let text = String::from_utf8(read_body_raw(res.into_body()).await.to_vec()).unwrap();
+	assert!(text.contains("data: "), "expected SSE body, got: {text}");
+}
+
+#[tokio::test]
 async fn llm_openai_tokenize() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
 	let (_mock, _bind, io) = setup_llm_mock(

@@ -2946,6 +2946,63 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 	);
 }
 
+#[tokio::test]
+async fn process_streaming_exposes_request_llm_context_to_response_cel() {
+	use crate::cel::{Executor, Expression, LLMContext};
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+
+	let mut resp = Response::new(Body::from("data: [DONE]\n\n"));
+	resp.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"text/event-stream".parse().unwrap(),
+	);
+
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let translated = provider
+		.process_streaming(
+			client,
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Completions,
+				cache_convention: CacheTokenConvention::pending(),
+				request_model: "input-model".into(),
+				original_model: None,
+				provider: "openai".into(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponsePolicies::default(),
+			None,
+			Default::default(),
+			None,
+			resp,
+		)
+		.expect("streaming translation should succeed");
+
+	let ctx = translated
+		.extensions()
+		.get::<LLMContext>()
+		.expect("streaming responses must carry the request-side LLM context");
+	assert_eq!(ctx.provider, "openai");
+	assert!(ctx.streaming);
+	assert!(ctx.response_model.is_none());
+
+	let executor = Executor::new_response(None, &translated);
+	let expr = Expression::new_strict(
+		"llm.provider == \"openai\" && llm.requestModel == \"input-model\" && llm.streaming \
+		 && !has(llm.responseModel)",
+	)
+	.unwrap();
+	assert!(executor.eval_bool(&expr));
+}
+
 #[test]
 fn setup_request_openai_applies_prefixed_path_without_host_override() {
 	let provider = AIProvider::OpenAI(openai::Provider {

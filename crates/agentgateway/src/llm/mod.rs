@@ -3301,11 +3301,15 @@ impl AIProvider {
 		{
 			llmresp.response.service_tier = Some(strng::new(tier));
 		}
-		log.store(Some(llmresp));
 		let buffer = http::response_buffer_limit(&resp);
 
 		// Decompress before the SSE parser, which expects plaintext chunks.
 		let (mut parts, body) = resp.into_parts();
+		// Request-side context for response CEL; response fields are not known yet.
+		parts
+			.extensions
+			.insert(crate::cel::LLMContext::from_llm_info(llmresp.clone(), None));
+		log.store(Some(llmresp));
 		let body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer);
 		let ce = parts.headers.typed_get::<ContentEncoding>();
 		let (body, decompressed_encoding) = http::compression::decompress_body(body, ce.as_ref())
