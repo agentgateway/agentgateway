@@ -4464,7 +4464,10 @@ impl LocalLLMModelRegistry {
 		if target == virtual_model.name {
 			return None;
 		}
-		self.virtual_models.iter().find(|model| model.name == target)
+		self
+			.virtual_models
+			.iter()
+			.find(|model| model.name == target)
 	}
 
 	fn validate_no_cycle<'a>(

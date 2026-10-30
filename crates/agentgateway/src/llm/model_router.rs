@@ -1580,6 +1580,13 @@ mod tests {
 			.respond_with(ResponseTemplate::new(500))
 			.mount(&server)
 			.await;
+		Mock::given(path("/nested"))
+			.respond_with(
+				ResponseTemplate::new(200)
+					.set_body_json(serde_json::json!({"model": "ha", "effort": "low"})),
+			)
+			.mount(&server)
+			.await;
 
 		let model = |name: &str| ModelRoute {
 			discovery: None,
@@ -1642,6 +1649,28 @@ mod tests {
 						"transformation": {"model": "callout.body.model"},
 					}),
 				),
+				callout(
+					"nested",
+					serde_json::json!({
+						"host": format!("http://{}/nested", server.address()),
+						"transformation": {
+							"model": "callout.body.model",
+							"reasoning_effort": "callout.body.effort",
+						},
+					}),
+				),
+				VirtualModelRoute {
+					name: "ha".to_string(),
+					created: 0,
+					llm_policy: Arc::default(),
+					routing: VirtualModelRouting::Failover {
+						backend: RouteBackendReference {
+							weight: 1,
+							target: RouteBackendTarget::Invalid,
+							inline_policies: vec![],
+						},
+					},
+				},
 			],
 		);
 		let client = crate::test_helpers::policy_client();
@@ -1689,6 +1718,14 @@ mod tests {
 			panic!("expected an error");
 		};
 		assert_eq!(error.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
+
+		// A callout can select a failover virtual model; its fields still apply.
+		let (result, req) = resolve("nested").await;
+		assert!(matches!(result, ResolveResult::Backend(_)));
+		assert_eq!(
+			body(req).await,
+			serde_json::json!({"model": "ha", "max_tokens": 256, "reasoning_effort": "low"})
+		);
 	}
 
 	#[rstest::rstest]
