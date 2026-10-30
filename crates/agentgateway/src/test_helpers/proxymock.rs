@@ -1193,6 +1193,9 @@ impl TestBind {
 			alpn: None,
 			subject_alt_names: None,
 			key_exchange_groups: None,
+			cert_path: None,
+			key_path: None,
+			root_path: None,
 			spiffe: false,
 		}
 		.try_into()
@@ -1231,6 +1234,9 @@ impl TestBind {
 			alpn: None,
 			subject_alt_names: None,
 			key_exchange_groups: None,
+			cert_path: None,
+			key_path: None,
+			root_path: None,
 			spiffe: false,
 		}
 		.try_into()

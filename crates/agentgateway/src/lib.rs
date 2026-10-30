@@ -183,6 +183,9 @@ pub struct RawConfig {
 	/// Local SPIFFE Workload API configuration
 	/// When set, listeners and backends may source their TLS identity from SPIFFE.
 	spiffe: Option<RawSpiffeConfig>,
+	/// Directories that cert, key and root files referenced by xDS-configured backend TLS must be under.
+	/// If unset, such files are rejected.
+	allowed_backend_tls_file_dirs: Option<Vec<PathBuf>>,
 	/// Kubernetes namespace for this gateway instance.
 	namespace: Option<String>,
 	/// Name of this gateway. Required when xDS is configured.
@@ -715,6 +718,8 @@ pub struct Config {
 	pub ca: Option<caclient::Config>,
 	/// Connection to the local SPIFFE Workload API, enabling SPIFFE-sourced TLS on binds.
 	pub spiffe: Option<control::spiffe::Config>,
+	/// Directories that backend TLS cert, key and root files must be under.
+	pub allowed_backend_tls_file_dirs: Vec<PathBuf>,
 
 	pub tracing: Option<trc::DeprecatedConfig>,
 	pub metrics: crate::telemetry::log::MetricsConfig,

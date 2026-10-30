@@ -247,6 +247,8 @@ pub fn parse_config(
 		.and_then(|cfg| cfg.endpoint)
 		.map(|endpoint| crate::control::spiffe::Config { endpoint });
 
+	let allowed_backend_tls_file_dirs = raw.allowed_backend_tls_file_dirs.unwrap_or_default();
+
 	let network = parse("NETWORK")?.or(raw.network).unwrap_or_default();
 
 	// Self-identity for locality-aware load balancing.
@@ -453,6 +455,7 @@ pub fn parse_config(
 		xds,
 		ca,
 		spiffe,
+		allowed_backend_tls_file_dirs,
 		num_worker_threads: parse_worker_threads(raw.worker_threads)
 			.ctx("invalid WORKER_THREADS/config.workerThreads")?,
 		termination_min_deadline,

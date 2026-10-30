@@ -75,6 +75,7 @@
 |`config.xdsAuthToken`|string|Authentication token for communicating with the xDS control plane.|
 |`config.spiffe`|object|Local SPIFFE Workload API configuration<br>When set, listeners and backends may source their TLS identity from SPIFFE.|
 |`config.spiffe.endpoint`|string|SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).|
+|`config.allowedBackendTlsFileDirs`|[]string|Directories that cert, key and root files referenced by xDS-configured backend TLS must be under.<br>If unset, such files are rejected.|
 |`config.namespace`|string|Kubernetes namespace for this gateway instance.|
 |`config.gateway`|string|Name of this gateway. Required when xDS is configured.|
 |`config.trustDomain`|string|SPIFFE trust domain for this gateway.|
