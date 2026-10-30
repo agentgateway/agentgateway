@@ -403,18 +403,17 @@ impl Session {
 		match d {
 			Ok(r) => Ok(r),
 			Err(UpstreamError::Http(ClientError::Status(resp))) => {
-				let resp = http::SendDirectResponse::new(*resp)
-					.await
-					.map_err(ProxyError::Body)?;
-				Err(mcp::Error::UpstreamError(Box::new(resp)).into())
+				Err(mcp::Error::UpstreamError(Box::new(http::SyncResponse::new(*resp))).into())
 			},
 			Err(UpstreamError::Proxy(p)) => Err(p),
-			// Preserve backend-auth error classification through the MCP HTTP transport.
+			// Preserve backend-auth error classification, and responses from backend policies (such
+			// as an ext_authz deny), through the MCP HTTP transport.
 			Err(UpstreamError::Http(ClientError::Proxy(
 				p @ (ProxyError::InvalidRequest
 				| ProxyError::BackendAuthenticationFailed(_)
 				| ProxyError::JwtAuthenticationFailure(_)
-				| ProxyError::McpAuthenticationFailure(_, _)),
+				| ProxyError::McpAuthenticationFailure(_, _)
+				| ProxyError::DirectResponse { .. }),
 			))) => Err(p),
 			Err(UpstreamError::Authorization {
 				resource_type,

@@ -282,7 +282,7 @@ impl crate::store::RequestPolicyTrait for RateLimits {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut http::Request,
-	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<http::PolicyResponse, ProxyError> {
 		let exec = Executor::new_request(req);
 		let mut status: Option<RateLimitStatus> = None;
 		let mut taken = Vec::new();

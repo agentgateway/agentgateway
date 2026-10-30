@@ -34,6 +34,7 @@ use crate::http::{
 	timeout,
 };
 use crate::mcp::{FailureMode, McpAuthorization};
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
@@ -3112,20 +3113,20 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 		client: &crate::proxy::httpproxy::PolicyClient,
 		log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		if let Some(auth) = &self.mcp {
 			if !crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
 				self.jwt.apply(Some(log), req).await.map_err(|e| {
-					crate::proxy::ProxyResponse::from(crate::mcp::auth::create_auth_required_response(
+					crate::mcp::auth::create_auth_required_response(
 						crate::proxy::ProxyError::JwtAuthenticationFailure(e),
 						req,
 						auth,
-					))
+					)
 				})?;
 			}
 
 			if let Some(resp) = crate::mcp::auth::handle_mcp_request(req, auth, client).await? {
-				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
+				return Err(ProxyError::direct_response(resp));
 			}
 			return Ok(crate::http::PolicyResponse::default());
 		}
@@ -3134,8 +3135,7 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 			.jwt
 			.apply(Some(log), req)
 			.await
-			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)
-			.map_err(crate::proxy::ProxyResponse::from)?;
+			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)?;
 		Ok(crate::http::PolicyResponse::default())
 	}
 

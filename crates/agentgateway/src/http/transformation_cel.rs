@@ -7,7 +7,7 @@ use crate::cel::{Expression, RequestSnapshot};
 use crate::http::{
 	HeaderOrPseudo, HeaderOrPseudoValue, PolicyResponse, Request, RequestOrResponse, Response,
 };
-use crate::proxy::ProxyResponse;
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 use crate::{cel, *};
@@ -293,7 +293,7 @@ impl crate::store::RequestPolicyTrait for Transformation {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		self
 			.apply_request(req)
 			.map_err(crate::proxy::ProxyError::Processing)?;
@@ -324,7 +324,7 @@ impl store::BackendPolicyTrait for Transformation {
 		_client: &PolicyClient,
 		_log: &mut Option<&mut RequestLog>,
 		req: &mut Request,
-	) -> Result<PolicyResponse, ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		self
 			.apply_request(req)
 			.map_err(crate::proxy::ProxyError::Processing)?;
@@ -341,7 +341,7 @@ impl store::ResponsePolicyTrait for Transformation {
 		&self,
 		log: &mut RequestLog,
 		resp: &mut Response,
-	) -> Result<PolicyResponse, ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		self
 			.apply_response(resp, log.request_snapshot.as_deref())
 			.map_err(crate::proxy::ProxyError::Processing)?;

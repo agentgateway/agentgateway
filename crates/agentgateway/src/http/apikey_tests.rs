@@ -334,9 +334,7 @@ async fn test_apikey_sha256_rejects_invalid_key() {
 
 	assert!(matches!(
 		err,
-		ProxyResponse::Error(ProxyError::APIKeyAuthenticationFailure(
-			Error::InvalidCredentials
-		))
+		ProxyError::APIKeyAuthenticationFailure(Error::InvalidCredentials)
 	));
 }
 

@@ -35,8 +35,8 @@ pub mod transformation_cel;
 
 pub use agent_http::{
 	Body, BodyContent, BodyInspection, BufferLimit, Error, PolicyResponse, RawBody, RecordedBody,
-	RecordedBodyHandle, Request, RequestBodyExt, Response, ResponseBodyExt, buffer_limit,
-	merge_in_headers, read_body_with_limit, response_buffer_limit, x_headers,
+	RecordedBodyHandle, Request, RequestBodyExt, Response, ResponseBodyExt, SyncResponse,
+	buffer_limit, merge_in_headers, read_body_with_limit, response_buffer_limit, x_headers,
 };
 pub use agent_policy_cors as cors;
 
@@ -84,34 +84,6 @@ pub(crate) fn strip_request_cookies_by_prefix(req: &mut Request, prefix: &str) {
 		let hv =
 			HeaderValue::from_str(&preserved.join("; ")).expect("re-joined cookie header is valid");
 		req.headers_mut().insert(header::COOKIE, hv);
-	}
-}
-
-// SendDirectResponse is a Response that has been buffered so that it is Send.
-pub struct SendDirectResponse(pub ::http::Response<Bytes>);
-
-impl Debug for SendDirectResponse {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("SendDirectResponse")
-			.field("status", &self.0.status())
-			.finish()
-	}
-}
-
-impl Deref for SendDirectResponse {
-	type Target = ::http::Response<Bytes>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl SendDirectResponse {
-	pub async fn new(response: Response) -> Result<Self, Error> {
-		let (head, bytes) = read_response_body(response).await?;
-		Ok(SendDirectResponse(::http::Response::from_parts(
-			head, bytes,
-		)))
 	}
 }
 
@@ -258,7 +230,6 @@ impl RequestOrResponse<'_> {
 
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
-use std::ops::Deref;
 use std::str::FromStr;
 
 pub use ::http::uri::{Authority, Scheme};
@@ -274,7 +245,7 @@ use url::{Url, form_urlencoded};
 
 use crate::cel::{BackendContext, DestinationContext, LLMContext, RequestTime, SourceContext};
 use crate::client::PoolKey;
-use crate::proxy::{ProxyError, ProxyResponse};
+use crate::proxy::ProxyError;
 use crate::transport::stream::TCPConnectionInfo;
 use crate::types::agent::{HeaderValueMatch, PathMatch};
 
@@ -781,23 +752,6 @@ pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
 pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
 	let lim = response_buffer_limit(resp);
 	resp.body_mut().inspect(lim).await
-}
-
-// Small extension to allow apply()ing a PolicyResponse which doesn't have access to a ProxyResponse.
-pub trait PolicyResponseExt {
-	fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse>;
-}
-
-impl PolicyResponseExt for PolicyResponse {
-	fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse> {
-		if let Some(mut dr) = self.direct_response {
-			merge_in_headers(self.response_headers, dr.headers_mut());
-			Err(ProxyResponse::DirectResponse(Box::new(dr)))
-		} else {
-			merge_in_headers(self.response_headers, hm);
-			Ok(())
-		}
-	}
 }
 
 // DebugExtensions is a wrapper that logs a requests known-extensions in the Debug implementation.

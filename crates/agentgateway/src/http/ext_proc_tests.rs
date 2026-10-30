@@ -2640,16 +2640,54 @@ fn configure_standalone_service_with_app_protocol(t: &TestBind, app_protocol: Op
 		.unwrap();
 }
 
+/// Selects `target` like a normal EPP, then replaces the upstream response with an ImmediateResponse.
+struct ImmediateResponseInferenceRouter(StandaloneInferenceRouter);
+
+#[async_trait::async_trait]
+impl Handler for ImmediateResponseInferenceRouter {
+	async fn handle_request_headers(
+		&mut self,
+		headers: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		self.0.handle_request_headers(headers, sender).await
+	}
+
+	async fn handle_response_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender
+			.send(immediate_response(proto::ImmediateResponse {
+				status: Some(proto::HttpStatus { code: 503 }),
+				body: "epp immediate".to_string(),
+				headers: None,
+				grpc_status: None,
+				details: "".to_string(),
+			}))
+			.await;
+		Ok(())
+	}
+}
+
 async fn setup_inference_routing_mock(
 	target: Option<String>,
 	request_headers_seen: Arc<AtomicUsize>,
 	destination_mode: Option<&'static str>,
 ) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
-	let ext_proc = ExtProcMock::new(move || {
-		StandaloneInferenceRouter::new(target.clone(), request_headers_seen.clone())
-	})
-	.spawn()
-	.await;
+	setup_inference_routing_with(
+		move || StandaloneInferenceRouter::new(target.clone(), request_headers_seen.clone()),
+		destination_mode,
+	)
+	.await
+}
+
+async fn setup_inference_routing_with<T: Handler + Send + Sync + 'static>(
+	handler: impl Fn() -> T + Send + Sync + 'static,
+	destination_mode: Option<&'static str>,
+) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
+	let ext_proc = ExtProcMock::new(handler).spawn().await;
 
 	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
 	configure_standalone_service(&t);
@@ -2760,6 +2798,36 @@ mod standalone_inference_routing {
 				.len(),
 			1,
 			"EPP-selected endpoint should receive traffic",
+		);
+	}
+
+	#[tokio::test]
+	async fn standalone_inference_routing_response_immediate_response_replaces_upstream() {
+		let backend = named_backend("backend").await;
+		let target = backend.address().to_string();
+		let (_ext_proc, _bind, io) = setup_inference_routing_with(
+			move || {
+				ImmediateResponseInferenceRouter(StandaloneInferenceRouter::new(
+					Some(target.clone()),
+					Arc::new(AtomicUsize::new(0)),
+				))
+			},
+			Some("passthrough"),
+		)
+		.await;
+
+		let res = send_request(io, Method::GET, "http://lo").await;
+		assert_eq!(res.status(), 503);
+		let body = read_body_raw(res.into_body()).await;
+		assert_eq!(body.as_ref(), b"epp immediate");
+		assert_eq!(
+			backend
+				.received_requests()
+				.await
+				.expect("recording should be enabled")
+				.len(),
+			1,
+			"the upstream is called before the EPP replaces its response",
 		);
 	}
 

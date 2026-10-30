@@ -4,8 +4,8 @@ use x509_parser::extensions::GeneralName;
 
 use super::{ActorRef, TRACE_POLICY_KIND, valid_resource_name};
 use crate::http::Request;
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::proxy::{ProxyError, ProxyResponse};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
@@ -88,7 +88,7 @@ impl EgressActorResolution {
 		inputs: &Arc<ProxyInputs>,
 		connection: &Extension,
 		req: &mut Request,
-	) -> Result<ActorIdentity, ProxyResponse> {
+	) -> Result<ActorIdentity, ProxyError> {
 		connection
 			.copy::<TCPConnectionInfo>(req.extensions_mut())
 			.expect("tcp connection must be set");
@@ -103,7 +103,7 @@ impl EgressActorResolution {
 		&self,
 		client: &PolicyClient,
 		actor: &ActorRef,
-	) -> Result<ActorIdentity, ProxyResponse> {
+	) -> Result<ActorIdentity, ProxyError> {
 		let channel = self
 			.target
 			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate));

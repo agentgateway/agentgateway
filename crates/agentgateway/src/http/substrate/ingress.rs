@@ -566,7 +566,7 @@ impl SubstrateRequestState {
 			.and_then(|current| current.uid.clone())
 	}
 
-	pub(crate) async fn resolve_target(&mut self) -> Result<Target, crate::proxy::ProxyResponse> {
+	pub(crate) async fn resolve_target(&mut self) -> Result<Target, ProxyError> {
 		if let Some(current) = self.current.as_ref() {
 			self.route_outcome = Some(RouteOutcome::Ok);
 			pol_event!(
@@ -688,7 +688,7 @@ impl RequestPolicyTrait for SubstrateIngress {
 		client: &PolicyClient,
 		log: &mut RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		let connect_authority = req
 			.extensions()
 			.get::<crate::transport::stream::ConnectAuthority>()

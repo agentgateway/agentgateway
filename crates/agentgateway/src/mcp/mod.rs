@@ -35,7 +35,7 @@ pub use router::App;
 use thiserror::Error;
 pub(crate) use upstream::openapi_server_prefix;
 
-use crate::http::SendDirectResponse;
+use crate::http::SyncResponse;
 use crate::proxy::ProxyError;
 use crate::{apply, schema};
 
@@ -177,7 +177,7 @@ pub enum Error {
 	#[error("failed to start stdio server: {0}")]
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
-	UpstreamError(Box<SendDirectResponse>),
+	UpstreamError(Box<SyncResponse>),
 	#[error("failed to send message: {1}")]
 	SendError(Option<RequestId>, String),
 	/// Server-side availability/capability condition (no upstreams reachable, method unsupported by
@@ -391,23 +391,22 @@ impl Error {
 
 // a rate-limited MCP toolcall becomes an isError result others just have the top level json RPC error
 pub(crate) async fn maybe_convert_mcp_error<T>(
-	res: Result<T, crate::proxy::ProxyResponse>,
+	res: Result<T, ProxyError>,
 	request_protocol: crate::proxy::httpproxy::RequestProtocol,
 	req: &mut crate::http::Request,
-) -> Result<T, crate::proxy::ProxyResponse> {
-	use crate::proxy::ProxyResponse;
+) -> Result<T, ProxyError> {
 	let err = match res {
-		Err(ProxyResponse::Error(err)) => err,
-		other => return other,
+		Err(err) => err,
+		ok => return ok,
 	};
 	if !matches!(
 		err,
 		ProxyError::RateLimitExceeded { .. } | ProxyError::RemoteRateLimitExceeded { .. }
 	) {
-		return Err(ProxyResponse::Error(err));
+		return Err(err);
 	}
 	if request_protocol != crate::proxy::httpproxy::RequestProtocol::Mcp {
-		return Err(ProxyResponse::Error(err));
+		return Err(err);
 	}
 	let limit = crate::http::buffer_limit(req);
 	let parsed = match req.body_mut().inspect(limit).await {
@@ -417,7 +416,7 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 		Ok(crate::http::BodyInspection::Partial(_)) | Err(_) => None,
 	};
 	let Some(request_id) = parsed.as_ref().and_then(streamablehttp::request_id) else {
-		return Err(ProxyResponse::Error(err));
+		return Err(err);
 	};
 	let was_tool_call =
 		parsed.as_ref().and_then(streamablehttp::message_method) == Some(CallToolRequestMethod::VALUE);
@@ -463,7 +462,7 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 		.into(),
 		e => e,
 	};
-	Err(ProxyResponse::Error(converted))
+	Err(converted)
 }
 
 impl From<Error> for ProxyError {

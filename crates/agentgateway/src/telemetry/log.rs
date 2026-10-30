@@ -3274,7 +3274,9 @@ mod tests {
 		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
 
 		let refusal = || {
-			Err(ProxyError::JwtAuthenticationFailure(TokenError::UnknownKeyId("rotated".into())).into())
+			Err(ProxyError::JwtAuthenticationFailure(
+				TokenError::UnknownKeyId("rotated".into()),
+			))
 		};
 
 		let mut log = test_request_log();
@@ -3323,8 +3325,8 @@ mod tests {
 	#[test]
 	fn gen_ai_duration_preserves_response_failures_and_snapshot_metadata() {
 		use crate::http::transformation_cel::TransformationMetadata;
+		use crate::proxy::ProxyError;
 		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
-		use crate::proxy::{ProxyError, ProxyResponse};
 
 		for upstream_failed in [false, true] {
 			for policy in ["none", "error", "direct"] {
@@ -3335,7 +3337,7 @@ mod tests {
 					.ctx()
 					.register_log_expression(&Expression::new_strict("proxy.error").unwrap());
 				let initial = if upstream_failed {
-					Err(ProxyError::NoHealthyEndpoints.into())
+					Err(ProxyError::NoHealthyEndpoints)
 				} else {
 					Ok(::http::Response::new(crate::http::Body::empty()))
 				};
@@ -3349,7 +3351,7 @@ mod tests {
 				match policy {
 					"error" => {
 						(response, reason) = resolve_response(
-							Err(ProxyError::ProcessingString("policy failed".to_string()).into()),
+							Err(ProxyError::ProcessingString("policy failed".to_string())),
 							&mut log,
 							false,
 						);
@@ -3362,7 +3364,7 @@ mod tests {
 							.unwrap();
 						replacement.extensions_mut().insert(metadata.clone());
 						(response, reason) = resolve_response(
-							Err(ProxyResponse::DirectResponse(Box::new(replacement))),
+							Err(ProxyError::direct_response(replacement)),
 							&mut log,
 							false,
 						);

@@ -13,7 +13,7 @@ use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
 use crate::mcp::{FailureMode, MCPInfo, McpAuthorizationSet, auth};
 use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
-use crate::proxy::{ProxyError, ProxyResponse};
+use crate::proxy::{ProxyError, ProxyResponseReason};
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
@@ -80,7 +80,7 @@ impl App {
 		backend_policies: BackendPolicies,
 		mut req: MustSnapshot<'_>,
 		mut log: &mut RequestLog,
-	) -> Result<Response, ProxyResponse> {
+	) -> Result<Response, ProxyError> {
 		let backends = {
 			let binds = self.state.read_binds();
 			let nt = backend
@@ -146,7 +146,10 @@ impl App {
 		if backend.dns_rebinding_protection
 			&& let Some(resp) = mcp::dns_rebinding::reject_non_localhost(&req)
 		{
-			return Err(ProxyResponse::DirectResponse(Box::new(resp)));
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::Authorization,
+				resp,
+			));
 		}
 
 		authorization_policies.register(log.cel.ctx());
@@ -233,7 +236,7 @@ impl App {
 					log.response_processing_duration,
 				));
 		}
-		response.map_err(ProxyResponse::from)
+		response
 	}
 }
 

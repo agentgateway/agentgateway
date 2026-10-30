@@ -447,10 +447,9 @@ async fn apply_derives_claims_from_stored_id_token() {
 		format!("{}={encoded}", policy.session.cookie_name),
 	);
 
-	let response = test_helpers::test_policy(&policy, &mut req)
+	let _ = test_helpers::test_policy(&policy, &mut req)
 		.await
 		.expect("browser policy apply");
-	assert!(response.direct_response.is_none());
 	assert!(
 		!req
 			.extensions()
@@ -541,7 +540,6 @@ async fn apply_refreshes_expired_browser_session() {
 			let response = test_helpers::test_policy(&policy, &mut req)
 				.await
 				.expect("refresh browser session");
-			assert!(response.direct_response.is_none());
 			assert!(req.extensions().get::<AuthenticatedSession>().is_some());
 			let claims = req.extensions().get::<jwt::Claims>().expect("claims");
 			assert_eq!(claims.jwt.expose_secret(), refreshed_id_token);
@@ -577,14 +575,19 @@ async fn apply_refreshes_expired_browser_session() {
 	*login_req.uri_mut() = "https://app.example.com/auth/start?returnTo=%2Fapp"
 		.parse()
 		.unwrap();
-	let login_response = test_helpers::test_policy(&login_policy, &mut login_req)
-		.await
-		.unwrap();
-	assert_eq!(
-		login_response.direct_response.unwrap().headers()[header::LOCATION],
-		"/app"
-	);
-	assert_eq!(login_response.response_headers, response.response_headers);
+	let login_response =
+		direct_response(test_helpers::test_policy(&login_policy, &mut login_req).await);
+	assert_eq!(login_response.headers()[header::LOCATION], "/app");
+	// The refreshed session cookies are merged into the redirect.
+	for (name, value) in response.response_headers.as_ref().expect("refresh cookies") {
+		assert!(
+			login_response
+				.headers()
+				.get_all(name)
+				.iter()
+				.any(|v| v == value)
+		);
+	}
 	tokio::time::resume();
 
 	assert_eq!(mock.received_requests().await.unwrap().len(), 1);
@@ -635,10 +638,9 @@ async fn apply_refreshes_expired_browser_session() {
 	tokio::time::pause();
 	tokio::time::advance(Duration::from_secs(2)).await;
 	tokio::time::resume();
-	let response = test_helpers::test_policy(&policy, &mut make_request())
+	let _ = test_helpers::test_policy(&policy, &mut make_request())
 		.await
 		.expect("refresh after cache expiry");
-	assert!(response.direct_response.is_none());
 	mock.verify().await;
 }
 
@@ -706,14 +708,10 @@ async fn apply_handles_refresh_failures() {
 				&mut req,
 				format!("{}={encoded_refresh}", policy.session.refresh_cookie_name),
 			);
-			let direct = match test_helpers::test_policy(&policy, &mut req).await {
-				Ok(response) => {
-					let mut direct = response.direct_response.expect("direct response");
-					crate::http::merge_in_headers(response.response_headers, direct.headers_mut());
-					direct
-				},
-				Err(err) => err.downcast().into_response_with_grpc(mode == "grpc"),
-			};
+			let direct = test_helpers::test_policy(&policy, &mut req)
+				.await
+				.expect_err("refresh failure must end the request")
+				.into_response_with_grpc(mode == "grpc");
 			if mode == "navigate" {
 				// Freeze the clock once the failure is cached so later modes cannot outlive the 1s TTL.
 				tokio::time::pause();
@@ -770,10 +768,7 @@ async fn apply_handles_refresh_failures() {
 			&mut req,
 			format!("{}={encoded_refresh}", policy.session.refresh_cookie_name),
 		);
-		let response = test_helpers::test_policy(&policy, &mut req)
-			.await
-			.expect("retry after failure cache expiry");
-		assert!(response.direct_response.is_some());
+		direct_response(test_helpers::test_policy(&policy, &mut req).await);
 		mock.verify().await;
 	}
 }
@@ -821,10 +816,7 @@ async fn apply_redirects_unauthenticated_requests_to_login() {
 		policy.redirect_uri = RedirectUri::parse(redirect_uri.to_string()).expect("redirect uri");
 		let mut req = request(Method::GET, request_uri, Some(accept));
 
-		let response = test_helpers::test_policy(&policy, &mut req)
-			.await
-			.expect(name);
-		let response = response.direct_response.expect("redirect response");
+		let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 		assert_eq!(response.status(), ::http::StatusCode::FOUND, "{name}");
 
 		let location = response
@@ -860,8 +852,7 @@ async fn apply_returns_unauthorized_for_fetch_requests() {
 
 	let err = test_helpers::test_policy(&policy, &mut req)
 		.await
-		.expect_err("fetch request should not redirect")
-		.downcast();
+		.expect_err("fetch request should not redirect");
 	assert!(matches!(
 		&err,
 		ProxyError::OidcFailure(Error::AuthenticationRequired)
@@ -893,27 +884,35 @@ fn encoded_session_cookie(policy: &OidcPolicy) -> String {
 	format!("{}={encoded}", policy.session.cookie_name)
 }
 
+/// The response the policy answered with, panicking if it continued or failed.
+fn direct_response(result: Result<PolicyResponse, ProxyError>) -> crate::http::Response {
+	match result {
+		Err(ProxyError::DirectResponse { response, .. }) => response.into_response(),
+		other => panic!("expected a direct response, got {other:?}"),
+	}
+}
+
 fn assert_outcome(
 	name: &str,
-	result: Result<PolicyResponse, crate::proxy::ProxyResponse>,
+	result: Result<PolicyResponse, ProxyError>,
 	req: &crate::http::Request,
 	expected: Outcome,
 ) {
 	match expected {
 		Outcome::Authenticated => {
-			assert!(result.expect(name).direct_response.is_none(), "{name}");
+			let _ = result.expect(name);
 			let claims = req.extensions().get::<jwt::Claims>().expect(name);
 			assert_eq!(claims.inner.get("sub"), Some(&json!("user-1")), "{name}");
 		},
 		Outcome::Rejected => {
-			let err = result.expect_err(name).downcast();
+			let err = result.expect_err(name);
 			assert!(
 				matches!(&err, ProxyError::OidcFailure(Error::AuthenticationRequired)),
 				"{name}: {err:?}"
 			);
 		},
 		Outcome::Login => {
-			let response = result.expect(name).direct_response.expect(name);
+			let response = direct_response(result);
 			assert_eq!(response.status(), ::http::StatusCode::FOUND, "{name}");
 			assert!(
 				redirect_location(&response).starts_with("https://issuer.example.com/authorize?"),
@@ -922,7 +921,7 @@ fn assert_outcome(
 			assert!(req.extensions().get::<jwt::Claims>().is_none(), "{name}");
 		},
 		Outcome::Continue => {
-			assert!(result.expect(name).direct_response.is_none(), "{name}");
+			let _ = result.expect(name);
 			assert!(req.extensions().get::<jwt::Claims>().is_none(), "{name}");
 			assert!(
 				req.extensions().get::<AuthenticatedSession>().is_none(),
@@ -1348,11 +1347,7 @@ async fn apply_permissive_fetch_continues_despite_login_redirect() {
 	req
 		.headers_mut()
 		.insert("sec-fetch-mode", "cors".parse().unwrap());
-	let response = test_helpers::test_policy(&policy, &mut req)
-		.await
-		.expect("fetch gets a direct response")
-		.direct_response
-		.expect("direct response");
+	let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 	assert_eq!(response.status(), ::http::StatusCode::UNAUTHORIZED);
 	assert_eq!(redirect_location(&response), "/sign-in");
 }
@@ -1400,7 +1395,6 @@ async fn apply_permissive_continue_still_clears_refresh_cookie() {
 	let response = test_helpers::test_policy(&policy, &mut req)
 		.await
 		.expect("non-browser request continues");
-	assert!(response.direct_response.is_none());
 	assert!(req.extensions().get::<jwt::Claims>().is_none());
 	let cleared = response
 		.response_headers
@@ -1432,7 +1426,6 @@ async fn apply_bypasses_cors_preflight_requests() {
 		.await
 		.expect("preflight should bypass oidc");
 
-	assert!(response.direct_response.is_none());
 	assert!(response.response_headers.is_none());
 	assert!(req.extensions().get::<jwt::Claims>().is_none());
 }
@@ -1650,8 +1643,7 @@ async fn callback_rejects_invalid_transaction_state() {
 
 		let err = test_helpers::test_policy(&policy, &mut req)
 			.await
-			.expect_err(name)
-			.downcast();
+			.expect_err(name);
 		match expected_error {
 			Error::MissingTransaction => assert!(
 				matches!(err, ProxyError::OidcFailure(Error::MissingTransaction)),
@@ -1702,10 +1694,7 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		),
 	);
 
-	let response = test_helpers::test_policy(&policy, &mut req)
-		.await
-		.expect("callback apply");
-	let response = response.direct_response.expect("redirect response");
+	let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 	assert_eq!(response.status(), ::http::StatusCode::FOUND);
 	assert_eq!(
 		response.headers().get(header::LOCATION).unwrap(),
@@ -1760,11 +1749,7 @@ async fn concurrent_login_attempts_use_distinct_transaction_cookies() {
 		"https://app.example.com/protected",
 		Some("text/html"),
 	);
-	let first_response = test_helpers::test_policy(&policy, &mut first_req)
-		.await
-		.expect("first login start")
-		.direct_response
-		.expect("first redirect");
+	let first_response = direct_response(test_helpers::test_policy(&policy, &mut first_req).await);
 	let first_location = redirect_location(&first_response);
 	let first_state = query_param(&first_location, "state");
 	let first_cookie = parse_set_cookie(
@@ -1786,11 +1771,7 @@ async fn concurrent_login_attempts_use_distinct_transaction_cookies() {
 		Some("text/html"),
 	);
 
-	let second_response = test_helpers::test_policy(&policy, &mut second_req)
-		.await
-		.expect("second login start")
-		.direct_response
-		.expect("second redirect");
+	let second_response = direct_response(test_helpers::test_policy(&policy, &mut second_req).await);
 	let second_cookie = parse_set_cookie(
 		second_response
 			.headers()
@@ -1834,11 +1815,8 @@ async fn concurrent_login_attempts_use_distinct_transaction_cookies() {
 		format!("{}={}", second_cookie.name(), second_cookie.value()),
 	);
 
-	let callback_response = test_helpers::test_policy(&policy, &mut callback_req)
-		.await
-		.expect("first callback succeeds")
-		.direct_response
-		.expect("callback redirect");
+	let callback_response =
+		direct_response(test_helpers::test_policy(&policy, &mut callback_req).await);
 	let set_cookies: Vec<_> = callback_response
 		.headers()
 		.get_all(header::SET_COOKIE)
@@ -1891,16 +1869,9 @@ async fn callback_matching_uses_path_not_redirect_host_or_port() {
 		),
 	);
 
-	let response = test_helpers::test_policy(&policy, &mut req)
-		.await
-		.expect("callback apply");
+	let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 	assert_eq!(
-		response
-			.direct_response
-			.unwrap()
-			.headers()
-			.get(header::LOCATION)
-			.unwrap(),
+		response.headers().get(header::LOCATION).unwrap(),
 		"/protected"
 	);
 }
@@ -2154,11 +2125,7 @@ async fn browser_login_and_logout_flow() {
 		"https://app.example.com/ui/llm/models?tab=all",
 		None,
 	);
-	let response = test_helpers::test_policy(&policy, &mut req)
-		.await
-		.unwrap()
-		.direct_response
-		.unwrap();
+	let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 	assert_eq!(
 		response.headers()[header::LOCATION],
 		"/sign-in?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall"
@@ -2169,22 +2136,14 @@ async fn browser_login_and_logout_flow() {
 	req
 		.headers_mut()
 		.insert("sec-fetch-mode", "cors".parse().unwrap());
-	let response = test_helpers::test_policy(&policy, &mut req)
-		.await
-		.unwrap()
-		.direct_response
-		.unwrap();
+	let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 	assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 	assert_eq!(response.headers()[header::LOCATION], "/sign-in");
 
 	// A login page left behind the policy starts OAuth rather than redirecting to itself.
 	for path in ["/sign-in", "/sign-in?returnTo=%2Fapp"] {
 		let mut req = request(Method::GET, &format!("https://app.example.com{path}"), None);
-		let response = test_helpers::test_policy(&policy, &mut req)
-			.await
-			.unwrap()
-			.direct_response
-			.unwrap();
+		let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 		assert!(
 			response.headers()[header::LOCATION]
 				.to_str()
@@ -2204,11 +2163,7 @@ async fn browser_login_and_logout_flow() {
 			&format!("https://app.example.com/auth/start?returnTo={target}"),
 			None,
 		);
-		let response = test_helpers::test_policy(&policy, &mut req)
-			.await
-			.unwrap()
-			.direct_response
-			.unwrap();
+		let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 		assert!(
 			response.headers()[header::LOCATION]
 				.to_str()
@@ -2252,11 +2207,9 @@ async fn browser_login_and_logout_flow() {
 		}
 		let result = test_helpers::test_policy(&policy, &mut req).await;
 		let response = if expected == StatusCode::SEE_OTHER {
-			result.unwrap().direct_response.unwrap()
+			direct_response(result)
 		} else {
-			let error = result
-				.expect_err("logout rejection must be a proxy error")
-				.downcast();
+			let error = result.expect_err("logout rejection must be a proxy error");
 			if expected == StatusCode::FORBIDDEN {
 				assert!(matches!(&error, ProxyError::CsrfValidationFailed));
 			} else {
@@ -2297,11 +2250,7 @@ async fn browser_login_and_logout_flow() {
 		req
 			.headers_mut()
 			.insert(header::ORIGIN, "https://app.example.com".parse().unwrap());
-		let response = test_helpers::test_policy(&policy, &mut req)
-			.await
-			.unwrap()
-			.direct_response
-			.unwrap();
+		let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 		assert_eq!(response.status(), StatusCode::SEE_OTHER);
 		assert_eq!(response.headers()[header::LOCATION], expected);
 	}

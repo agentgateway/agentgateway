@@ -507,15 +507,10 @@ fn redirection_test() {
 		let mut req = request_for_uri(inp.uri);
 		req.extensions_mut().insert(inp.path.clone());
 
-		let got = inp
-			.redirect
-			.apply(&mut req)
-			.ok()
-			.and_then(|r| r.direct_response)
-			.map(|resp| Want {
-				location: resp.hdr(http::header::LOCATION).to_string(),
-				code: resp.status(),
-			});
+		let got = inp.redirect.apply(&mut req).ok().map(|resp| Want {
+			location: resp.hdr(http::header::LOCATION).to_string(),
+			code: resp.status(),
+		});
 		assert_eq!(got, want, "{name}");
 	}
 }

@@ -228,6 +228,7 @@ sqlx-macros = { version = "0.9", default-features = false, features = ["derive",
 sqlx-core = { version = "0.9", default-features = false, features = ["rustls-native-certs"] }
 stacker = "0.1"
 subtle = "2"
+sync_wrapper = "1"
 tempfile = "3.27"
 thiserror = "2.0"
 tiktoken = { version = "4.1", default-features = false, features = ["vocab-o200k_base"] }

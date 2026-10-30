@@ -3,8 +3,8 @@ use htpasswd_verify_fork::Htpasswd;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
+use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self};
-use crate::proxy::{ProxyError, ProxyResponse};
 use crate::{apply, *};
 
 #[cfg(test)]
@@ -173,13 +173,10 @@ impl crate::store::RequestPolicyTrait for BasicAuthentication {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<crate::http::PolicyResponse, ProxyResponse> {
-		let res = self.verify(req).await.map_err(ProxyResponse::from)?;
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
+		let res = self.verify(req).await?;
 		if let Some(claims) = res {
-			self
-				.authorization_location
-				.remove(req)
-				.map_err(ProxyResponse::from)?;
+			self.authorization_location.remove(req)?;
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(claims);
 		}

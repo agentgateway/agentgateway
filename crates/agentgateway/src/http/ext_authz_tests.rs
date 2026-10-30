@@ -479,7 +479,6 @@ fn test_cached_http_allow_replays_request_headers_and_metadata() {
 
 	let response = cached.apply(&mut req).unwrap();
 
-	assert!(response.direct_response.is_none());
 	assert!(response.response_headers.is_none());
 	assert_eq!(req.headers().get("x-authz-user").unwrap(), "alice");
 	assert_eq!(
@@ -509,9 +508,11 @@ async fn test_cached_http_direct_response_replays_status_headers_and_body() {
 		body: Bytes::from_static(b"nope"),
 	};
 
-	let response = cached.apply(&mut req).unwrap();
-
-	let mut direct_response = response.direct_response.unwrap();
+	let Err(crate::proxy::ProxyError::DirectResponse { response, .. }) = cached.apply(&mut req)
+	else {
+		panic!("expected a rejection");
+	};
+	let mut direct_response = response.into_response();
 	assert_eq!(direct_response.status(), StatusCode::UNAUTHORIZED);
 	assert_eq!(
 		direct_response.headers().get("www-authenticate").unwrap(),

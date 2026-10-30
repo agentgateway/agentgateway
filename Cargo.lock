@@ -119,6 +119,7 @@ dependencies = [
  "http-body-util",
  "parking_lot",
  "pin-project-lite",
+ "sync_wrapper",
  "tokio",
  "tracing",
 ]
@@ -196,6 +197,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror 2.0.21",
  "tokio",
 ]
 

@@ -24,7 +24,7 @@ use crate::http::{
 };
 use crate::proxy::dtrace::{Severity, pol_event, pol_result_timed};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::proxy::{ProxyError, ProxyResponse, dtrace};
+use crate::proxy::{ProxyError, ProxyResponseReason, dtrace};
 use crate::telemetry::log::{RequestLog, copy_span_writer};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
@@ -235,12 +235,12 @@ impl ExtAuthz {
 		req.extensions_mut().insert(source);
 		req.extensions_mut().insert(destination);
 
-		let response = self.check_http(client, &mut req).await?;
-		match response.direct_response {
-			Some(response) => Err(ProxyError::ExternalAuthorizationFailed(Some(
-				response.status(),
-			))),
-			None => Ok(()),
+		match self.check_http(client, &mut req).await {
+			Ok(_) => Ok(()),
+			Err(ProxyError::DirectResponse { response, .. }) => Err(
+				ProxyError::ExternalAuthorizationFailed(Some(response.status())),
+			),
+			Err(e) => Err(e),
 		}
 	}
 
@@ -322,21 +322,9 @@ impl ExtAuthz {
 				Ok(PolicyResponse::default())
 			},
 			FailureMode::Deny => Err(ProxyError::ExternalAuthorizationFailed(None)),
-			FailureMode::DenyWithStatus(status_code) => {
-				let status = StatusCode::from_u16(*status_code).unwrap_or(StatusCode::FORBIDDEN);
-				let resp = ::http::Response::builder()
-					.status(status)
-					.body(http::Body::from(
-						ProxyError::ExternalAuthorizationFailed(None)
-							.external_message()
-							.into_owned(),
-					))
-					.map_err(|e| ProxyError::Processing(e.into()))?;
-				Ok(PolicyResponse {
-					direct_response: Some(resp),
-					response_headers: None,
-				})
-			},
+			FailureMode::DenyWithStatus(status_code) => Err(ProxyError::ExternalAuthorizationFailed(
+				Some(StatusCode::from_u16(*status_code).unwrap_or(StatusCode::FORBIDDEN)),
+			)),
 		}
 	}
 
@@ -625,9 +613,9 @@ impl ExtAuthz {
 					body,
 					dynamic_metadata,
 				};
-				let response = cached.clone().apply(req)?;
+				let response = cached.clone().apply(req);
 				self.insert_cache(cache_key, req, CachedPolicyResponse::Grpc(cached));
-				return Ok(response);
+				return response;
 			}
 			let cached = CachedGrpcPolicyResponse::DenyWithoutResponse { dynamic_metadata };
 			let response = cached.clone().apply(req);
@@ -918,10 +906,10 @@ impl ExtAuthz {
 						.body(http::Body::empty())
 						.map_err(|e| ProxyError::Processing(e.into()))?;
 					if cache_key.is_none() {
-						return Ok(PolicyResponse {
-							direct_response: Some(resp),
-							response_headers: None,
-						});
+						return Err(ProxyError::direct_response_from(
+							ProxyResponseReason::ExtAuth,
+							resp,
+						));
 					}
 					let (parts, body) = crate::http::read_response_body(resp)
 						.await
@@ -931,21 +919,18 @@ impl ExtAuthz {
 						headers: parts.headers,
 						body,
 					};
-					let response = cached.clone().apply(req)?;
+					let response = cached.clone().apply(req);
 					self.insert_cache(cache_key, req, CachedPolicyResponse::Http(cached));
-					Ok(PolicyResponse {
-						direct_response: response.direct_response,
-						response_headers: response.response_headers,
-					})
+					response
 				},
 			};
 		}
 		trace!("ext_authz failed with code {}", resp.status());
 		if cache_key.is_none() || !should_cache_http_direct_response(resp.status()) {
-			return Ok(PolicyResponse {
-				direct_response: Some(resp),
-				response_headers: None,
-			});
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtAuth,
+				resp,
+			));
 		}
 		let (parts, body) = http::read_response_body(resp)
 			.await
@@ -955,9 +940,9 @@ impl ExtAuthz {
 			headers: parts.headers,
 			body,
 		};
-		let response = cached.clone().apply(req)?;
+		let response = cached.clone().apply(req);
 		self.insert_cache(cache_key, req, CachedPolicyResponse::Http(cached));
-		Ok(response)
+		response
 	}
 
 	fn build_metadata(
@@ -1031,10 +1016,8 @@ impl crate::store::BackendPolicyTrait for ExtAuthz {
 		client: &PolicyClient,
 		_log: &mut Option<&mut RequestLog>,
 		req: &mut Request,
-	) -> Result<PolicyResponse, ProxyResponse> {
-		Box::pin(self.check(client.clone(), req))
-			.await
-			.map_err(ProxyResponse::from)
+	) -> Result<PolicyResponse, ProxyError> {
+		Box::pin(self.check(client.clone(), req)).await
 	}
 
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
@@ -1048,10 +1031,8 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 		client: &PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, ProxyResponse> {
-		Box::pin(self.check(client.clone(), req))
-			.await
-			.map_err(ProxyResponse::from)
+	) -> Result<PolicyResponse, ProxyError> {
+		Box::pin(self.check(client.clone(), req)).await
 	}
 
 	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
@@ -1274,10 +1255,7 @@ impl CachedGrpcPolicyResponse {
 					&query_parameters_to_set,
 					&query_parameters_to_remove,
 				)?;
-				Ok(PolicyResponse {
-					direct_response: None,
-					response_headers,
-				})
+				Ok(PolicyResponse { response_headers })
 			},
 			Self::Denied {
 				status,
@@ -1291,10 +1269,10 @@ impl CachedGrpcPolicyResponse {
 					.body(http::Body::from(body))
 					.map_err(|e| ProxyError::Processing(e.into()))?;
 				*resp.headers_mut() = headers;
-				Ok(PolicyResponse {
-					direct_response: Some(resp),
-					response_headers: None,
-				})
+				Err(ProxyError::direct_response_from(
+					ProxyResponseReason::ExtAuth,
+					resp,
+				))
 			},
 			Self::DenyWithoutResponse { dynamic_metadata } => {
 				insert_dynamic_metadata(req, dynamic_metadata);
@@ -1346,10 +1324,10 @@ impl CachedHttpPolicyResponse {
 					.body(http::Body::from(body))
 					.map_err(|e| ProxyError::Processing(e.into()))?;
 				*resp.headers_mut() = headers;
-				Ok(PolicyResponse {
-					direct_response: Some(resp),
-					response_headers: None,
-				})
+				Err(ProxyError::direct_response_from(
+					ProxyResponseReason::ExtAuth,
+					resp,
+				))
 			},
 		}
 	}

@@ -11,6 +11,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::cel::LLMContext;
+use crate::proxy::ProxyError;
 use crate::{apply, schema_de, serde_dur};
 
 mod database;
@@ -546,16 +547,16 @@ impl crate::store::RequestPolicyTrait for BudgetPolicy {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		let Some(budgets) = req.extensions_mut().remove::<MatchedBudgets>() else {
 			return Ok(crate::http::PolicyResponse::default());
 		};
 
 		if let Some(exceeded) = self
 			.check(&budgets)
-			.map_err(|err| crate::proxy::ProxyResponse::from(crate::proxy::ProxyError::Processing(err)))?
+			.map_err(|err| crate::proxy::ProxyError::Processing(err))?
 		{
-			return Err(crate::proxy::ProxyError::BudgetExceeded(exceeded).into());
+			return Err(crate::proxy::ProxyError::BudgetExceeded(exceeded));
 		}
 
 		log.budgets.push(BudgetSettlement {

@@ -578,7 +578,7 @@ impl crate::store::RequestPolicyTrait for RemoteRateLimit {
 		client: &PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		Ok(self.check(client.clone(), req).await?)
 	}
 

@@ -1,3 +1,4 @@
+use crate::proxy::ProxyError;
 use crate::telemetry::log::MetricsConfig;
 
 pub fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
@@ -9,7 +10,7 @@ pub fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
 pub async fn test_policy<P>(
 	policy: &P,
 	req: &mut crate::http::Request,
-) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse>
+) -> Result<crate::http::PolicyResponse, ProxyError>
 where
 	P: crate::store::RequestPolicyTrait + ?Sized,
 {

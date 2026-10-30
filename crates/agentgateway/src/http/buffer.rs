@@ -1,3 +1,4 @@
+use crate::proxy::ProxyError;
 use crate::*;
 
 #[cfg(test)]
@@ -39,10 +40,7 @@ impl Buffer {
 	/// Applies request body buffering before forwarding.
 	/// No-op when buffering is disabled or for upgrade requests (whose "body" only exists
 	/// post-handshake as the upgraded byte stream).
-	pub async fn apply_to_request(
-		&self,
-		req: &mut crate::http::Request,
-	) -> Result<(), crate::proxy::ProxyResponse> {
+	pub async fn apply_to_request(&self, req: &mut crate::http::Request) -> Result<(), ProxyError> {
 		let Some(request) = self.request.as_ref() else {
 			trace!("request buffering disabled");
 			return Ok(());
@@ -59,11 +57,7 @@ impl Buffer {
 			Ok(()) => {},
 			Err(e) => {
 				warn!(limit, error = %e, "failed to buffer request body");
-				let resp = ::http::Response::builder()
-					.status(::http::StatusCode::PAYLOAD_TOO_LARGE)
-					.body(crate::http::Body::empty())
-					.expect("static response builds");
-				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
+				return Err(ProxyError::RequestBodyBufferFailed(e));
 			},
 		}
 		// Explicit policy limits override the request's default.
@@ -81,7 +75,7 @@ impl Buffer {
 	pub async fn apply_to_response(
 		&self,
 		resp: &mut crate::http::Response,
-	) -> Result<(), crate::proxy::ProxyResponse> {
+	) -> Result<(), ProxyError> {
 		let Some(response) = self.response.as_ref() else {
 			trace!("response buffering disabled");
 			return Ok(());
@@ -98,11 +92,7 @@ impl Buffer {
 			Ok(()) => {},
 			Err(e) => {
 				warn!(limit, error = %e, "failed to buffer response body");
-				let err = ::http::Response::builder()
-					.status(::http::StatusCode::BAD_GATEWAY)
-					.body(crate::http::Body::empty())
-					.expect("static response builds");
-				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(err)));
+				return Err(ProxyError::ResponseBodyBufferFailed(e));
 			},
 		}
 		resp
@@ -146,7 +136,7 @@ impl crate::store::RequestPolicyTrait for Buffer {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		self.apply_to_request(req).await?;
 		Ok(Default::default())
 	}
@@ -157,7 +147,7 @@ impl crate::store::ResponsePolicyTrait for Buffer {
 		&self,
 		_log: &mut crate::telemetry::log::RequestLog,
 		res: &mut crate::http::Response,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		self.apply_to_response(res).await?;
 		Ok(Default::default())
 	}
