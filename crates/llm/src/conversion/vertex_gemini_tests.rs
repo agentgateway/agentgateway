@@ -2072,3 +2072,69 @@ mod passthrough {
 		}
 	}
 }
+
+#[test]
+fn exclusive_bounds_are_stripped_from_tool_schemas() {
+	// Neither the Gemini API nor the Vertex Schema proto defines
+	// exclusiveMinimum/exclusiveMaximum; a request carrying them is rejected
+	// with a 400 (#4242). The inclusive bounds stay.
+	let body = json!({
+		"model": "gemini-3-pro",
+		"messages": [{"role": "user", "content": "search"}],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "search",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"limit": {
+							"type": "integer",
+							"exclusiveMinimum": 0,
+							"exclusiveMaximum": 100,
+							"minimum": 1,
+							"maximum": 99
+						}
+					},
+					"required": ["limit"]
+				}
+			}
+		}]
+	});
+	for g in [to_gemini(body.clone()), to_gemini_api(body)] {
+		let params = &g["tools"][0]["functionDeclarations"][0]["parameters"];
+		let s = serde_json::to_string(params).unwrap();
+		assert!(
+			!s.contains("exclusiveMinimum") && !s.contains("exclusiveMaximum"),
+			"exclusive bounds must be stripped: {s}"
+		);
+		assert_eq!(params["properties"]["limit"]["minimum"], 1);
+		assert_eq!(params["properties"]["limit"]["maximum"], 99);
+	}
+}
+
+#[test]
+fn exclusive_bounds_are_stripped_from_response_schema() {
+	let body = json!({
+		"model": "gemini-3-pro",
+		"messages": [{"role": "user", "content": "hi"}],
+		"response_format": { "type": "json_schema", "json_schema": {
+			"name": "out",
+			"schema": {
+				"type": "object",
+				"properties": {
+					"score": {"type": "number", "exclusiveMinimum": 0, "minimum": 0}
+				}
+			}
+		}}
+	});
+	for g in [to_gemini(body.clone()), to_gemini_api(body)] {
+		let schema = &g["generationConfig"]["responseSchema"];
+		let s = serde_json::to_string(schema).unwrap();
+		assert!(
+			!s.contains("exclusiveMinimum"),
+			"exclusive bounds must be stripped from responseSchema: {s}"
+		);
+		assert_eq!(schema["properties"]["score"]["minimum"], 0);
+	}
+}
