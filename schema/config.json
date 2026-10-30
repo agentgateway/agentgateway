@@ -10833,7 +10833,7 @@
           "minimum": 1
         },
         "normalize": {
-          "description": "Path normalization rules applied before route matching and before forwarding upstream.",
+          "description": "Path normalization rules applied before route matching. The normalized path is used for\nrouting, policies and the upstream request. Access logs keep the original path.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/PathNormalization"
@@ -10857,10 +10857,33 @@
       ]
     },
     "PathNormalization": {
-      "type": "string",
-      "enum": [
-        "mergeSlash",
-        "dotSegment"
+      "description": "A request path normalization rule. Rules are applied in a fixed order regardless of how they are\nlisted: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`), `MergeSlash`, `DotSegment`.",
+      "oneOf": [
+        {
+          "description": "Collapse repeated slashes into one",
+          "type": "string",
+          "const": "mergeSlash"
+        },
+        {
+          "description": "Resolve `.` and `..` segments (RFC 3986 section 5.2.4)",
+          "type": "string",
+          "const": "dotSegment"
+        },
+        {
+          "description": "Decode percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`)",
+          "type": "string",
+          "const": "decodeUnreserved"
+        },
+        {
+          "description": "Reject requests whose path contains `%2F` or `%5C`",
+          "type": "string",
+          "const": "rejectEscapedSlash"
+        },
+        {
+          "description": "Decode `%2F` and `%5C` into `/` and `\\`. Mutually exclusive with `RejectEscapedSlash`",
+          "type": "string",
+          "const": "unescapeSlash"
+        }
       ]
     },
     "TLS": {

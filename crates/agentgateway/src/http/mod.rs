@@ -532,19 +532,15 @@ pub fn normalize_path_for_proxy(
 	req: &mut Request,
 	normalize: &[crate::types::frontend::PathNormalization],
 ) -> anyhow::Result<()> {
-	use crate::types::frontend::PathNormalization;
-
 	if normalize.is_empty() {
 		return Ok(());
 	}
 
-	let apply_merge_slash = normalize.contains(&PathNormalization::MergeSlash);
-	let apply_dot_segment = normalize.contains(&PathNormalization::DotSegment);
 	let Some(orig) = req.uri().path_and_query() else {
 		return Ok(());
 	};
 
-	let Some(path) = normalize_path(orig.path(), apply_merge_slash, apply_dot_segment) else {
+	let Some(path) = normalize_path(orig.path(), normalize)? else {
 		return Ok(());
 	};
 
@@ -566,24 +562,94 @@ pub fn normalize_path_for_proxy(
 	Ok(())
 }
 
-fn normalize_path(path: &str, apply_merge_slash: bool, apply_dot_segment: bool) -> Option<String> {
+/// Applies the configured rules in a fixed order, see [`crate::types::frontend::PathNormalization`]
+fn normalize_path(
+	path: &str,
+	normalize: &[crate::types::frontend::PathNormalization],
+) -> anyhow::Result<Option<String>> {
 	use std::borrow::Cow;
 
+	use crate::types::frontend::PathNormalization;
+
+	let decode_unreserved = normalize.contains(&PathNormalization::DecodeUnreserved);
+	let escaped_slash = normalize.iter().copied().find(|n| {
+		matches!(
+			n,
+			PathNormalization::RejectEscapedSlash | PathNormalization::UnescapeSlash
+		)
+	});
+	let apply_merge_slash = normalize.contains(&PathNormalization::MergeSlash);
+	let apply_dot_segment = normalize.contains(&PathNormalization::DotSegment);
+
 	let mut path = Cow::Borrowed(path);
-	if apply_merge_slash {
-		if let Some(normalized) = merge_adjacent_slashes(path.as_ref()) {
-			path = Cow::Owned(normalized);
-		}
+	if (decode_unreserved || escaped_slash.is_some())
+		&& let Some(normalized) = decode_percent(path.as_ref(), decode_unreserved, escaped_slash)?
+	{
+		path = Cow::Owned(normalized);
 	}
-	if apply_dot_segment {
-		if let Some(normalized) = remove_dot_segments(path.as_ref()) {
-			path = Cow::Owned(normalized);
-		}
+	if apply_merge_slash && let Some(normalized) = merge_adjacent_slashes(path.as_ref()) {
+		path = Cow::Owned(normalized);
 	}
-	match path {
+	if apply_dot_segment && let Some(normalized) = remove_dot_segments(path.as_ref()) {
+		path = Cow::Owned(normalized);
+	}
+	Ok(match path {
 		Cow::Borrowed(_) => None,
 		Cow::Owned(path) => Some(path),
+	})
+}
+
+/// Rewrites percent-encoded octets in `path`. With `decode_unreserved`, unreserved characters
+/// (RFC 3986 section 2.3) are decoded, since `/%61dmin` and `/admin` are the same resource.
+/// Escaped slashes (`%2F`, `%5C`) are rejected or decoded depending on `escaped_slash`.
+/// Every other octet is kept encoded with uppercase hex digits. Malformed escapes are rejected,
+/// as backends disagree on how to interpret them.
+fn decode_percent(
+	path: &str,
+	decode_unreserved: bool,
+	escaped_slash: Option<crate::types::frontend::PathNormalization>,
+) -> anyhow::Result<Option<String>> {
+	use crate::types::frontend::PathNormalization;
+
+	let Some(first) = path.find('%') else {
+		return Ok(None);
+	};
+	let hex = |b: Option<&u8>| b.and_then(|b| (*b as char).to_digit(16));
+	let bytes = path.as_bytes();
+	let mut out = String::with_capacity(path.len());
+	out.push_str(&path[..first]);
+	let mut i = first;
+	while i < bytes.len() {
+		if bytes[i] != b'%' {
+			let next = path[i..].find('%').map_or(bytes.len(), |n| i + n);
+			out.push_str(&path[i..next]);
+			i = next;
+			continue;
+		}
+		let (Some(hi), Some(lo)) = (hex(bytes.get(i + 1)), hex(bytes.get(i + 2))) else {
+			anyhow::bail!("invalid percent-encoding in path");
+		};
+		let b = (hi << 4 | lo) as u8;
+		match b {
+			b'/' | b'\\' if escaped_slash == Some(PathNormalization::RejectEscapedSlash) => {
+				anyhow::bail!("escaped slash in path")
+			},
+			b'/' | b'\\' if escaped_slash == Some(PathNormalization::UnescapeSlash) => {
+				out.push(b as char)
+			},
+			b if decode_unreserved
+				&& (b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~')) =>
+			{
+				out.push(b as char)
+			},
+			b => {
+				out.push('%');
+				out.push_str(&format!("{b:02X}"));
+			},
+		}
+		i += 3;
 	}
+	Ok((out != path).then_some(out))
 }
 
 pub fn path_and_query_string(uri: &Uri) -> String {
@@ -640,11 +706,8 @@ fn remove_dot_segments(path: &str) -> Option<String> {
 		} else if input == "." || input == ".." {
 			input = "";
 		} else {
-			let segment_end = if input.starts_with('/') {
-				input[1..]
-					.find('/')
-					.map(|idx| idx + 1)
-					.unwrap_or(input.len())
+			let segment_end = if let Some(rest) = input.strip_prefix('/') {
+				rest.find('/').map(|idx| idx + 1).unwrap_or(input.len())
 			} else {
 				input.find('/').unwrap_or(input.len())
 			};

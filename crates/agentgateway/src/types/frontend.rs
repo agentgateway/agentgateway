@@ -12,10 +12,20 @@ fn empty_string_set(set: &Arc<FzHashSet<String>>) -> bool {
 	set.is_empty()
 }
 
+/// A request path normalization rule. Rules are applied in a fixed order regardless of how they are
+/// listed: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`), `MergeSlash`, `DotSegment`.
 #[apply(schema_enum!)]
 pub enum PathNormalization {
+	/// Collapse repeated slashes into one
 	MergeSlash,
+	/// Resolve `.` and `..` segments (RFC 3986 section 5.2.4)
 	DotSegment,
+	/// Decode percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`)
+	DecodeUnreserved,
+	/// Reject requests whose path contains `%2F` or `%5C`
+	RejectEscapedSlash,
+	/// Decode `%2F` and `%5C` into `/` and `\`. Mutually exclusive with `RejectEscapedSlash`
+	UnescapeSlash,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -107,7 +117,8 @@ pub struct HTTP {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub max_concurrent_requests: Option<NonZeroU32>,
 
-	/// Path normalization rules applied before route matching and before forwarding upstream.
+	/// Path normalization rules applied before route matching. The normalized path is used for
+	/// routing, policies and the upstream request. Access logs keep the original path.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub normalize: Vec<PathNormalization>,
 }
