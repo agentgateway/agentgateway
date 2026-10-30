@@ -1068,6 +1068,7 @@ mod responses {
 		),
 		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
 		("response/copilot/embeddings.json", COPILOT),
+		("response/openai/gemini-embeddings.json", COPILOT),
 		("response/vertex/embeddings.json", VERTEX),
 		("response/vertex/embed-content.json", VERTEX_EMBED_CONTENT),
 		("response/openai/embeddings.json", OPENAI),

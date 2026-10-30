@@ -17,6 +17,7 @@ pub struct Response {
 	pub object: String,
 	#[serde(default)]
 	pub model: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub usage: Option<Usage>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
