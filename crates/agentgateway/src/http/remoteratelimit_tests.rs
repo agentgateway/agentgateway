@@ -842,6 +842,103 @@ fn rate_limit_exceeded_maps_to_429() {
 	);
 }
 
+const RATE_LIMIT_JSON_BODY: &str = r#"{"error":{"message":"Rate limit exceeded","type":"rate_limit_error","code":"rate_limit_exceeded"}}"#;
+
+#[tokio::test]
+async fn rate_limit_json_body_local() {
+	use ::http::StatusCode;
+
+	let err = ProxyError::RateLimitExceeded {
+		limit: 10,
+		remaining: 0,
+		reset_seconds: 60,
+	};
+	let response = err.into_response_with_grpc(false);
+	assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+	assert_eq!(response.headers()["content-type"], "application/json");
+	assert_eq!(response.headers()["x-ratelimit-limit"], "10");
+	assert_eq!(response.headers()["x-ratelimit-remaining"], "0");
+	assert_eq!(response.headers()["x-ratelimit-reset"], "60");
+	assert_eq!(response.headers()["retry-after"], "60");
+	let body = crate::test_helpers::proxymock::read_body_raw(response.into_body()).await;
+	assert_eq!(body.as_ref(), RATE_LIMIT_JSON_BODY.as_bytes());
+}
+
+#[tokio::test]
+async fn rate_limit_json_body_local_grpc_unchanged() {
+	use ::http::StatusCode;
+
+	let err = ProxyError::RateLimitExceeded {
+		limit: 10,
+		remaining: 0,
+		reset_seconds: 60,
+	};
+	let response = err.into_response_with_grpc(true);
+	assert_eq!(response.status(), StatusCode::OK);
+	assert_eq!(response.headers()["content-type"], "application/grpc");
+	assert!(response.headers().contains_key("grpc-status"));
+	let body = crate::test_helpers::proxymock::read_body_raw(response.into_body()).await;
+	assert!(body.is_empty());
+}
+
+#[tokio::test]
+async fn rate_limit_json_body_remote_empty_body() {
+	use ::http::StatusCode;
+
+	use crate::http::tests_common::request_for_uri;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::OverLimit as i32,
+		statuses: vec![],
+		response_headers_to_add: vec![proto::HeaderValue {
+			key: "retry-after".to_string(),
+			value: "60".to_string(),
+			raw_value: vec![],
+		}],
+		request_headers_to_add: vec![],
+		raw_body: vec![],
+		dynamic_metadata: None,
+		quota: None,
+	};
+	let err = RemoteRateLimit::apply(&mut req, response).unwrap_err();
+	let direct = err.into_response_with_grpc(false);
+	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
+	assert_eq!(direct.headers()["content-type"], "application/json");
+	assert_eq!(direct.headers()["retry-after"], "60");
+	let body = crate::test_helpers::proxymock::read_body_raw(direct.into_body()).await;
+	assert_eq!(body.as_ref(), RATE_LIMIT_JSON_BODY.as_bytes());
+}
+
+#[tokio::test]
+async fn rate_limit_json_body_remote_custom_body_untouched() {
+	use ::http::StatusCode;
+
+	use crate::http::tests_common::request_for_uri;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::OverLimit as i32,
+		statuses: vec![],
+		response_headers_to_add: vec![proto::HeaderValue {
+			key: "x-custom".to_string(),
+			value: "kept".to_string(),
+			raw_value: vec![],
+		}],
+		request_headers_to_add: vec![],
+		raw_body: b"slow down".to_vec(),
+		dynamic_metadata: None,
+		quota: None,
+	};
+	let err = RemoteRateLimit::apply(&mut req, response).unwrap_err();
+	let direct = err.into_response_with_grpc(false);
+	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
+	assert_eq!(direct.headers()["x-custom"], "kept");
+	assert!(!direct.headers().contains_key("content-type"));
+	let body = crate::test_helpers::proxymock::read_body_raw(direct.into_body()).await;
+	assert_eq!(body.as_ref(), b"slow down");
+}
+
 // --- Config deserialization tests ---
 
 #[test]

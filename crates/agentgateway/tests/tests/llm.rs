@@ -2017,6 +2017,12 @@ async fn llm_remote_ratelimit_response(#[case] check_requests: bool) {
 			"retry-after": "2712",
 		})
 	);
+	// The mock sends no body of its own, so the gateway supplies a JSON error body.
+	assert_eq!(res.hdr("content-type"), "application/json");
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		br#"{"error":{"message":"Rate limit exceeded","type":"rate_limit_error","code":"rate_limit_exceeded"}}"#
+	);
 }
 
 async fn assert_llm_remote_rate_limit_cost(
