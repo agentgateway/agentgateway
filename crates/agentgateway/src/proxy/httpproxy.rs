@@ -337,6 +337,15 @@ async fn apply_request_policies(
 		.apply_selected("remote rate limit", c, l, req, &mut rp.rate_limit_headers)
 		.await?;
 
+	pol
+		.concurrency_limit
+		.apply_without_response("concurrency limit", c, l, req, rp.headers())
+		.await?;
+	rp.concurrency_guard = req
+		.extensions()
+		.get::<Arc<http::concurrencylimit::ConcurrencyGuard>>()
+		.cloned();
+
 	rp.buffer = pol.buffer.apply("buffer", c, l, req, rp.headers()).await?;
 
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
@@ -794,6 +803,9 @@ impl HTTPProxy {
 			.await
 		{
 			(resp, reason) = resolve_response(Err(failure), log.as_mut().unwrap(), is_grpc_request);
+		}
+		if let Some(guard) = response_policies.concurrency_guard.take() {
+			http::concurrencylimit::hold_until_complete(&mut resp, guard);
 		}
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
 		// and replace them. Restore the upstream-selected encoding only after every such policy ran.
@@ -5017,6 +5029,9 @@ struct ResponsePolicies {
 	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
 	llm_request_policies: LLMRequestPolicies,
 	a2a_type: a2a::RequestType,
+	// Slots taken by concurrency limits. Attached to the final response body so they are released
+	// when the response has been fully sent.
+	concurrency_guard: Option<Arc<http::concurrencylimit::ConcurrencyGuard>>,
 }
 
 impl ResponsePolicies {

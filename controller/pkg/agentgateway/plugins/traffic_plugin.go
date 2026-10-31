@@ -50,6 +50,7 @@ const (
 	extprocPolicySuffix            = ":extproc"
 	rbacPolicySuffix               = ":rbac"
 	localRateLimitPolicySuffix     = ":rl-local"
+	concurrencyLimitPolicySuffix   = ":concurrency"
 	globalRateLimitPolicySuffix    = ":rl-global"
 	transformationPolicySuffix     = ":transformation"
 	csrfPolicySuffix               = ":csrf"
@@ -1728,11 +1729,18 @@ func processRateLimitPolicy(
 
 	var localEntries []agentgateway.ConditionalPolicyEntry[[]agentgateway.LocalRateLimit]
 	var globalEntries []agentgateway.ConditionalPolicyEntry[agentgateway.GlobalRateLimit]
+	var concurrencyEntries []agentgateway.ConditionalPolicyEntry[[]agentgateway.ConcurrencyLimit]
 	for cond := range conditional {
 		if cond.Policy.Local != nil {
 			localEntries = append(localEntries, agentgateway.ConditionalPolicyEntry[[]agentgateway.LocalRateLimit]{
 				Condition: cond.Condition,
 				Policy:    cond.Policy.Local,
+			})
+		}
+		if cond.Policy.Concurrency != nil {
+			concurrencyEntries = append(concurrencyEntries, agentgateway.ConditionalPolicyEntry[[]agentgateway.ConcurrencyLimit]{
+				Condition: cond.Condition,
+				Policy:    cond.Policy.Concurrency,
 			})
 		}
 		if cond.Policy.Global != nil {
@@ -1756,6 +1764,15 @@ func processRateLimitPolicy(
 	}
 	if len(globalEntries) > 0 {
 		pol, err := processConditionalEntries(globalEntries, processGlobalRateLimitTraffic, globalRateLimitPolicySuffix, ctx, policyPhase, basePolicyName, policy)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		if pol != nil {
+			agwPolicies = append(agwPolicies, pol)
+		}
+	}
+	if len(concurrencyEntries) > 0 {
+		pol, err := processConditionalEntries(concurrencyEntries, processConcurrencyLimitTraffic, concurrencyLimitPolicySuffix, ctx, policyPhase, basePolicyName, policy)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -1793,7 +1810,43 @@ func processConcreteRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, 
 		}
 	}
 
+	if rl.Concurrency != nil {
+		tp, err := processConcurrencyLimitTraffic(ctx, &rl.Concurrency, policy)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		if tp != nil {
+			tp.Traffic.Phase = phase(policyPhase)
+			agwPolicies = append(agwPolicies, &api.Policy{
+				Key:  basePolicyName + concurrencyLimitPolicySuffix,
+				Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+				Kind: tp,
+			})
+		}
+	}
+
 	return agwPolicies, errors.Join(errs...)
+}
+
+// processConcurrencyLimitTraffic translates in-flight request limits.
+func processConcurrencyLimitTraffic(_ PolicyCtx, limits *[]agentgateway.ConcurrencyLimit, _ types.NamespacedName) (*api.Policy_Traffic, error) {
+	var errs []error
+	rules := make([]*api.TrafficPolicySpec_ConcurrencyLimit_Rule, 0, len(*limits))
+	for _, limit := range *limits {
+		rule := &api.TrafficPolicySpec_ConcurrencyLimit_Rule{
+			Limit:       uint32(limit.Limit), //nolint:gosec // G115: Limit is validated by kubebuilder to be >= 0
+			FailureMode: concurrencyLimitFailureMode(limit.FailureMode),
+		}
+		rule.Key = castCELPtr(limit.Key, func(expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("concurrency limit key is not a valid CEL expression: %s", expr))
+		})
+		rules = append(rules, rule)
+	}
+	return &api.Policy_Traffic{Traffic: &api.TrafficPolicySpec{
+		Kind: &api.TrafficPolicySpec_ConcurrencyLimit_{
+			ConcurrencyLimit: &api.TrafficPolicySpec_ConcurrencyLimit{Rules: rules},
+		},
+	}}, errors.Join(errs...)
 }
 
 // processLocalRateLimitPolicy processes local rate limiting configuration
@@ -1948,6 +2001,13 @@ func extAuthFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_Ext
 		return api.TrafficPolicySpec_ExternalAuth_ALLOW
 	}
 	return api.TrafficPolicySpec_ExternalAuth_DENY
+}
+
+func concurrencyLimitFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_ConcurrencyLimit_Rule_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.TrafficPolicySpec_ConcurrencyLimit_Rule_FAIL_OPEN
+	}
+	return api.TrafficPolicySpec_ConcurrencyLimit_Rule_FAIL_CLOSED
 }
 
 func remoteRateLimitFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_RemoteRateLimit_FailureMode {

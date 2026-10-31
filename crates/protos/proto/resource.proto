@@ -1009,6 +1009,25 @@ message TrafficPolicySpec {
     // Inline backend policies (e.g. TLS, auth) for the remote rate limit backend.
     repeated BackendPolicySpec inline_policies = 5;
   }
+  // ConcurrencyLimit bounds the number of in-flight requests per key on each proxy instance.
+  message ConcurrencyLimit {
+    message Rule {
+      // What happens to a request whose key cannot be evaluated. Defaults to FAIL_CLOSED.
+      enum FailureMode {
+        // Reject the request with a 500.
+        FAIL_CLOSED = 0;
+        // Let the request through without counting it.
+        FAIL_OPEN = 1;
+      }
+      // Maximum number of in-flight requests allowed per key.
+      uint32 limit = 1;
+      // CEL expression selecting the counter. Without a key, every request the rule applies to
+      // shares one counter.
+      optional string key = 2;
+      FailureMode failure_mode = 3;
+    }
+    repeated Rule rules = 1;
+  }
   message LocalRateLimit {
     enum Type {
       REQUEST = 0;
@@ -1296,6 +1315,7 @@ message TrafficPolicySpec {
     HostRewrite host_rewrite = 21;
     Buffer buffer = 22;
     Delay delay = 23;
+    ConcurrencyLimit concurrency_limit = 24;
   }
 }
 
