@@ -22,6 +22,10 @@ pub mod tokenizer;
 pub mod types;
 pub mod vertex;
 
+/// Logged and returned when a Chat Completions reply ends with no output and no finish reason.
+pub(crate) const EMPTY_REPLY_ERROR: &str =
+	"upstream response ended without content or a finish reason";
+
 #[cfg(test)]
 mod golden_tests;
 
@@ -497,6 +501,10 @@ pub struct LLMResponse {
 	/// `usage.iterations`). When set, cost is priced per line instead of from the totals above.
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub usage_lines: Vec<UsageLine>,
+	/// Stream conversion can fail after HTTP 200 is sent.
+	/// Keep the error for request logging and metrics.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub stream_error: Option<Strng>,
 	#[serde(skip)]
 	pub first_token: Option<Instant>,
 	/// Timestamp of the most recently observed output token, used to compute
@@ -651,6 +659,10 @@ pub enum AIError {
 	MessageNotFound,
 	#[error("response was missing fields")]
 	IncompleteResponse,
+	/// A Chat Completions reply that ended with no output and no finish reason. It carries the
+	/// reply's usage so the failed request can still be logged and charged.
+	#[error("{}", EMPTY_REPLY_ERROR)]
+	EmptyResponse(Option<Box<LLMResponse>>),
 	#[error("streaming is not currently supported for this provider")]
 	StreamingUnsupported,
 	#[error("unsupported model")]

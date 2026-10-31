@@ -1231,6 +1231,7 @@ impl ResponseType for Response {
 					.and_then(|d| d.ttl_12h_tokens)
 			}),
 			usage_lines: Vec::new(),
+			stream_error: None,
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
 			input_text_tokens: None,

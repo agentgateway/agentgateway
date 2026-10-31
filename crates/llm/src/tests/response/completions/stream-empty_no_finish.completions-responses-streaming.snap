@@ -1,0 +1,24 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-empty_no_finish.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"gemini-4-argon","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"","model":"gemini-4-argon","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.failed","sequence_number":3,"response":{"created_at":123,"error":{"code":"server_error","message":"upstream response ended without content or a finish reason"},"id":"","model":"gemini-4-argon","object":"response","output":[],"status":"failed","usage":{"input_tokens":283710,"input_tokens_details":{"cached_tokens":281661},"output_tokens":1423,"output_tokens_details":{"reasoning_tokens":1415},"total_tokens":285133}}}
+
+
+
+{
+  "input_tokens": 283710,
+  "output_tokens": 1423,
+  "total_tokens": 285133,
+  "reasoning_tokens": 1415,
+  "cached_input_tokens": 281661,
+  "provider_model": "gemini-4-argon",
+  "stream_error": "upstream response ended without content or a finish reason"
+}

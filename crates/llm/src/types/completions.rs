@@ -184,6 +184,7 @@ impl ResponseType for Response {
 			cache_creation_1h_input_tokens: None,
 			cache_creation_12h_input_tokens: None,
 			usage_lines: Vec::new(),
+			stream_error: None,
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -907,6 +908,40 @@ pub mod typed {
 			self
 				.completion_tokens
 				.max(self.total_tokens.saturating_sub(self.prompt_tokens))
+		}
+
+		/// Cache write and read token counts. Providers report them in `prompt_tokens_details` or,
+		/// like some OpenAI-compatible gateways, at the top level. The details take precedence.
+		pub fn cache_tokens(&self) -> (Option<u64>, Option<u64>) {
+			let details = self.prompt_tokens_details.as_ref();
+			(
+				details
+					.and_then(|d| d.cache_write_tokens)
+					.or(self.cache_creation_input_tokens),
+				details
+					.and_then(|d| d.cached_tokens)
+					.or(self.cache_read_input_tokens),
+			)
+		}
+
+		/// Copies this usage into a logged response.
+		pub(crate) fn apply(&self, response: &mut crate::LLMResponse) {
+			response.input_tokens = Some(self.prompt_tokens as u64);
+			response.output_tokens = Some(self.output_tokens() as u64);
+			response.total_tokens = Some(self.total_tokens as u64);
+			(
+				response.cache_creation_input_tokens,
+				response.cached_input_tokens,
+			) = self.cache_tokens();
+			response.reasoning_tokens = self
+				.completion_tokens_details
+				.as_ref()
+				.and_then(|d| d.reasoning_tokens);
+		}
+
+		/// Records this usage on a translated stream's log.
+		pub(crate) fn record(&self, log: &crate::StreamingUsageGuard) {
+			log.update(|r| self.apply(&mut r.response));
 		}
 	}
 

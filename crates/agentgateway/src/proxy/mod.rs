@@ -350,6 +350,7 @@ fn classify_ai_request(error: &llm::AIError) -> AIErrorClassification {
 		llm::AIError::RequestMarshal(_)
 		| llm::AIError::ResponseParsing(_)
 		| llm::AIError::IncompleteResponse
+		| llm::AIError::EmptyResponse(_)
 		| llm::AIError::InvalidResponse(_)
 		| llm::AIError::ResponseMarshal(_)
 		| llm::AIError::ResponseTooLarge
@@ -367,6 +368,7 @@ fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
 	match error {
 		llm::AIError::ResponseParsing(_)
 		| llm::AIError::IncompleteResponse
+		| llm::AIError::EmptyResponse(_)
 		| llm::AIError::InvalidResponse(_)
 		| llm::AIError::ResponseTooLarge
 		| llm::AIError::UnsupportedEncoding(_)

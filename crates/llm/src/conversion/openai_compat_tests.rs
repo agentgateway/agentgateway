@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use serde_json::{Value, json};
 
-use super::to_responses;
+use super::{from_responses, to_responses};
 
 fn translate(input: &[u8]) -> Value {
 	let response =
@@ -115,4 +115,95 @@ fn gemini_thought_signature_pairs_with_the_next_call_when_call_ids_repeat() {
 		})
 		.collect();
 	assert_eq!(sigs, ["sig1", "sig2"]);
+}
+
+#[test]
+fn buffered_function_call_survives_discarded_custom_call() {
+	let mut input: Value =
+		serde_json::from_slice(include_bytes!("../tests/response/completions/basic.json")).unwrap();
+	input["choices"][0]["finish_reason"] = Value::Null;
+	input["choices"][0]["message"] = json!({
+		"content": null,
+		"role": "assistant",
+		"tool_calls": [
+			{"custom_tool": {"input": "input", "name": "custom"}, "id": "custom", "type": "custom"},
+			{"function": {"arguments": "{}", "name": "get_weather"}, "id": "call_1", "type": "function"},
+		],
+	});
+	let response = translate(&serde_json::to_vec(&input).unwrap());
+	assert_eq!(response["status"], "completed");
+	assert_eq!(response["output"].as_array().unwrap().len(), 1);
+	assert_eq!(response["output"][0]["type"], "function_call");
+	assert_eq!(response["output"][0]["call_id"], "call_1");
+}
+
+#[test]
+fn tool_choice_without_tools_is_dropped_unless_forced() {
+	let function = json!([{"type": "function", "name": "f", "parameters": {"type": "object"}}]);
+	let unsupported = json!([{"type": "web_search"}]);
+	// (tools, tool_choice) in, (tools, tool_choice) out.
+	let cases = [
+		(None, json!("auto"), None, None),
+		(Some(json!([])), json!("auto"), None, None),
+		(None, json!("none"), None, None),
+		(Some(unsupported), json!("auto"), None, None),
+		(None, json!("required"), None, Some(json!("required"))),
+		(
+			None,
+			json!({"type": "function", "name": "f"}),
+			None,
+			Some(json!({"type": "function", "function": {"name": "f"}})),
+		),
+		(
+			Some(function),
+			json!("auto"),
+			Some(
+				json!([{"type": "function", "function": {"name": "f", "parameters": {"type": "object"}}}]),
+			),
+			Some(json!("auto")),
+		),
+	];
+	for (tools, tool_choice, want_tools, want_choice) in cases {
+		let mut req = json!({
+			"model": "gemini-4-argon",
+			"input": "synthetic",
+			"stream": true,
+			"tool_choice": tool_choice,
+			"parallel_tool_calls": false,
+		});
+		if let Some(tools) = &tools {
+			req["tools"] = tools.clone();
+		}
+		let req = serde_json::from_value(req).unwrap();
+		let out: Value = serde_json::from_slice(&from_responses::translate(&req).unwrap()).unwrap();
+		assert_eq!(
+			out.get("tools"),
+			want_tools.as_ref(),
+			"{tools:?} {tool_choice}"
+		);
+		assert_eq!(
+			out.get("tool_choice"),
+			want_choice.as_ref(),
+			"{tools:?} {tool_choice}"
+		);
+		assert_eq!(out["parallel_tool_calls"], false, "{tools:?} {tool_choice}");
+	}
+}
+
+#[test]
+fn buffered_signature_only_reply_without_finish_reason_fails() {
+	// Responses drops a bare signature, so the client would get an empty completed reply.
+	let mut input: Value =
+		serde_json::from_slice(include_bytes!("../tests/response/completions/basic.json")).unwrap();
+	input["choices"][0]["finish_reason"] = Value::Null;
+	input["choices"][0]["message"] =
+		json!({"content": null, "role": "assistant", "reasoning_signature": "sig"});
+	let err =
+		to_responses::translate_response(&Bytes::from(serde_json::to_vec(&input).unwrap()), "m", None)
+			.err()
+			.expect("an untranslated signature is not output");
+	assert!(
+		matches!(err, crate::AIError::EmptyResponse(Some(_))),
+		"{err}"
+	);
 }

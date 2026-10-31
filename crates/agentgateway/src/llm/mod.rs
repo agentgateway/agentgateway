@@ -2851,11 +2851,29 @@ impl AIProvider {
 			)?;
 			(LLMResponse::default(), body)
 		} else {
-			let mut resp = self.translate_chat_or_detect_response(
+			let mut resp = match self.translate_chat_or_detect_response(
 				&req,
 				&bytes,
 				model_catalog.map(|c| c.as_handle()),
-			)?;
+			) {
+				Ok(resp) => resp,
+				Err(mut err) => {
+					// A failed reply can still use tokens. Preserve its usage for logging and limits.
+					// The response is built only so the rate limit cost expression can read it.
+					if let AIError::EmptyResponse(usage) = &mut err
+						&& let Some(llm_resp) = usage.take()
+					{
+						let (resp, llm_info) =
+							Self::build_response(parts, bytes, managed_body, req, *llm_resp, model_catalog);
+						if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
+							let exec = cel::Executor::new_response(req_snapshot.as_deref(), &resp);
+							amend_tokens(rate_limit, &llm_info, exec);
+						}
+						log.store(Some(llm_info));
+					}
+					return Err(err);
+				},
+			};
 			let prompt_guard_headers =
 				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
 
@@ -2945,14 +2963,28 @@ impl AIProvider {
 	}
 
 	fn finalize_response(
+		parts: ::http::response::Parts,
+		bytes: Bytes,
+		managed_body: Body,
+		req: LLMRequest,
+		llm_resp: LLMResponse,
+		model_catalog: Option<&catalog::ModelCatalog>,
+		log: &AsyncLog<llm::LLMInfo>,
+	) -> Response {
+		let (resp, llm_info) =
+			Self::build_response(parts, bytes, managed_body, req, llm_resp, model_catalog);
+		log.store(Some(llm_info));
+		resp
+	}
+
+	fn build_response(
 		mut parts: ::http::response::Parts,
 		bytes: Bytes,
 		mut managed_body: Body,
 		req: LLMRequest,
 		llm_resp: LLMResponse,
 		model_catalog: Option<&catalog::ModelCatalog>,
-		log: &AsyncLog<llm::LLMInfo>,
-	) -> Response {
+	) -> (Response, LLMInfo) {
 		let llm_info = LLMInfo::new(req, llm_resp);
 		parts
 			.extensions
@@ -2960,9 +2992,8 @@ impl AIProvider {
 				llm_info.clone(),
 				model_catalog,
 			));
-		log.store(Some(llm_info));
 		managed_body.replace_bytes(bytes);
-		Response::from_parts(parts, managed_body)
+		(Response::from_parts(parts, managed_body), llm_info)
 	}
 
 	fn process_count_tokens_response(

@@ -391,6 +391,7 @@ pub mod from_responses {
 				})
 				.collect()
 		});
+		let tools = tools.filter(|tools| !tools.is_empty());
 
 		let tool_choice = req.tool_choice.as_ref().and_then(|tc| {
 			use responses::{ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam};
@@ -423,6 +424,17 @@ pub mod from_responses {
 					None
 				},
 			}
+		});
+		// Copilot rejects a tool choice without tools. Only `auto` and `none` can be omitted
+		// without weakening a required or named tool choice.
+		let tool_choice = tool_choice.filter(|choice| {
+			tools.is_some()
+				|| !matches!(
+					choice,
+					completions::ToolChoiceOption::Mode(
+						completions::ToolChoiceOptions::Auto | completions::ToolChoiceOptions::None
+					)
+				)
 		});
 
 		let reasoning_effort = req.reasoning.as_ref().and_then(|r| {
@@ -527,6 +539,31 @@ pub mod to_responses {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		// An empty reply without a finish reason is an upstream failure.
+		// Only retained output counts. Custom tool calls are dropped below, and Responses has no
+		// place for a bare `reasoning_signature`, so neither counts.
+		if resp.choices.first().is_none_or(|choice| {
+			choice.finish_reason.is_none()
+				&& choice.message.content.as_deref().is_none_or(str::is_empty)
+				&& !choice
+					.message
+					.tool_calls
+					.iter()
+					.flatten()
+					.any(|call| matches!(call, completions::MessageToolCalls::Function(_)))
+				&& choice.message.reasoning().is_none()
+		}) {
+			let resolved_model = if resp.model.is_empty() {
+				model
+			} else {
+				&resp.model
+			};
+			return Err(crate::conversion::completions::empty_reply(
+				resolved_model,
+				resp.service_tier.as_deref(),
+				resp.usage.as_ref(),
+			));
+		}
 		let mut typed = translate_response_internal(resp, model);
 		if let Some(namespaces) = namespaces {
 			namespaces.restore_response(&mut typed);
@@ -641,32 +678,7 @@ pub mod to_responses {
 			_ => None,
 		};
 
-		let usage = resp.usage.map(|u| responses::ResponseUsage {
-			input_tokens: u.prompt_tokens,
-			output_tokens: u.output_tokens(),
-			total_tokens: u.total_tokens,
-			input_tokens_details: responses::InputTokenDetails {
-				cached_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens)
-					.unwrap_or(0) as u32,
-				cache_write_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as i64),
-				cache_write_tokens_details: None,
-			},
-			output_tokens_details: responses::OutputTokenDetails {
-				reasoning_tokens: u
-					.completion_tokens_details
-					.as_ref()
-					.and_then(|d| d.reasoning_tokens)
-					.unwrap_or(0) as u32,
-			},
-		});
+		let usage = resp.usage.as_ref().map(response_usage);
 
 		let mut response = response_builder.response(status, usage, error, incomplete_details);
 		response.output = outputs;
@@ -879,7 +891,12 @@ pub mod to_responses {
 								));
 							}
 
-							if let Some(tcs) = &choice.delta.tool_calls {
+							if let Some(tcs) = choice
+								.delta
+								.tool_calls
+								.as_ref()
+								.filter(|tcs| !tcs.is_empty())
+							{
 								// The message keeps its place ahead of the tool calls.
 								open_message(
 									&mut events,
@@ -1051,6 +1068,39 @@ pub mod to_responses {
 		})
 	}
 
+	/// Record usage for failed streams as well as successful ones.
+	fn record_usage(
+		log: &StreamingUsageGuard,
+		usage: Option<completions::Usage>,
+	) -> Option<responses::ResponseUsage> {
+		if let Some(ref u) = usage {
+			u.record(log);
+		}
+
+		usage.as_ref().map(response_usage)
+	}
+
+	fn response_usage(u: &completions::Usage) -> responses::ResponseUsage {
+		let (cache_write_tokens, cached_tokens) = u.cache_tokens();
+		responses::ResponseUsage {
+			input_tokens: u.prompt_tokens,
+			output_tokens: u.output_tokens(),
+			total_tokens: u.total_tokens,
+			input_tokens_details: responses::InputTokenDetails {
+				cached_tokens: cached_tokens.unwrap_or(0) as u32,
+				cache_write_tokens: cache_write_tokens.map(|tokens| tokens as i64),
+				cache_write_tokens_details: None,
+			},
+			output_tokens_details: responses::OutputTokenDetails {
+				reasoning_tokens: u
+					.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens)
+					.unwrap_or(0) as u32,
+			},
+		}
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	fn flush_end(
 		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
@@ -1070,16 +1120,38 @@ pub mod to_responses {
 		logged_tool_calls: &mut Option<LoggedToolCalls>,
 	) {
 		use responses::{
-			AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputContent,
-			OutputItem, OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent,
-			OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
-			ResponseContentPartDoneEvent, ResponseError, ResponseFunctionCallArgumentsDoneEvent,
-			ResponseOutputItemDoneEvent, ResponseReasoningTextDoneEvent, ResponseStreamEvent,
-			ResponseTextDoneEvent, ResponseUsage,
+			AssistantRole, FunctionToolCall, IncompleteDetails, OutputContent, OutputItem, OutputMessage,
+			OutputMessageContent, OutputStatus, OutputTextContent, ReasoningItem, ReasoningItemContent,
+			ReasoningTextContent, ResponseContentPartDoneEvent, ResponseError,
+			ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemDoneEvent,
+			ResponseReasoningTextDoneEvent, ResponseStreamEvent, ResponseTextDoneEvent,
 		};
 
 		let stop_reason = pending_stop_reason.take();
 		let usage = pending_usage.take();
+		// Completing an empty reply here would hide the upstream failure. A bare reasoning signature
+		// is not translated, so it does not count as output.
+		if stop_reason.is_none() && text.is_empty() && reasoning.is_none() && tool_calls.is_empty() {
+			tracing::warn!(
+				"chat completions stream ended without content or a finish reason; emitting response.failed"
+			);
+			let usage_obj = record_usage(log, usage);
+			log.update(|r| r.response.stream_error = Some(strng::new(crate::EMPTY_REPLY_ERROR)));
+			*sequence_number += 1;
+			events.push((
+				"event",
+				response_builder.failed_event(
+					*sequence_number,
+					usage_obj,
+					ResponseError {
+						code: responses::ResponseErrorCode::ServerError,
+						message: crate::EMPTY_REPLY_ERROR.to_string(),
+						misalignment: None,
+					},
+				),
+			));
+			return;
+		}
 		let response_status = match stop_reason.as_ref() {
 			Some(completions::FinishReason::Stop)
 			| Some(completions::FinishReason::ToolCalls)
@@ -1249,53 +1321,7 @@ pub mod to_responses {
 		output.sort_by_key(|(output_index, _)| *output_index);
 		let output: Vec<OutputItem> = output.into_iter().map(|(_, item)| item).collect();
 
-		if let Some(ref u) = usage {
-			log.update(|r| {
-				r.response.input_tokens = Some(u.prompt_tokens as u64);
-				r.response.output_tokens = Some(u.output_tokens() as u64);
-				r.response.total_tokens = Some(u.total_tokens as u64);
-				r.response.cached_input_tokens = u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens);
-				r.response.cache_creation_input_tokens = u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens);
-				r.response.reasoning_tokens = u
-					.completion_tokens_details
-					.as_ref()
-					.and_then(|d| d.reasoning_tokens);
-			});
-		}
-
-		let usage_obj = usage.map(|u| ResponseUsage {
-			input_tokens: u.prompt_tokens,
-			output_tokens: u.output_tokens(),
-			total_tokens: u.total_tokens,
-			input_tokens_details: InputTokenDetails {
-				cached_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens)
-					.unwrap_or(0) as u32,
-				cache_write_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as i64),
-				cache_write_tokens_details: None,
-			},
-			output_tokens_details: OutputTokenDetails {
-				reasoning_tokens: u
-					.completion_tokens_details
-					.as_ref()
-					.and_then(|d| d.reasoning_tokens)
-					.unwrap_or(0) as u32,
-			},
-		});
+		let usage_obj = record_usage(log, usage);
 
 		*sequence_number += 1;
 		let mut done_event = match stop_reason {
