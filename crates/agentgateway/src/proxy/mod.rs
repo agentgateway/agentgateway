@@ -843,7 +843,10 @@ fn proxy_error_to_grpc_status(error: &ProxyError, http_status: StatusCode) -> Co
 	match error {
 		// Gateway API requires invalid backend references to be HTTP 500 for HTTP
 		// requests, but gRPC callers should see the backend as unavailable.
-		ProxyError::NoValidBackends => Code::Unavailable,
+		ProxyError::NoValidBackends
+		| ProxyError::ServiceNotFound
+		| ProxyError::InvalidBackendType
+		| ProxyError::BackendDoesNotExist => Code::Unavailable,
 		// HTTP 200 with JSON-RPC error -> gRPC 503
 		ProxyError::MCP(mcp::Error::RateLimited { .. }) => Code::Unavailable,
 		_ => http_status_to_grpc_status(http_status),
@@ -1046,6 +1049,9 @@ mod tests {
 			(ProxyError::NoHealthyEndpoints, Code::Unavailable),
 			(ProxyError::UpstreamCallTimeout, Code::Unavailable),
 			(ProxyError::NoValidBackends, Code::Unavailable),
+			(ProxyError::ServiceNotFound, Code::Unavailable),
+			(ProxyError::InvalidBackendType, Code::Unavailable),
+			(ProxyError::BackendDoesNotExist, Code::Unavailable),
 			(ProxyError::AuthorizationFailed, Code::PermissionDenied),
 		] {
 			let message = error.to_string();
