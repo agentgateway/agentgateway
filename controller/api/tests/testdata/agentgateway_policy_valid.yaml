@@ -283,6 +283,8 @@ spec:
       normalize:
       - MergeSlash
       - DotSegment
+      - DecodeUnreserved
+      - RejectEscapedSlash
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

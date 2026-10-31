@@ -759,12 +759,15 @@ type FrontendConnect struct {
 	Mode FrontendConnectMode `json:"mode"`
 }
 
-// +kubebuilder:validation:Enum=MergeSlash;DotSegment
+// +kubebuilder:validation:Enum=MergeSlash;DotSegment;DecodeUnreserved;RejectEscapedSlash;UnescapeSlash
 type FrontendHTTPNormalize string
 
 const (
-	FrontendHTTPNormalizeMergeSlash FrontendHTTPNormalize = "MergeSlash"
-	FrontendHTTPNormalizeDotSegment FrontendHTTPNormalize = "DotSegment"
+	FrontendHTTPNormalizeMergeSlash         FrontendHTTPNormalize = "MergeSlash"
+	FrontendHTTPNormalizeDotSegment         FrontendHTTPNormalize = "DotSegment"
+	FrontendHTTPNormalizeDecodeUnreserved   FrontendHTTPNormalize = "DecodeUnreserved"
+	FrontendHTTPNormalizeRejectEscapedSlash FrontendHTTPNormalize = "RejectEscapedSlash"
+	FrontendHTTPNormalizeUnescapeSlash      FrontendHTTPNormalize = "UnescapeSlash"
 )
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -840,15 +843,26 @@ type FrontendHTTP struct {
 	// +optional
 	MaxConcurrentRequests *int32 `json:"maxConcurrentRequests,omitempty"`
 
-	// `normalize` defines path normalization rules applied before route matching
-	// and before forwarding upstream.
+	// `normalize` defines path normalization rules applied before route matching.
+	// The normalized path is used for routing, policies and the upstream request;
+	// access logs keep the original path. Rules are applied in a fixed order
+	// regardless of how they are listed: percent-decoding, then `MergeSlash`,
+	// then `DotSegment`.
 	//
-	// `MergeSlash` collapses repeated `/` characters into a single `/`.
-	// `DotSegment` removes `/./` segments and resolves `/../` segments.
+	// `MergeSlash` collapses repeated slashes into one: `//a///b` becomes `/a/b`.
+	// `DotSegment` resolves `.` and `..` segments: `/a/./b/../c` becomes `/a/c`.
+	// `DecodeUnreserved` decodes percent-encoded unreserved characters
+	// (`A-Z a-z 0-9 - . _ ~`): `/%61dmin` becomes `/admin`. Other escapes stay
+	// encoded with uppercase hex. Requests with malformed escapes are rejected with 400.
+	// `RejectEscapedSlash` rejects requests whose path contains `%2F` or `%5C` with 400.
+	// Use it when the backend decodes them into path separators, otherwise
+	// `/api%2Fmetrics` bypasses rules for `/api/metrics`.
+	// `UnescapeSlash` decodes `%2F` and `%5C` into `/` and `\`.
 	//
 	// +listType=set
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=2
+	// +kubebuilder:validation:MaxItems=5
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(x, x == 'RejectEscapedSlash') && self.exists(x, x == 'UnescapeSlash'))",message="RejectEscapedSlash and UnescapeSlash are mutually exclusive"
 	// +optional
 	Normalize []FrontendHTTPNormalize `json:"normalize,omitempty"`
 }

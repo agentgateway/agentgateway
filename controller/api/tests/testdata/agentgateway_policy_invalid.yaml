@@ -360,6 +360,18 @@ spec:
       - MergeSlash
       - MergeSlash
 ---
+_err: 'RejectEscapedSlash and UnescapeSlash are mutually exclusive'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-normalize-conflicting-slashes
+spec:
+  frontend:
+    http:
+      normalize:
+      - RejectEscapedSlash
+      - UnescapeSlash
+---
 _err: 'http.http2WindowSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

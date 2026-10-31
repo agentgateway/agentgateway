@@ -683,6 +683,9 @@ const (
 	FrontendPolicySpec_HTTP_NORMALIZE_UNSPECIFIED FrontendPolicySpec_HTTP_Normalize = 0
 	FrontendPolicySpec_HTTP_MERGE_SLASH           FrontendPolicySpec_HTTP_Normalize = 1
 	FrontendPolicySpec_HTTP_DOT_SEGMENT           FrontendPolicySpec_HTTP_Normalize = 2
+	FrontendPolicySpec_HTTP_DECODE_UNRESERVED     FrontendPolicySpec_HTTP_Normalize = 3
+	FrontendPolicySpec_HTTP_REJECT_ESCAPED_SLASH  FrontendPolicySpec_HTTP_Normalize = 4
+	FrontendPolicySpec_HTTP_UNESCAPE_SLASH        FrontendPolicySpec_HTTP_Normalize = 5
 )
 
 // Enum value maps for FrontendPolicySpec_HTTP_Normalize.
@@ -691,11 +694,17 @@ var (
 		0: "NORMALIZE_UNSPECIFIED",
 		1: "MERGE_SLASH",
 		2: "DOT_SEGMENT",
+		3: "DECODE_UNRESERVED",
+		4: "REJECT_ESCAPED_SLASH",
+		5: "UNESCAPE_SLASH",
 	}
 	FrontendPolicySpec_HTTP_Normalize_value = map[string]int32{
 		"NORMALIZE_UNSPECIFIED": 0,
 		"MERGE_SLASH":           1,
 		"DOT_SEGMENT":           2,
+		"DECODE_UNRESERVED":     3,
+		"REJECT_ESCAPED_SLASH":  4,
+		"UNESCAPE_SLASH":        5,
 	}
 )
 
@@ -19068,7 +19077,7 @@ const file_resource_proto_rawDesc = "" +
 	"\binterval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12\x1d\n" +
 	"\aretries\x18\x03 \x01(\rH\x00R\aretries\x88\x01\x01B\n" +
 	"\n" +
-	"\b_retries\"\xd9)\n" +
+	"\b_retries\"\x9f*\n" +
 	"\x12FrontendPolicySpec\x12E\n" +
 	"\x03tcp\x18\x01 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TCPH\x00R\x03tcp\x12E\n" +
 	"\x03tls\x18\x02 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TLSH\x00R\x03tls\x12H\n" +
@@ -19078,7 +19087,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x15network_authorization\x18\x06 \x01(\v2B.agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorizationH\x00R\x14networkAuthorization\x12d\n" +
 	"\x0eproxy_protocol\x18\a \x01(\v2;.agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocolH\x00R\rproxyProtocol\x12Q\n" +
 	"\ametrics\x18\b \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.MetricsH\x00R\ametrics\x12Q\n" +
-	"\aconnect\x18\t \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.ConnectH\x00R\aconnect\x1a\xb3\t\n" +
+	"\aconnect\x18\t \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.ConnectH\x00R\aconnect\x1a\xf9\t\n" +
 	"\x04HTTP\x12+\n" +
 	"\x0fmax_buffer_size\x18\x01 \x01(\rH\x00R\rmaxBufferSize\x88\x01\x01\x12/\n" +
 	"\x11http1_max_headers\x18\x02 \x01(\rH\x01R\x0fhttp1MaxHeaders\x88\x01\x01\x12G\n" +
@@ -19096,11 +19105,14 @@ const file_resource_proto_rawDesc = "" +
 	"\tnormalize\x18\r \x03(\x0e2<.agentgateway.dev.resource.FrontendPolicySpec.HTTP.NormalizeR\tnormalize\"-\n" +
 	"\x0eHTTPHeaderCase\x12\r\n" +
 	"\tLOWERCASE\x10\x00\x12\f\n" +
-	"\bPRESERVE\x10\x01\"H\n" +
+	"\bPRESERVE\x10\x01\"\x8d\x01\n" +
 	"\tNormalize\x12\x19\n" +
 	"\x15NORMALIZE_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vMERGE_SLASH\x10\x01\x12\x0f\n" +
-	"\vDOT_SEGMENT\x10\x02B\x12\n" +
+	"\vDOT_SEGMENT\x10\x02\x12\x15\n" +
+	"\x11DECODE_UNRESERVED\x10\x03\x12\x18\n" +
+	"\x14REJECT_ESCAPED_SLASH\x10\x04\x12\x12\n" +
+	"\x0eUNESCAPE_SLASH\x10\x05B\x12\n" +
 	"\x10_max_buffer_sizeB\x14\n" +
 	"\x12_http1_max_headersB\x14\n" +
 	"\x12_http2_window_sizeB\x1f\n" +

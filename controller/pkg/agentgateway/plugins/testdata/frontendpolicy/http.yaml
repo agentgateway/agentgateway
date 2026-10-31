@@ -30,6 +30,8 @@ spec:
       normalize:
       - MergeSlash
       - DotSegment
+      - DecodeUnreserved
+      - RejectEscapedSlash
 ---
 # Output
 output:
@@ -48,6 +50,8 @@ output:
           normalize:
           - MERGE_SLASH
           - DOT_SEGMENT
+          - DECODE_UNRESERVED
+          - REJECT_ESCAPED_SLASH
       key: frontend/default/http-policy:frontend-http:default/test
       name:
         kind: AgentgatewayPolicy
