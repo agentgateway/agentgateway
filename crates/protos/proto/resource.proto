@@ -758,6 +758,9 @@ message FrontendPolicySpec {
       NORMALIZE_UNSPECIFIED = 0;
       MERGE_SLASH = 1;
       DOT_SEGMENT = 2;
+      DECODE_UNRESERVED = 3;
+      REJECT_ESCAPED_SLASH = 4;
+      UNESCAPE_SLASH = 5;
     }
 
     optional uint32 max_buffer_size = 1;

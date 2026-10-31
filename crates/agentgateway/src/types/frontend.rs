@@ -123,6 +123,20 @@ pub struct HTTP {
 	pub normalize: Vec<PathNormalization>,
 }
 
+impl HTTP {
+	/// Rejects path normalization rules that contradict each other.
+	pub fn validate(&self) -> anyhow::Result<()> {
+		if self
+			.normalize
+			.contains(&PathNormalization::RejectEscapedSlash)
+			&& self.normalize.contains(&PathNormalization::UnescapeSlash)
+		{
+			anyhow::bail!("normalize: rejectEscapedSlash and unescapeSlash are mutually exclusive");
+		}
+		Ok(())
+	}
+}
+
 impl Default for HTTP {
 	fn default() -> Self {
 		Self {

@@ -3537,39 +3537,54 @@ fn frontend_policy_from_proto(
 	};
 
 	Ok(match &spec.kind {
-		Some(fps::Kind::Http(h)) => FrontendPolicy::HTTP(frontend::HTTP {
-			max_buffer_size: h.max_buffer_size.map(|v| v as usize),
-			http1_max_headers: h.http1_max_headers.map(|v| v as usize),
-			http1_idle_timeout: h
-				.http1_idle_timeout
-				.map(convert_duration)
-				.unwrap_or_else(crate::defaults::http1_idle_timeout),
-			http1_header_case: HttpHeaderCase::try_from(h.http1_header_case).map(|header_case| {
-				match header_case {
-					HttpHeaderCase::Lowercase => frontend::HTTPHeaderCase::Lowercase,
-					HttpHeaderCase::Preserve => frontend::HTTPHeaderCase::Preserve,
-				}
-			})?,
-			http2_window_size: h.http2_window_size,
-			http2_connection_window_size: h.http2_connection_window_size,
-			http2_frame_size: h.http2_frame_size,
-			http2_max_header_size: h.http2_max_header_size,
-			http2_keepalive_interval: h.http2_keepalive_interval.map(convert_duration),
-			http2_keepalive_timeout: h.http2_keepalive_timeout.map(convert_duration),
-			max_connection_duration: h.max_connection_duration.map(convert_duration),
-			max_concurrent_requests: h
-				.max_concurrent_requests
-				.and_then(std::num::NonZeroU32::new),
-			normalize: h
-				.normalize
-				.iter()
-				.filter_map(|raw| match fps::http::Normalize::try_from(*raw).ok() {
-					Some(fps::http::Normalize::MergeSlash) => Some(frontend::PathNormalization::MergeSlash),
-					Some(fps::http::Normalize::DotSegment) => Some(frontend::PathNormalization::DotSegment),
-					_ => None,
-				})
-				.collect(),
-		}),
+		Some(fps::Kind::Http(h)) => {
+			let http = frontend::HTTP {
+				max_buffer_size: h.max_buffer_size.map(|v| v as usize),
+				http1_max_headers: h.http1_max_headers.map(|v| v as usize),
+				http1_idle_timeout: h
+					.http1_idle_timeout
+					.map(convert_duration)
+					.unwrap_or_else(crate::defaults::http1_idle_timeout),
+				http1_header_case: HttpHeaderCase::try_from(h.http1_header_case).map(|header_case| {
+					match header_case {
+						HttpHeaderCase::Lowercase => frontend::HTTPHeaderCase::Lowercase,
+						HttpHeaderCase::Preserve => frontend::HTTPHeaderCase::Preserve,
+					}
+				})?,
+				http2_window_size: h.http2_window_size,
+				http2_connection_window_size: h.http2_connection_window_size,
+				http2_frame_size: h.http2_frame_size,
+				http2_max_header_size: h.http2_max_header_size,
+				http2_keepalive_interval: h.http2_keepalive_interval.map(convert_duration),
+				http2_keepalive_timeout: h.http2_keepalive_timeout.map(convert_duration),
+				max_connection_duration: h.max_connection_duration.map(convert_duration),
+				max_concurrent_requests: h
+					.max_concurrent_requests
+					.and_then(std::num::NonZeroU32::new),
+				normalize: h
+					.normalize
+					.iter()
+					.filter_map(|raw| match fps::http::Normalize::try_from(*raw).ok() {
+						Some(fps::http::Normalize::MergeSlash) => Some(frontend::PathNormalization::MergeSlash),
+						Some(fps::http::Normalize::DotSegment) => Some(frontend::PathNormalization::DotSegment),
+						Some(fps::http::Normalize::DecodeUnreserved) => {
+							Some(frontend::PathNormalization::DecodeUnreserved)
+						},
+						Some(fps::http::Normalize::RejectEscapedSlash) => {
+							Some(frontend::PathNormalization::RejectEscapedSlash)
+						},
+						Some(fps::http::Normalize::UnescapeSlash) => {
+							Some(frontend::PathNormalization::UnescapeSlash)
+						},
+						_ => None,
+					})
+					.collect(),
+			};
+			http
+				.validate()
+				.map_err(|e| ProtoError::Generic(e.to_string()))?;
+			FrontendPolicy::HTTP(http)
+		},
 		Some(fps::Kind::Tls(t)) => FrontendPolicy::TLS(frontend::TLS {
 			handshake_timeout: t
 				.handshake_timeout
@@ -6577,6 +6592,52 @@ mod tests {
 
 		assert_eq!(metrics.add.len(), 0);
 		Ok(())
+	}
+
+	#[test]
+	fn test_frontend_policy_spec_http_normalize() {
+		use crate::types::frontend::PathNormalization;
+		use crate::types::proto::agent::frontend_policy_spec as fps;
+
+		let spec = |normalize: &[fps::http::Normalize]| proto::agent::FrontendPolicySpec {
+			kind: Some(fps::Kind::Http(fps::Http {
+				normalize: normalize.iter().map(|n| *n as i32).collect(),
+				..Default::default()
+			})),
+		};
+
+		let policy = frontend_policy_from_proto(
+			&spec(&[
+				fps::http::Normalize::MergeSlash,
+				fps::http::Normalize::DotSegment,
+				fps::http::Normalize::DecodeUnreserved,
+				fps::http::Normalize::RejectEscapedSlash,
+			]),
+			&mut Diagnostics::default(),
+		)
+		.expect("valid normalize rules");
+		let FrontendPolicy::HTTP(http) = policy else {
+			panic!("Expected HTTP policy variant, got: {policy:?}");
+		};
+		assert_eq!(
+			http.normalize,
+			vec![
+				PathNormalization::MergeSlash,
+				PathNormalization::DotSegment,
+				PathNormalization::DecodeUnreserved,
+				PathNormalization::RejectEscapedSlash,
+			]
+		);
+
+		let err = frontend_policy_from_proto(
+			&spec(&[
+				fps::http::Normalize::RejectEscapedSlash,
+				fps::http::Normalize::UnescapeSlash,
+			]),
+			&mut Diagnostics::default(),
+		)
+		.expect_err("conflicting escaped slash rules");
+		assert!(err.to_string().contains("mutually exclusive"), "{err}");
 	}
 
 	#[test]
