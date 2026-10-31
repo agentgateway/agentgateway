@@ -1430,8 +1430,7 @@ impl HTTPProxy {
 		req: &mut Request,
 	) -> Result<(), ProxyError> {
 		if let Some(http_policy) = &frontend_policies.http {
-			http::normalize_path_for_proxy(req, &http_policy.normalize)
-				.map_err(ProxyError::Processing)?;
+			http::normalize_path_for_proxy(req, &http_policy.normalize)?;
 		}
 
 		frontend_policies.register_cel_expressions(log.cel.ctx());

@@ -2,6 +2,8 @@
 use crate::http::normalize_path;
 #[cfg(test)]
 use crate::http::{Body, Request, normalize_path_for_proxy, path_and_query_string};
+#[cfg(test)]
+use crate::proxy::ProxyError;
 #[cfg(any(test, feature = "internal_benches"))]
 use crate::types::frontend::PathNormalization;
 #[cfg(feature = "internal_benches")]
@@ -35,6 +37,10 @@ fn path_normalization_table() {
 		("/a//b///c", "/a//b///c"),
 		("/..", "/"),
 		("/.", "/"),
+		("/a/b/..", "/a/"),
+		("/a/.", "/a/"),
+		("/a/b/..?x=1", "/a/?x=1"),
+		("/a.b/c..", "/a.b/c.."),
 	];
 	let both_cases: &[(&str, &str)] = &[("/foo", "/foo"), ("//foo/./../bar", "/bar"), ("/*", "/*")];
 
@@ -91,7 +97,10 @@ fn path_normalization_table() {
 				res.unwrap_or_else(|e| panic!("{input}: {e}"));
 				assert_eq!(path_and_query_string(req.uri()), *expected, "{input}");
 			},
-			None => assert!(res.is_err(), "{input} should be rejected"),
+			None => assert!(
+				matches!(res, Err(ProxyError::InvalidRequest)),
+				"{input} should be rejected as invalid, got {res:?}"
+			),
 		}
 	}
 

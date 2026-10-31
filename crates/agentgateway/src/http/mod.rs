@@ -531,7 +531,7 @@ pub fn modify_req_uri(
 pub fn normalize_path_for_proxy(
 	req: &mut Request,
 	normalize: &[crate::types::frontend::PathNormalization],
-) -> anyhow::Result<()> {
+) -> Result<(), ProxyError> {
 	if normalize.is_empty() {
 		return Ok(());
 	}
@@ -540,7 +540,12 @@ pub fn normalize_path_for_proxy(
 		return Ok(());
 	};
 
-	let Some(path) = normalize_path(orig.path(), normalize)? else {
+	// Normalization only fails on paths we refuse to interpret, so that is the client's error.
+	let path = normalize_path(orig.path(), normalize).map_err(|e| {
+		tracing::debug!(path = orig.path(), "rejecting request path: {e}");
+		ProxyError::InvalidRequest
+	})?;
+	let Some(path) = path else {
 		return Ok(());
 	};
 
@@ -558,8 +563,8 @@ pub fn normalize_path_for_proxy(
 	modify_req_uri(req, |uri| {
 		uri.path_and_query = Some(PathAndQuery::from_str(&normalized)?);
 		Ok(())
-	})?;
-	Ok(())
+	})
+	.map_err(ProxyError::Processing)
 }
 
 /// Applies the configured rules in a fixed order, see [`crate::types::frontend::PathNormalization`]
@@ -736,6 +741,8 @@ fn needs_dot_segment_normalization(path: &str) -> bool {
 		|| path.starts_with("../")
 		|| path.contains("/./")
 		|| path.contains("/../")
+		|| path.ends_with("/.")
+		|| path.ends_with("/..")
 }
 
 pub fn modify_uri(
