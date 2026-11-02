@@ -479,7 +479,10 @@ fn render_openai_responses(
 			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
 		types::ChatRequest::Completions(req) => {
-			conversion::responses::from_completions::translate(&req, ctx.catalog)
+			let mut translated =
+				conversion::responses::from_completions::translate_request(&req, ctx.catalog)?;
+			apply_openai_moderation(&mut translated.moderation, ctx)?;
+			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"expected responses request"

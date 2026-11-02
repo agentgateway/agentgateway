@@ -753,7 +753,16 @@ pub mod from_messages {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<responses::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
+		let provider_usage = provider_usage(&resp);
+		let anthropic = translate_response_internal(resp)?;
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: anthropic,
+			provider_usage,
+		}))
+	}
+
+	pub(super) fn provider_usage(resp: &responses::Response) -> Option<super::super::ProviderUsage> {
+		resp.usage.as_ref().map(|u| super::super::ProviderUsage {
 			input_tokens: u.input_tokens as u64,
 			total_tokens: u.total_tokens as u64,
 			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
@@ -764,12 +773,7 @@ pub mod from_messages {
 				.and_then(|d| d.ttl_12h_tokens)
 				.map(|t| t as u64),
 			..Default::default()
-		});
-		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
-			response: anthropic,
-			provider_usage,
-		}))
+		})
 	}
 
 	pub(crate) fn translate_response_internal(
@@ -1751,6 +1755,14 @@ pub mod from_completions {
 		req: &types::completions::Request,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
+		let xlated = translate_request(req, catalog)?;
+		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(
+		req: &types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<types::responses::Request, AIError> {
 		let typed = json::convert::<_, completions::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
 		#[allow(deprecated)]
@@ -1791,17 +1803,32 @@ pub mod from_completions {
 				);
 			}
 		}
-		serde_json::to_vec(&request).map_err(AIError::RequestMarshal)
+		Ok(request)
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<responses::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = super::from_messages::provider_usage(&resp);
+		let reasoning_tokens = resp
+			.usage
+			.as_ref()
+			.map(|u| u.output_tokens_details.reasoning_tokens)
+			.filter(|tokens| *tokens > 0);
 		let resp = super::from_messages::translate_response_internal(resp)?;
-		let resp = conversion::messages::from_completions::translate_response_internal(resp);
+		let mut resp = conversion::messages::from_completions::translate_response_internal(resp);
+		if let (Some(usage), Some(reasoning_tokens)) = (resp.usage.as_mut(), reasoning_tokens) {
+			usage
+				.completion_tokens_details
+				.get_or_insert_with(Default::default)
+				.reasoning_tokens = Some(u64::from(reasoning_tokens));
+		}
 		let passthrough =
 			json::convert::<_, types::completions::Response>(&resp).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(passthrough))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: passthrough,
+			provider_usage,
+		}))
 	}
 
 	/// The Responses stage reads the provider's events, so it takes the usage guard and the content

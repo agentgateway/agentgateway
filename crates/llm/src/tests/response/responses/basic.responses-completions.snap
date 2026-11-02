@@ -112,7 +112,9 @@ info:
     "input_tokens": 10,
     "output_tokens": 10,
     "total_tokens": 20,
+    "reasoning_tokens": 0,
     "cache_creation_input_tokens": 6,
+    "cache_creation_12h_input_tokens": 2,
     "service_tier": "default",
     "provider_model": "gpt-4o-2024-08-06"
   }

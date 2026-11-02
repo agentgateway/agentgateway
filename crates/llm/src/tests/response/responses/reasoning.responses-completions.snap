@@ -77,7 +77,10 @@ info:
     "usage": {
       "prompt_tokens": 18,
       "completion_tokens": 5,
-      "total_tokens": 23
+      "total_tokens": 23,
+      "completion_tokens_details": {
+        "reasoning_tokens": 8
+      }
     },
     "choices": [
       {
@@ -97,6 +100,7 @@ info:
     "input_tokens": 18,
     "output_tokens": 5,
     "total_tokens": 23,
+    "reasoning_tokens": 8,
     "service_tier": "default",
     "provider_model": "qwen3-8b"
   }
