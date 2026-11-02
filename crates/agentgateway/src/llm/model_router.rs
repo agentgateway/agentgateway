@@ -570,22 +570,26 @@ impl ModelRouter {
 		model: &VirtualModelRoute,
 		catalog: &llm::catalog::CatalogSnapshot,
 	) -> llm::model_list::ModelInfo {
-		let targets: Vec<&str> = match &model.routing {
-			VirtualModelRouting::Weighted(targets) => targets.iter().map(|t| t.model.as_str()).collect(),
-			VirtualModelRouting::Conditional(targets) => {
-				targets.iter().map(|t| t.model.as_str()).collect()
-			},
+		let targets: Vec<(&str, bool)> = match &model.routing {
+			VirtualModelRouting::Weighted(targets) => targets
+				.iter()
+				.map(|t| (t.model.as_str(), t.invalid))
+				.collect(),
+			VirtualModelRouting::Conditional(targets) => targets
+				.iter()
+				.map(|t| (t.model.as_str(), t.invalid))
+				.collect(),
 			// Failover targets are compiled into a backend and callouts pick targets at request time.
 			VirtualModelRouting::Failover { .. } | VirtualModelRouting::Callout(_) => vec![],
 		};
 		let targets = targets
 			.into_iter()
-			.map(|target| {
-				// An unresolved target leaves its metadata unknown rather than being skipped.
+			.map(|(target, invalid)| {
+				// An unresolved or invalid target leaves its metadata unknown rather than being skipped.
 				match self
 					.models
 					.iter()
-					.find(|route| model_name_matches(&route.name, target))
+					.find(|route| !invalid && model_name_matches(&route.name, target))
 				{
 					Some(route) => model_info(route, target.to_string(), catalog),
 					None => llm::model_list::ModelInfo::default(),

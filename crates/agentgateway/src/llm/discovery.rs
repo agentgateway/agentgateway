@@ -75,7 +75,12 @@ impl ModelDiscovery {
 
 	/// Client endpoints the gateway fully parses for the model, preferring those served natively.
 	pub fn preferred_endpoints(&self, model: &str, catalog: &CatalogSnapshot) -> Vec<&'static str> {
-		let Some(provider) = &self.provider_config else {
+		// Endpoints are model-specific, so an unexpanded wildcard advertises none.
+		let Some(provider) = self
+			.provider_config
+			.as_ref()
+			.filter(|_| !model.contains('*'))
+		else {
 			return Vec::new();
 		};
 		let custom = matches!(provider, AIProvider::Custom(_));
@@ -109,7 +114,10 @@ impl ModelDiscovery {
 					.into_iter()
 					.filter_map(|format| match format {
 						ProviderFormat::Embeddings if !converted => Some("/embeddings"),
-						ProviderFormat::Rerank if !converted => Some("/rerank"),
+						// Azure forwards rerank requests to Chat Completions.
+						ProviderFormat::Rerank if !converted && !matches!(provider, AIProvider::Azure(_)) => {
+							Some("/rerank")
+						},
 						ProviderFormat::Decisions if custom => Some("/decisions"),
 						ProviderFormat::SystemOne if custom => Some("/systemone"),
 						ProviderFormat::AnthropicTokenCount if custom => Some("/messages/count_tokens"),
