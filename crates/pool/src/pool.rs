@@ -425,10 +425,21 @@ impl ReservedHttp2Connection {
 	}
 }
 
-#[derive(Debug)]
 pub(crate) struct H2Load {
 	active_streams: AtomicUsize,
+	// Last known max streams.
 	max_streams: AtomicUsize,
+	// Reads the current max streams from the connection, if available.
+	peer_max_streams: Box<dyn Fn() -> Option<usize> + Send + Sync>,
+}
+
+impl Debug for H2Load {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("H2Load")
+			.field("active_streams", &self.active_streams)
+			.field("max_streams", &self.max_streams)
+			.finish_non_exhaustive()
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -439,18 +450,35 @@ enum CapacityReservationResult {
 }
 
 impl H2Load {
-	pub(crate) fn new(max_streams: usize) -> Self {
+	pub(crate) fn new(
+		max_streams: usize,
+		peer_max_streams: impl Fn() -> Option<usize> + Send + Sync + 'static,
+	) -> Self {
 		Self {
 			active_streams: AtomicUsize::new(0),
 			max_streams: AtomicUsize::new(max_streams.max(1)),
+			peer_max_streams: Box::new(peer_max_streams),
+		}
+	}
+
+	fn max_streams(&self) -> usize {
+		match (self.peer_max_streams)() {
+			Some(max) => {
+				let max = max.max(1);
+				self.max_streams.store(max, Ordering::Release);
+				max
+			},
+			None => self.max_streams.load(Ordering::Acquire),
 		}
 	}
 
 	fn remaining_capacity(&self) -> usize {
-		self.max_streams.load(Ordering::Acquire) - self.active_streams.load(Ordering::Acquire)
+		self
+			.max_streams()
+			.saturating_sub(self.active_streams.load(Ordering::Acquire))
 	}
 	fn try_reserve_stream_slot(&self) -> CapacityReservationResult {
-		let max = self.max_streams.load(Ordering::Acquire);
+		let max = self.max_streams();
 		let prev = self
 			.active_streams
 			.try_update(Ordering::AcqRel, Ordering::Acquire, |active| {
@@ -471,7 +499,7 @@ impl H2Load {
 
 	fn release_stream_slot(&self) -> (usize, bool) {
 		let prev = self.active_streams.fetch_sub(1, Ordering::AcqRel);
-		let max = self.max_streams.load(Ordering::Acquire);
+		let max = self.max_streams();
 		debug_assert!(prev > 0, "active_streams must be > 0 before release");
 		(prev - 1, prev == max)
 	}
@@ -817,10 +845,10 @@ impl<K: Key> Pool<K> {
 		// Do not drop again as we explicitly inserted
 		let capacity = conn.capacity();
 		host.connecting -= 1;
-		// Min of capacity and expected to handle the over-capacity case.
-		// For under capacity, we handle it below in forget_pending_connection
-		host.expected_connecting_capacity -= std::cmp::min(capacity, expected_capacity);
-		trace!(?key, ?host.connecting, %host.expected_connecting_capacity, "inserting new connection");
+		let h2_load = match &conn {
+			HttpConnection::Http2(h2) => Some(h2.load.clone()),
+			HttpConnection::Http1(_) => None,
+		};
 
 		let conn = host.active_h2.maybe_insert_new(conn, false);
 		trace!(waiters=%host.waiters.len(), "insert new");
@@ -834,6 +862,13 @@ impl<K: Key> Pool<K> {
 			&self.settings,
 			conn,
 		);
+
+		// The peer's SETTINGS may have lowered the capacity while we were sending.
+		let capacity = h2_load.map_or(capacity, |load| std::cmp::min(capacity, load.max_streams()));
+		// Min of capacity and expected to handle the over-capacity case.
+		// For under capacity, we handle it below in forget_pending_connection
+		host.expected_connecting_capacity -= std::cmp::min(capacity, expected_capacity);
+		trace!(?key, ?host.connecting, %host.expected_connecting_capacity, "inserted new connection");
 
 		// If we had expected this to have more capacity, we need to notify any waiters that its not going to
 		// arrive...
@@ -896,6 +931,8 @@ impl<K: Key> Pool<K> {
 
 			if let Some(CapacityReservationResult::NoCapacity) = host.active_h2.increment_load(&this_conn)
 			{
+				// The peer lowered its limit; keep the waiter queued.
+				host.waiters.push_front(tx);
 				break;
 			}
 			let pooled = Pooled {
@@ -1647,7 +1684,7 @@ mod tests {
 			HttpConnection::Http2(ReservedHttp2Connection {
 				info: Connected::new(),
 				tx,
-				load: Arc::new(H2Load::new(max_streams)),
+				load: Arc::new(H2Load::new(max_streams, || None)),
 			}),
 			MockHttp2Control {
 				server_task,
@@ -2376,6 +2413,43 @@ mod tests {
 			&key,
 			"single canceled waiter send race should not leave h2 in idle and active",
 		);
+	}
+
+	#[tokio::test]
+	async fn test_h2_peer_lowers_max_streams_while_sending_new_connection() {
+		let _guard = lock_send_connection_test_hook().await;
+		let pool = pool_with_expected_h2_capacity(100);
+		let key = host_key_h2("foo");
+		let (sc, first) = must_want_new_connection(&pool, key.clone());
+		let mut waiters = vec![first];
+		for _ in 1..10 {
+			waiters.push(must_wait_for_existing_connection(&pool, key.clone()));
+		}
+
+		let peer_max = Arc::new(AtomicUsize::new(100));
+		let HttpConnection::Http2(mut h2) = mock_http2_connection(100).await else {
+			unreachable!("mock is http2")
+		};
+		h2.load = Arc::new(H2Load::new(100, {
+			let peer_max = peer_max.clone();
+			move || Some(peer_max.load(Ordering::Acquire))
+		}));
+		// The peer's SETTINGS lower the limit while the connection is being handed to waiters.
+		install_send_connection_test_hook(move || {
+			peer_max.store(5, Ordering::Release);
+			false
+		});
+		pool.insert_new_connection(sc, HttpConnection::Http2(h2));
+
+		for (i, mut waiter) in waiters.into_iter().enumerate() {
+			match waiter.try_recv() {
+				Ok(Some(Ok(_))) => assert!(i < 5, "waiter {i} exceeded the peer limit"),
+				Ok(Some(Err(ClientConnectError::CheckoutIsClosed(pool::Error::ConnectionLowCapacity)))) => {
+					assert!(i >= 5, "waiter {i} should have been sent the connection")
+				},
+				res => panic!("waiter {i} was lost: {res:?}"),
+			}
+		}
 	}
 
 	#[tokio::test]
