@@ -7940,6 +7940,57 @@ async fn mcp_extauth_deny() {
 	);
 }
 
+#[tokio::test]
+async fn mcp_backend_extauth_deny() {
+	struct DenyAllAuthz;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extauthmock::Handler for DenyAllAuthz {
+		async fn check(
+			&mut self,
+			_request: &crate::http::ext_authz::proto::CheckRequest,
+		) -> Result<crate::http::ext_authz::proto::CheckResponse, tonic::Status> {
+			deny_response(
+				crate::http::ext_authz::proto::StatusCode::Forbidden,
+				"denied by mock ext_authz",
+			)
+		}
+	}
+
+	let authz = ExtAuthMock::new(|| DenyAllAuthz).spawn().await;
+	let ext_authz: crate::http::ext_authz::ExtAuthz = serde_json::from_value(serde_json::json!({
+		"host": authz.address.to_string(),
+		"protocol": {
+			"grpc": {}
+		}
+	}))
+	.unwrap();
+
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			mock.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::ExtAuthz(Arc::new(
+				ext_authz.with_configured_cache_store(),
+			))],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let err = try_mcp_streamable_client(io)
+		.await
+		.expect_err("Client initialization should be denied by ext_authz");
+	let err_msg = err.to_string();
+	assert!(
+		err_msg.contains("403") && err_msg.contains("denied by mock ext_authz"),
+		"Expected 403 denial from ext_authz, got: {err_msg}"
+	);
+}
+
 #[allow(clippy::result_large_err)]
 async fn try_mcp_streamable_client(
 	s: SocketAddr,

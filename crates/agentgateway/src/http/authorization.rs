@@ -39,10 +39,10 @@ impl crate::store::RequestPolicyTrait for HTTPAuthorizationSet {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut http::Request,
-	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<http::PolicyResponse, ProxyError> {
 		self
 			.apply(req)
-			.map_err(|_| crate::proxy::ProxyResponse::from(ProxyError::AuthorizationFailed))?;
+			.map_err(|_| ProxyError::AuthorizationFailed)?;
 		Ok(http::PolicyResponse::default())
 	}
 
@@ -57,10 +57,10 @@ impl crate::store::BackendPolicyTrait for HTTPAuthorizationSet {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut Option<&mut crate::telemetry::log::RequestLog>,
 		req: &mut http::Request,
-	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<http::PolicyResponse, ProxyError> {
 		self
 			.apply(req)
-			.map_err(|_| crate::proxy::ProxyResponse::from(ProxyError::AuthorizationFailed))?;
+			.map_err(|_| ProxyError::AuthorizationFailed)?;
 		Ok(http::PolicyResponse::default())
 	}
 

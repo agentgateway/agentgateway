@@ -16,10 +16,10 @@ use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, CommonResponse, HeaderMutation, HeadersResponse, ImmediateResponse,
 	ProcessingResponse,
 };
-use crate::http::{self, PolicyResponse, envoy_proto_common};
+use crate::http::{self, envoy_proto_common};
 use crate::proxy::ProxyError;
 
-pub(super) fn to_immediate_response(rp: &ProcessingResponse) -> Option<PolicyResponse> {
+pub(super) fn to_immediate_response(rp: &ProcessingResponse) -> Option<http::Response> {
 	match &rp.response {
 		Some(Response::ImmediateResponse(ir)) => {
 			let ImmediateResponse {
@@ -37,10 +37,7 @@ pub(super) fn to_immediate_response(rp: &ProcessingResponse) -> Option<PolicyRes
 				.map_err(|e| ProxyError::Processing(e.into()))
 				.unwrap();
 			apply_header_mutations_response(&mut resp, headers.as_ref());
-			Some(crate::http::PolicyResponse {
-				direct_response: Some(resp),
-				response_headers: None,
-			})
+			Some(resp)
 		},
 		_ => None,
 	}

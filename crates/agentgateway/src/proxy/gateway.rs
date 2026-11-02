@@ -795,12 +795,7 @@ impl Gateway {
 							.await
 						{
 							Ok(identity) => Some(identity),
-							Err(error) => {
-								return Ok(match error {
-									crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
-									crate::proxy::ProxyResponse::DirectResponse(response) => *response,
-								});
-							},
+							Err(error) => return Ok(error.into_response_with_grpc(false)),
 						}
 					} else {
 						None

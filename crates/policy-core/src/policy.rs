@@ -1,8 +1,30 @@
 //! Policy execution context and phase-specific policy contracts.
 
-use agent_http::PolicyResponse;
+use std::borrow::Cow;
 
-use crate::{BackendDispatcher, BoxError, Expression, PolicyCel};
+use agent_http::{PolicyResponse, Response, StatusCode};
+
+use crate::{BackendDispatcher, Expression, PolicyCel};
+
+/// An error that ends the request. Errors are rendered from `status` and `external_message`
+/// unless `into_response` returns a complete response, such as a CORS preflight response.
+pub trait PolicyError: std::error::Error + Send + Sync + 'static {
+	fn status(&self) -> StatusCode;
+
+	/// Message sent to the client. `Display` is the internal message, used in logs.
+	fn external_message(&self) -> Cow<'static, str> {
+		self.to_string().into()
+	}
+
+	/// A complete response to send instead of `status` and `external_message`. Returns the
+	/// error back when it has none, so the host can render it.
+	fn into_response(self) -> Result<Response, Self>
+	where
+		Self: Sized,
+	{
+		Err(self)
+	}
+}
 
 /// Services supplied by the host for one policy invocation.
 ///
@@ -68,12 +90,13 @@ pub trait RequestPolicy: Send + Sync + 'static {
 	///
 	/// Request-only policies use [`std::convert::Infallible`], so they cannot return response state.
 	type ResponseState: Send + 'static;
+	type Error: PolicyError;
 
 	async fn apply(
 		&self,
 		ctx: PolicyContext<'_>,
 		req: &mut agent_http::Request,
-	) -> Result<RequestAction<Self::ResponseState>, BoxError>;
+	) -> Result<RequestAction<Self::ResponseState>, Self::Error>;
 
 	/// Runs on the response of a request whose [`Self::apply`] returned response state.
 	async fn apply_response(
@@ -81,7 +104,7 @@ pub trait RequestPolicy: Send + Sync + 'static {
 		_ctx: PolicyContext<'_>,
 		_state: Self::ResponseState,
 		_resp: &mut agent_http::Response,
-	) -> Result<PolicyResponse, BoxError> {
+	) -> Result<PolicyResponse, Self::Error> {
 		Ok(PolicyResponse::default())
 	}
 
@@ -94,11 +117,13 @@ pub trait RequestPolicy: Send + Sync + 'static {
 /// Policy invoked for each backend attempt, including policy callouts.
 #[allow(async_fn_in_trait)]
 pub trait BackendPolicy: Send + Sync + 'static {
+	type Error: PolicyError;
+
 	async fn apply_backend(
 		&self,
 		ctx: PolicyContext<'_>,
 		req: &mut agent_http::Request,
-	) -> Result<agent_http::PolicyResponse, BoxError>;
+	) -> Result<agent_http::PolicyResponse, Self::Error>;
 
 	/// Returns every CEL expression owned by this policy.
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {

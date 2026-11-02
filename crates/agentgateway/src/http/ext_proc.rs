@@ -20,10 +20,10 @@ use crate::http::ext_proc::proto::{
 	HttpBody, HttpHeaders, HttpTrailers, Metadata, ProcessingRequest, ProcessingResponse,
 	processing_response,
 };
-use crate::http::{HeaderName, PolicyResponse, envoy_proto_common};
-use crate::proxy::ProxyError;
+use crate::http::{HeaderName, envoy_proto_common};
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::proxy::{ProxyError, ProxyResponseReason};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target};
 use crate::{http, *};
@@ -193,7 +193,6 @@ pub struct InferencePoolRouter {
 pub struct InferenceRequestResult {
 	pub destination: Option<Target>,
 	pub destination_mode: InferenceRoutingDestinationMode,
-	pub policy_response: PolicyResponse,
 	pub failed_open: bool,
 }
 
@@ -250,6 +249,12 @@ impl InferencePoolRouter {
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		let failed_open = ext_proc.skipped;
 		*req = new_req;
+		if let Some(resp) = pr {
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtProc,
+				resp,
+			));
+		}
 		let dest = req
 			.headers_mut()
 			.remove(&INFERENCE_DESTINATION_HEADER)
@@ -259,23 +264,25 @@ impl InferencePoolRouter {
 		Ok(InferenceRequestResult {
 			destination: dest,
 			destination_mode: self.destination_mode,
-			policy_response: pr.unwrap_or_default(),
 			failed_open,
 		})
 	}
 
-	pub async fn mutate_response(
-		&mut self,
-		resp: &mut http::Response,
-	) -> Result<PolicyResponse, ProxyError> {
+	pub async fn mutate_response(&mut self, resp: &mut http::Response) -> Result<(), ProxyError> {
 		let rd = resp.extensions().get::<ResolvedDestination>().map(|d| d.0);
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok(Default::default());
+			return Ok(());
 		};
 		let r = std::mem::take(resp);
 		let (new_resp, pr) = ext_proc.mutate_response(r, None, rd).await?;
 		*resp = new_resp;
-		Ok(pr.unwrap_or_default())
+		if let Some(resp) = pr {
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtProc,
+				resp,
+			));
+		}
+		Ok(())
 	}
 }
 
@@ -351,45 +358,56 @@ pub struct ExtProcRequest {
 }
 
 impl ExtProcRequest {
-	pub async fn mutate_request(
-		&mut self,
-		req: &mut http::Request,
-	) -> Result<PolicyResponse, ProxyError> {
+	pub async fn mutate_request(&mut self, req: &mut http::Request) -> Result<(), ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok(PolicyResponse::default());
+			return Ok(());
 		};
 		let r = std::mem::take(req);
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		*req = new_req;
-		let pr = pr.unwrap_or_default();
 		pol_result!(
 			dtrace::Info,
 			Apply,
 			"ext_proc request ({})",
-			dtrace::policy_response_details(&pr)
+			pr.as_ref()
+				.map(|r| format!("returned direct response with status {}", r.status()))
+				.unwrap_or_default()
 		);
-		Ok(pr)
+		if let Some(resp) = pr {
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtProc,
+				resp,
+			));
+		}
+		Ok(())
 	}
 
 	pub async fn mutate_response(
 		&mut self,
 		resp: &mut http::Response,
 		request: Option<&RequestSnapshot>,
-	) -> Result<PolicyResponse, ProxyError> {
+	) -> Result<(), ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok(PolicyResponse::default());
+			return Ok(());
 		};
 		let r = std::mem::take(resp);
 		let (new_resp, pr) = ext_proc.mutate_response(r, request, None).await?;
 		*resp = new_resp;
-		let pr = pr.unwrap_or_default();
 		pol_result!(
 			dtrace::Info,
 			Apply,
 			"ext_proc response ({})",
-			dtrace::policy_response_details(&pr)
+			pr.as_ref()
+				.map(|r| format!("returned direct response with status {}", r.status()))
+				.unwrap_or_default()
 		);
-		Ok(pr)
+		if let Some(resp) = pr {
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtProc,
+				resp,
+			));
+		}
+		Ok(())
 	}
 
 	pub fn take_body_immediate_response(&self) -> Option<http::Response> {
@@ -925,7 +943,7 @@ impl ExtProcInstance {
 	pub async fn mutate_request(
 		&mut self,
 		req: http::Request,
-	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
+	) -> Result<(http::Request, Option<http::Response>), Error> {
 		let rebuffer = req.body().needs_inspection();
 		let (mut req, response) = self.mutate_request_inner(req).await?;
 		if rebuffer && self.mode_state.request_body_mode != BodySendMode::None {
@@ -939,7 +957,7 @@ impl ExtProcInstance {
 	async fn mutate_request_inner(
 		&mut self,
 		mut req: http::Request,
-	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
+	) -> Result<(http::Request, Option<http::Response>), Error> {
 		let headers = req_to_header_map(&req);
 
 		// Drop the executor before the first await so the request future does not store it.
@@ -1296,7 +1314,7 @@ impl ExtProcInstance {
 							};
 							if let Some(resp) = to_immediate_response(&presp) {
 								trace!("got immediate response during request body streaming");
-								*immediate_response.lock().unwrap() = resp.direct_response;
+								*immediate_response.lock().unwrap() = Some(resp);
 								return;
 							}
 							let response = handle_response_for_request_mutation(
@@ -1484,7 +1502,7 @@ impl ExtProcInstance {
 		response: http::Response,
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
-	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
+	) -> Result<(http::Response, Option<http::Response>), Error> {
 		let rebuffer = response.body().needs_inspection();
 		let (mut response, policy_response) = self
 			.mutate_response_inner(response, request, resolved_destination_metadata)
@@ -1502,7 +1520,7 @@ impl ExtProcInstance {
 		response: http::Response,
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
-	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
+	) -> Result<(http::Response, Option<http::Response>), Error> {
 		if self.skipped {
 			return Ok((response, None));
 		}

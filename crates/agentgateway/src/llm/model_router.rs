@@ -1,6 +1,7 @@
 use std::sync::{Arc, LazyLock};
 
 use agent_core::strng;
+use agent_policy::PolicyError;
 use bytes::Bytes;
 use futures_util::stream;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -11,6 +12,7 @@ use serde_json::Value;
 
 use crate::http::{self, Request, RequestBodyExt, Response};
 use crate::llm::router_callout::VirtualModelCalloutFailureMode;
+use crate::proxy::ProxyResponseReason;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{
 	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
@@ -278,8 +280,58 @@ pub struct ResolvedBackend {
 }
 
 pub enum ResolveResult {
+	/// A response the router serves itself, such as the model list.
 	DirectResponse(Response),
+	Rejected(ProxyResponseReason, Response),
+	Error(Error),
 	Backend(ResolvedBackend),
+}
+
+/// Model routing failures that are logged as errors. Clients get the same JSON error body as other
+/// model router rejections.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	#[error("model {0} is not allowed for this API key")]
+	ApiKeyModelDenied(String),
+	#[error("virtual model {model} callout failed: {cause}")]
+	CalloutFailed { model: String, cause: String },
+}
+
+impl Error {
+	pub fn reason(&self) -> ProxyResponseReason {
+		match self {
+			Error::ApiKeyModelDenied(_) => ProxyResponseReason::Authorization,
+			Error::CalloutFailed { .. } => ProxyResponseReason::ModelRouting,
+		}
+	}
+}
+
+impl PolicyError for Error {
+	fn status(&self) -> ::http::StatusCode {
+		match self {
+			Error::ApiKeyModelDenied(_) => ::http::StatusCode::FORBIDDEN,
+			Error::CalloutFailed { .. } => ::http::StatusCode::SERVICE_UNAVAILABLE,
+		}
+	}
+
+	fn external_message(&self) -> std::borrow::Cow<'static, str> {
+		match self {
+			Error::ApiKeyModelDenied(_) => "Model is not allowed for this API key".into(),
+			Error::CalloutFailed { model, .. } => format!("Virtual model {model} callout failed").into(),
+		}
+	}
+
+	fn into_response(self) -> Result<Response, Self> {
+		let code = match self {
+			Error::ApiKeyModelDenied(_) => "model_not_allowed",
+			Error::CalloutFailed { .. } => "virtual_model_callout_failed",
+		};
+		Ok(llm_error_response(
+			self.status(),
+			&self.external_message(),
+			code,
+		))
+	}
 }
 
 type RouterResult<T> = Result<T, Box<Response>>;
@@ -362,11 +414,14 @@ impl ModelRouter {
 				Ok(())
 			});
 			if rewritten.is_err() {
-				return ResolveResult::DirectResponse(llm_error_response(
-					::http::StatusCode::NOT_FOUND,
-					"Request does not match llm.pathPrefix",
-					"not_found",
-				));
+				return ResolveResult::Rejected(
+					ProxyResponseReason::NotFound,
+					llm_error_response(
+						::http::StatusCode::NOT_FOUND,
+						"Request does not match llm.pathPrefix",
+						"not_found",
+					),
+				);
 			}
 			req
 				.extensions_mut()
@@ -382,17 +437,17 @@ impl ModelRouter {
 				::http::header::ALLOW,
 				::http::HeaderValue::from_static("POST"),
 			);
-			return ResolveResult::DirectResponse(response);
+			return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, response);
 		}
 		if is_model_list_request(req) {
 			return ResolveResult::DirectResponse(self.model_list_response(req, catalog));
 		}
 		let requested_model = match requested_model(req).await {
 			Ok(requested_model) => requested_model,
-			Err(resp) => return ResolveResult::DirectResponse(*resp),
+			Err(resp) => return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp),
 		};
 		if !api_key_model_authorized(req, &requested_model.model) {
-			return ResolveResult::DirectResponse(api_key_model_authorization_denied_response());
+			return ResolveResult::Error(Error::ApiKeyModelDenied(requested_model.model));
 		}
 		req
 			.extensions_mut()
@@ -414,8 +469,13 @@ impl ModelRouter {
 
 		match self.resolve_concrete_model(&requested_model.model, false, req) {
 			Ok(Some(route)) => ResolveResult::Backend(route),
-			Ok(None) => ResolveResult::DirectResponse(model_not_found_response()),
-			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
+			Ok(None) => {
+				ResolveResult::Rejected(ProxyResponseReason::NotFound, model_not_found_response())
+			},
+			Err(()) => ResolveResult::Rejected(
+				ProxyResponseReason::Authorization,
+				model_authorization_denied_response(),
+			),
 		}
 	}
 
@@ -545,11 +605,14 @@ impl ModelRouter {
 					Ok(target) => (target.model.clone(), target.invalid),
 					Err(err) => {
 						tracing::debug!(%err, "failed to select weighted virtual model target");
-						return ResolveResult::DirectResponse(llm_error_response(
-							::http::StatusCode::NOT_FOUND,
-							&format!("Virtual model {} could not be resolved", virtual_model.name),
-							"virtual_model_not_resolved",
-						));
+						return ResolveResult::Rejected(
+							ProxyResponseReason::ModelRouting,
+							llm_error_response(
+								::http::StatusCode::NOT_FOUND,
+								&format!("Virtual model {} could not be resolved", virtual_model.name),
+								"virtual_model_not_resolved",
+							),
+						);
 					},
 				}
 			},
@@ -571,45 +634,40 @@ impl ModelRouter {
 				}) {
 					Some(target) => (target.model.clone(), target.invalid),
 					None => {
-						return ResolveResult::DirectResponse(llm_error_response(
-							::http::StatusCode::BAD_REQUEST,
-							&format!(
-								"Virtual model {} did not match any conditional target",
-								virtual_model.name
+						return ResolveResult::Rejected(
+							ProxyResponseReason::ModelRouting,
+							llm_error_response(
+								::http::StatusCode::BAD_REQUEST,
+								&format!(
+									"Virtual model {} did not match any conditional target",
+									virtual_model.name
+								),
+								"virtual_model_no_matching_target",
 							),
-							"virtual_model_no_matching_target",
-						));
+						);
 					},
 				}
 			},
 			VirtualModelRouting::Callout(callout) => {
 				let selection = match callout.select(client, req).await {
-					Ok(selection) if self.has_model(&selection.model) => Some(selection),
-					Ok(selection) => {
-						tracing::debug!(
-							virtual_model = %virtual_model.name,
-							target_model = %selection.model,
-							"virtual model callout selected unknown model",
-						);
-						None
-					},
-					Err(err) => {
-						tracing::debug!(virtual_model = %virtual_model.name, %err, "virtual model callout failed");
-						None
-					},
+					Ok(selection) if self.has_model(&selection.model) => Ok(selection),
+					Ok(selection) => Err(format!("selected unknown model {}", selection.model)),
+					Err(err) => Err(err.to_string()),
 				};
 				match (selection, &callout.failure_mode) {
-					(Some(selection), _) => {
+					(Ok(selection), _) => {
 						fields = selection.fields;
 						(selection.model, false)
 					},
-					(None, VirtualModelCalloutFailureMode::Fallback(model)) => (model.clone(), false),
-					(None, VirtualModelCalloutFailureMode::FailClosed) => {
-						return ResolveResult::DirectResponse(llm_error_response(
-							::http::StatusCode::SERVICE_UNAVAILABLE,
-							&format!("Virtual model {} callout failed", virtual_model.name),
-							"virtual_model_callout_failed",
-						));
+					(Err(cause), VirtualModelCalloutFailureMode::Fallback(model)) => {
+						tracing::debug!(virtual_model = %virtual_model.name, %cause, "virtual model callout failed, using fallback");
+						(model.clone(), false)
+					},
+					(Err(cause), VirtualModelCalloutFailureMode::FailClosed) => {
+						return ResolveResult::Error(Error::CalloutFailed {
+							model: virtual_model.name.clone(),
+							cause,
+						});
 					},
 				}
 			},
@@ -620,18 +678,21 @@ impl ModelRouter {
 				target_model = %target,
 				"virtual model selected an invalid target",
 			);
-			return ResolveResult::DirectResponse(llm_error_response(
-				::http::StatusCode::NOT_FOUND,
-				&format!(
-					"Virtual model {} selected invalid target {target}",
-					virtual_model.name
+			return ResolveResult::Rejected(
+				ProxyResponseReason::ModelRouting,
+				llm_error_response(
+					::http::StatusCode::NOT_FOUND,
+					&format!(
+						"Virtual model {} selected invalid target {target}",
+						virtual_model.name
+					),
+					"virtual_model_target_not_found",
 				),
-				"virtual_model_target_not_found",
-			));
+			);
 		}
 
 		if let Err(resp) = Box::pin(rewrite_request_model(req, location, &target, fields)).await {
-			return ResolveResult::DirectResponse(*resp);
+			return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp);
 		}
 		match self.resolve_concrete_model(&target, true, req) {
 			Ok(Some(route)) => ResolveResult::Backend(route),
@@ -641,16 +702,22 @@ impl ModelRouter {
 					target_model = %target,
 					"virtual model selected target with no declared concrete model",
 				);
-				ResolveResult::DirectResponse(llm_error_response(
-					::http::StatusCode::NOT_FOUND,
-					&format!(
-						"Virtual model {} selected target {target}, but no matching model was found",
-						virtual_model.name
+				ResolveResult::Rejected(
+					ProxyResponseReason::ModelRouting,
+					llm_error_response(
+						::http::StatusCode::NOT_FOUND,
+						&format!(
+							"Virtual model {} selected target {target}, but no matching model was found",
+							virtual_model.name
+						),
+						"virtual_model_target_not_found",
 					),
-					"virtual_model_target_not_found",
-				))
+				)
 			},
-			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
+			Err(()) => ResolveResult::Rejected(
+				ProxyResponseReason::Authorization,
+				model_authorization_denied_response(),
+			),
 		}
 	}
 
@@ -709,14 +776,6 @@ fn model_authorization_denied_response() -> Response {
 		::http::StatusCode::FORBIDDEN,
 		"Model authorization denied",
 		"model_authorization_denied",
-	)
-}
-
-fn api_key_model_authorization_denied_response() -> Response {
-	llm_error_response(
-		::http::StatusCode::FORBIDDEN,
-		"Model is not allowed for this API key",
-		"model_not_allowed",
 	)
 }
 
@@ -1582,10 +1641,10 @@ mod tests {
 		assert_eq!(body(req).await["model"], "economy-model");
 
 		let (result, _) = resolve("closed").await;
-		let ResolveResult::DirectResponse(resp) = result else {
-			panic!("expected direct response");
+		let ResolveResult::Error(error) = result else {
+			panic!("expected an error");
 		};
-		assert_eq!(resp.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
+		assert_eq!(error.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
 	}
 
 	#[rstest::rstest]
@@ -1679,7 +1738,7 @@ mod tests {
 				.body(http::Body::empty())
 				.unwrap();
 			assert!(router.trace_path(&req).is_none());
-			let ResolveResult::DirectResponse(response) = router
+			let ResolveResult::Rejected(_, response) = router
 				.resolve(
 					&mut req,
 					&llm::catalog::ModelCatalog::default(),
@@ -1713,7 +1772,7 @@ mod tests {
 			.body(http::Body::from(r#"{"model":"weighted-model"}"#))
 			.expect("valid request");
 
-		let ResolveResult::DirectResponse(resp) = router
+		let ResolveResult::Rejected(_, resp) = router
 			.resolve(
 				&mut req,
 				&llm::catalog::ModelCatalog::default(),
@@ -1762,7 +1821,7 @@ mod tests {
 			.body(http::Body::from(r#"{"model":"conditional-model"}"#))
 			.expect("valid request");
 
-		let ResolveResult::DirectResponse(resp) = router
+		let ResolveResult::Rejected(_, resp) = router
 			.resolve(
 				&mut req,
 				&llm::catalog::ModelCatalog::default(),

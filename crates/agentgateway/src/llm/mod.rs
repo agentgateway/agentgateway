@@ -950,6 +950,8 @@ pub enum RequestResult {
 		llm_request: LLMRequest,
 		upstream_route_type: RouteType,
 	},
+	/// A response computed locally instead of calling the provider.
+	DirectResponse(Response),
 	Rejected(Response),
 	GuardrailRejected {
 		response: Response,
@@ -2138,7 +2140,7 @@ impl AIProvider {
 				.header(::http::header::CONTENT_TYPE, "application/json")
 				.body(Body::from(body))
 				.expect("failed to build count_tokens response");
-			return Ok(RequestResult::Rejected(resp));
+			return Ok(RequestResult::DirectResponse(resp));
 		}
 
 		self

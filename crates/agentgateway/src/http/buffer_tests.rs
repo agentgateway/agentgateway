@@ -6,7 +6,6 @@ use http_body_util::BodyExt;
 
 use super::*;
 use crate::http::{Request, Response};
-use crate::proxy::ProxyResponse;
 use crate::transport::BufferLimit;
 
 fn request_with_body(body: crate::http::Body) -> Request {
@@ -283,12 +282,10 @@ async fn apply_to_request_fails_when_body_exceeds_limit() {
 		.await
 		.expect_err("oversize body must surface as an error");
 
-	match err {
-		ProxyResponse::DirectResponse(resp) => {
-			assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
-		},
-		other => panic!("expected 413 DirectResponse, got {other:?}"),
-	}
+	assert!(
+		matches!(err, ProxyError::RequestBodyBufferFailed(_)),
+		"expected RequestBodyBufferFailed, got {err:?}"
+	);
 }
 
 #[tokio::test]
@@ -417,12 +414,10 @@ async fn apply_to_request_falls_back_to_extension_limit_when_max_bytes_missing()
 		.await
 		.expect_err("fallback limit should reject payload");
 
-	match err {
-		ProxyResponse::DirectResponse(resp) => {
-			assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
-		},
-		other => panic!("expected 413 DirectResponse, got {other:?}"),
-	}
+	assert!(
+		matches!(err, ProxyError::RequestBodyBufferFailed(_)),
+		"expected RequestBodyBufferFailed, got {err:?}"
+	);
 }
 
 #[tokio::test]
@@ -524,12 +519,10 @@ async fn apply_to_response_fails_when_body_exceeds_limit() {
 		.await
 		.expect_err("oversize body must surface as an error");
 
-	match err {
-		ProxyResponse::DirectResponse(resp) => {
-			assert_eq!(resp.status(), ::http::StatusCode::BAD_GATEWAY);
-		},
-		other => panic!("expected 502 DirectResponse, got {other:?}"),
-	}
+	assert!(
+		matches!(err, ProxyError::ResponseBodyBufferFailed(_)),
+		"expected ResponseBodyBufferFailed, got {err:?}"
+	);
 }
 
 #[tokio::test]
@@ -600,12 +593,10 @@ async fn apply_to_response_falls_back_to_extension_limit_when_max_bytes_missing(
 		.await
 		.expect_err("fallback limit should reject payload");
 
-	match err {
-		ProxyResponse::DirectResponse(resp) => {
-			assert_eq!(resp.status(), ::http::StatusCode::BAD_GATEWAY);
-		},
-		other => panic!("expected 502 DirectResponse, got {other:?}"),
-	}
+	assert!(
+		matches!(err, ProxyError::ResponseBodyBufferFailed(_)),
+		"expected ResponseBodyBufferFailed, got {err:?}"
+	);
 }
 
 #[tokio::test]
@@ -656,14 +647,9 @@ async fn request_policy_trait_drains_body() {
 	let policy = enabled_request(64);
 	let mut req = request_with_body(streaming_body(&[b"hi ", b"there"]));
 
-	let resp = crate::test_helpers::test_policy(&policy, &mut req)
+	let _ = crate::test_helpers::test_policy(&policy, &mut req)
 		.await
-		.expect("trait apply should succeed");
-
-	assert!(
-		!resp.should_short_circuit(),
-		"buffer must not short-circuit the policy chain"
-	);
+		.expect("buffer must not short-circuit the policy chain");
 	assert_eq!(
 		read_request_body_bytes(&mut req).await,
 		Bytes::from_static(b"hi there")
@@ -675,11 +661,9 @@ async fn request_policy_trait_is_noop_when_disabled() {
 	let policy = disabled_request();
 	let mut req = request_with_body(crate::http::Body::from("payload"));
 
-	let resp = crate::test_helpers::test_policy(&policy, &mut req)
+	let _ = crate::test_helpers::test_policy(&policy, &mut req)
 		.await
 		.expect("trait apply should succeed");
-
-	assert!(!resp.should_short_circuit());
 	assert_eq!(
 		read_request_body_bytes(&mut req).await,
 		Bytes::from_static(b"payload")
@@ -697,10 +681,8 @@ async fn request_policy_trait_propagates_oversize_error() {
 		.await
 		.expect_err("trait apply must surface oversize errors");
 
-	match err {
-		ProxyResponse::DirectResponse(resp) => {
-			assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
-		},
-		other => panic!("expected 413 DirectResponse, got {other:?}"),
-	}
+	assert!(
+		matches!(err, ProxyError::RequestBodyBufferFailed(_)),
+		"expected RequestBodyBufferFailed, got {err:?}"
+	);
 }

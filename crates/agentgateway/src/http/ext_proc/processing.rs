@@ -7,7 +7,6 @@ use protos::envoy::service::ext_proc::v3::{
 
 use super::proto;
 use super::proto::processing_request::Request;
-use crate::http::PolicyResponse;
 use crate::http::ext_proc::proto::{HttpBody, HttpTrailers, ProcessingResponse};
 use crate::*;
 
@@ -453,7 +452,7 @@ pub(super) struct ResponseFlowFsm {
 }
 
 pub(super) enum ResponseLoopMessage {
-	Immediate(PolicyResponse),
+	Immediate(crate::http::Response),
 	Processing(ProcessingResponse),
 }
 
