@@ -1,0 +1,26 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/stream-failed.json
+---
+data: {"id":"resp_terminal","choices":[{"index":0,"delta":{"content":"Let me check.","role":"assistant"}}],"created":123,"model":"gpt-5.6-luna","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp_terminal","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":"call_partial","type":"function","function":{"name":"weather"}}]}}],"created":123,"model":"gpt-5.6-luna","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp_terminal","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"function":{"arguments":"{\"city\":"}}]}}],"created":123,"model":"gpt-5.6-luna","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 100,
+  "output_tokens": 5,
+  "total_tokens": 105,
+  "reasoning_tokens": 3,
+  "cache_creation_input_tokens": 30,
+  "cached_input_tokens": 20,
+  "provider_model": "gpt-5.6-luna",
+  "completion": [
+    "Let me check."
+  ]
+}

@@ -151,21 +151,22 @@ mod requests {
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI, RESPONSES]),
 		("prompt-cache-breakpoint", &[ANTHROPIC, BEDROCK]),
 		("cache_control_blank_text", &[BEDROCK]),
-		("full", &[ANTHROPIC, BEDROCK]),
+		("full", &[ANTHROPIC, BEDROCK, RESPONSES]),
 		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI, RESPONSES]),
-		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
+		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI, RESPONSES]),
 		("reasoning", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI, RESPONSES]),
 		("reasoning-adaptive", &[ANTHROPIC, BEDROCK]),
-		("reasoning_max", &[ANTHROPIC, VERTEX_GEMINI]),
+		("reasoning_max", &[ANTHROPIC, VERTEX_GEMINI, RESPONSES]),
 		("reasoning_replay", &[ANTHROPIC, BEDROCK]),
 		("reasoning_replay_unsigned", &[ANTHROPIC, BEDROCK]),
-		("image-url", &[ANTHROPIC]),
+		("image-url", &[ANTHROPIC, RESPONSES]),
 		("image-inline", &[VERTEX_GEMINI]),
 		("image-file", &[VERTEX_GEMINI]),
 		("file-inline", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("file-uri", &[VERTEX_GEMINI]),
 		("structured-output", &[VERTEX_GEMINI, RESPONSES]),
-		("multi-turn-tools", &[VERTEX_GEMINI]),
+		("multi-turn-tools", &[VERTEX_GEMINI, RESPONSES]),
+		("responses-only-tools", &[RESPONSES]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
 		("generation-config", &[VERTEX_GEMINI, RESPONSES]),
 	];
@@ -1062,12 +1063,22 @@ mod responses {
 			"truncated_tool_call",
 			&[RESPONSES_TO_RESPONSES, RESPONSES_TO_MESSAGES],
 		),
-		("max_tokens", &[RESPONSES_TO_MESSAGES]),
+		(
+			"max_tokens",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS],
+		),
 		("incomplete_no_details", &[RESPONSES_TO_MESSAGES]),
-		("content_filter", &[RESPONSES_TO_MESSAGES]),
+		(
+			"content_filter",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS],
+		),
 		("context_window", &[RESPONSES_TO_MESSAGES]),
-		("failed", &[RESPONSES_TO_MESSAGES]),
-		("empty_tool_call", &[RESPONSES_TO_MESSAGES]),
+		("failed", &[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS]),
+		(
+			"empty_tool_call",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS],
+		),
+		("parallel_tool", &[RESPONSES_TO_COMPLETIONS]),
 	];
 	const EMBEDDING_RESPONSES: &[(&str, &str)] = &[
 		("response/bedrock-titan/embeddings.json", BEDROCK_TITAN),
@@ -1173,14 +1184,27 @@ mod responses {
 				RESPONSES_TO_MESSAGES,
 			],
 		),
-		("stream-refusal", &[RESPONSES_TO_MESSAGES]),
+		(
+			"stream-refusal",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS],
+		),
 		("stream-refusal-final-only", &[RESPONSES_TO_MESSAGES]),
-		("stream-error", &[RESPONSES_TO_MESSAGES]),
-		("stream-max_tokens", &[RESPONSES_TO_MESSAGES]),
+		(
+			"stream-error",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS],
+		),
+		(
+			"stream-max_tokens",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS],
+		),
 		("stream-incomplete_no_details", &[RESPONSES_TO_MESSAGES]),
 		("stream-content_filter", &[RESPONSES_TO_MESSAGES]),
 		("stream-context_window", &[RESPONSES_TO_MESSAGES]),
-		("stream-failed", &[RESPONSES_TO_MESSAGES]),
+		(
+			"stream-failed",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS],
+		),
+		("stream-parallel-tool", &[RESPONSES_TO_COMPLETIONS]),
 	];
 
 	#[tokio::test]

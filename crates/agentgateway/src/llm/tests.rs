@@ -711,6 +711,34 @@ fn completions_routing_falls_back_to_responses() {
 			"custom-model",
 			ChatFormat::OpenAIResponses,
 		),
+		(
+			"OpenAI gpt-5.5",
+			&AIProvider::OpenAI(openai::Provider {
+				model_override: None,
+				moderation: None,
+			}),
+			"gpt-5.5",
+			ChatFormat::OpenAICompletions,
+		),
+		(
+			"custom Completions and Responses",
+			&AIProvider::Custom(custom::Provider {
+				model_override: None,
+				provider_override: None,
+				formats: vec![
+					custom::ProviderFormatConfig {
+						format: custom::ProviderFormat::Responses,
+						path: None,
+					},
+					custom::ProviderFormatConfig {
+						format: custom::ProviderFormat::Completions,
+						path: None,
+					},
+				],
+			}),
+			"custom-model",
+			ChatFormat::OpenAICompletions,
+		),
 	];
 
 	for (name, provider, model, expected) in providers {
@@ -2757,6 +2785,91 @@ fn custom_messages_error_translates_to_completions_client() {
 
 	assert_eq!(body["error"]["type"], json!("invalid_request_error"));
 	assert_eq!(body["error"]["message"], json!("bad request"));
+}
+
+#[test]
+fn custom_responses_error_passes_through_to_completions_client() {
+	let provider = custom_provider(custom::ProviderFormat::Responses);
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Completions;
+	req.request_model = "gpt-5.5".into();
+
+	let error = Bytes::from_static(
+		br#"{"error":{"message":"bad request","type":"invalid_request_error","param":"tools","code":null}}"#,
+	);
+	let translated = provider
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
+		.expect("Responses error should reach completions client");
+
+	assert_eq!(translated, error);
+}
+
+#[tokio::test]
+async fn custom_responses_provider_receives_completions_as_responses() {
+	let provider = custom_provider(custom::ProviderFormat::Responses);
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5.5",
+				"stream": true,
+				"max_completion_tokens": 256,
+				"reasoning_effort": "low",
+				"messages": [{"role": "user", "content": "weather in Columbus?"}],
+				"tools": [{"type": "function", "function": {"name": "get_weather", "strict": true, "parameters": {"type": "object"}}}]
+			}"#
+			.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
+		.await
+		.expect("completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::Responses);
+	assert_eq!(llm_request.input_format, InputFormat::Completions);
+	assert!(llm_request.streaming);
+
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(forwarded.uri().path(), "/v1/responses");
+
+	let body = forwarded.into_body().collect().await.unwrap().to_bytes();
+	let json: Value = serde_json::from_slice(&body).expect("forwarded body should be JSON");
+	assert!(json.get("messages").is_none(), "{json}");
+	assert_eq!(json["input"][0]["type"], "message", "{json}");
+	assert_eq!(json["max_output_tokens"], 256, "{json}");
+	assert_eq!(json["reasoning"]["effort"], "low", "{json}");
+	assert_eq!(json["stream"], true, "{json}");
+	assert_eq!(json["store"], false, "{json}");
+	assert_eq!(json["tools"][0]["name"], "get_weather", "{json}");
+	assert_eq!(json["tools"][0]["strict"], true, "{json}");
 }
 
 #[test]
