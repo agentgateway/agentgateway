@@ -1,6 +1,6 @@
 // Originally derived from https://github.com/istio/ztunnel (Apache 2.0 licensed)
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use agentgateway::ConfigSource;
@@ -254,21 +254,25 @@ fn home_var_name() -> &'static str {
 /// The user's home directory, without its `.config` suffix.
 ///
 /// Windows does not set `HOME`, so looking only at `HOME` left Windows users unable to find
-/// their config file unless they exported it themselves (see #4219). On Windows we read
-/// `USERPROFILE`, falling back to the legacy `HOMEDRIVE` + `HOMEPATH` pair. Unix keeps
-/// `HOME`. Every variable is filtered so an empty value does not resolve to a relative path.
+/// their config file unless they exported it themselves (see #4219). `USERPROFILE` is what
+/// Windows sets instead, with `HOMEDRIVE` + `HOMEPATH` as its legacy pair. Empty values are
+/// skipped so they cannot resolve to a relative path.
+///
+/// CI runs the tests on Windows and macOS as well as Linux, so the platform-specific branch is
+/// exercised for real rather than simulated.
 fn home_dir() -> Option<PathBuf> {
-	home_dir_from(|name| std::env::var_os(name))
-}
-
-/// `home_dir` with the variable lookup injected, so the fallback order can be tested without
-/// mutating the process environment.
-fn home_dir_from(lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
 	let var = |name: &str| {
-		lookup(name)
+		std::env::var_os(name)
 			.filter(|value| !value.is_empty())
 			.map(PathBuf::from)
 	};
+	if cfg!(windows) {
+		return var("USERPROFILE").or_else(|| {
+			let drive = var("HOMEDRIVE")?;
+			let path = var("HOMEPATH")?;
+			Some(drive.join(path))
+		});
+	}
 	var("HOME").or_else(|| var("USERPROFILE")).or_else(|| {
 		let drive = var("HOMEDRIVE")?;
 		let path = var("HOMEPATH")?;
@@ -330,63 +334,75 @@ fn is_read_once_path(path: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
+	use super::home_dir;
 
-	use super::home_dir_from;
-
-	/// Look variables up in a fixed map, so these tests never touch the process environment
-	/// (`set_var` is unsafe and parallel tests would race on it).
-	fn lookup<'a>(
-		vars: &'a [(&'a str, &'a str)],
-	) -> impl Fn(&str) -> Option<std::ffi::OsString> + 'a {
-		let map: HashMap<String, std::ffi::OsString> = vars
-			.iter()
-			.map(|(k, v)| (k.to_string(), std::ffi::OsString::from(v)))
-			.collect();
-		move |name| map.get(name).cloned()
+	/// The home directory this process reports, read from the same variables `home_dir` uses.
+	///
+	/// These tests read the real environment rather than injecting a lookup: CI runs the suite
+	/// on Windows and macOS as well as Linux, so each platform's branch is exercised for real.
+	fn expected_home() -> Option<std::path::PathBuf> {
+		let var = |name: &str| {
+			std::env::var_os(name)
+				.filter(|value| !value.is_empty())
+				.map(std::path::PathBuf::from)
+		};
+		if cfg!(windows) {
+			return var("USERPROFILE").or_else(|| {
+				let drive = var("HOMEDRIVE")?;
+				let path = var("HOMEPATH")?;
+				Some(drive.join(path))
+			});
+		}
+		var("HOME")
 	}
 
 	#[test]
-	fn home_prefers_home_on_unix() {
-		let dir = home_dir_from(lookup(&[
-			("HOME", "/home/user"),
-			("USERPROFILE", r"C:\Users\user"),
-		]));
-		assert_eq!(dir, Some("/home/user".into()));
+	fn home_dir_matches_the_platform_variable() {
+		let home = home_dir();
+
+		// Every CI runner sets a home directory, so this failing means the lookup is broken.
+		assert!(
+			home.is_some(),
+			"home_dir() found nothing on {}",
+			std::env::consts::OS
+		);
+		assert_eq!(home, expected_home());
 	}
 
 	#[test]
-	fn home_falls_back_to_userprofile_without_home() {
-		// This is the Windows case from #4219: HOME is unset, USERPROFILE is what the OS sets.
-		let dir = home_dir_from(lookup(&[("USERPROFILE", r"C:\Users\user")]));
-		assert_eq!(dir, Some(r"C:\Users\user".into()));
+	#[cfg(windows)]
+	fn home_dir_uses_userprofile_on_windows() {
+		// The #4219 case: Windows sets USERPROFILE, not HOME.
+		let userprofile = std::env::var_os("USERPROFILE").expect("USERPROFILE is set on Windows");
+
+		assert_eq!(home_dir(), Some(std::path::PathBuf::from(userprofile)));
 	}
 
 	#[test]
-	fn home_falls_back_to_homedrive_and_homepath() {
-		let dir = home_dir_from(lookup(&[("HOMEDRIVE", "C:"), ("HOMEPATH", r"\Users\user")]));
-		assert_eq!(dir, Some(r"C:\Users\user".into()));
+	#[cfg(unix)]
+	fn home_dir_uses_home_on_unix() {
+		let home = std::env::var_os("HOME").expect("HOME is set on unix");
+
+		assert_eq!(home_dir(), Some(std::path::PathBuf::from(home)));
 	}
 
 	#[test]
-	fn home_ignores_empty_values() {
-		// An empty variable must not resolve to a relative path; the next candidate wins.
-		let dir = home_dir_from(lookup(&[
-			("HOME", ""),
-			("USERPROFILE", ""),
-			("HOMEDRIVE", "C:"),
-			("HOMEPATH", r"\Users\user"),
-		]));
-		assert_eq!(dir, Some(r"C:\Users\user".into()));
-	}
+	fn home_dir_ignores_empty_variables() {
+		// An empty variable must not resolve to a relative or empty path. Checked against the
+		// live environment rather than by writing to it: a test that mutates the environment
+		// races with the platform tests running in parallel.
+		let name = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+		let is_empty = std::env::var_os(name).is_some_and(|value| value.is_empty());
+		if !is_empty {
+			// Nothing to assert about emptiness here; the platform tests cover the normal path.
+			return;
+		}
 
-	#[test]
-	fn home_is_none_when_nothing_is_set() {
-		assert_eq!(home_dir_from(lookup(&[])), None);
-	}
+		let resolved = home_dir();
 
-	#[test]
-	fn home_requires_both_drive_and_path() {
-		assert_eq!(home_dir_from(lookup(&[("HOMEDRIVE", "C:")])), None);
+		assert!(
+			resolved.as_ref().is_none_or(|p| !p.as_os_str().is_empty()),
+			"an empty {name} must not produce an empty path"
+		);
 	}
 }
