@@ -612,3 +612,95 @@ mod usage_reporting_streaming {
 		assert_eq!(usage.total_tokens, 37075);
 	}
 }
+
+mod missing_model_streaming {
+	use std::sync::{Arc, Mutex};
+
+	use crate::{
+		CacheTokenConvention, InputFormat, LLMInfo, LLMRequest, LLMResponse, LogContentFields,
+		StreamingUsageGuard, StreamingUsageReporter,
+	};
+	use agent_http::Body;
+	use http_body_util::BodyExt;
+
+	struct Capture(Arc<Mutex<LLMInfo>>);
+
+	impl StreamingUsageReporter for Capture {
+		fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
+			f(&mut self.0.lock().unwrap());
+		}
+
+		fn report_usage(&mut self) {}
+	}
+
+	#[tokio::test]
+	async fn chunks_without_model_preserve_content_and_usage() {
+		for model in ["", r#", "model":"""#, r#", "model":"upstream-model""#] {
+			let input = format!(
+				"data: {{\"id\":\"c\",\"choices\":[{{\"delta\":{{\"content\":\"hello\"}}}}]{model}}}\n\n\
+				 data: {{\"id\":\"c\",\"choices\":[{{\"delta\":{{}},\"finish_reason\":\"stop\"}}]{model}}}\n\n\
+				 data: {{\"id\":\"c\",\"choices\":[],\"usage\":{{\"prompt_tokens\":7,\"completion_tokens\":2,\"total_tokens\":9}}{model}}}\n\n\
+				 data: [DONE]\n\n"
+			);
+			for translate in [false, true] {
+				let captured = Arc::new(Mutex::new(LLMInfo {
+					request: LLMRequest {
+						input_tokens: None,
+						input_format: InputFormat::Completions,
+						cache_convention: CacheTokenConvention::pending(),
+						request_model: "request-model".into(),
+						original_model: None,
+						provider: "test-provider".into(),
+						streaming: true,
+						params: Default::default(),
+						prompt: None,
+						provider_state: None,
+					},
+					response: LLMResponse::default(),
+				}));
+				let logger = StreamingUsageGuard::new(Box::new(Capture(captured.clone())));
+				let log_content = LogContentFields {
+					completion: true,
+					tool_calls: false,
+				};
+				let body = Body::from(input.clone());
+				let output = if translate {
+					super::super::from_messages::translate_stream(body, 4096, logger, log_content)
+				} else {
+					super::super::passthrough_stream(logger, log_content, http::Response::new(body))
+						.into_body()
+				};
+				let bytes = output.collect().await.unwrap().to_bytes();
+				if translate {
+					let events: Vec<serde_json::Value> = std::str::from_utf8(&bytes)
+						.unwrap()
+						.lines()
+						.filter_map(|line| line.strip_prefix("data: "))
+						.map(|data| serde_json::from_str(data).unwrap())
+						.collect();
+					assert!(events.iter().any(|e| e["delta"]["text"] == "hello"));
+					assert!(events.iter().any(|e| e["usage"]["output_tokens"] == 2));
+					assert_eq!(events.last().unwrap()["type"], "message_stop");
+				} else {
+					assert_eq!(bytes.as_ref(), input.as_bytes());
+				}
+				let info = captured.lock().unwrap();
+				assert_eq!(info.response.input_tokens, Some(7));
+				assert_eq!(info.response.output_tokens, Some(2));
+				assert_eq!(info.response.total_tokens, Some(9));
+				if !translate {
+					assert_eq!(info.response.completion, Some(vec!["hello".to_string()]));
+				}
+				assert_eq!(
+					info.response.provider_model.as_deref(),
+					Some(if model.contains("upstream-model") {
+						"upstream-model"
+					} else {
+						""
+					})
+				);
+				assert!(info.response.first_token.is_some());
+			}
+		}
+	}
+}
