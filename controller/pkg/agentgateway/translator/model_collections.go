@@ -467,10 +467,16 @@ func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.Agentgateway
 		if err != nil {
 			return nil, err
 		}
+		// Only the provider identity is needed for discovery; policies stay on the backend.
+		llm := backend.GetAi().GetProviderGroups()[0].GetProviders()[0]
 		route.Kind = &api.ModelRoute_ConcreteModel_{
 			ConcreteModel: &api.ModelRoute_ConcreteModel{
 				ModelVisibility: translateModelVisibility(model.Spec.Visibility),
 				Backend:         backendRef(backend.Key),
+				DiscoveryProviderConfig: &api.AIBackend_Provider{
+					Provider:      llm.GetProvider(),
+					ModelOverride: llm.ModelOverride,
+				},
 			},
 		}
 		provider := strings.ToLower(string(*model.Spec.Provider))

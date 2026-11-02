@@ -1856,6 +1856,15 @@ impl ModelRoute {
 								.and_then(|p| p.get("model"))
 								.map(AsRef::as_ref),
 						)
+						.map(|d| llm::discovery::ModelDiscovery {
+							// Invalid providers are reported by the backend carrying the same config.
+							provider_config: concrete
+								.discovery_provider_config
+								.as_ref()
+								.and_then(|p| ai_provider_from_proto(p, 0).ok())
+								.map(|(provider, _)| provider),
+							..d
+						})
 					}),
 					id: None,
 					name: model_match.model.clone(),
@@ -2091,11 +2100,123 @@ fn openai_moderation_config_from_proto(
 	Ok(llm::openai::ModerationConfigParam { mode })
 }
 
+/// Converts an AI backend provider, returning the preset it was built from, if any.
+fn ai_provider_from_proto(
+	provider_config: &proto::agent::ai_backend::Provider,
+	provider_idx: usize,
+) -> Result<(AIProvider, Option<llm::custom::ProviderPreset>), ProtoError> {
+	use proto::agent::ai_backend::provider;
+	let mut preset = None;
+	let mut provider = match &provider_config.provider {
+		Some(provider::Provider::Openai(openai)) => {
+			let moderation = openai
+				.moderation
+				.as_ref()
+				.map(openai_moderation_from_proto)
+				.transpose()?;
+			AIProvider::OpenAI(llm::openai::Provider {
+				model_override: openai.model.as_deref().map(strng::new),
+				moderation,
+			})
+		},
+		Some(provider::Provider::Copilot(copilot)) => AIProvider::Copilot(llm::copilot::Provider {
+			model_override: copilot.model.as_deref().map(strng::new),
+		}),
+		Some(provider::Provider::Gemini(gemini)) => AIProvider::Gemini(llm::gemini::Provider {
+			model_override: gemini.model.as_deref().map(strng::new),
+		}),
+		Some(provider::Provider::Vertex(vertex)) => AIProvider::Vertex(llm::vertex::Provider {
+			model_override: vertex.model.as_deref().map(strng::new),
+			region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
+			project_id: strng::new(&vertex.project_id),
+		}),
+		Some(provider::Provider::Anthropic(anthropic)) => {
+			AIProvider::Anthropic(llm::anthropic::Provider {
+				model_override: anthropic.model.as_deref().map(strng::new),
+			})
+		},
+		Some(provider::Provider::Bedrock(bedrock)) => AIProvider::bedrock(llm::bedrock::Provider {
+			model_override: bedrock.model.as_deref().map(strng::new),
+			region: strng::new(&bedrock.region),
+			guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
+			guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+			endpoint_preference: match bedrock.endpoint_preference() {
+				proto::agent::ai_backend::BedrockEndpointPreference::MantlePreferred => {
+					llm::bedrock::BedrockEndpointPreference::MantlePreferred
+				},
+				proto::agent::ai_backend::BedrockEndpointPreference::MantleOnly => {
+					llm::bedrock::BedrockEndpointPreference::MantleOnly
+				},
+				proto::agent::ai_backend::BedrockEndpointPreference::RuntimeOnly => {
+					llm::bedrock::BedrockEndpointPreference::RuntimeOnly
+				},
+				_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
+			},
+		}),
+		Some(provider::Provider::Azure(azure)) => {
+			let resource_type = match azure.resource_type() {
+				proto::agent::ai_backend::AzureResourceType::Foundry => {
+					llm::azure::AzureResourceType::Foundry
+				},
+				_ => llm::azure::AzureResourceType::OpenAI,
+			};
+			AIProvider::azure(llm::azure::Provider {
+				model_override: azure.model.as_deref().map(strng::new),
+				resource_name: strng::new(&azure.resource_name),
+				resource_type,
+				api_version: azure.api_version.as_deref().map(strng::new),
+				project_name: azure.project_name.as_deref().map(strng::new),
+			})
+		},
+		Some(provider::Provider::Azureopenai(_)) => {
+			return Err(ProtoError::Generic(format!(
+				"AI backend provider at index {provider_idx} uses deprecated azureOpenAI format; use azure instead"
+			)));
+		},
+		Some(provider::Provider::Custom(custom)) => {
+			if custom.formats.is_empty() {
+				return Err(ProtoError::Generic(format!(
+					"AI backend custom provider at index {provider_idx} must specify at least one format"
+				)));
+			}
+			let formats = custom
+				.formats
+				.iter()
+				.map(|format| convert_provider_format_config(format, provider_idx))
+				.collect::<Result<Vec<_>, _>>()?;
+			AIProvider::Custom(llm::custom::Provider {
+				model_override: custom.model.as_deref().map(strng::new),
+				provider_override: custom.provider_override.as_deref().map(strng::new),
+				formats,
+			})
+		},
+		Some(provider::Provider::ProviderPreset(provider_preset)) => {
+			let provider_preset = proto::agent::ai_backend::ProviderPreset::try_from(*provider_preset)
+				.map_err(|_| {
+					ProtoError::Generic(format!(
+						"AI backend provider at index {provider_idx} has an unknown provider preset {provider_preset}"
+					))
+				})?;
+			let provider_preset = provider_preset_from_proto(provider_preset, provider_idx)?;
+			preset = Some(provider_preset);
+			AIProvider::Custom(provider_preset.provider(None))
+		},
+		None => {
+			return Err(ProtoError::Generic(format!(
+				"AI backend provider at index {provider_idx} is required"
+			)));
+		},
+	};
+	if let Some(model_override) = provider_config.model_override.as_deref() {
+		override_ai_provider_model(&mut provider, model_override);
+	}
+	Ok((provider, preset))
+}
+
 pub(crate) fn backend_with_policies_from_proto(
 	s: &proto::agent::Backend,
 	diagnostics: &mut Diagnostics,
 ) -> Result<BackendWithPolicies, ProtoError> {
-	use proto::agent::ai_backend::provider;
 	use proto::agent::backend;
 	let pols = s
 		.inline_policies
@@ -2151,112 +2272,7 @@ pub(crate) fn backend_with_policies_from_proto(
 						.iter()
 						.map(|policy| backend_policy_from_proto(policy, diagnostics))
 						.collect::<Result<Vec<_>, _>>()?;
-					let mut preset = None;
-					let mut provider = match &provider_config.provider {
-						Some(provider::Provider::Openai(openai)) => {
-							let moderation = openai
-								.moderation
-								.as_ref()
-								.map(openai_moderation_from_proto)
-								.transpose()?;
-							AIProvider::OpenAI(llm::openai::Provider {
-								model_override: openai.model.as_deref().map(strng::new),
-								moderation,
-							})
-						},
-						Some(provider::Provider::Copilot(copilot)) => {
-							AIProvider::Copilot(llm::copilot::Provider {
-								model_override: copilot.model.as_deref().map(strng::new),
-							})
-						},
-						Some(provider::Provider::Gemini(gemini)) => AIProvider::Gemini(llm::gemini::Provider {
-							model_override: gemini.model.as_deref().map(strng::new),
-						}),
-						Some(provider::Provider::Vertex(vertex)) => AIProvider::Vertex(llm::vertex::Provider {
-							model_override: vertex.model.as_deref().map(strng::new),
-							region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
-							project_id: strng::new(&vertex.project_id),
-						}),
-						Some(provider::Provider::Anthropic(anthropic)) => {
-							AIProvider::Anthropic(llm::anthropic::Provider {
-								model_override: anthropic.model.as_deref().map(strng::new),
-							})
-						},
-						Some(provider::Provider::Bedrock(bedrock)) => {
-							AIProvider::bedrock(llm::bedrock::Provider {
-								model_override: bedrock.model.as_deref().map(strng::new),
-								region: strng::new(&bedrock.region),
-								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
-								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								endpoint_preference: match bedrock.endpoint_preference() {
-									proto::agent::ai_backend::BedrockEndpointPreference::MantlePreferred => {
-										llm::bedrock::BedrockEndpointPreference::MantlePreferred
-									},
-									proto::agent::ai_backend::BedrockEndpointPreference::MantleOnly => {
-										llm::bedrock::BedrockEndpointPreference::MantleOnly
-									},
-									proto::agent::ai_backend::BedrockEndpointPreference::RuntimeOnly => {
-										llm::bedrock::BedrockEndpointPreference::RuntimeOnly
-									},
-									_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
-								},
-							})
-						},
-						Some(provider::Provider::Azure(azure)) => {
-							let resource_type = match azure.resource_type() {
-								proto::agent::ai_backend::AzureResourceType::Foundry => {
-									llm::azure::AzureResourceType::Foundry
-								},
-								_ => llm::azure::AzureResourceType::OpenAI,
-							};
-							AIProvider::azure(llm::azure::Provider {
-								model_override: azure.model.as_deref().map(strng::new),
-								resource_name: strng::new(&azure.resource_name),
-								resource_type,
-								api_version: azure.api_version.as_deref().map(strng::new),
-								project_name: azure.project_name.as_deref().map(strng::new),
-							})
-						},
-						Some(provider::Provider::Azureopenai(_)) => {
-							return Err(ProtoError::Generic(format!(
-								"AI backend provider at index {provider_idx} uses deprecated azureOpenAI format; use azure instead"
-							)));
-						},
-						Some(provider::Provider::Custom(custom)) => {
-							if custom.formats.is_empty() {
-								return Err(ProtoError::Generic(format!(
-									"AI backend custom provider at index {provider_idx} must specify at least one format"
-								)));
-							}
-							let formats = custom
-								.formats
-								.iter()
-								.map(|format| convert_provider_format_config(format, provider_idx))
-								.collect::<Result<Vec<_>, _>>()?;
-							AIProvider::Custom(llm::custom::Provider {
-								model_override: custom.model.as_deref().map(strng::new),
-								provider_override: custom.provider_override.as_deref().map(strng::new),
-								formats,
-							})
-						},
-						Some(provider::Provider::ProviderPreset(provider_preset)) => {
-							let provider_preset = proto::agent::ai_backend::ProviderPreset::try_from(*provider_preset)
-								.map_err(|_| ProtoError::Generic(format!(
-									"AI backend provider at index {provider_idx} has an unknown provider preset {provider_preset}"
-								)))?;
-							let provider_preset = provider_preset_from_proto(provider_preset, provider_idx)?;
-							preset = Some(provider_preset);
-							AIProvider::Custom(provider_preset.provider(None))
-						},
-						None => {
-							return Err(ProtoError::Generic(format!(
-								"AI backend provider at index {provider_idx} is required"
-							)));
-						},
-					};
-					if let Some(model_override) = provider_config.model_override.as_deref() {
-						override_ai_provider_model(&mut provider, model_override);
-					}
+					let (provider, preset) = ai_provider_from_proto(provider_config, provider_idx)?;
 
 					let provider_name = if provider_config.name.is_empty() {
 						strng::literal!("default")
@@ -5927,6 +5943,12 @@ mod tests {
 			unreachable!();
 		};
 		concrete.discovery_provider = Some("openai".to_string());
+		concrete.discovery_provider_config = Some(proto::agent::ai_backend::Provider {
+			provider: Some(proto::agent::ai_backend::provider::Provider::Openai(
+				Default::default(),
+			)),
+			..Default::default()
+		});
 		proto_route.ai_policy.as_mut().unwrap().transformations = [(
 			"model".to_string(),
 			"llmRequest.model.stripPrefix(\"openai/\")".to_string(),
@@ -5938,6 +5960,10 @@ mod tests {
 		};
 		let discovery = model.discovery.unwrap();
 		assert_eq!(discovery.provider, "openai");
+		assert!(matches!(
+			discovery.provider_config,
+			Some(AIProvider::OpenAI(_))
+		));
 		assert_eq!(
 			discovery.transformation.apply("gpt-5-mini").unwrap(),
 			"openai/gpt-5-mini"

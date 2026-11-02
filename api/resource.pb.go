@@ -18162,8 +18162,10 @@ type ModelRoute_ConcreteModel struct {
 	BackendPolicies []*BackendPolicySpec                     `protobuf:"bytes,3,rep,name=backend_policies,json=backendPolicies,proto3" json:"backend_policies,omitempty"`
 	// Catalog provider identity, used to expand wildcards and look up model metadata.
 	DiscoveryProvider *string `protobuf:"bytes,4,opt,name=discovery_provider,json=discoveryProvider,proto3,oneof" json:"discovery_provider,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// The backend's provider, used to advertise the client endpoints the model serves.
+	DiscoveryProviderConfig *AIBackend_Provider `protobuf:"bytes,5,opt,name=discovery_provider_config,json=discoveryProviderConfig,proto3" json:"discovery_provider_config,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *ModelRoute_ConcreteModel) Reset() {
@@ -18222,6 +18224,13 @@ func (x *ModelRoute_ConcreteModel) GetDiscoveryProvider() string {
 		return *x.DiscoveryProvider
 	}
 	return ""
+}
+
+func (x *ModelRoute_ConcreteModel) GetDiscoveryProviderConfig() *AIBackend_Provider {
+	if x != nil {
+		return x.DiscoveryProviderConfig
+	}
+	return nil
 }
 
 type ModelRoute_VirtualModel_Weighted struct {
@@ -20159,7 +20168,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\x12\x1d\n" +
 	"\n" +
 	"token_type\x18\x02 \x01(\tR\ttokenTypeB\x14\n" +
-	"\x12_translation_error\"\xa5\x14\n" +
+	"\x12_translation_error\"\x90\x15\n" +
 	"\n" +
 	"ModelRoute\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +
@@ -20212,12 +20221,13 @@ const file_resource_proto_rawDesc = "" +
 	"\x05_pathB\a\n" +
 	"\x05_bodyB\x11\n" +
 	"\x0f_fallback_modelB\t\n" +
-	"\arouting\x1a\x97\x03\n" +
+	"\arouting\x1a\x82\x04\n" +
 	"\rConcreteModel\x12n\n" +
 	"\x10model_visibility\x18\x01 \x01(\x0e2C.agentgateway.dev.resource.ModelRoute.ConcreteModel.ModelVisibilityR\x0fmodelVisibility\x12E\n" +
 	"\abackend\x18\x02 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackend\x12W\n" +
 	"\x10backend_policies\x18\x03 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0fbackendPolicies\x122\n" +
-	"\x12discovery_provider\x18\x04 \x01(\tH\x00R\x11discoveryProvider\x88\x01\x01\"+\n" +
+	"\x12discovery_provider\x18\x04 \x01(\tH\x00R\x11discoveryProvider\x88\x01\x01\x12i\n" +
+	"\x19discovery_provider_config\x18\x05 \x01(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\x17discoveryProviderConfig\"+\n" +
 	"\x0fModelVisibility\x12\n" +
 	"\n" +
 	"\x06PUBLIC\x10\x00\x12\f\n" +
@@ -20956,19 +20966,20 @@ var file_resource_proto_depIdxs = []int32{
 	60,  // 409: agentgateway.dev.resource.ModelRoute.ConcreteModel.model_visibility:type_name -> agentgateway.dev.resource.ModelRoute.ConcreteModel.ModelVisibility
 	127, // 410: agentgateway.dev.resource.ModelRoute.ConcreteModel.backend:type_name -> agentgateway.dev.resource.BackendReference
 	119, // 411: agentgateway.dev.resource.ModelRoute.ConcreteModel.backend_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	277, // 412: agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.targets:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.Target
-	278, // 413: agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.targets:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.Target
-	127, // 414: agentgateway.dev.resource.ModelRoute.VirtualModel.Failover.backend:type_name -> agentgateway.dev.resource.BackendReference
-	127, // 415: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.target:type_name -> agentgateway.dev.resource.BackendReference
-	119, // 416: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	279, // 417: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.headers:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.HeadersEntry
-	280, // 418: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.transformation:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.TransformationEntry
-	184, // 419: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.cache:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.Cache
-	420, // [420:420] is the sub-list for method output_type
-	420, // [420:420] is the sub-list for method input_type
-	420, // [420:420] is the sub-list for extension type_name
-	420, // [420:420] is the sub-list for extension extendee
-	0,   // [0:420] is the sub-list for field type_name
+	254, // 412: agentgateway.dev.resource.ModelRoute.ConcreteModel.discovery_provider_config:type_name -> agentgateway.dev.resource.AIBackend.Provider
+	277, // 413: agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.targets:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.Target
+	278, // 414: agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.targets:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.Target
+	127, // 415: agentgateway.dev.resource.ModelRoute.VirtualModel.Failover.backend:type_name -> agentgateway.dev.resource.BackendReference
+	127, // 416: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.target:type_name -> agentgateway.dev.resource.BackendReference
+	119, // 417: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	279, // 418: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.headers:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.HeadersEntry
+	280, // 419: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.transformation:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.TransformationEntry
+	184, // 420: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.cache:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.Cache
+	421, // [421:421] is the sub-list for method output_type
+	421, // [421:421] is the sub-list for method input_type
+	421, // [421:421] is the sub-list for extension type_name
+	421, // [421:421] is the sub-list for extension extendee
+	0,   // [0:421] is the sub-list for field type_name
 }
 
 func init() { file_resource_proto_init() }
