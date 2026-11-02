@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use agent_core::version::BuildInfo;
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode, Uri};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::Event;
 use axum::response::{IntoResponse, Redirect, Response, Sse};
 use axum::routing::{get, post, put};
@@ -123,7 +123,7 @@ pub fn router(
 		let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
 		router
 			.nest_service("/ui", ui_service)
-			.route("/", get(|| async { Redirect::permanent("/ui") }))
+			.route("/", get(|| async { Redirect::permanent("ui/") }))
 	};
 	router
 		.layer(axum::middleware::from_fn_with_state(
@@ -392,30 +392,50 @@ async fn serve_ui_asset(
 	req: http::Request<axum::body::Body>,
 	assets: &'static Dir<'static>,
 ) -> Result<Response, std::convert::Infallible> {
-	let req = if should_serve_ui_index(req.uri().path()) {
-		request_with_path(req, "/index.html")
-	} else {
-		req
-	};
+	let path = req.uri().path();
+	if should_serve_ui_index(path) {
+		let original = req
+			.extensions()
+			.get::<axum::extract::OriginalUri>()
+			.map(|uri| uri.path())
+			.unwrap_or(path);
+		if path == "/" && !original.ends_with('/') {
+			let last = original.rsplit('/').next().unwrap_or_default();
+			return Ok(Redirect::permanent(&format!("{last}/")).into_response());
+		}
+		return Ok(serve_ui_index(assets, path));
+	}
 	ServeDir::new(assets)
 		.oneshot(req)
 		.await
 		.map(|response| response.map(axum::body::Body::new))
 }
 
+fn serve_ui_index(assets: &'static Dir<'static>, path: &str) -> Response {
+	let Some(index) = assets.get_file("index.html") else {
+		return StatusCode::NOT_FOUND.into_response();
+	};
+	let depth = path.trim_start_matches('/').matches('/').count();
+	let base = if depth == 0 {
+		"./".to_string()
+	} else {
+		"../".repeat(depth)
+	};
+	let html = String::from_utf8_lossy(index.contents()).replacen(
+		"<head>",
+		&format!("<head><base href=\"{base}\">"),
+		1,
+	);
+	(
+		[(http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+		html,
+	)
+		.into_response()
+}
+
 fn should_serve_ui_index(path: &str) -> bool {
 	let path = path.trim_start_matches('/');
 	path.is_empty() || (!path.starts_with("assets/") && !path.contains('.'))
-}
-
-fn request_with_path<B>(mut req: http::Request<B>, path: &str) -> http::Request<B> {
-	let mut parts = req.uri().clone().into_parts();
-	parts.path_and_query = Some(match req.uri().query() {
-		Some(query) => format!("{path}?{query}").parse().expect("valid UI path"),
-		None => path.parse().expect("valid UI path"),
-	});
-	*req.uri_mut() = Uri::from_parts(parts).expect("valid UI uri");
-	req
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -1773,5 +1793,82 @@ mod tests {
 	async fn ensure_writable_allows_when_not_read_only() {
 		let app = test_app(false);
 		assert!(app.ensure_writable().is_ok());
+	}
+
+	static TEST_UI_ASSETS: Dir<'static> = Dir::new(
+		"",
+		&[
+			include_dir::DirEntry::File(include_dir::File::new(
+				"index.html",
+				b"<!doctype html><html><head><script src=\"./assets/index.js\"></script></head></html>",
+			)),
+			include_dir::DirEntry::Dir(Dir::new(
+				"assets",
+				&[include_dir::DirEntry::File(include_dir::File::new(
+					"assets/index.js",
+					b"console.log(1)",
+				))],
+			)),
+		],
+	);
+
+	#[tokio::test]
+	async fn ui_is_served_relative_to_its_own_path() {
+		let app = test_app(true);
+		let router = router(
+			app.state.clone(),
+			app.model_catalog.clone(),
+			None,
+			app.resource_manager.clone(),
+			&TEST_UI_ASSETS,
+		);
+		let get = |uri: &'static str| {
+			let router = router.clone();
+			async move {
+				let response = router
+					.oneshot(
+						axum::extract::Request::builder()
+							.uri(uri)
+							.body(axum::body::Body::empty())
+							.unwrap(),
+					)
+					.await
+					.unwrap();
+				let status = response.status();
+				let location = response
+					.headers()
+					.get(http::header::LOCATION)
+					.map(|v| v.to_str().unwrap().to_string());
+				let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+					.await
+					.unwrap();
+				(status, location, String::from_utf8(body.to_vec()).unwrap())
+			}
+		};
+
+		for (uri, location) in [("/", "ui/"), ("/ui", "ui/")] {
+			let (status, got, _) = get(uri).await;
+			assert_eq!(status, StatusCode::PERMANENT_REDIRECT, "{uri}");
+			assert_eq!(got.as_deref(), Some(location), "{uri}");
+		}
+		for (uri, base) in [
+			("/ui/", "./"),
+			("/ui/llm", "./"),
+			("/ui/llm/models", "../"),
+			("/ui/llm/models/", "../../"),
+			("/ui/settings/ui?tab=1", "../"),
+		] {
+			let (status, _, body) = get(uri).await;
+			assert_eq!(status, StatusCode::OK, "{uri}");
+			assert!(
+				body.starts_with(&format!(
+					"<!doctype html><html><head><base href=\"{base}\"><script"
+				)),
+				"{uri}: {body}"
+			);
+		}
+		let (status, _, body) = get("/ui/assets/index.js").await;
+		assert_eq!(status, StatusCode::OK);
+		assert_eq!(body, "console.log(1)");
 	}
 }

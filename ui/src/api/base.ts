@@ -1,4 +1,6 @@
-export const apiBase = import.meta.env.VITE_AGENTGATEWAY_API ?? '';
+import { defaultApiBase } from '@/basePath';
+
+export const apiBase = import.meta.env.VITE_AGENTGATEWAY_API ?? defaultApiBase();
 
 let redirecting = false;
 let hasSuccessfulRequest = false;
