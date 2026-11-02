@@ -38,6 +38,25 @@ impl Provider {
 			formats
 		}
 	}
+
+	pub fn requires_responses(
+		request_model: &str,
+		req: &crate::types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> bool {
+		req.tools.as_ref().is_some_and(|tools| !tools.is_empty())
+			&& req.reasoning_effort.as_ref().is_some_and(|effort| {
+				!matches!(
+					effort,
+					crate::types::completions::typed::ReasoningEffort::None
+				)
+			}) && catalog.is_some_and(|c| {
+			c.model_has_tag(
+				&request_model.to_ascii_lowercase(),
+				crate::model_catalog::tags::OPENAI_RESPONSES_FOR_REASONING_TOOLS,
+			)
+		})
+	}
 }
 
 #[apply(schema!)]

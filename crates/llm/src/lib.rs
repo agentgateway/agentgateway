@@ -298,6 +298,7 @@ pub enum ProviderState {
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
 	VertexGemini,
+	ChatOutput(ChatFormat),
 	SystemOneDecisions(Arc<conversion::systemone::from_decisions::State>),
 	DecisionsSystemOne(Arc<conversion::systemone::from_systemone::State>),
 }

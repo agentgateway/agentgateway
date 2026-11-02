@@ -48,3 +48,11 @@ providers:
         tags: [openai_responses]
       gpt-5.3-codex-spark:
         tags: [openai_responses]
+      gpt-5.4*:
+        tags: [openai_responses_for_reasoning_tools]
+      gpt-5.5*:
+        tags: [openai_responses_for_reasoning_tools]
+      gpt-5.6*:
+        tags: [openai_responses_for_reasoning_tools]
+      gpt-6*:
+        tags: [openai_responses_for_reasoning_tools]
