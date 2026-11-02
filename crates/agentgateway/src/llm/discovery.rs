@@ -78,49 +78,58 @@ impl ModelDiscovery {
 		let Some(provider) = &self.provider_config else {
 			return Vec::new();
 		};
-		let chat = provider
+		let custom = matches!(provider, AIProvider::Custom(_));
+		let mut endpoints = provider
 			.supported_chat_formats(model, Some(catalog))
 			.into_iter()
 			.filter_map(|format| match format {
 				ChatFormat::OpenAICompletions => Some("/chat/completions"),
 				ChatFormat::OpenAIResponses => Some("/responses"),
 				ChatFormat::AnthropicMessages => Some("/messages"),
-				ChatFormat::VertexGemini | ChatFormat::BedrockConverse => None,
-			});
-		let mut endpoints = match catalog
-			.model(&self.provider, model)
-			.and_then(|m| m.endpoints.as_ref())
+				ChatFormat::VertexGemini => Some("/models/{model}:generateContent"),
+				ChatFormat::BedrockConverse => None,
+			})
+			.collect::<Vec<_>>();
+		let entry = catalog.model(&self.provider, model);
+		// Converse requests pass through to Bedrock regardless of the chat format it selects. Bedrock
+		// catalog entries lack endpoints, so only entries with modalities are known chat models.
+		if matches!(provider, AIProvider::Bedrock(_))
+			&& entry.is_some_and(|m| !m.modalities.output.is_empty())
 		{
-			None => chat.collect::<Vec<_>>(),
-			Some(served) => {
-				// Vertex and Bedrock convert embeddings and reranking.
-				let converted = matches!(provider, AIProvider::Vertex(_) | AIProvider::Bedrock(_));
-				let other = provider
+			endpoints.push("/model/{model}/converse");
+		}
+		let served = entry.and_then(|m| m.endpoints.as_ref());
+		// Models without catalog endpoints are chat models, unless a custom provider declares more.
+		if served.is_some() || custom {
+			// Vertex and Bedrock convert embeddings and reranking.
+			let converted = matches!(provider, AIProvider::Vertex(_) | AIProvider::Bedrock(_));
+			endpoints.extend(
+				provider
 					.supported_formats(model)
 					.into_iter()
 					.filter_map(|format| match format {
 						ProviderFormat::Embeddings if !converted => Some("/embeddings"),
 						ProviderFormat::Rerank if !converted => Some("/rerank"),
+						ProviderFormat::Decisions if custom => Some("/decisions"),
+						ProviderFormat::SystemOne if custom => Some("/systemone"),
+						ProviderFormat::AnthropicTokenCount if custom => Some("/messages/count_tokens"),
+						ProviderFormat::GeminiCountTokens if custom => Some("/models/{model}:countTokens"),
 						_ => None,
-					});
-				// Image and audio requests are forwarded unmodified, matching only OpenAI's paths.
-				let passthrough: &[&'static str] = if matches!(provider, AIProvider::OpenAI(_)) {
-					&[
-						"/images/generations",
-						"/images/edits",
-						"/audio/speech",
-						"/audio/transcriptions",
-					]
-				} else {
-					&[]
-				};
-				chat
-					.chain(other)
-					.chain(passthrough.iter().copied())
-					.filter(|e| served.iter().any(|s| s == e))
-					.collect()
-			},
-		};
+					}),
+			);
+		}
+		if let Some(served) = served {
+			// Image and audio requests are forwarded with their OpenAI-style paths.
+			if matches!(provider, AIProvider::OpenAI(_) | AIProvider::Custom(_)) {
+				endpoints.extend([
+					"/images/generations",
+					"/images/edits",
+					"/audio/speech",
+					"/audio/transcriptions",
+				]);
+			}
+			endpoints.retain(|e| served.iter().any(|s| s == e));
+		}
 		endpoints.sort();
 		endpoints.dedup();
 		endpoints
