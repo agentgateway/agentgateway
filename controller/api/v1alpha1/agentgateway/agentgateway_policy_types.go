@@ -759,7 +759,7 @@ type FrontendConnect struct {
 	Mode FrontendConnectMode `json:"mode"`
 }
 
-// +kubebuilder:validation:Enum=MergeSlash;DotSegment;DecodeUnreserved;RejectEscapedSlash;UnescapeSlash
+// +k8s:enum
 type FrontendHTTPNormalize string
 
 const (
@@ -849,10 +849,15 @@ type FrontendHTTP struct {
 	// regardless of how they are listed: percent-decoding, then `MergeSlash`,
 	// then `DotSegment`.
 	//
-	// `MergeSlash` collapses repeated slashes into one.
-	// `DotSegment` resolves `.` and `..` segments.
+	// Malformed percent-encoding and `%00` are rejected with 400 whenever any rule
+	// other than `MergeSlash` is set.
+	//
+	// `MergeSlash` collapses repeated slashes into one, treating `\` as `/`.
+	// `DotSegment` resolves `.` and `..` segments, treating `%2E` as `.`, `\` as `/`,
+	// and ignoring parameters on dot segments (`..;x`).
+	// `DecodeUnreserved` decodes percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`).
 	// `RejectEscapedSlash` rejects requests whose path contains `%2F` or `%5C` with 400.
-	// `UnescapeSlash` decodes `%2F` and `%5C` into `/` and `\`.
+	// `UnescapeSlash` decodes `%2F` and `%5C` into `/`.
 	//
 	// +listType=set
 	// +kubebuilder:validation:MinItems=1

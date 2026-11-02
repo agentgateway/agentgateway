@@ -10857,15 +10857,15 @@
       ]
     },
     "PathNormalization": {
-      "description": "A request path normalization rule. Rules are applied in a fixed order regardless of how they are\nlisted: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`, `MergeSlash`, `DotSegment`.",
+      "description": "A request path normalization rule. Rules are applied in a fixed order regardless of how they are\nlisted: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`, `MergeSlash`, `DotSegment`.\nWhenever percent-encoding is inspected, malformed escapes and `%00` are rejected.",
       "oneOf": [
         {
-          "description": "Collapse repeated slashes into one",
+          "description": "Collapse repeated slashes into one. `\\` is treated as `/`",
           "type": "string",
           "const": "mergeSlash"
         },
         {
-          "description": "Resolve `.` and `..` segments (RFC 3986 section 5.2.4)",
+          "description": "Resolve `.` and `..` segments (RFC 3986 section 5.2.4). `%2E` is treated as `.`, `\\` as `/`,\nand parameters on dot segments (`..;x`) are ignored",
           "type": "string",
           "const": "dotSegment"
         },
@@ -10880,7 +10880,7 @@
           "const": "rejectEscapedSlash"
         },
         {
-          "description": "Decode `%2F` and `%5C` into `/` and `\\`. Mutually exclusive with `RejectEscapedSlash`",
+          "description": "Decode `%2F` and `%5C` into `/`. Mutually exclusive with `RejectEscapedSlash`",
           "type": "string",
           "const": "unescapeSlash"
         }

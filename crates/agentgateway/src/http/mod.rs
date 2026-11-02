@@ -541,7 +541,6 @@ pub fn normalize_path_for_proxy(
 		return Ok(());
 	};
 
-	// TODO(docs): почему отклонённый путь это 400 (ошибка клиента), а ошибка сборки URI ниже 503
 	let path = normalize_path(orig.path(), normalize).map_err(|e| {
 		tracing::debug!(path = orig.path(), "rejecting request path: {e}");
 		ProxyError::InvalidRequest
@@ -581,16 +580,29 @@ fn normalize_path(path: &str, normalize: &[PathNormalization]) -> anyhow::Result
 	let apply_dot_segment = normalize.contains(&PathNormalization::DotSegment);
 
 	let mut path = Cow::Borrowed(path);
-	if (decode_unreserved || escaped_slash.is_some())
-		&& let Some(normalized) = decode_percent(path.as_ref(), decode_unreserved, escaped_slash)?
-	{
+	if (decode_unreserved || apply_dot_segment || escaped_slash.is_some())
+		&& let Some(normalized) = decode_percent(
+			path.as_ref(),
+			decode_unreserved,
+			apply_dot_segment,
+			escaped_slash,
+		)? {
 		path = Cow::Owned(normalized);
+	}
+	// Many backends (IIS, Windows, some Java and Node servers) treat `\` as a separator.
+	if (apply_merge_slash || apply_dot_segment) && path.contains('\\') {
+		path = Cow::Owned(path.replace('\\', "/"));
 	}
 	if apply_merge_slash && let Some(normalized) = merge_adjacent_slashes(path.as_ref()) {
 		path = Cow::Owned(normalized);
 	}
-	if apply_dot_segment && let Some(normalized) = remove_dot_segments(path.as_ref()) {
-		path = Cow::Owned(normalized);
+	if apply_dot_segment {
+		if let Some(normalized) = strip_dot_segment_params(path.as_ref()) {
+			path = Cow::Owned(normalized);
+		}
+		if let Some(normalized) = remove_dot_segments(path.as_ref()) {
+			path = Cow::Owned(normalized);
+		}
 	}
 	Ok(match path {
 		Cow::Borrowed(_) => None,
@@ -600,15 +612,17 @@ fn normalize_path(path: &str, normalize: &[PathNormalization]) -> anyhow::Result
 
 /// Rewrites percent-encoded octets in `path`.
 ///
-/// With `decode_unreserved`, unreserved characters (RFC 3986 section 2.3) are decoded.
+/// With `decode_unreserved`, unreserved characters (RFC 3986 section 2.3) are decoded. With
+/// `decode_dot`, only `%2E` is decoded, so dot segments cannot hide behind encoding.
 ///
 /// Escaped slashes (`%2F`, `%5C`) are rejected or decoded depending on `escaped_slash`.
 ///
-/// Every other octet is kept encoded with uppercase hex digits. Malformed escapes are rejected,
-/// as backends disagree on how to interpret them.
+/// Every other octet is kept encoded with uppercase hex digits. Malformed escapes and `%00` are
+/// rejected, as backends disagree on how to interpret them.
 fn decode_percent(
 	path: &str,
 	decode_unreserved: bool,
+	decode_dot: bool,
 	escaped_slash: Option<PathNormalization>,
 ) -> anyhow::Result<Option<String>> {
 	const HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -633,12 +647,12 @@ fn decode_percent(
 		};
 		let b = (hi << 4 | lo) as u8;
 		match b {
+			0 => anyhow::bail!("escaped NUL in path"),
+			b'.' if decode_dot => out.push('.'),
 			b'/' | b'\\' if escaped_slash == Some(PathNormalization::RejectEscapedSlash) => {
 				anyhow::bail!("escaped slash in path")
 			},
-			b'/' | b'\\' if escaped_slash == Some(PathNormalization::UnescapeSlash) => {
-				out.push(b as char)
-			},
+			b'/' | b'\\' if escaped_slash == Some(PathNormalization::UnescapeSlash) => out.push('/'),
 			b if decode_unreserved
 				&& (b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~')) =>
 			{
@@ -674,6 +688,22 @@ fn merge_adjacent_slashes(path: &str) -> Option<String> {
 	}
 
 	Some(out)
+}
+
+/// Drops parameters from `.` and `..` segments, as servlet containers do: `/a/..;x/b` is `/a/../b`.
+fn strip_dot_segment_params(path: &str) -> Option<String> {
+	if !path.contains(".;") {
+		return None;
+	}
+	let stripped = path
+		.split('/')
+		.map(|segment| match segment.split_once(';') {
+			Some((dots @ ("." | ".."), _)) => dots,
+			_ => segment,
+		})
+		.collect::<Vec<_>>()
+		.join("/");
+	(stripped != path).then_some(stripped)
 }
 
 fn remove_dot_segments(path: &str) -> Option<String> {

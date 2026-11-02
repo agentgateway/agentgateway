@@ -14,17 +14,19 @@ fn empty_string_set(set: &Arc<FzHashSet<String>>) -> bool {
 
 /// A request path normalization rule. Rules are applied in a fixed order regardless of how they are
 /// listed: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`, `MergeSlash`, `DotSegment`.
+/// Whenever percent-encoding is inspected, malformed escapes and `%00` are rejected.
 #[apply(schema_enum!)]
 pub enum PathNormalization {
-	/// Collapse repeated slashes into one
+	/// Collapse repeated slashes into one. `\` is treated as `/`
 	MergeSlash,
-	/// Resolve `.` and `..` segments (RFC 3986 section 5.2.4)
+	/// Resolve `.` and `..` segments (RFC 3986 section 5.2.4). `%2E` is treated as `.`, `\` as `/`,
+	/// and parameters on dot segments (`..;x`) are ignored
 	DotSegment,
 	/// Decode percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`)
 	DecodeUnreserved,
 	/// Reject requests whose path contains `%2F` or `%5C`
 	RejectEscapedSlash,
-	/// Decode `%2F` and `%5C` into `/` and `\`. Mutually exclusive with `RejectEscapedSlash`
+	/// Decode `%2F` and `%5C` into `/`. Mutually exclusive with `RejectEscapedSlash`
 	UnescapeSlash,
 }
 

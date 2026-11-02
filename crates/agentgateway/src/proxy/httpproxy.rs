@@ -1429,9 +1429,11 @@ impl HTTPProxy {
 		log: &mut RequestLog,
 		req: &mut Request,
 	) -> Result<(), ProxyError> {
-		if let Some(http_policy) = &frontend_policies.http {
-			http::normalize_path_for_proxy(req, &http_policy.normalize)?;
-		}
+		// Deferred so rejected requests still get logging and tracing set up below.
+		let normalized = frontend_policies
+			.http
+			.as_ref()
+			.map_or(Ok(()), |p| http::normalize_path_for_proxy(req, &p.normalize));
 
 		frontend_policies.register_cel_expressions(log.cel.ctx());
 
@@ -1520,7 +1522,7 @@ impl HTTPProxy {
 			log.outgoing_span = Some(ns);
 		}
 		log.insert_span_writer(req.extensions_mut());
-		Ok(())
+		normalized
 	}
 
 	fn detect_misdirected(

@@ -83,13 +83,9 @@ fn path_normalization_table() {
 		(&[RejectEscapedSlash], "/a%zz", None),
 		(&[RejectEscapedSlash], "/a?x=%2F", Some("/a?x=%2F")),
 		(&[RejectEscapedSlash, DotSegment], "/a%5C..%5Cadmin", None),
-		(
-			&[UnescapeSlash, DotSegment],
-			"/a%5C..%5Cadmin",
-			Some("/a\\..\\admin"),
-		),
+		(&[UnescapeSlash, DotSegment], "/a%5C..%5Cadmin", Some("/admin")),
 		(&[UnescapeSlash], "/api%2Fmetrics", Some("/api/metrics")),
-		(&[UnescapeSlash], "/a%5Cb", Some("/a\\b")),
+		(&[UnescapeSlash], "/a%5Cb", Some("/a/b")),
 		(
 			&[UnescapeSlash, MergeSlash],
 			"/api%2F%2fmetrics",
@@ -105,6 +101,14 @@ fn path_normalization_table() {
 			"/plain/path",
 			Some("/plain/path"),
 		),
+		(&[DotSegment], "/public/%2e%2E/admin", Some("/admin")),
+		(&[DotSegment], "/public/%61/admin", Some("/public/%61/admin")),
+		(&[DotSegment], "/public\\..\\admin", Some("/admin")),
+		(&[MergeSlash], "/a\\\\b", Some("/a/b")),
+		(&[DotSegment], "/public/..;x=y/admin", Some("/admin")),
+		(&[DotSegment], "/a/.;x/b;y", Some("/a/b;y")),
+		(&[DecodeUnreserved], "/admin%00.css", None),
+		(&[DotSegment], "/a%zz", None),
 	];
 	for (rules, input, expected) in percent_cases {
 		let mut req = request(input);
