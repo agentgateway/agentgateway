@@ -943,6 +943,7 @@ mod responses {
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
 	const RESPONSES_TO_MESSAGES: &str = "responses-messages";
+	const RESPONSES_TO_MESSAGES_TO_COMPLETIONS: &str = "responses-messages-completions";
 	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
 
 	const ALL_BEDROCK: &[&str] = &[
@@ -1110,6 +1111,10 @@ mod responses {
 			"stream_tool_empty_args",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
 		),
+		(
+			"stream_error",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
@@ -1152,12 +1157,18 @@ mod responses {
 		),
 		("stream-refusal", &[RESPONSES_TO_MESSAGES]),
 		("stream-refusal-final-only", &[RESPONSES_TO_MESSAGES]),
-		("stream-error", &[RESPONSES_TO_MESSAGES]),
+		(
+			"stream-error",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_MESSAGES_TO_COMPLETIONS],
+		),
 		("stream-max_tokens", &[RESPONSES_TO_MESSAGES]),
 		("stream-incomplete_no_details", &[RESPONSES_TO_MESSAGES]),
 		("stream-content_filter", &[RESPONSES_TO_MESSAGES]),
 		("stream-context_window", &[RESPONSES_TO_MESSAGES]),
-		("stream-failed", &[RESPONSES_TO_MESSAGES]),
+		(
+			"stream-failed",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_MESSAGES_TO_COMPLETIONS],
+		),
 	];
 
 	#[tokio::test]
@@ -1683,6 +1694,19 @@ mod responses {
 							BUFFER_LIMIT,
 							reporter,
 							LOG_CONTENT,
+						)
+					}),
+					RESPONSES_TO_MESSAGES_TO_COMPLETIONS => response.map(|body| {
+						conversion::messages::from_completions::translate_stream(
+							conversion::responses::from_messages::translate_stream(
+								body,
+								BUFFER_LIMIT,
+								reporter,
+								LOG_CONTENT,
+							),
+							BUFFER_LIMIT,
+							StreamingUsageGuard::default(),
+							crate::LogContentFields::default(),
 						)
 					}),
 					_ => unreachable!(),

@@ -1044,6 +1044,32 @@ pub mod from_completions {
 		))
 	}
 
+	#[derive(serde::Serialize)]
+	#[serde(untagged)]
+	#[allow(clippy::large_enum_variant)]
+	enum StreamChunk {
+		Chunk(completions::StreamResponse),
+		Error(serde_json::Value),
+	}
+
+	fn stream_error(error: messages::MessagesError) -> serde_json::Value {
+		let (r#type, code) = match error.r#type.as_str() {
+			"rate_limit_error" => ("rate_limit_error", Some("rate_limit_exceeded")),
+			"overloaded_error" => ("server_error", Some("server_is_overloaded")),
+			"billing_error" => ("insufficient_quota", Some("insufficient_quota")),
+			"api_error" => ("server_error", None),
+			other => (other, None),
+		};
+		serde_json::json!({
+			"error": {
+				"message": error.message,
+				"type": r#type,
+				"param": null,
+				"code": code,
+			}
+		})
+	}
+
 	pub fn translate_stream(
 		b: Body,
 		buffer_limit: usize,
@@ -1075,205 +1101,81 @@ pub mod from_completions {
 		let mut tool_calls = super::StreamingToolCalls::new(log_content.tool_calls);
 
 		// https://docs.anthropic.com/en/docs/build-with-claude/streaming
-		let body = parse::sse::json_transform::<
-			messages::MessagesStreamEvent,
-			completions::StreamResponse,
-		>(b, buffer_limit, move |f| {
-			let mut mk = |mut choices: Vec<completions::ChatChoiceStream>,
-			              usage: Option<completions::Usage>| {
-				if let Some(first) = choices.first_mut() {
-					first.delta.role = pending_role.take();
-				}
-				Some(completions::StreamResponse {
-					id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
-					model: model.clone(),
-					object: "chat.completion.chunk".to_string(),
-					system_fingerprint: None,
-					service_tier: service_tier.clone(),
-					created,
-					choices,
-					usage,
-				})
-			};
-			// ignore errors... what else can we do?
-			let f = f.ok()?;
-
-			// Extract info we need
-			match f {
-				messages::MessagesStreamEvent::MessageStart { message } => {
-					usage_acc = message.usage.accounting();
-					message_id = Some(message.id);
-					pending_role = Some(match message.role {
-						messages::Role::Assistant => completions::Role::Assistant,
-						messages::Role::User => completions::Role::User,
-						messages::Role::System => completions::Role::System,
-					});
-					model = message.model.clone();
-					service_tier = message.usage.service_tier.clone();
-					log.update(|r| {
-						usage_acc.apply(&mut r.response);
-						r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
-						r.response.provider_model = Some(strng::new(&message.model))
-					});
-					// no need to respond with anything yet
-					None
-				},
-
-				messages::MessagesStreamEvent::ContentBlockStart {
-					index,
-					content_block,
-				} => match content_block {
-					messages::ContentBlock::ToolUse {
-						id, name, input, ..
+		let body = parse::sse::json_transform::<messages::MessagesStreamEvent, StreamChunk>(
+			b,
+			buffer_limit,
+			move |f| {
+				let mut mk = |mut choices: Vec<completions::ChatChoiceStream>,
+				              usage: Option<completions::Usage>| {
+					if let Some(first) = choices.first_mut() {
+						first.delta.role = pending_role.take();
 					}
-					| messages::ContentBlock::ServerToolUse {
-						id, name, input, ..
-					} => {
-						let tool_index = next_tool_index;
-						next_tool_index += 1;
-						tool_calls.start(index, id.as_str(), name.as_str(), &input);
-						// `input` is always `{}` here: the payload arrives as `input_json_delta`s.
-						ongoing_tool_calls.insert(
-							index,
-							OngoingToolCall {
-								tool_index,
-								emitted_arguments: false,
-							},
-						);
-
-						let choice = completions::ChatChoiceStream::with_delta(
-							completions::StreamResponseDelta::with_tool_calls(vec![
-								completions::ChatCompletionMessageToolCallChunk {
-									index: tool_index,
-									id: Some(id),
-									r#type: Some(completions::FunctionType::Function),
-									function: Some(completions::FunctionCallStream {
-										name: Some(name),
-										arguments: None,
-									}),
-								},
-							]),
-						);
-						mk(vec![choice], None)
-					},
-					_ => None,
-				},
-				messages::MessagesStreamEvent::ContentBlockDelta { delta, index } => {
-					let now = Instant::now();
-					if !saw_token {
-						saw_token = true;
-						last_token_at = Some(now);
-						log.update(|r| {
-							r.response.first_token = Some(now);
-						});
-					} else if let Some(prev) = last_token_at.replace(now) {
-						let gap = now.duration_since(prev);
-						log.update(|r| r.response.inter_chunk_latencies.record(gap));
-					}
-					let mut dr = completions::StreamResponseDelta::default();
-					let mut emit_chunk = true;
-					match delta {
-						messages::ContentBlockDelta::TextDelta { text } => {
-							if let Some(completion) = completion.as_mut() {
-								completion.push_str(&text);
-							}
-							dr.content = Some(text);
-						},
-						messages::ContentBlockDelta::ThinkingDelta { thinking } => {
-							dr.reasoning_content = Some(thinking)
-						},
-						messages::ContentBlockDelta::InputJsonDelta { partial_json } => {
-							tool_calls.append_arguments(index, &partial_json);
-							match ongoing_tool_calls.get_mut(&index) {
-								Some(_) if partial_json.is_empty() => emit_chunk = false,
-								Some(ongoing) => {
-									ongoing.emitted_arguments = true;
-									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
-										index: ongoing.tool_index,
-										id: None,
-										r#type: None,
-										function: Some(completions::FunctionCallStream {
-											name: None,
-											arguments: Some(partial_json),
-										}),
-									}]);
-								},
-								None => emit_chunk = false,
-							}
-						},
-						messages::ContentBlockDelta::SignatureDelta { signature } => {
-							dr.reasoning_signature = Some(signature)
-						},
-						messages::ContentBlockDelta::CitationsDelta { .. } => {
-							emit_chunk = false;
-						},
-					};
-					if emit_chunk {
-						let choice = completions::ChatChoiceStream::with_delta(dr);
-						mk(vec![choice], None)
-					} else {
-						None
-					}
-				},
-				messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
-					usage_acc = usage.accumulate(usage_acc);
-					let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
-					let log_finish_reason = delta
-						.stop_reason
-						.as_ref()
-						.and_then(crate::types::serialize_str);
-					log.update(|r| {
-						usage_acc.apply(&mut r.response);
-						if !usage.iterations.is_empty() {
-							r.response.usage_lines = crate::types::messages::usage_lines(&usage.iterations);
-						}
-						if let Some(completion) = completion.take() {
-							r.response.completion = Some(vec![completion]);
-						}
-						r.response.output_messages = tool_calls.take_output_messages(log_finish_reason.clone());
-					});
-					let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
-						vec![completions::ChatChoiceStream::with_finish_reason(
-							finish_reason,
-						)]
-					});
-					let cache_read_input_tokens = usage_acc.cache_read_input_tokens;
-					let cache_creation_input_tokens = usage_acc.cache_creation_input_tokens;
-					let prompt_tokens = usage_acc
-						.input_tokens
-						.saturating_add(cache_read_input_tokens.unwrap_or_default())
-						.saturating_add(cache_creation_input_tokens.unwrap_or_default());
-					let output_tokens = usage_acc.output_tokens;
-					mk(
+					Some(StreamChunk::Chunk(completions::StreamResponse {
+						id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
+						model: model.clone(),
+						object: "chat.completion.chunk".to_string(),
+						system_fingerprint: None,
+						service_tier: service_tier.clone(),
+						created,
 						choices,
-						Some(completions::Usage {
-							prompt_tokens: prompt_tokens as u32,
-							completion_tokens: output_tokens as u32,
-							total_tokens: prompt_tokens.saturating_add(output_tokens) as u32,
-							cache_read_input_tokens,
-							prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
-								cache_read_input_tokens,
-								cache_creation_input_tokens,
-							),
-							cache_creation_input_tokens,
-							..Default::default()
-						}),
-					)
-				},
-				messages::MessagesStreamEvent::ContentBlockStop { index } => {
-					match ongoing_tool_calls.remove(&index) {
-						Some(ongoing) if !ongoing.emitted_arguments => {
-							// If no arguments were emitted for a tool call, send a synthetic `{}`
-							// for compatibility.
+						usage,
+					}))
+				};
+				// ignore errors... what else can we do?
+				let f = f.ok()?;
+
+				// Extract info we need
+				match f {
+					messages::MessagesStreamEvent::MessageStart { message } => {
+						usage_acc = message.usage.accounting();
+						message_id = Some(message.id);
+						pending_role = Some(match message.role {
+							messages::Role::Assistant => completions::Role::Assistant,
+							messages::Role::User => completions::Role::User,
+							messages::Role::System => completions::Role::System,
+						});
+						model = message.model.clone();
+						service_tier = message.usage.service_tier.clone();
+						log.update(|r| {
+							usage_acc.apply(&mut r.response);
+							r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
+							r.response.provider_model = Some(strng::new(&message.model))
+						});
+						// no need to respond with anything yet
+						None
+					},
+
+					messages::MessagesStreamEvent::ContentBlockStart {
+						index,
+						content_block,
+					} => match content_block {
+						messages::ContentBlock::ToolUse {
+							id, name, input, ..
+						}
+						| messages::ContentBlock::ServerToolUse {
+							id, name, input, ..
+						} => {
+							let tool_index = next_tool_index;
+							next_tool_index += 1;
+							tool_calls.start(index, id.as_str(), name.as_str(), &input);
+							// `input` is always `{}` here: the payload arrives as `input_json_delta`s.
+							ongoing_tool_calls.insert(
+								index,
+								OngoingToolCall {
+									tool_index,
+									emitted_arguments: false,
+								},
+							);
+
 							let choice = completions::ChatChoiceStream::with_delta(
 								completions::StreamResponseDelta::with_tool_calls(vec![
 									completions::ChatCompletionMessageToolCallChunk {
-										index: ongoing.tool_index,
-										id: None,
-										r#type: None,
+										index: tool_index,
+										id: Some(id),
+										r#type: Some(completions::FunctionType::Function),
 										function: Some(completions::FunctionCallStream {
-											name: None,
-											arguments: Some("{}".to_string()),
+											name: Some(name),
+											arguments: None,
 										}),
 									},
 								]),
@@ -1281,29 +1183,159 @@ pub mod from_completions {
 							mk(vec![choice], None)
 						},
 						_ => None,
-					}
-				},
-				messages::MessagesStreamEvent::MessageStop => {
-					log.update(|r| {
-						if let Some(completion) = completion.take() {
-							r.response.completion = Some(vec![completion]);
+					},
+					messages::MessagesStreamEvent::ContentBlockDelta { delta, index } => {
+						let now = Instant::now();
+						if !saw_token {
+							saw_token = true;
+							last_token_at = Some(now);
+							log.update(|r| {
+								r.response.first_token = Some(now);
+							});
+						} else if let Some(prev) = last_token_at.replace(now) {
+							let gap = now.duration_since(prev);
+							log.update(|r| r.response.inter_chunk_latencies.record(gap));
 						}
-						if r.response.output_messages.is_none() {
-							r.response.output_messages = tool_calls.take_output_messages(None);
+						let mut dr = completions::StreamResponseDelta::default();
+						let mut emit_chunk = true;
+						match delta {
+							messages::ContentBlockDelta::TextDelta { text } => {
+								if let Some(completion) = completion.as_mut() {
+									completion.push_str(&text);
+								}
+								dr.content = Some(text);
+							},
+							messages::ContentBlockDelta::ThinkingDelta { thinking } => {
+								dr.reasoning_content = Some(thinking)
+							},
+							messages::ContentBlockDelta::InputJsonDelta { partial_json } => {
+								tool_calls.append_arguments(index, &partial_json);
+								match ongoing_tool_calls.get_mut(&index) {
+									Some(_) if partial_json.is_empty() => emit_chunk = false,
+									Some(ongoing) => {
+										ongoing.emitted_arguments = true;
+										dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
+											index: ongoing.tool_index,
+											id: None,
+											r#type: None,
+											function: Some(completions::FunctionCallStream {
+												name: None,
+												arguments: Some(partial_json),
+											}),
+										}]);
+									},
+									None => emit_chunk = false,
+								}
+							},
+							messages::ContentBlockDelta::SignatureDelta { signature } => {
+								dr.reasoning_signature = Some(signature)
+							},
+							messages::ContentBlockDelta::CitationsDelta { .. } => {
+								emit_chunk = false;
+							},
+						};
+						if emit_chunk {
+							let choice = completions::ChatChoiceStream::with_delta(dr);
+							mk(vec![choice], None)
+						} else {
+							None
 						}
-					});
-					None
-				},
-				messages::MessagesStreamEvent::Ping => None,
-				messages::MessagesStreamEvent::Error { error } => {
-					tracing::warn!(
-						"Messages stream error during completions translation: {}",
-						error.message
-					);
-					None
-				},
-			}
-		});
+					},
+					messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+						usage_acc = usage.accumulate(usage_acc);
+						let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
+						let log_finish_reason = delta
+							.stop_reason
+							.as_ref()
+							.and_then(crate::types::serialize_str);
+						log.update(|r| {
+							usage_acc.apply(&mut r.response);
+							if !usage.iterations.is_empty() {
+								r.response.usage_lines = crate::types::messages::usage_lines(&usage.iterations);
+							}
+							if let Some(completion) = completion.take() {
+								r.response.completion = Some(vec![completion]);
+							}
+							r.response.output_messages =
+								tool_calls.take_output_messages(log_finish_reason.clone());
+						});
+						let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
+							vec![completions::ChatChoiceStream::with_finish_reason(
+								finish_reason,
+							)]
+						});
+						let cache_read_input_tokens = usage_acc.cache_read_input_tokens;
+						let cache_creation_input_tokens = usage_acc.cache_creation_input_tokens;
+						let prompt_tokens = usage_acc
+							.input_tokens
+							.saturating_add(cache_read_input_tokens.unwrap_or_default())
+							.saturating_add(cache_creation_input_tokens.unwrap_or_default());
+						let output_tokens = usage_acc.output_tokens;
+						mk(
+							choices,
+							Some(completions::Usage {
+								prompt_tokens: prompt_tokens as u32,
+								completion_tokens: output_tokens as u32,
+								total_tokens: prompt_tokens.saturating_add(output_tokens) as u32,
+								cache_read_input_tokens,
+								prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
+									cache_read_input_tokens,
+									cache_creation_input_tokens,
+								),
+								cache_creation_input_tokens,
+								..Default::default()
+							}),
+						)
+					},
+					messages::MessagesStreamEvent::ContentBlockStop { index } => {
+						match ongoing_tool_calls.remove(&index) {
+							Some(ongoing) if !ongoing.emitted_arguments => {
+								// If no arguments were emitted for a tool call, send a synthetic `{}`
+								// for compatibility.
+								let choice = completions::ChatChoiceStream::with_delta(
+									completions::StreamResponseDelta::with_tool_calls(vec![
+										completions::ChatCompletionMessageToolCallChunk {
+											index: ongoing.tool_index,
+											id: None,
+											r#type: None,
+											function: Some(completions::FunctionCallStream {
+												name: None,
+												arguments: Some("{}".to_string()),
+											}),
+										},
+									]),
+								);
+								mk(vec![choice], None)
+							},
+							_ => None,
+						}
+					},
+					messages::MessagesStreamEvent::MessageStop => {
+						log.update(|r| {
+							if let Some(completion) = completion.take() {
+								r.response.completion = Some(vec![completion]);
+							}
+							if r.response.output_messages.is_none() {
+								r.response.output_messages = tool_calls.take_output_messages(None);
+							}
+						});
+						None
+					},
+					messages::MessagesStreamEvent::Ping => None,
+					messages::MessagesStreamEvent::Error { error } => {
+						log.update(|r| {
+							if let Some(completion) = completion.take() {
+								r.response.completion = Some(vec![completion]);
+							}
+							if r.response.output_messages.is_none() {
+								r.response.output_messages = tool_calls.take_output_messages(None);
+							}
+						});
+						Some(StreamChunk::Error(stream_error(error)))
+					},
+				}
+			},
+		);
 
 		parse::sse::append_done_on_success(body)
 	}
