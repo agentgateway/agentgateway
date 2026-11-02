@@ -1119,7 +1119,7 @@ impl AIProvider {
 	) -> Vec<ChatFormat> {
 		match self {
 			AIProvider::OpenAI(_) => {
-				vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
+				openai::Provider::supported_formats_for_model(request_model, catalog)
 			},
 
 			AIProvider::Copilot(_) => {

@@ -687,6 +687,49 @@ fn fixture_path(relative_path: &str) -> PathBuf {
 	test_root().join(relative_path)
 }
 
+#[tokio::test]
+async fn openai_responses_only_models_route_completions_to_responses() {
+	let catalog = crate::llm::catalog::ModelCatalog::new(vec![])
+		.await
+		.expect("built-in catalog");
+	let catalog = Some(catalog.as_handle());
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+	for model in [
+		"gpt-5-pro",
+		"gpt-5.2-pro",
+		"gpt-5.4-pro",
+		"gpt-5.5-pro",
+		"o1-pro",
+		"o3-pro",
+		"gpt-5.3-codex",
+		"gpt-5.3-codex-spark",
+	] {
+		for input in [InputFormat::Completions, InputFormat::Responses] {
+			assert_eq!(
+				provider
+					.chat_translation(input, model, catalog)
+					.unwrap()
+					.output,
+				ChatFormat::OpenAIResponses,
+				"{model} {input:?}"
+			);
+		}
+	}
+	for model in ["gpt-5.5", "gpt-4.1", "unknown-model"] {
+		assert_eq!(
+			provider
+				.chat_translation(InputFormat::Completions, model, catalog)
+				.unwrap()
+				.output,
+			ChatFormat::OpenAICompletions,
+			"{model}"
+		);
+	}
+}
+
 #[test]
 fn completions_routing_falls_back_to_responses() {
 	let copilot = AIProvider::Copilot(copilot::Provider {

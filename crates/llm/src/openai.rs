@@ -1,7 +1,7 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
 
-use crate::{RouteType, apply};
+use crate::{ChatFormat, RouteType, apply};
 
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "OpenAIProvider"))]
@@ -16,6 +16,28 @@ pub struct Provider {
 
 impl super::Provider for Provider {
 	const NAME: Strng = strng::literal!("openai");
+}
+
+impl Provider {
+	pub fn supported_formats_for_model(
+		request_model: &str,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Vec<ChatFormat> {
+		let formats: Vec<ChatFormat> = catalog
+			.and_then(|c| c.get_model_tags(&request_model.to_ascii_lowercase()))
+			.map(|tags| {
+				[ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
+					.into_iter()
+					.filter(|f| tags.contains(f.tag()))
+					.collect()
+			})
+			.unwrap_or_default();
+		if formats.is_empty() {
+			vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
+		} else {
+			formats
+		}
+	}
 }
 
 #[apply(schema!)]
