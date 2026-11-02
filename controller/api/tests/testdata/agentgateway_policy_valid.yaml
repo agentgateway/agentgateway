@@ -280,6 +280,11 @@ spec:
       maxBufferSize: 5Mi
       http1MaxHeaders: 150
       http1IdleTimeout: 5m
+      normalize:
+      - MergeSlash
+      - DotSegment
+      - DecodeUnreserved
+      - RejectEscapedSlash
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

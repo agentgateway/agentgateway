@@ -5479,6 +5479,7 @@ async fn split_frontend_policies(
 		tracing,
 	} = pol;
 	if let Some(p) = http {
+		p.validate()?;
 		add(FrontendPolicy::HTTP(p), "http");
 	}
 	if let Some(p) = tls {

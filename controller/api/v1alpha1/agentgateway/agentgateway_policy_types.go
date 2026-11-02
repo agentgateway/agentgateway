@@ -759,6 +759,17 @@ type FrontendConnect struct {
 	Mode FrontendConnectMode `json:"mode"`
 }
 
+// +k8s:enum
+type FrontendHTTPNormalize string
+
+const (
+	FrontendHTTPNormalizeMergeSlash         FrontendHTTPNormalize = "MergeSlash"
+	FrontendHTTPNormalizeDotSegment         FrontendHTTPNormalize = "DotSegment"
+	FrontendHTTPNormalizeDecodeUnreserved   FrontendHTTPNormalize = "DecodeUnreserved"
+	FrontendHTTPNormalizeRejectEscapedSlash FrontendHTTPNormalize = "RejectEscapedSlash"
+	FrontendHTTPNormalizeUnescapeSlash      FrontendHTTPNormalize = "UnescapeSlash"
+)
+
 // +kubebuilder:validation:AtLeastOneFieldSet
 type FrontendHTTP struct {
 	// Maximum HTTP body size that will be buffered
@@ -831,6 +842,29 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	MaxConcurrentRequests *int32 `json:"maxConcurrentRequests,omitempty"`
+
+	// `normalize` defines path normalization rules applied before route matching.
+	// The normalized path is used for routing, policies and the upstream request;
+	// access logs keep the original path. Rules are applied in a fixed order
+	// regardless of how they are listed: percent-decoding, then `MergeSlash`,
+	// then `DotSegment`.
+	//
+	// Malformed percent-encoding and `%00` are rejected with 400 whenever any rule
+	// other than `MergeSlash` is set.
+	//
+	// `MergeSlash` collapses repeated slashes into one, treating `\` as `/`.
+	// `DotSegment` resolves `.` and `..` segments, treating `%2E` as `.`, `\` as `/`,
+	// and ignoring parameters on dot segments (`..;x`).
+	// `DecodeUnreserved` decodes percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`).
+	// `RejectEscapedSlash` rejects requests whose path contains `%2F` or `%5C` with 400.
+	// `UnescapeSlash` decodes `%2F` and `%5C` into `/`.
+	//
+	// +listType=set
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=5
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(x, x == 'RejectEscapedSlash') && self.exists(x, x == 'UnescapeSlash'))",message="RejectEscapedSlash and UnescapeSlash are mutually exclusive"
+	// +optional
+	Normalize []FrontendHTTPNormalize `json:"normalize,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet

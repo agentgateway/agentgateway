@@ -12,6 +12,24 @@ fn empty_string_set(set: &Arc<FzHashSet<String>>) -> bool {
 	set.is_empty()
 }
 
+/// A request path normalization rule. Rules are applied in a fixed order regardless of how they are
+/// listed: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`, `MergeSlash`, `DotSegment`.
+/// Whenever percent-encoding is inspected, malformed escapes and `%00` are rejected.
+#[apply(schema_enum!)]
+pub enum PathNormalization {
+	/// Collapse repeated slashes into one. `\` is treated as `/`
+	MergeSlash,
+	/// Resolve `.` and `..` segments (RFC 3986 section 5.2.4). `%2E` is treated as `.`, `\` as `/`,
+	/// and parameters on dot segments (`..;x`) are ignored
+	DotSegment,
+	/// Decode percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`)
+	DecodeUnreserved,
+	/// Reject requests whose path contains `%2F` or `%5C`
+	RejectEscapedSlash,
+	/// Decode `%2F` and `%5C` into `/`. Mutually exclusive with `RejectEscapedSlash`
+	UnescapeSlash,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[allow(non_camel_case_types)]
@@ -100,6 +118,25 @@ pub struct HTTP {
 	/// and HTTP/2 streams. Requests over the limit are rejected immediately.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub max_concurrent_requests: Option<NonZeroU32>,
+
+	/// Path normalization rules applied before route matching. The normalized path is used for
+	/// routing, policies and the upstream request. Access logs keep the original path.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub normalize: Vec<PathNormalization>,
+}
+
+impl HTTP {
+	/// Rejects path normalization rules that contradict each other.
+	pub fn validate(&self) -> anyhow::Result<()> {
+		if self
+			.normalize
+			.contains(&PathNormalization::RejectEscapedSlash)
+			&& self.normalize.contains(&PathNormalization::UnescapeSlash)
+		{
+			anyhow::bail!("normalize: rejectEscapedSlash and unescapeSlash are mutually exclusive");
+		}
+		Ok(())
+	}
 }
 
 impl Default for HTTP {
@@ -121,6 +158,7 @@ impl Default for HTTP {
 
 			max_connection_duration: None,
 			max_concurrent_requests: None,
+			normalize: vec![],
 		}
 	}
 }
