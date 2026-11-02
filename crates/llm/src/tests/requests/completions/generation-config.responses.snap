@@ -85,7 +85,8 @@ info:
     "tool_choice": {
       "type": "function",
       "name": "get_weather"
-    }
+    },
+    "store": false
   },
   "parsed": {
     "input_format": "Completions",

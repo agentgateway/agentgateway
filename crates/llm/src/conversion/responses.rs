@@ -1739,6 +1739,8 @@ pub mod from_messages {
 /// the same way. The output limit, reasoning effort and response format are taken from the Chat
 /// Completions request, because the Messages step fills in or approximates them.
 pub mod from_completions {
+	use std::collections::HashMap;
+
 	use agent_http::Body;
 	use bytes::Bytes;
 	use serde_json::{Map, Value};
@@ -1784,10 +1786,58 @@ pub mod from_completions {
 			},
 		});
 
+		let strict_tools: HashMap<String, bool> = typed
+			.tools
+			.iter()
+			.flatten()
+			.filter_map(|tool| match tool {
+				completions::Tool::Function(tool) => tool
+					.function
+					.strict
+					.map(|strict| (tool.function.name.clone(), strict)),
+				_ => None,
+			})
+			.collect();
+		let mut passthrough = Map::new();
+		passthrough.insert(
+			"store".to_string(),
+			Value::Bool(typed.store.unwrap_or(false)),
+		);
+		if let Some(service_tier) = &typed.service_tier {
+			passthrough.insert(
+				"service_tier".to_string(),
+				Value::String(service_tier.clone()),
+			);
+		}
+		if let Some(user) = &typed.user {
+			passthrough.insert("user".to_string(), Value::String(user.clone()));
+		}
+		for key in [
+			"prompt_cache_key",
+			"prompt_cache_retention",
+			"safety_identifier",
+		] {
+			if let Some(value) = req.rest.get(key) {
+				passthrough.insert(key.to_string(), value.clone());
+			}
+		}
+
 		let request = conversion::messages::from_completions::translate_typed(typed, catalog)?;
 		let mut request = super::from_messages::translate_internal(request)?;
 		request.max_output_tokens = max_output_tokens;
 		if let Some(rest) = request.rest.as_object_mut() {
+			rest.extend(passthrough);
+			if let Some(Value::Array(tools)) = rest.get_mut("tools") {
+				for tool in tools {
+					if let Some(strict) = tool
+						.get("name")
+						.and_then(Value::as_str)
+						.and_then(|name| strict_tools.get(name))
+					{
+						tool["strict"] = Value::Bool(*strict);
+					}
+				}
+			}
 			rest.remove("reasoning");
 			if let Some(reasoning) = reasoning {
 				rest.insert(

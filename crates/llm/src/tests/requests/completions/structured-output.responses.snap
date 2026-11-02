@@ -76,7 +76,8 @@ info:
           }
         }
       }
-    }
+    },
+    "store": false
   },
   "parsed": {
     "input_format": "Completions",
