@@ -88,6 +88,7 @@ impl RequestType for Request {
 			request_model: model,
 			original_model: None,
 			provider,
+			region: None,
 			streaming: false,
 			params: LLMRequestParams {
 				temperature: None,

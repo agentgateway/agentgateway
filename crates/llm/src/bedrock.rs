@@ -60,7 +60,22 @@ impl super::Provider for Provider {
 	const NAME: Strng = strng::literal!("aws.bedrock");
 }
 
+// Cross-region profiles carry the region in the model id prefix.
+const INFERENCE_PROFILE_PREFIXES: &[&str] = &[
+	"global", "us", "us-gov", "eu", "apac", "au", "ca", "in", "jp", "sa",
+];
+
 impl Provider {
+	// No prefix: use the configured region (us-east-1 → us).
+	pub fn pricing_region(&self, model: &str) -> Strng {
+		if let Some((prefix, _)) = model.split_once('.')
+			&& INFERENCE_PROFILE_PREFIXES.contains(&prefix)
+		{
+			return strng::new(prefix);
+		}
+		strng::new(self.region.rsplitn(3, '-').last().unwrap_or(&self.region))
+	}
+
 	pub fn is_anthropic_model(&self, request_model: &str) -> bool {
 		request_model
 			.to_ascii_lowercase()
@@ -299,6 +314,36 @@ mod tests {
 			guardrail_version: None,
 			endpoint_preference: pref,
 		}
+	}
+
+	#[rstest::rstest]
+	#[case("us-east-1", "anthropic.claude-sonnet-4-5-20250929-v1:0", "us")]
+	#[case("eu-west-1", "anthropic.claude-sonnet-4-5-20250929-v1:0", "eu")]
+	#[case("ap-northeast-1", "anthropic.claude-sonnet-4-5-20250929-v1:0", "ap")]
+	#[case("us-gov-west-1", "anthropic.claude-sonnet-4-5-20250929-v1:0", "us-gov")]
+	#[case(
+		"us-east-1",
+		"global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+		"global"
+	)]
+	#[case("us-east-1", "eu.anthropic.claude-sonnet-4-5-20250929-v1:0", "eu")]
+	#[case(
+		"ap-northeast-1",
+		"apac.anthropic.claude-sonnet-4-20250514-v1:0",
+		"apac"
+	)]
+	#[case(
+		"us-gov-west-1",
+		"us-gov.anthropic.claude-sonnet-4-5-20250929-v1:0",
+		"us-gov"
+	)]
+	#[case("us-east-1", "meta.llama3-1-70b-instruct-v1:0", "us")]
+	fn pricing_region(#[case] region: &str, #[case] model: &str, #[case] expected: &str) {
+		let p = Provider {
+			region: strng::new(region),
+			..provider(BedrockEndpointPreference::default())
+		};
+		assert_eq!(p.pricing_region(model).as_str(), expected);
 	}
 
 	#[test]

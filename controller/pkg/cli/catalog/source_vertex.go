@@ -57,7 +57,7 @@ func init() {
 	}
 }
 
-// vertexParsePricing imports Global prices. The catalog cannot select by region yet.
+// Imports global prices only; regional ones aren't imported yet.
 // Flex and Batch share a table; Batch-only models get a harmless flex tier.
 func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, error) {
 	doc, err := html.Parse(r)

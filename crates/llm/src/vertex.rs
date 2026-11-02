@@ -176,6 +176,17 @@ impl Provider {
 		}
 	}
 
+	// Vertex location → pricing region: global stays global, us-central1 → us, europe-west4 → eu.
+	pub fn pricing_region(&self) -> Strng {
+		match self.region.as_deref() {
+			None | Some("global") => strng::literal!("global"),
+			Some(region) => match region.split('-').next().unwrap_or(region) {
+				"europe" => strng::literal!("eu"),
+				geo => strng::new(geo),
+			},
+		}
+	}
+
 	pub fn get_host(&self, route_type: RouteType) -> Strng {
 		// Rerank is served by the Discovery Engine ranking endpoint, not the aiplatform host. Deciding
 		// it here keeps the request authority (Host header) and the TCP/TLS connection target in sync.
@@ -313,6 +324,24 @@ fn remove_nested_cache_control_scope(value: &mut Value) {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[rstest::rstest]
+	#[case(None, "global")]
+	#[case(Some("global"), "global")]
+	#[case(Some("us"), "us")]
+	#[case(Some("eu"), "eu")]
+	#[case(Some("us-central1"), "us")]
+	#[case(Some("us-east5"), "us")]
+	#[case(Some("europe-west4"), "eu")]
+	#[case(Some("asia-northeast1"), "asia")]
+	fn pricing_region(#[case] region: Option<&str>, #[case] expected: &str) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model_override: None,
+			region: region.map(strng::new),
+		};
+		assert_eq!(p.pricing_region().as_str(), expected);
+	}
 
 	#[rstest::rstest]
 	#[case::strip_publishers_prefix(

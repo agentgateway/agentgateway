@@ -1018,6 +1018,15 @@ impl AIProvider {
 				.unwrap_or(custom::Provider::NAME),
 		}
 	}
+	// Only Vertex and Bedrock price by region.
+	pub fn pricing_region(&self, model: &str) -> Option<Strng> {
+		match self {
+			AIProvider::Vertex(p) => Some(p.pricing_region()),
+			AIProvider::Bedrock(p) => Some(p.pricing_region(model)),
+			_ => None,
+		}
+	}
+
 	fn default_base_path(&self) -> Option<&'static str> {
 		match self {
 			AIProvider::OpenAI(_) | AIProvider::Copilot(_) => Some(openai::DEFAULT_BASE_PATH),
@@ -2502,6 +2511,7 @@ impl AIProvider {
 			.get::<model_router::OriginalModel>()
 			.map(|m| strng::new(&m.0))
 			.filter(|m| *m != llm_info.request_model);
+		llm_info.region = self.pricing_region(&llm_info.request_model);
 		if let Some(log) = log
 			&& log.original_model.is_none()
 		{

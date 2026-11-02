@@ -1601,6 +1601,9 @@ pub struct LLMContext {
 	pub response_model: Option<Strng>,
 	/// The provider of the LLM.
 	pub provider: Strng,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	/// Backend pricing region (us, eu…), if the provider has one.
+	pub region: Option<Strng>,
 	/// The total number of tokens in the input/prompt, including tokens read from or written to
 	/// cache. This has consistent semantics across providers.
 	#[dynamic(rename = "inputTokens")]
@@ -1833,6 +1836,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			request_model,
 			original_model,
 			provider,
+			region,
 			streaming,
 			params,
 			prompt,
@@ -1843,6 +1847,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			original_model: original_model.unwrap_or_else(|| request_model.clone()),
 			request_model,
 			provider,
+			region,
 			input_tokens,
 			provider_input_tokens: None,
 			params,
@@ -2587,6 +2592,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			original_model: "gpt-4".into(),
 			response_model: Some("gpt-4-turbo".into()),
 			provider: "fake-ai".into(),
+			region: Some("us".into()),
 			input_tokens: Some(100),
 			provider_input_tokens: Some(100),
 			input_image_tokens: Some(60),

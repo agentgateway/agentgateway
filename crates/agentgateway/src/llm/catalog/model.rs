@@ -87,11 +87,13 @@ impl Catalog {
 						&format_args!("{provider}/{model} tier {index} rates"),
 						&tier.rates.unknown,
 					)?;
-					if let Some(prior) = previous.insert(tier.service_tier, tier.context_over)
-						&& tier.context_over <= prior
+					if let Some(prior) = previous.insert(
+						(tier.service_tier, tier.region.as_deref()),
+						tier.context_over,
+					) && tier.context_over <= prior
 					{
 						anyhow::bail!(
-							"{provider}/{model}: tier {index} contextOver must increase within its serviceTier"
+							"{provider}/{model}: tier {index} contextOver must increase within its serviceTier and region"
 						);
 					}
 				}
@@ -109,9 +111,13 @@ impl Catalog {
 					Some(mut bm) => {
 						bm.rates = bm.rates.overlay(&om.rates);
 						if !om.tiers.is_empty() {
-							// Replace each supplied service tier while preserving other service tiers.
-							bm.tiers
-								.retain(|t| !om.tiers.iter().any(|o| o.service_tier == t.service_tier));
+							// Replace each (service tier, region) pair given, keep the rest.
+							bm.tiers.retain(|t| {
+								!om
+									.tiers
+									.iter()
+									.any(|o| o.service_tier == t.service_tier && o.region == t.region)
+							});
 							bm.tiers.extend(om.tiers);
 						}
 						bm.tags.extend(om.tags);
@@ -231,7 +237,7 @@ pub struct Model {
 	/// Base pricing rates for this model.
 	#[serde(default, skip_serializing_if = "Rates::is_empty")]
 	pub rates: Rates,
-	/// Pricing rules ordered by increasing context threshold within each service tier.
+	/// Ordered by context threshold within each service tier and region.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tiers: Vec<Tier>,
 	/// Freeform capability/routing tags for this model.
@@ -440,6 +446,9 @@ pub struct Tier {
 	/// Normalized served service tier; absent matches any service tier.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<PricingTier>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	/// Region this tier prices (global, us, eu…); unset means every region.
+	pub region: Option<String>,
 	/// Pricing rates for this tier, overlaid on the base model rates.
 	pub rates: Rates,
 	/// Fields not understood by this version.
@@ -612,24 +621,35 @@ impl Model {
 	#[cfg(test)]
 	pub fn breakdown(&self, usage: &Usage) -> Breakdown {
 		self
-			.effective_rates(usage.context_tokens(), PricingTier::Standard)
+			.effective_rates(usage.context_tokens(), PricingTier::Standard, None)
 			.breakdown(usage)
 	}
 
-	pub(super) fn effective_rates(&self, context_tokens: u64, service_tier: PricingTier) -> Rates {
-		let select = |service_tier: Option<PricingTier>| {
-			self
-				.tiers
-				.iter()
-				.rev()
-				.find(|tier| tier.service_tier == service_tier && context_tokens > tier.context_over)
+	pub(super) fn effective_rates(
+		&self,
+		context_tokens: u64,
+		service_tier: PricingTier,
+		region: Option<&str>,
+	) -> Rates {
+		let select = |service_tier: Option<PricingTier>, region: Option<&str>| {
+			self.tiers.iter().rev().find(|tier| {
+				tier.service_tier == service_tier
+					&& tier.region.as_deref() == region
+					&& context_tokens > tier.context_over
+			})
 		};
 		// Service-tier rates overlay the context tier, so components a service tier omits use the
 		// context-appropriate standard rate.
-		[select(None), select(Some(service_tier))]
-			.into_iter()
-			.flatten()
-			.fold(self.rates.clone(), |rates, tier| rates.overlay(&tier.rates))
+		// Region-only tiers first, then service tier, then both.
+		[
+			select(None, None),
+			region.and_then(|r| select(None, Some(r))),
+			select(Some(service_tier), None),
+			region.and_then(|r| select(Some(service_tier), Some(r))),
+		]
+		.into_iter()
+		.flatten()
+		.fold(self.rates.clone(), |rates, tier| rates.overlay(&tier.rates))
 	}
 }
 
@@ -665,6 +685,7 @@ mod tests {
 		Tier {
 			context_over,
 			service_tier: None,
+			region: None,
 			rates,
 			unknown: Unknown::new(),
 		}
@@ -711,7 +732,7 @@ mod tests {
 		assert!(
 			!mini
 				.unwrap()
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, PricingTier::Standard, None)
 				.is_empty(),
 			"and is priced"
 		);
@@ -823,7 +844,7 @@ mod tests {
 			"rates":{"input":"1","future":"2"},
 			"tiers":[
 				{"contextOver":100,"rates":{"input":"3","future":"4"}},
-				{"contextOver":100,"region":"us","rates":{"input":"5"}}
+				{"contextOver":100,"batch":true,"rates":{"input":"5"}}
 			]}}}}}"#;
 		assert!(from_json(json).is_err());
 		let mut catalog: Catalog = serde_json::from_str(json).unwrap();
@@ -1077,6 +1098,98 @@ mod tests {
 	}
 
 	#[test]
+	fn validates_rule_order_per_region() {
+		let catalog = |tiers: &str| {
+			from_json(&format!(
+				r#"{{"providers":{{"openai":{{"models":{{"m":{{"tiers":[{tiers}]}}}}}}}}}}"#
+			))
+		};
+		assert!(
+			catalog(
+				r#"{"contextOver":200,"rates":{}},{"region":"us","rates":{}},{"region":"eu","rates":{}}"#
+			)
+			.is_ok()
+		);
+		assert!(
+			catalog(r#"{"region":"us","contextOver":200,"rates":{}},{"region":"us","rates":{}}"#)
+				.is_err()
+		);
+		assert!(
+			catalog(
+				r#"{"serviceTier":"flex","region":"us","rates":{}},{"serviceTier":"flex","rates":{}}"#
+			)
+			.is_ok()
+		);
+		assert!(
+			catalog(
+				r#"{"serviceTier":"flex","region":"us","rates":{}},{"serviceTier":"flex","region":"us","rates":{}}"#
+			)
+			.is_err()
+		);
+	}
+
+	#[test]
+	fn region_tiers_select_by_region() {
+		let catalog = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{
+				"rates":{"input":"1","output":"10"},
+				"tiers":[
+					{"contextOver":200000,"rates":{"input":"2"}},
+					{"region":"us","rates":{"input":"1.1","output":"11"}},
+					{"region":"us","contextOver":200000,"rates":{"input":"2.2","output":"11"}},
+					{"serviceTier":"flex","rates":{"input":"0.5"}},
+					{"serviceTier":"flex","region":"us","rates":{"input":"0.55"}}
+				]
+			}}}}}"#,
+		)
+		.unwrap();
+		let model = catalog.resolve("openai", "m").unwrap();
+		let rates = |tokens, tier, region| {
+			let r = model.effective_rates(tokens, tier, region);
+			(r.input.unwrap(), r.output.unwrap())
+		};
+		use PricingTier::{Flex, Standard};
+		assert_eq!(rates(1000, Standard, None), (m("1"), m("10")));
+		assert_eq!(rates(1000, Standard, Some("global")), (m("1"), m("10")));
+		assert_eq!(rates(1000, Standard, Some("us")), (m("1.1"), m("11")));
+		assert_eq!(rates(300_000, Standard, None), (m("2"), m("10")));
+		assert_eq!(rates(300_000, Standard, Some("us")), (m("2.2"), m("11")));
+		assert_eq!(rates(300_000, Standard, Some("eu")), (m("2"), m("10")));
+		assert_eq!(rates(1000, Flex, None), (m("0.5"), m("10")));
+		assert_eq!(rates(1000, Flex, Some("us")), (m("0.55"), m("11")));
+		assert_eq!(rates(1000, Flex, Some("eu")), (m("0.5"), m("10")));
+	}
+
+	#[test]
+	fn override_replaces_tiers_per_service_tier_and_region() {
+		let base = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[
+				{"contextOver":100000,"rates":{"input":"2"}},
+				{"region":"us","rates":{"input":"1.1"}},
+				{"region":"eu","rates":{"input":"1.2"}}
+			]}}}}}"#,
+		)
+		.unwrap();
+		let overlay = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"tiers":[{"region":"us","rates":{"input":"1.3"}}]}}}}}"#,
+		)
+		.unwrap();
+		let merged = base.override_with(overlay);
+		let model = merged.resolve("openai", "m").unwrap();
+		let input = |region| {
+			model
+				.effective_rates(1000, PricingTier::Standard, region)
+				.input
+				.unwrap()
+		};
+		assert_eq!(model.tiers.len(), 3);
+		assert_eq!(input(Some("us")), m("1.3"));
+		assert_eq!(input(Some("eu")), m("1.2"));
+		assert_eq!(input(None), m("1"));
+		merged.validate().unwrap();
+	}
+
+	#[test]
 	fn tier_omitted_component_falls_back_to_base() {
 		let e = entry(
 			rates("1.25", "10"),
@@ -1110,30 +1223,30 @@ mod tests {
 		};
 		assert!(
 			entry(Rates::default(), vec![])
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, PricingTier::Standard, None)
 				.is_empty()
 		);
 		assert!(
 			!entry(input_rate.clone(), vec![])
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, PricingTier::Standard, None)
 				.is_empty()
 		);
 
 		let tier_only = entry(Rates::default(), vec![tier(100_000, input_rate)]);
 		assert!(
 			tier_only
-				.effective_rates(100_000, PricingTier::Standard)
+				.effective_rates(100_000, PricingTier::Standard, None)
 				.is_empty()
 		);
 		assert!(
 			!tier_only
-				.effective_rates(100_001, PricingTier::Standard)
+				.effective_rates(100_001, PricingTier::Standard, None)
 				.is_empty()
 		);
 
 		assert!(
 			entry(Rates::default(), vec![tier(100_000, Rates::default())])
-				.effective_rates(100_001, PricingTier::Standard)
+				.effective_rates(100_001, PricingTier::Standard, None)
 				.is_empty()
 		);
 	}

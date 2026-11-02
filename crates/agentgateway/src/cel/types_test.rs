@@ -121,6 +121,7 @@ fn build_test_request() -> crate::http::Request {
 		original_model: "gpt-4".into(),
 		response_model: Some("gpt-4-turbo".into()),
 		provider: "openai".into(),
+		region: Some("us".into()),
 		input_tokens: Some(100),
 		provider_input_tokens: Some(100),
 		input_image_tokens: None,
@@ -168,6 +169,7 @@ fn llm_context_with_usage(
 		request_model: "model".into(),
 		original_model: None,
 		provider: "provider".into(),
+		region: None,
 		streaming: false,
 		params: llm::LLMRequestParams::default(),
 		prompt: None,
@@ -322,6 +324,14 @@ fn normalized_and_provider_token_counts_are_exposed_to_cel() {
 	)
 	.unwrap();
 
+	assert!(executor.eval_bool(&expr));
+}
+
+#[test]
+fn llm_region_is_exposed_to_cel() {
+	let req = build_test_request();
+	let executor = Executor::new_request(&req);
+	let expr = Expression::new_strict("llm.region == 'us'").unwrap();
 	assert!(executor.eval_bool(&expr));
 }
 

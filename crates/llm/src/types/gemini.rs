@@ -280,6 +280,7 @@ impl RequestType for Request {
 			request_model: model,
 			original_model: None,
 			provider,
+			region: None,
 			streaming: self.streaming,
 			params: LLMRequestParams {
 				temperature: gc.and_then(|g| g.temperature).map(f64::from),
@@ -459,6 +460,7 @@ impl RequestType for CountTokensRequest {
 			request_model: strng::new(self.model.as_deref().unwrap_or_default()),
 			original_model: None,
 			provider,
+			region: None,
 			streaming: false,
 			params: Default::default(),
 			prompt: Default::default(),

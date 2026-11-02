@@ -454,6 +454,7 @@ impl super::RequestType for Request {
 			request_model: model,
 			original_model: None,
 			provider,
+			region: None,
 			streaming: self.stream.unwrap_or_default(),
 			params: LLMRequestParams {
 				temperature: self.temperature.map(Into::into),
