@@ -943,6 +943,7 @@ mod responses {
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
 	const RESPONSES_TO_MESSAGES: &str = "responses-messages";
+	// Responses → Messages → Chat Completions until a direct path exists.
 	const RESPONSES_TO_MESSAGES_TO_COMPLETIONS: &str = "responses-messages-completions";
 	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
 

@@ -1047,14 +1047,17 @@ pub mod from_completions {
 	#[derive(serde::Serialize)]
 	#[serde(untagged)]
 	#[allow(clippy::large_enum_variant)]
+	// A chat chunk, or OpenAI's mid-stream error object.
 	enum StreamChunk {
 		Chunk(completions::StreamResponse),
 		Error(serde_json::Value),
 	}
 
+	// Same shape as OpenAI's mid-stream error, which the SDKs raise on.
 	fn stream_error(error: messages::MessagesError) -> serde_json::Value {
 		let (r#type, code) = match error.r#type.as_str() {
 			"rate_limit_error" => ("rate_limit_error", Some("rate_limit_exceeded")),
+			// Anthropic error type → OpenAI type and code.
 			"overloaded_error" => ("server_error", Some("server_is_overloaded")),
 			"billing_error" => ("insufficient_quota", Some("insufficient_quota")),
 			"api_error" => ("server_error", None),
@@ -1331,12 +1334,14 @@ pub mod from_completions {
 								r.response.output_messages = tool_calls.take_output_messages(None);
 							}
 						});
+						// Send the error instead of ending the stream as a success.
 						Some(StreamChunk::Error(stream_error(error)))
 					},
 				}
 			},
 		);
 
+		// [DONE] still follows the error; clients stop at the error.
 		parse::sse::append_done_on_success(body)
 	}
 }
