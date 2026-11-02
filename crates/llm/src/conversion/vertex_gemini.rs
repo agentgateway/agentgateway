@@ -797,6 +797,7 @@ pub mod from_completions {
 		let defs = take_defs(&mut out);
 		inline_refs(&mut out, &defs, &mut Vec::new());
 		clean_schema_node(&mut out, preserve_ap);
+		inject_property_ordering(&mut out);
 		out
 	}
 
@@ -1086,6 +1087,35 @@ pub mod from_completions {
 		map.retain(|k, _| {
 			ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()) && (preserve_ap || k != "additionalProperties")
 		});
+	}
+
+	/// Inject `propertyOrdering` on multi-property object nodes, mirroring the Google Gen AI
+	/// SDKs (python-genai `process_schema`): Gemini's constrained decoding can degenerate into
+	/// a loop that fills a single field until the token budget is exhausted when the schema
+	/// carries no explicit field order (agentgateway#4227). Only nodes with more than one
+	/// property are touched and an existing `propertyOrdering` always wins, exactly like the
+	/// SDK. Runs after `clean_schema_node`, so flattened `allOf` members and inlined `$ref`
+	/// targets are covered too.
+	fn inject_property_ordering(node: &mut Value) {
+		let map = match node {
+			Value::Object(map) => map,
+			Value::Array(arr) => {
+				for v in arr.iter_mut() {
+					inject_property_ordering(v);
+				}
+				return;
+			},
+			_ => return,
+		};
+		if map.get("type").and_then(Value::as_str) == Some("object")
+			&& !map.contains_key("propertyOrdering")
+			&& let Some(Value::Object(props)) = map.get("properties")
+			&& props.len() > 1
+		{
+			let ordering = Value::Array(props.keys().map(|k| Value::String(k.clone())).collect());
+			map.insert("propertyOrdering".to_string(), ordering);
+		}
+		for_each_child_schema(map, inject_property_ordering);
 	}
 
 	/// Model families that take a `thinkingLevel` string instead of an integer
