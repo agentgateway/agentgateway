@@ -73,31 +73,31 @@ impl ModelDiscovery {
 		target.to_string()
 	}
 
-	/// Client endpoints that reach the upstream model without cross-protocol conversion.
+	/// Client endpoints the gateway fully parses for the model, preferring those served natively.
 	pub fn preferred_endpoints(&self, model: &str, catalog: &CatalogSnapshot) -> Vec<&'static str> {
 		let Some(provider) = &self.provider_config else {
 			return Vec::new();
 		};
 		let custom = matches!(provider, AIProvider::Custom(_));
+		let entry = catalog.model(&self.provider, model);
 		let mut endpoints = provider
 			.supported_chat_formats(model, Some(catalog))
 			.into_iter()
-			.filter_map(|format| match format {
-				ChatFormat::OpenAICompletions => Some("/chat/completions"),
-				ChatFormat::OpenAIResponses => Some("/responses"),
-				ChatFormat::AnthropicMessages => Some("/messages"),
-				ChatFormat::VertexGemini => Some("/models/{model}:generateContent"),
-				ChatFormat::BedrockConverse => None,
+			.flat_map(|format| match format {
+				ChatFormat::OpenAICompletions => &["/chat/completions"][..],
+				ChatFormat::OpenAIResponses => &["/responses"],
+				ChatFormat::AnthropicMessages => &["/messages"],
+				ChatFormat::VertexGemini => &["/models/{model}:generateContent"],
+				// Converse is only reachable by raw passthrough, so advertise the best converted formats.
+				// Bedrock catalog entries lack endpoints, so only entries with modalities are chat models.
+				ChatFormat::BedrockConverse => match provider {
+					AIProvider::Bedrock(_) if entry.is_none_or(|m| m.modalities.output.is_empty()) => &[][..],
+					AIProvider::Bedrock(p) if p.is_anthropic_model(model) => &["/messages"],
+					_ => &["/chat/completions", "/responses"],
+				},
 			})
+			.copied()
 			.collect::<Vec<_>>();
-		let entry = catalog.model(&self.provider, model);
-		// Converse requests pass through to Bedrock regardless of the chat format it selects. Bedrock
-		// catalog entries lack endpoints, so only entries with modalities are known chat models.
-		if matches!(provider, AIProvider::Bedrock(_))
-			&& entry.is_some_and(|m| !m.modalities.output.is_empty())
-		{
-			endpoints.push("/model/{model}/converse");
-		}
 		let served = entry.and_then(|m| m.endpoints.as_ref());
 		// Models without catalog endpoints are chat models, unless a custom provider declares more.
 		if served.is_some() || custom {

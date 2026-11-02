@@ -819,6 +819,11 @@ llm:
     params:
       model: anthropic.claude-sonnet-4-5
       awsRegion: us-east-1
+  - name: bedrock/llama3
+    provider: bedrock
+    params:
+      model: meta.llama3-70b-instruct-v1:0
+      awsRegion: us-east-1
   - name: bedrock/titan-embed
     provider: bedrock
     params:
@@ -877,7 +882,7 @@ llm:
 				"openai":{"models":{"gpt-5.5":{},"text-embedding-3-small":{"endpoints":["/embeddings"]},"gpt-image-2":{"endpoints":["/images/generations","/images/edits"]}}},
 				"gcp.gemini":{"models":{"gemini-2.5-flash":{},"gemini-2.5-flash-image":{"endpoints":["/images/generations","/images/edits"]}}},
 				"gcp.vertex_ai":{"models":{"gemini-embedding-001":{"endpoints":["/embeddings"]}}},
-				"aws.bedrock":{"models":{"anthropic.claude-sonnet-4-5":{"modalities":{"input":["text"],"output":["text"]}},"amazon.titan-embed-text-v2:0":{}}},
+				"aws.bedrock":{"models":{"anthropic.claude-sonnet-4-5":{"modalities":{"input":["text"],"output":["text"]}},"meta.llama3-70b-instruct-v1:0":{"modalities":{"input":["text"],"output":["text"]}},"amazon.titan-embed-text-v2:0":{}}},
 				"togetherai":{"models":{"FLUX.1-schnell":{"endpoints":["/images/generations","/images/edits"]}}}
 			}}"#.to_string(),
 		},

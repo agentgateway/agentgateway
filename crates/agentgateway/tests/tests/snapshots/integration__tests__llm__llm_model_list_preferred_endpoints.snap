@@ -12,7 +12,11 @@ expression: endpoints
     "/responses"
   ],
   "bedrock/claude-sonnet-4-5": [
-    "/model/{model}/converse"
+    "/messages"
+  ],
+  "bedrock/llama3": [
+    "/chat/completions",
+    "/responses"
   ],
   "bedrock/titan-embed": null,
   "claude-sonnet-4-5": [
