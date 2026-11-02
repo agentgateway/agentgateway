@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-30T08:27:23Z"
+    "generatedAt": "2026-10-30T21:58:11Z"
   },
   "providers": {
     "anthropic": {
@@ -33308,6 +33308,48 @@
               "high",
               "max"
             ]
+          }
+        }
+      }
+    },
+    "typesafe": {
+      "models": {
+        "jev-1.13.0": {
+          "rates": {
+            "input": "0.042",
+            "output": "0"
+          },
+          "capabilities": {
+            "structuredOutput": true
+          }
+        },
+        "jev-1.14.0": {
+          "rates": {
+            "input": "0.042",
+            "output": "0"
+          },
+          "capabilities": {
+            "structuredOutput": true
+          }
+        },
+        "jev-latest": {
+          "name": "Jev Latest",
+          "rates": {
+            "input": "0.042",
+            "output": "0"
+          },
+          "capabilities": {
+            "structuredOutput": true
+          }
+        },
+        "jev-preview": {
+          "name": "Jev Preview",
+          "rates": {
+            "input": "0.042",
+            "output": "0"
+          },
+          "capabilities": {
+            "structuredOutput": true
           }
         }
       }
