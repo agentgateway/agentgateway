@@ -336,6 +336,9 @@ impl PolicyError for Error {
 
 type RouterResult<T> = Result<T, Box<Response>>;
 
+/// Bounds virtual model nesting so a cycle cannot loop forever.
+const MAX_VIRTUAL_MODEL_DEPTH: usize = 4;
+
 struct RequestedModel {
 	model: String,
 	location: RequestedModelLocation,
@@ -599,97 +602,137 @@ impl ModelRouter {
 		client: &PolicyClient,
 	) -> ResolveResult {
 		let mut fields = Vec::new();
-		let (target, invalid) = match &virtual_model.routing {
-			VirtualModelRouting::Weighted(targets) => {
-				match targets.choose_weighted(&mut rand::rng(), |target| target.weight) {
-					Ok(target) => (target.model.clone(), target.invalid),
-					Err(err) => {
-						tracing::debug!(%err, "failed to select weighted virtual model target");
-						return ResolveResult::Rejected(
-							ProxyResponseReason::ModelRouting,
-							llm_error_response(
-								::http::StatusCode::NOT_FOUND,
-								&format!("Virtual model {} could not be resolved", virtual_model.name),
-								"virtual_model_not_resolved",
-							),
-						);
-					},
-				}
-			},
-			VirtualModelRouting::Failover { backend } => {
-				return ResolveResult::Backend(ResolvedBackend {
-					backend: backend.clone(),
-					route_type: classify_route(req.uri().path()).unwrap_or(llm::RouteType::Passthrough),
-					llm_policy: virtual_model.llm_policy.clone(),
-				});
-			},
-			VirtualModelRouting::Conditional(targets) => {
-				let exec = cel::Executor::new_request(req);
-				match targets.iter().find(|target| {
-					target
-						.when
-						.as_ref()
-						.map(|expr| exec.eval_bool(expr))
-						.unwrap_or(true)
-				}) {
-					Some(target) => (target.model.clone(), target.invalid),
-					None => {
-						return ResolveResult::Rejected(
-							ProxyResponseReason::ModelRouting,
-							llm_error_response(
-								::http::StatusCode::BAD_REQUEST,
-								&format!(
-									"Virtual model {} did not match any conditional target",
-									virtual_model.name
+		let mut virtual_model = virtual_model;
+		let mut depth = 0;
+		let target = loop {
+			let (target, invalid) = match &virtual_model.routing {
+				VirtualModelRouting::Weighted(targets) => {
+					match targets.choose_weighted(&mut rand::rng(), |target| target.weight) {
+						Ok(target) => (target.model.clone(), target.invalid),
+						Err(err) => {
+							tracing::debug!(%err, "failed to select weighted virtual model target");
+							return ResolveResult::Rejected(
+								ProxyResponseReason::ModelRouting,
+								llm_error_response(
+									::http::StatusCode::NOT_FOUND,
+									&format!("Virtual model {} could not be resolved", virtual_model.name),
+									"virtual_model_not_resolved",
 								),
-								"virtual_model_no_matching_target",
-							),
-						);
-					},
-				}
-			},
-			VirtualModelRouting::Callout(callout) => {
-				let selection = match callout.select(client, req).await {
-					Ok(selection) if self.has_model(&selection.model) => Ok(selection),
-					Ok(selection) => Err(format!("selected unknown model {}", selection.model)),
-					Err(err) => Err(err.to_string()),
-				};
-				match (selection, &callout.failure_mode) {
-					(Ok(selection), _) => {
-						fields = selection.fields;
-						(selection.model, false)
-					},
-					(Err(cause), VirtualModelCalloutFailureMode::Fallback(model)) => {
-						tracing::debug!(virtual_model = %virtual_model.name, %cause, "virtual model callout failed, using fallback");
-						(model.clone(), false)
-					},
-					(Err(cause), VirtualModelCalloutFailureMode::FailClosed) => {
-						return ResolveResult::Error(Error::CalloutFailed {
-							model: virtual_model.name.clone(),
-							cause,
-						});
-					},
-				}
-			},
-		};
-		if invalid {
-			tracing::debug!(
-				virtual_model = %virtual_model.name,
-				target_model = %target,
-				"virtual model selected an invalid target",
-			);
-			return ResolveResult::Rejected(
-				ProxyResponseReason::ModelRouting,
-				llm_error_response(
-					::http::StatusCode::NOT_FOUND,
-					&format!(
-						"Virtual model {} selected invalid target {target}",
-						virtual_model.name
+							);
+						},
+					}
+				},
+				VirtualModelRouting::Failover { backend } => {
+					// A callout earlier in the chain may have set fields; apply them since we will not reach the
+					// rewrite below. The failover providers override the model themselves.
+					if !fields.is_empty()
+						&& let Err(resp) = Box::pin(rewrite_request_model(
+							req,
+							location,
+							&virtual_model.name,
+							fields,
+						))
+						.await
+					{
+						return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp);
+					}
+					return ResolveResult::Backend(ResolvedBackend {
+						backend: backend.clone(),
+						route_type: classify_route(req.uri().path()).unwrap_or(llm::RouteType::Passthrough),
+						llm_policy: virtual_model.llm_policy.clone(),
+					});
+				},
+				VirtualModelRouting::Conditional(targets) => {
+					let exec = cel::Executor::new_request(req);
+					match targets.iter().find(|target| {
+						target
+							.when
+							.as_ref()
+							.map(|expr| exec.eval_bool(expr))
+							.unwrap_or(true)
+					}) {
+						Some(target) => (target.model.clone(), target.invalid),
+						None => {
+							return ResolveResult::Rejected(
+								ProxyResponseReason::ModelRouting,
+								llm_error_response(
+									::http::StatusCode::BAD_REQUEST,
+									&format!(
+										"Virtual model {} did not match any conditional target",
+										virtual_model.name
+									),
+									"virtual_model_no_matching_target",
+								),
+							);
+						},
+					}
+				},
+				VirtualModelRouting::Callout(callout) => {
+					let selection = match callout.select(client, req).await {
+						Ok(selection) if self.has_model(&selection.model) => Ok(selection),
+						Ok(selection) => Err(format!("selected unknown model {}", selection.model)),
+						Err(err) => Err(err.to_string()),
+					};
+					match (selection, &callout.failure_mode) {
+						(Ok(selection), _) => {
+							fields.extend(selection.fields);
+							(selection.model, false)
+						},
+						(Err(cause), VirtualModelCalloutFailureMode::Fallback(model)) => {
+							tracing::debug!(virtual_model = %virtual_model.name, %cause, "virtual model callout failed, using fallback");
+							(model.clone(), false)
+						},
+						(Err(cause), VirtualModelCalloutFailureMode::FailClosed) => {
+							return ResolveResult::Error(Error::CalloutFailed {
+								model: virtual_model.name.clone(),
+								cause,
+							});
+						},
+					}
+				},
+			};
+			if invalid {
+				tracing::debug!(
+					virtual_model = %virtual_model.name,
+					target_model = %target,
+					"virtual model selected an invalid target",
+				);
+				return ResolveResult::Rejected(
+					ProxyResponseReason::ModelRouting,
+					llm_error_response(
+						::http::StatusCode::NOT_FOUND,
+						&format!(
+							"Virtual model {} selected invalid target {target}",
+							virtual_model.name
+						),
+						"virtual_model_target_not_found",
 					),
-					"virtual_model_target_not_found",
-				),
-			);
-		}
+				);
+			}
+			// A target may itself be a virtual model; keep resolving until we reach a concrete model.
+			// A target with the virtual model's own name refers to the concrete model it shadows.
+			let next = (target != virtual_model.name)
+				.then(|| self.virtual_models.iter().find(|m| m.name == target))
+				.flatten();
+			let Some(next) = next else {
+				break target;
+			};
+			depth += 1;
+			if depth >= MAX_VIRTUAL_MODEL_DEPTH {
+				return ResolveResult::Rejected(
+					ProxyResponseReason::ModelRouting,
+					llm_error_response(
+						::http::StatusCode::NOT_FOUND,
+						&format!(
+							"Virtual model {} exceeded the maximum nesting depth",
+							virtual_model.name
+						),
+						"virtual_model_not_resolved",
+					),
+				);
+			}
+			virtual_model = next;
+		};
 
 		if let Err(resp) = Box::pin(rewrite_request_model(req, location, &target, fields)).await {
 			return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp);
@@ -722,10 +765,11 @@ impl ModelRouter {
 	}
 
 	fn has_model(&self, model: &str) -> bool {
-		self
-			.models
-			.iter()
-			.any(|route| model_name_matches(&route.name, model))
+		self.virtual_models.iter().any(|route| route.name == model)
+			|| self
+				.models
+				.iter()
+				.any(|route| model_name_matches(&route.name, model))
 	}
 
 	fn resolve_concrete_model(
@@ -1536,6 +1580,13 @@ mod tests {
 			.respond_with(ResponseTemplate::new(500))
 			.mount(&server)
 			.await;
+		Mock::given(path("/nested"))
+			.respond_with(
+				ResponseTemplate::new(200)
+					.set_body_json(serde_json::json!({"model": "ha", "effort": "low"})),
+			)
+			.mount(&server)
+			.await;
 
 		let model = |name: &str| ModelRoute {
 			discovery: None,
@@ -1598,6 +1649,28 @@ mod tests {
 						"transformation": {"model": "callout.body.model"},
 					}),
 				),
+				callout(
+					"nested",
+					serde_json::json!({
+						"host": format!("http://{}/nested", server.address()),
+						"transformation": {
+							"model": "callout.body.model",
+							"reasoning_effort": "callout.body.effort",
+						},
+					}),
+				),
+				VirtualModelRoute {
+					name: "ha".to_string(),
+					created: 0,
+					llm_policy: Arc::default(),
+					routing: VirtualModelRouting::Failover {
+						backend: RouteBackendReference {
+							weight: 1,
+							target: RouteBackendTarget::Invalid,
+							inline_policies: vec![],
+						},
+					},
+				},
 			],
 		);
 		let client = crate::test_helpers::policy_client();
@@ -1645,6 +1718,14 @@ mod tests {
 			panic!("expected an error");
 		};
 		assert_eq!(error.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
+
+		// A callout can select a failover virtual model; its fields still apply.
+		let (result, req) = resolve("nested").await;
+		assert!(matches!(result, ResolveResult::Backend(_)));
+		assert_eq!(
+			body(req).await,
+			serde_json::json!({"model": "ha", "max_tokens": 256, "reasoning_effort": "low"})
+		);
 	}
 
 	#[rstest::rstest]
