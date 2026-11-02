@@ -849,14 +849,9 @@ type FrontendHTTP struct {
 	// regardless of how they are listed: percent-decoding, then `MergeSlash`,
 	// then `DotSegment`.
 	//
-	// `MergeSlash` collapses repeated slashes into one: `//a///b` becomes `/a/b`.
-	// `DotSegment` resolves `.` and `..` segments: `/a/./b/../c` becomes `/a/c`.
-	// `DecodeUnreserved` decodes percent-encoded unreserved characters
-	// (`A-Z a-z 0-9 - . _ ~`): `/%61dmin` becomes `/admin`. Other escapes stay
-	// encoded with uppercase hex. Requests with malformed escapes are rejected with 400.
+	// `MergeSlash` collapses repeated slashes into one.
+	// `DotSegment` resolves `.` and `..` segments.
 	// `RejectEscapedSlash` rejects requests whose path contains `%2F` or `%5C` with 400.
-	// Use it when the backend decodes them into path separators, otherwise
-	// `/api%2Fmetrics` bypasses rules for `/api/metrics`.
 	// `UnescapeSlash` decodes `%2F` and `%5C` into `/` and `\`.
 	//
 	// +listType=set

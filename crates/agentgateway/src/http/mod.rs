@@ -251,6 +251,7 @@ use crate::client::PoolKey;
 use crate::proxy::ProxyError;
 use crate::transport::stream::TCPConnectionInfo;
 use crate::types::agent::{HeaderValueMatch, PathMatch};
+use crate::types::frontend::PathNormalization;
 
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -530,7 +531,7 @@ pub fn modify_req_uri(
 
 pub fn normalize_path_for_proxy(
 	req: &mut Request,
-	normalize: &[crate::types::frontend::PathNormalization],
+	normalize: &[PathNormalization],
 ) -> Result<(), ProxyError> {
 	if normalize.is_empty() {
 		return Ok(());
@@ -540,7 +541,7 @@ pub fn normalize_path_for_proxy(
 		return Ok(());
 	};
 
-	// Normalization only fails on paths we refuse to interpret, so that is the client's error.
+	// TODO(docs): почему отклонённый путь это 400 (ошибка клиента), а ошибка сборки URI ниже 503
 	let path = normalize_path(orig.path(), normalize).map_err(|e| {
 		tracing::debug!(path = orig.path(), "rejecting request path: {e}");
 		ProxyError::InvalidRequest
@@ -567,15 +568,8 @@ pub fn normalize_path_for_proxy(
 	.map_err(ProxyError::Processing)
 }
 
-/// Applies the configured rules in a fixed order, see [`crate::types::frontend::PathNormalization`]
-fn normalize_path(
-	path: &str,
-	normalize: &[crate::types::frontend::PathNormalization],
-) -> anyhow::Result<Option<String>> {
-	use std::borrow::Cow;
-
-	use crate::types::frontend::PathNormalization;
-
+/// Applies the configured rules in a fixed order, see [`PathNormalization`]
+fn normalize_path(path: &str, normalize: &[PathNormalization]) -> anyhow::Result<Option<String>> {
 	let decode_unreserved = normalize.contains(&PathNormalization::DecodeUnreserved);
 	let escaped_slash = normalize.iter().copied().find(|n| {
 		matches!(
@@ -604,17 +598,20 @@ fn normalize_path(
 	})
 }
 
-/// Rewrites percent-encoded octets in `path`. With `decode_unreserved`, unreserved characters
-/// (RFC 3986 section 2.3) are decoded, since `/%61dmin` and `/admin` are the same resource.
+/// Rewrites percent-encoded octets in `path`.
+///
+/// With `decode_unreserved`, unreserved characters (RFC 3986 section 2.3) are decoded.
+///
 /// Escaped slashes (`%2F`, `%5C`) are rejected or decoded depending on `escaped_slash`.
+///
 /// Every other octet is kept encoded with uppercase hex digits. Malformed escapes are rejected,
 /// as backends disagree on how to interpret them.
 fn decode_percent(
 	path: &str,
 	decode_unreserved: bool,
-	escaped_slash: Option<crate::types::frontend::PathNormalization>,
+	escaped_slash: Option<PathNormalization>,
 ) -> anyhow::Result<Option<String>> {
-	use crate::types::frontend::PathNormalization;
+	const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
 	let Some(first) = path.find('%') else {
 		return Ok(None);
@@ -649,19 +646,13 @@ fn decode_percent(
 			},
 			b => {
 				out.push('%');
-				out.push_str(&format!("{b:02X}"));
+				out.push(HEX[usize::from(b >> 4)] as char);
+				out.push(HEX[usize::from(b & 0xF)] as char);
 			},
 		}
 		i += 3;
 	}
 	Ok((out != path).then_some(out))
-}
-
-pub fn path_and_query_string(uri: &Uri) -> String {
-	uri
-		.path_and_query()
-		.map(|pq| pq.to_string())
-		.unwrap_or_else(|| uri.path().to_string())
 }
 
 fn merge_adjacent_slashes(path: &str) -> Option<String> {

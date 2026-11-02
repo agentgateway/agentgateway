@@ -3538,6 +3538,9 @@ fn frontend_policy_from_proto(
 
 	Ok(match &spec.kind {
 		Some(fps::Kind::Http(h)) => {
+			use fps::http::Normalize;
+			use frontend::PathNormalization;
+
 			let http = frontend::HTTP {
 				max_buffer_size: h.max_buffer_size.map(|v| v as usize),
 				http1_max_headers: h.http1_max_headers.map(|v| v as usize),
@@ -3564,21 +3567,17 @@ fn frontend_policy_from_proto(
 				normalize: h
 					.normalize
 					.iter()
-					.filter_map(|raw| match fps::http::Normalize::try_from(*raw).ok() {
-						Some(fps::http::Normalize::MergeSlash) => Some(frontend::PathNormalization::MergeSlash),
-						Some(fps::http::Normalize::DotSegment) => Some(frontend::PathNormalization::DotSegment),
-						Some(fps::http::Normalize::DecodeUnreserved) => {
-							Some(frontend::PathNormalization::DecodeUnreserved)
-						},
-						Some(fps::http::Normalize::RejectEscapedSlash) => {
-							Some(frontend::PathNormalization::RejectEscapedSlash)
-						},
-						Some(fps::http::Normalize::UnescapeSlash) => {
-							Some(frontend::PathNormalization::UnescapeSlash)
-						},
-						_ => None,
+					.map(|raw| match Normalize::try_from(*raw) {
+						Ok(Normalize::MergeSlash) => Ok(PathNormalization::MergeSlash),
+						Ok(Normalize::DotSegment) => Ok(PathNormalization::DotSegment),
+						Ok(Normalize::DecodeUnreserved) => Ok(PathNormalization::DecodeUnreserved),
+						Ok(Normalize::RejectEscapedSlash) => Ok(PathNormalization::RejectEscapedSlash),
+						Ok(Normalize::UnescapeSlash) => Ok(PathNormalization::UnescapeSlash),
+						Ok(Normalize::Unspecified) | Err(_) => Err(ProtoError::EnumParse(format!(
+							"invalid path normalization: {raw}"
+						))),
 					})
-					.collect(),
+					.collect::<Result<_, _>>()?,
 			};
 			http
 				.validate()
@@ -6638,6 +6637,18 @@ mod tests {
 		)
 		.expect_err("conflicting escaped slash rules");
 		assert!(err.to_string().contains("mutually exclusive"), "{err}");
+
+		for raw in [fps::http::Normalize::Unspecified as i32, 99] {
+			let spec = proto::agent::FrontendPolicySpec {
+				kind: Some(fps::Kind::Http(fps::Http {
+					normalize: vec![raw],
+					..Default::default()
+				})),
+			};
+			let err = frontend_policy_from_proto(&spec, &mut Diagnostics::default())
+				.expect_err("unknown normalize value");
+			assert!(matches!(err, ProtoError::EnumParse(_)), "{raw}: {err}");
+		}
 	}
 
 	#[test]

@@ -1859,6 +1859,23 @@ binds:
 }
 
 #[tokio::test]
+async fn test_local_frontend_http_normalize_conflicting_slash_rules() {
+	let input = r#"
+frontendPolicies:
+  http:
+    normalize:
+    - rejectEscapedSlash
+    - unescapeSlash
+"#;
+
+	let err = normalize_test_yaml(input).await.unwrap_err();
+	assert!(
+		err.to_string().contains("mutually exclusive"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
 async fn test_local_ext_authz_conditional_reports_field_errors() {
 	let input = r#"
 binds:

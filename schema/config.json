@@ -10857,7 +10857,7 @@
       ]
     },
     "PathNormalization": {
-      "description": "A request path normalization rule. Rules are applied in a fixed order regardless of how they are\nlisted: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`), `MergeSlash`, `DotSegment`.",
+      "description": "A request path normalization rule. Rules are applied in a fixed order regardless of how they are\nlisted: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`, `MergeSlash`, `DotSegment`.",
       "oneOf": [
         {
           "description": "Collapse repeated slashes into one",

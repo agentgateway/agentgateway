@@ -1,7 +1,7 @@
 #[cfg(feature = "internal_benches")]
 use crate::http::normalize_path;
 #[cfg(test)]
-use crate::http::{Body, Request, normalize_path_for_proxy, path_and_query_string};
+use crate::http::{Body, Request, Uri, normalize_path_for_proxy};
 #[cfg(test)]
 use crate::proxy::ProxyError;
 #[cfg(any(test, feature = "internal_benches"))]
@@ -15,6 +15,14 @@ fn request(uri: &str) -> Request {
 		.uri(format!("https://example.com{uri}"))
 		.body(Body::empty())
 		.expect("valid request")
+}
+
+#[cfg(test)]
+fn path_and_query_string(uri: &Uri) -> String {
+	uri
+		.path_and_query()
+		.map(|pq| pq.to_string())
+		.unwrap_or_else(|| uri.path().to_string())
 }
 
 #[cfg(test)]
@@ -71,6 +79,15 @@ fn path_normalization_table() {
 		(&[RejectEscapedSlash], "/api%2Fmetrics", None),
 		(&[RejectEscapedSlash], "/api%5cmetrics", None),
 		(&[RejectEscapedSlash], "/%61pi", Some("/%61pi")),
+		(&[RejectEscapedSlash], "/%d0%ba", Some("/%D0%BA")),
+		(&[RejectEscapedSlash], "/a%zz", None),
+		(&[RejectEscapedSlash], "/a?x=%2F", Some("/a?x=%2F")),
+		(&[RejectEscapedSlash, DotSegment], "/a%5C..%5Cadmin", None),
+		(
+			&[UnescapeSlash, DotSegment],
+			"/a%5C..%5Cadmin",
+			Some("/a\\..\\admin"),
+		),
 		(&[UnescapeSlash], "/api%2Fmetrics", Some("/api/metrics")),
 		(&[UnescapeSlash], "/a%5Cb", Some("/a\\b")),
 		(
@@ -127,6 +144,29 @@ fn path_normalization_table() {
 		.expect("normalization should succeed");
 		assert_eq!(path_and_query_string(req.uri()), *expected, "{input}");
 	}
+}
+
+#[cfg(test)]
+#[test]
+fn path_normalization_skips_non_origin_form() {
+	use PathNormalization::*;
+	let all = [MergeSlash, DotSegment, DecodeUnreserved, RejectEscapedSlash];
+
+	let mut options = ::http::Request::builder()
+		.method(::http::Method::OPTIONS)
+		.uri("*")
+		.body(Body::empty())
+		.expect("valid request");
+	normalize_path_for_proxy(&mut options, &all).expect("OPTIONS * is left alone");
+	assert_eq!(options.uri(), "*");
+
+	let mut connect = ::http::Request::builder()
+		.method(::http::Method::CONNECT)
+		.uri("example.com:443")
+		.body(Body::empty())
+		.expect("valid request");
+	normalize_path_for_proxy(&mut connect, &all).expect("CONNECT is left alone");
+	assert_eq!(connect.uri(), "example.com:443");
 }
 
 #[cfg(feature = "internal_benches")]

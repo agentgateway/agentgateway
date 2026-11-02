@@ -13,7 +13,7 @@ fn empty_string_set(set: &Arc<FzHashSet<String>>) -> bool {
 }
 
 /// A request path normalization rule. Rules are applied in a fixed order regardless of how they are
-/// listed: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`), `MergeSlash`, `DotSegment`.
+/// listed: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`, `MergeSlash`, `DotSegment`.
 #[apply(schema_enum!)]
 pub enum PathNormalization {
 	/// Collapse repeated slashes into one
