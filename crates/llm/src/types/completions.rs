@@ -922,6 +922,7 @@ pub mod typed {
 		#[serde(default)]
 		pub created: u32,
 		/// The model to generate the completion.
+		#[serde(default)]
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
 		pub service_tier: Option<String>,
