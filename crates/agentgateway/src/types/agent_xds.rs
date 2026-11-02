@@ -1219,6 +1219,7 @@ fn convert_backend_ai_policy(
 			};
 
 		let guard = llm::policy::PromptGuard {
+			pseudonymization: None,
 			streaming,
 			request,
 			response: response.collect::<Result<Vec<_>, ProtoError>>()?,

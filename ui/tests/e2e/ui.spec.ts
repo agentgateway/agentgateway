@@ -1900,3 +1900,31 @@ test('login loads without protected API requests and preserves the return destin
 	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
 	await expect(page.getByText('OAuth started')).toBeVisible();
 });
+
+test('email pseudonymization saves and reloads without changing existing guards', async ({
+	page
+}) => {
+	const config = emptyConfig();
+	const original = {
+		streaming: 'Enabled',
+		response: [{ regex: { action: 'audit', rules: [{ builtin: 'email' }] } }]
+	};
+	(config.llm as Record<string, unknown>).policies = { guardrails: original };
+	const gateway = await mockGateway(page, config);
+	await page.goto('/llm/guardrails');
+	await expect(page.getByRole('heading', { name: 'Pseudonymization', exact: true })).toBeVisible();
+	await page.getByRole('checkbox', { name: 'Email addresses' }).check();
+	await page.getByRole('button', { name: 'Save guardrails', exact: true }).click();
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	expect(gateway.postedConfigs[0]).toMatchObject({
+		llm: { policies: { guardrails: { ...original, pseudonymization: { email: true } } } }
+	});
+	await page.reload();
+	await expect(page.getByRole('checkbox', { name: 'Email addresses' })).toBeChecked();
+	await page.getByRole('checkbox', { name: 'Email addresses' }).uncheck();
+	await page.getByRole('button', { name: 'Save guardrails', exact: true }).click();
+	await expect.poll(() => gateway.postedConfigs.length).toBe(2);
+	expect(gateway.postedConfigs[1]).toMatchObject({ llm: { policies: { guardrails: original } } });
+	await page.reload();
+	await expect(page.getByRole('checkbox', { name: 'Email addresses' })).not.toBeChecked();
+});
