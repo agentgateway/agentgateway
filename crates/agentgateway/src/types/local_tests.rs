@@ -3031,3 +3031,21 @@ frontendPolicies:
 		.expect("a rotation of the root certificate is published")
 		.unwrap();
 }
+
+#[test]
+fn merged_prompt_guards_preserve_email_pseudonymization() {
+	let enabled: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"pseudonymization": {"email": true}
+	}))
+	.unwrap();
+	let disabled: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"pseudonymization": {"email": false}
+	}))
+	.unwrap();
+	for (shared, model) in [(enabled.clone(), disabled.clone()), (disabled, enabled)] {
+		let merged = super::merge_prompt_guards(Some(shared), Some(model))
+			.unwrap()
+			.unwrap();
+		assert!(merged.email_pseudonymization_enabled());
+	}
+}

@@ -4078,6 +4078,9 @@ fn merge_prompt_guards(
 			if model.streaming.is_enabled() {
 				shared.streaming = model.streaming;
 			}
+			if model.email_pseudonymization_enabled() {
+				shared.pseudonymization = model.pseudonymization;
+			}
 			shared.request.extend(model.request);
 			shared.response.extend(model.response);
 			Some(shared)

@@ -126,6 +126,7 @@ type RegexRulesShape = {
 	rules?: Array<{ builtin?: BuiltinRule; pattern?: string }>;
 };
 type GuardrailDraft = {
+	email: boolean;
 	request: GuardDraft[];
 	response: GuardDraft[];
 };
@@ -271,8 +272,8 @@ export function GuardrailsPage() {
 					onConfirm={remove}
 				>
 					<p>
-						Remove all request and response guardrails? LLM traffic will no longer be checked by
-						these rules.
+						Remove all request and response guardrails and pseudonymization? These protections will
+						no longer apply to LLM traffic.
 					</p>
 				</ConfirmDialog>
 			) : null}
@@ -352,6 +353,37 @@ function GuardrailsEditor(props: {
 				guards={draft.response}
 				onChange={response => applyDraft({ ...draft, response })}
 			/>
+			<section className="policy-form-section guardrail-section">
+				<div className="policy-form-section-header">
+					<span className="policy-form-section-icon">
+						<ShieldCheck size={17} />
+					</span>
+					<div>
+						<h4>Pseudonymization</h4>
+						<p>Replace sensitive text with temporary tokens and restore it in replies.</p>
+					</div>
+				</div>
+				<div className="policy-form-section-body">
+					<label className="config-option-row">
+						<input
+							type="checkbox"
+							checked={draft.email}
+							onChange={event => applyDraft({ ...draft, email: event.target.checked })}
+						/>
+						<span>Email addresses</span>
+					</label>
+					<p className="muted-copy">
+						Standard email addresses in message text and tool arguments are replaced before they
+						reach the model. Tokens are private to each request. Replies are restored automatically,
+						including streaming replies.
+					</p>
+					<p className="muted-copy">
+						Supports Chat Completions only. Other LLM endpoints are blocked while enabled. Images,
+						attachments, metadata and tool definitions are not inspected. Request guards run before
+						replacement. Response guards run before restoration.
+					</p>
+				</div>
+			</section>
 			{dirty ? (
 				<ConfigDiffSaveActions
 					config={props.config}
@@ -1337,7 +1369,8 @@ function PatternList(props: {
 function draftFromGuardrails(guardrails: LlmGuardrail): GuardrailDraft {
 	return {
 		request: (guardrails.request ?? []).map(draftFromGuard),
-		response: ((guardrails.response ?? []) as GuardObject[]).map(draftFromGuard)
+		response: ((guardrails.response ?? []) as GuardObject[]).map(draftFromGuard),
+		email: guardrails.pseudonymization?.email ?? false
 	};
 }
 
@@ -1474,7 +1507,8 @@ function buildGuardrails(draft: GuardrailDraft, original: LlmGuardrail): LlmGuar
 	return cleanEmpty({
 		...original,
 		request: request.length ? request : undefined,
-		response: response.length ? response : undefined
+		response: response.length ? response : undefined,
+		pseudonymization: draft.email ? { email: true } : undefined
 	}) as LlmGuardrail;
 }
 
