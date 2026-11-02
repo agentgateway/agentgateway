@@ -1,5 +1,6 @@
 ---
 source: crates/llm/src/golden_tests.rs
+assertion_line: 105
 description: src/tests/requests/completions/json-object-reasoning.json
 info:
   model: replaceme
@@ -52,7 +53,8 @@ info:
     "provider": "anthropic",
     "streaming": false,
     "params": {
-      "max_tokens": 8192
+      "max_tokens": 8192,
+      "reasoning_effort": "low"
     },
     "prompt": [
       {
