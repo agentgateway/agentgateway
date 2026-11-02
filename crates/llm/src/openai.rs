@@ -19,6 +19,7 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
+	// Formats come from catalog tags; untagged models get both.
 	pub fn supported_formats_for_model(
 		request_model: &str,
 		catalog: crate::model_catalog::Catalog<'_>,
@@ -39,6 +40,7 @@ impl Provider {
 		}
 	}
 
+	// gpt-5.4+ reject tools + reasoning_effort on Chat Completions.
 	pub fn requires_responses(
 		request_model: &str,
 		req: &crate::types::completions::Request,

@@ -480,6 +480,7 @@ fn render_openai_responses(
 		},
 		types::ChatRequest::Completions(req) => {
 			let mut translated =
+				// Moderation works the same as for Messages → Responses.
 				conversion::responses::from_completions::translate_request(&req, ctx.catalog)?;
 			apply_openai_moderation(&mut translated.moderation, ctx)?;
 			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
@@ -913,6 +914,7 @@ impl ChatTranslation {
 
 			ChatFormat::OpenAIResponses => match format {
 				ChatErrorFormat::OpenAI => match self.input {
+					// Responses and Chat Completions share the error body.
 					InputFormat::Responses | InputFormat::Completions => Ok(bytes.clone()),
 					InputFormat::Messages => {
 						conversion::responses::from_messages::translate_error(bytes, status)
@@ -1201,6 +1203,7 @@ impl AIProvider {
 			})
 	}
 
+	// Use the requested format only if the provider supports it and a translation exists.
 	fn preferred_chat_translation(
 		&self,
 		input_format: InputFormat,
@@ -1219,6 +1222,7 @@ impl AIProvider {
 			.find(|translation| translation.input == input_format && translation.output == output)
 	}
 
+	// Handle the response with the same translation as the request.
 	fn request_chat_translation(
 		&self,
 		req: &LLMRequest,
@@ -1894,6 +1898,7 @@ impl AIProvider {
 		) {
 			req.normalize_openai_token_limit();
 		}
+		// Only the built-in openai provider applies the tools + reasoning rule.
 		let preferred_output = match self {
 			AIProvider::OpenAI(_)
 				if openai::Provider::requires_responses(
@@ -2678,6 +2683,7 @@ impl AIProvider {
 		)?;
 		llm_info.provider_state = rendered
 			.provider_state
+			// Store the choice; the model alone would pick Chat Completions again.
 			.or(preferred_translation.map(|translation| ProviderState::ChatOutput(translation.output)));
 		// Couldn't find a better place to apply it, needs to be after rendered. but before generating the request.
 		let body = match policies {

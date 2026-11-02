@@ -1768,6 +1768,7 @@ pub mod from_completions {
 		let typed = json::convert::<_, completions::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
 		#[allow(deprecated)]
+		// Messages fills in a default limit, so use the client's.
 		let max_output_tokens = typed.max_completion_tokens.or(typed.max_tokens);
 		let reasoning = typed
 			.reasoning_effort
@@ -1786,6 +1787,7 @@ pub mod from_completions {
 			},
 		});
 
+		// Messages drops strict, and Responses defaults it to false here.
 		let strict_tools: HashMap<String, bool> = typed
 			.tools
 			.iter()
@@ -1800,6 +1802,7 @@ pub mod from_completions {
 			.collect();
 		let mut passthrough = Map::new();
 		passthrough.insert(
+			// Chat Completions doesn't store by default; Responses does.
 			"store".to_string(),
 			Value::Bool(typed.store.unwrap_or(false)),
 		);
@@ -1838,6 +1841,7 @@ pub mod from_completions {
 					}
 				}
 			}
+			// Messages only sets reasoning for known models; use the client's effort.
 			rest.remove("reasoning");
 			if let Some(reasoning) = reasoning {
 				rest.insert(
@@ -1860,6 +1864,7 @@ pub mod from_completions {
 		let resp = serde_json::from_slice::<responses::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let provider_usage = super::from_messages::provider_usage(&resp);
+		// Messages usage has no reasoning tokens, so add them back.
 		let reasoning_tokens = resp
 			.usage
 			.as_ref()
