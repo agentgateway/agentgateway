@@ -302,7 +302,7 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(for
 	for _, name := range slices.Sorted(maps.Keys(m.Experimental.Modes)) {
 		mode := m.Experimental.Modes[name]
 		serviceTier := mode.Provider.Body.ServiceTier
-		if mode.Cost == nil || (serviceTier != "priority" && serviceTier != "flex") {
+		if mode.Cost == nil || (serviceTier != "priority" && serviceTier != "flex" && serviceTier != "ultrafast") {
 			continue
 		}
 		rates, err := modelsDevBuildRates(mode.Cost, label+" "+name+" mode")

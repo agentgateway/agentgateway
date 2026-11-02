@@ -90,6 +90,9 @@ func TestTierOrderValidation(t *testing.T) {
 		{"legacy descending", []Tier{{ContextOver: 200}, {ContextOver: 100}}, false},
 		{"ordered flex", []Tier{{ServiceTier: "flex"}, {ServiceTier: "flex", ContextOver: 200}}, true},
 		{"descending flex", []Tier{{ServiceTier: "flex", ContextOver: 200}, {ServiceTier: "flex"}}, false},
+		{"ultrafast accepted", []Tier{{ServiceTier: "ultrafast"}}, true},
+		{"ordered ultrafast", []Tier{{ServiceTier: "ultrafast"}, {ServiceTier: "ultrafast", ContextOver: 200}}, true},
+		{"unknown service tier", []Tier{{ServiceTier: "turbo"}}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := (&Model{Tiers: tc.tiers}).validate()
