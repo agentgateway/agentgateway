@@ -549,43 +549,35 @@ pub fn normalize_path_for_proxy(
 		return Ok(());
 	};
 
-	let normalized = match orig.query() {
-		Some(query) => {
-			let mut normalized = String::with_capacity(path.len() + query.len() + 1);
-			normalized.push_str(&path);
-			normalized.push('?');
-			normalized.push_str(query);
-			normalized
-		},
-		None => path,
-	};
+	modify_req_uri(req, |uri| set_path_keep_query(uri, path)).map_err(ProxyError::Processing)
+}
 
-	modify_req_uri(req, |uri| {
-		uri.path_and_query = Some(PathAndQuery::from_str(&normalized)?);
-		Ok(())
-	})
-	.map_err(ProxyError::Processing)
+/// Replaces the path of `uri`, keeping its query.
+pub fn set_path_keep_query(uri: &mut uri::Parts, mut path: String) -> anyhow::Result<()> {
+	if let Some(query) = uri.path_and_query.as_ref().and_then(|pq| pq.query()) {
+		path.push('?');
+		path.push_str(query);
+	}
+	uri.path_and_query = Some(PathAndQuery::from_maybe_shared(path)?);
+	Ok(())
 }
 
 /// Applies the configured rules in a fixed order, see [`PathNormalization`]
 fn normalize_path(path: &str, normalize: &[PathNormalization]) -> anyhow::Result<Option<String>> {
 	let decode_unreserved = normalize.contains(&PathNormalization::DecodeUnreserved);
-	let escaped_slash = normalize.iter().copied().find(|n| {
-		matches!(
-			n,
-			PathNormalization::RejectEscapedSlash | PathNormalization::UnescapeSlash
-		)
-	});
+	let reject_escaped_slash = normalize.contains(&PathNormalization::RejectEscapedSlash);
+	let unescape_slash = normalize.contains(&PathNormalization::UnescapeSlash);
 	let apply_merge_slash = normalize.contains(&PathNormalization::MergeSlash);
 	let apply_dot_segment = normalize.contains(&PathNormalization::DotSegment);
 
 	let mut path = Cow::Borrowed(path);
-	if (decode_unreserved || apply_dot_segment || escaped_slash.is_some())
+	if (decode_unreserved || apply_dot_segment || reject_escaped_slash || unescape_slash)
 		&& let Some(normalized) = decode_percent(
 			path.as_ref(),
 			decode_unreserved,
 			apply_dot_segment,
-			escaped_slash,
+			reject_escaped_slash,
+			unescape_slash,
 		)? {
 		path = Cow::Owned(normalized);
 	}
@@ -615,7 +607,8 @@ fn normalize_path(path: &str, normalize: &[PathNormalization]) -> anyhow::Result
 /// With `decode_unreserved`, unreserved characters (RFC 3986 section 2.3) are decoded. With
 /// `decode_dot`, only `%2E` is decoded, so dot segments cannot hide behind encoding.
 ///
-/// Escaped slashes (`%2F`, `%5C`) are rejected or decoded depending on `escaped_slash`.
+/// Escaped slashes (`%2F`, `%5C`) are rejected with `reject_escaped_slash`, or decoded to `/` with
+/// `unescape_slash`.
 ///
 /// Every other octet is kept encoded with uppercase hex digits. Malformed escapes and `%00` are
 /// rejected, as backends disagree on how to interpret them.
@@ -623,7 +616,8 @@ fn decode_percent(
 	path: &str,
 	decode_unreserved: bool,
 	decode_dot: bool,
-	escaped_slash: Option<PathNormalization>,
+	reject_escaped_slash: bool,
+	unescape_slash: bool,
 ) -> anyhow::Result<Option<String>> {
 	const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
@@ -649,10 +643,10 @@ fn decode_percent(
 		match b {
 			0 => anyhow::bail!("escaped NUL in path"),
 			b'.' if decode_dot => out.push('.'),
-			b'/' | b'\\' if escaped_slash == Some(PathNormalization::RejectEscapedSlash) => {
+			b'/' | b'\\' if reject_escaped_slash => {
 				anyhow::bail!("escaped slash in path")
 			},
-			b'/' | b'\\' if escaped_slash == Some(PathNormalization::UnescapeSlash) => out.push('/'),
+			b'/' | b'\\' if unescape_slash => out.push('/'),
 			b if decode_unreserved
 				&& (b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~')) =>
 			{

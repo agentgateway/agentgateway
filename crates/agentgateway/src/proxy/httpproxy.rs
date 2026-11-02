@@ -1430,10 +1430,9 @@ impl HTTPProxy {
 		req: &mut Request,
 	) -> Result<(), ProxyError> {
 		// Deferred so rejected requests still get logging and tracing set up below.
-		let normalized = frontend_policies
-			.http
-			.as_ref()
-			.map_or(Ok(()), |p| http::normalize_path_for_proxy(req, &p.normalize));
+		let normalized = frontend_policies.http.as_ref().map_or(Ok(()), |p| {
+			http::normalize_path_for_proxy(req, &p.normalize)
+		});
 
 		frontend_policies.register_cel_expressions(log.cel.ctx());
 

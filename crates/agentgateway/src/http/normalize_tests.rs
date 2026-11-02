@@ -1,4 +1,7 @@
 #[cfg(feature = "internal_benches")]
+use divan::Bencher;
+
+#[cfg(feature = "internal_benches")]
 use crate::http::normalize_path;
 #[cfg(test)]
 use crate::http::{Body, Request, Uri, normalize_path_for_proxy};
@@ -6,8 +9,6 @@ use crate::http::{Body, Request, Uri, normalize_path_for_proxy};
 use crate::proxy::ProxyError;
 #[cfg(any(test, feature = "internal_benches"))]
 use crate::types::frontend::PathNormalization;
-#[cfg(feature = "internal_benches")]
-use divan::Bencher;
 
 #[cfg(test)]
 fn request(uri: &str) -> Request {
@@ -83,7 +84,11 @@ fn path_normalization_table() {
 		(&[RejectEscapedSlash], "/a%zz", None),
 		(&[RejectEscapedSlash], "/a?x=%2F", Some("/a?x=%2F")),
 		(&[RejectEscapedSlash, DotSegment], "/a%5C..%5Cadmin", None),
-		(&[UnescapeSlash, DotSegment], "/a%5C..%5Cadmin", Some("/admin")),
+		(
+			&[UnescapeSlash, DotSegment],
+			"/a%5C..%5Cadmin",
+			Some("/admin"),
+		),
 		(&[UnescapeSlash], "/api%2Fmetrics", Some("/api/metrics")),
 		(&[UnescapeSlash], "/a%5Cb", Some("/a/b")),
 		(
@@ -102,7 +107,11 @@ fn path_normalization_table() {
 			Some("/plain/path"),
 		),
 		(&[DotSegment], "/public/%2e%2E/admin", Some("/admin")),
-		(&[DotSegment], "/public/%61/admin", Some("/public/%61/admin")),
+		(
+			&[DotSegment],
+			"/public/%61/admin",
+			Some("/public/%61/admin"),
+		),
 		(&[DotSegment], "/public\\..\\admin", Some("/admin")),
 		(&[MergeSlash], "/a\\\\b", Some("/a/b")),
 		(&[DotSegment], "/public/..;x=y/admin", Some("/admin")),
