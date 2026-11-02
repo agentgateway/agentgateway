@@ -1,0 +1,39 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/copilot/embeddings.json
+info:
+  data:
+    - object: embedding
+      index: 0
+      embedding:
+        - 0.5
+        - -0.25
+  usage:
+    prompt_tokens: 2
+    total_tokens: 2
+---
+{
+  "response": {
+    "object": "list",
+    "model": "text-embedding-3-small",
+    "usage": {
+      "prompt_tokens": 2,
+      "total_tokens": 2
+    },
+    "data": [
+      {
+        "object": "embedding",
+        "index": 0,
+        "embedding": [
+          0.5,
+          -0.25
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_tokens": 2,
+    "total_tokens": 2,
+    "provider_model": "text-embedding-3-small"
+  }
+}

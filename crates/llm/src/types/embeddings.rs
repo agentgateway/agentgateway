@@ -7,10 +7,17 @@ use crate::{
 	AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage, json,
 };
 
+fn default_object() -> String {
+	"list".to_string()
+}
+
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
+	#[serde(default = "default_object")]
 	pub object: String,
+	#[serde(default)]
 	pub model: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub usage: Option<Usage>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
