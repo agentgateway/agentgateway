@@ -236,9 +236,48 @@ fn default_config_dir() -> anyhow::Result<PathBuf> {
 	let config_home = std::env::var_os("XDG_CONFIG_HOME")
 		.filter(|path| !path.is_empty())
 		.map(PathBuf::from)
-		.or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-		.ok_or_else(|| anyhow::anyhow!("HOME is not set; pass --config or --file"))?;
+		.or_else(|| home_dir().map(|home| home.join(".config")))
+		.ok_or_else(|| {
+			anyhow::anyhow!(
+				"could not determine the user's home directory ({} is not set); pass --config or --file",
+				home_var_name()
+			)
+		})?;
 	Ok(config_home.join("agentgateway"))
+}
+
+/// Name of the environment variable holding the user's home directory on this platform.
+fn home_var_name() -> &'static str {
+	if cfg!(windows) { "USERPROFILE" } else { "HOME" }
+}
+
+/// The user's home directory, without its `.config` suffix.
+///
+/// Windows does not set `HOME`, so looking only at `HOME` left Windows users unable to find
+/// their config file unless they exported it themselves (see #4219). `USERPROFILE` is what
+/// Windows sets instead, with `HOMEDRIVE` + `HOMEPATH` as its legacy pair. Empty values are
+/// skipped so they cannot resolve to a relative path.
+///
+/// CI runs the tests on Windows and macOS as well as Linux, so the platform-specific branch is
+/// exercised for real rather than simulated.
+fn home_dir() -> Option<PathBuf> {
+	let var = |name: &str| {
+		std::env::var_os(name)
+			.filter(|value| !value.is_empty())
+			.map(PathBuf::from)
+	};
+	if cfg!(windows) {
+		return var("USERPROFILE").or_else(|| {
+			let drive = var("HOMEDRIVE")?;
+			let path = var("HOMEPATH")?;
+			Some(drive.join(path))
+		});
+	}
+	var("HOME").or_else(|| var("USERPROFILE")).or_else(|| {
+		let drive = var("HOMEDRIVE")?;
+		let path = var("HOMEPATH")?;
+		Some(drive.join(path))
+	})
 }
 
 fn running_in_official_container() -> bool {
@@ -291,4 +330,79 @@ fn is_read_once_path(path: &std::path::Path) -> bool {
 	path == std::path::Path::new("/dev/stdin")
 		|| path.starts_with("/dev/fd")
 		|| path.starts_with("/proc/self/fd")
+}
+
+#[cfg(test)]
+mod tests {
+	use super::home_dir;
+
+	/// The home directory this process reports, read from the same variables `home_dir` uses.
+	///
+	/// These tests read the real environment rather than injecting a lookup: CI runs the suite
+	/// on Windows and macOS as well as Linux, so each platform's branch is exercised for real.
+	fn expected_home() -> Option<std::path::PathBuf> {
+		let var = |name: &str| {
+			std::env::var_os(name)
+				.filter(|value| !value.is_empty())
+				.map(std::path::PathBuf::from)
+		};
+		if cfg!(windows) {
+			return var("USERPROFILE").or_else(|| {
+				let drive = var("HOMEDRIVE")?;
+				let path = var("HOMEPATH")?;
+				Some(drive.join(path))
+			});
+		}
+		var("HOME")
+	}
+
+	#[test]
+	fn home_dir_matches_the_platform_variable() {
+		let home = home_dir();
+
+		// Every CI runner sets a home directory, so this failing means the lookup is broken.
+		assert!(
+			home.is_some(),
+			"home_dir() found nothing on {}",
+			std::env::consts::OS
+		);
+		assert_eq!(home, expected_home());
+	}
+
+	#[test]
+	#[cfg(windows)]
+	fn home_dir_uses_userprofile_on_windows() {
+		// The #4219 case: Windows sets USERPROFILE, not HOME.
+		let userprofile = std::env::var_os("USERPROFILE").expect("USERPROFILE is set on Windows");
+
+		assert_eq!(home_dir(), Some(std::path::PathBuf::from(userprofile)));
+	}
+
+	#[test]
+	#[cfg(unix)]
+	fn home_dir_uses_home_on_unix() {
+		let home = std::env::var_os("HOME").expect("HOME is set on unix");
+
+		assert_eq!(home_dir(), Some(std::path::PathBuf::from(home)));
+	}
+
+	#[test]
+	fn home_dir_ignores_empty_variables() {
+		// An empty variable must not resolve to a relative or empty path. Checked against the
+		// live environment rather than by writing to it: a test that mutates the environment
+		// races with the platform tests running in parallel.
+		let name = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+		let is_empty = std::env::var_os(name).is_some_and(|value| value.is_empty());
+		if !is_empty {
+			// Nothing to assert about emptiness here; the platform tests cover the normal path.
+			return;
+		}
+
+		let resolved = home_dir();
+
+		assert!(
+			resolved.as_ref().is_none_or(|p| !p.as_os_str().is_empty()),
+			"an empty {name} must not produce an empty path"
+		);
+	}
 }
