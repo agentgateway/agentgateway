@@ -652,7 +652,7 @@ impl SubstrateRequestState {
 						"substrate request parking capacity exhausted"
 					),
 				}
-				Err(error.into_proxy_error(&self.actor).into())
+				Err(error.into_proxy_error(&self.actor))
 			},
 		}
 	}
@@ -731,14 +731,11 @@ impl RequestPolicyTrait for SubstrateIngress {
 			.filter(|(_, name)| !name.contains('/'))
 			.filter(|(atespace, name)| valid_resource_name(atespace) && valid_resource_name(name))
 		else {
-			return Err(
-				ProxyError::SubstrateIngressFailed(
-					StatusCode::NOT_FOUND,
-					format!("invalid {TARGET_ACTOR_HEADER:?}: expected <atespace>/<actor>"),
-					None,
-				)
-				.into(),
-			);
+			return Err(ProxyError::SubstrateIngressFailed(
+				StatusCode::NOT_FOUND,
+				format!("invalid {TARGET_ACTOR_HEADER:?}: expected <atespace>/<actor>"),
+				None,
+			));
 		};
 
 		let actor = ActorRef {

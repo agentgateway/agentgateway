@@ -554,7 +554,7 @@ impl crate::store::RequestPolicyTrait for BudgetPolicy {
 
 		if let Some(exceeded) = self
 			.check(&budgets)
-			.map_err(|err| crate::proxy::ProxyError::Processing(err))?
+			.map_err(crate::proxy::ProxyError::Processing)?
 		{
 			return Err(crate::proxy::ProxyError::BudgetExceeded(exceeded));
 		}

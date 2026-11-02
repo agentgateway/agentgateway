@@ -211,12 +211,9 @@ impl SubstrateEgress {
 				},
 				("", Some(source)) => self.actor_jwt(client, identity, source).await?,
 				_ => {
-					return Err(
-						ProxyError::SubstrateEgressDenied(
-							"credential effect must specify exactly one credential source".to_owned(),
-						)
-						.into(),
-					);
+					return Err(ProxyError::SubstrateEgressDenied(
+						"credential effect must specify exactly one credential source".to_owned(),
+					));
 				},
 			};
 			let (name, value) = credential_header(injection, secret)?;
@@ -338,7 +335,6 @@ impl SubstrateEgress {
 			.ok_or_else(|| {
 				ProxyError::SubstrateEgressDenied(format!("no credential provider configured for {name}"))
 			})
-			.map_err(Into::into)
 	}
 }
 
@@ -361,12 +357,9 @@ fn credential_header(
 		ProxyError::SubstrateEgressDenied(format!("invalid credential header: {error}"))
 	})?;
 	if protected_credential_header(&name) {
-		return Err(
-			ProxyError::SubstrateEgressDenied(format!(
-				"credential effects cannot modify protected header {name}"
-			))
-			.into(),
-		);
+		return Err(ProxyError::SubstrateEgressDenied(format!(
+			"credential effects cannot modify protected header {name}"
+		)));
 	}
 	let secret = credential_secret(secret)?;
 	let mut value = injection.prefix.as_bytes().to_vec();
@@ -419,12 +412,9 @@ fn credential_secret(secret: Vec<u8>) -> Result<Vec<u8>, ProxyError> {
 	let secret = secret.strip_suffix(b"\n").unwrap_or(&secret);
 	let secret = secret.strip_suffix(b"\r").unwrap_or(secret);
 	if secret.is_empty() || secret.iter().any(|byte| byte.is_ascii_control()) {
-		return Err(
-			ProxyError::SubstrateEgressUnavailable(
-				"credential provider returned an unusable secret".to_owned(),
-			)
-			.into(),
-		);
+		return Err(ProxyError::SubstrateEgressUnavailable(
+			"credential provider returned an unusable secret".to_owned(),
+		));
 	}
 	Ok(secret.to_vec())
 }
@@ -557,7 +547,7 @@ fn matching_rule<'a>(
 		phase,
 	)
 	.ok_or_else(|| {
-		ProxyError::SubstrateEgressDenied("actor egress policy denied destination".to_owned()).into()
+		ProxyError::SubstrateEgressDenied("actor egress policy denied destination".to_owned())
 	})
 }
 

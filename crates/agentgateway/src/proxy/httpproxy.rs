@@ -307,10 +307,9 @@ async fn apply_request_policies(
 		.apply_selected("substrate egress", c, l, req, rp.headers())
 		.await?;
 	if req.extensions().get::<ActorIdentity>().is_some() && egress.is_none() {
-		return Err(
-			ProxyError::SubstrateEgressDenied("missing substrate egress request policy".to_owned())
-				.into(),
-		);
+		return Err(ProxyError::SubstrateEgressDenied(
+			"missing substrate egress request policy".to_owned(),
+		));
 	}
 	pol
 		.substrate_ingress
@@ -643,7 +642,7 @@ async fn apply_llm_request_policies(
 			for charged in &local_rate_limit {
 				charged.refund();
 			}
-			return Err(e.into());
+			return Err(e);
 		}
 	}
 	if let Some(status) = local_status {
@@ -2807,12 +2806,9 @@ async fn make_backend_call(
 			.await?
 		},
 		Backend::Dynamic(_, _) if policies.inference_routing.is_some() => {
-			return Err(
-				ProxyError::ProcessingString(
-					"inferenceRouting is not supported with dynamic backends".to_string(),
-				)
-				.into(),
-			);
+			return Err(ProxyError::ProcessingString(
+				"inferenceRouting is not supported with dynamic backends".to_string(),
+			));
 		},
 		Backend::Dynamic(_, expr) => {
 			let executor = crate::cel::Executor::new_request(&req);
@@ -3368,12 +3364,9 @@ async fn handle_substrate_backend_selection(
 		.get_mut::<http::substrate::SubstrateRequestState>()
 	{
 		if !matches!(backend, Backend::Dynamic(_, _)) {
-			return Err(
-				ProxyError::ProcessingString(
-					"substrateIngress requires a dynamic route backend".to_owned(),
-				)
-				.into(),
-			);
+			return Err(ProxyError::ProcessingString(
+				"substrateIngress requires a dynamic route backend".to_owned(),
+			));
 		}
 		let resolved_target = Box::pin(state.resolve_target()).await?;
 		req
@@ -3383,10 +3376,9 @@ async fn handle_substrate_backend_selection(
 	} else if req.extensions().get::<DynamicBackendOverride>().is_some()
 		&& !matches!(backend, Backend::Dynamic(_, _))
 	{
-		Err(
-			ProxyError::ProcessingString("substrateIngress requires a dynamic route backend".to_owned())
-				.into(),
-		)
+		Err(ProxyError::ProcessingString(
+			"substrateIngress requires a dynamic route backend".to_owned(),
+		))
 	} else {
 		Ok(())
 	}

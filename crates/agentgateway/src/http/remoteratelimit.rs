@@ -579,7 +579,7 @@ impl crate::store::RequestPolicyTrait for RemoteRateLimit {
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
-		Ok(self.check(client.clone(), req).await?)
+		self.check(client.clone(), req).await
 	}
 
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {

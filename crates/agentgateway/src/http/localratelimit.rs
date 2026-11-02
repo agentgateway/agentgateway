@@ -298,7 +298,7 @@ impl crate::store::RequestPolicyTrait for RateLimits {
 					for bucket in taken {
 						bucket.refund();
 					}
-					return Err(e.into());
+					return Err(e);
 				},
 			}
 		}

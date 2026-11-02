@@ -3306,7 +3306,7 @@ mod tests {
 			"private-item".to_string(),
 		));
 		let mut log = test_request_log();
-		let (response, reason) = resolve_response(Err(error.into()), &mut log, false);
+		let (response, reason) = resolve_response(Err(error), &mut log, false);
 		let detail = "mcp: authorization denied for tool: private-item";
 		assert_eq!(reason, ProxyResponseReason::Authorization);
 		assert_eq!(log.reason, Some(ProxyResponseReason::Authorization));

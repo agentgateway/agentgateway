@@ -121,18 +121,14 @@ impl EgressActorResolution {
 		let current = match result {
 			Ok(response) => response.into_inner(),
 			Err(status) if matches!(status.code(), Code::Unavailable | Code::DeadlineExceeded) => {
-				return Err(
-					ProxyError::SubstrateEgressUnavailable(format!(
-						"actor identity check unavailable: {status}"
-					))
-					.into(),
-				);
+				return Err(ProxyError::SubstrateEgressUnavailable(format!(
+					"actor identity check unavailable: {status}"
+				)));
 			},
 			Err(status) => {
-				return Err(
-					ProxyError::SubstrateEgressDenied(format!("actor identity check denied: {status}"))
-						.into(),
-				);
+				return Err(ProxyError::SubstrateEgressDenied(format!(
+					"actor identity check denied: {status}"
+				)));
 			},
 		};
 		// RESUMING is persisted with the worker assignment. Booting or restoring
@@ -141,9 +137,9 @@ impl EgressActorResolution {
 			current.status.as_ref().map(|status| status.state()),
 			Some(ActorState::Running | ActorState::Resuming)
 		) {
-			return Err(
-				ProxyError::SubstrateEgressDenied("actor is not running or resuming".to_owned()).into(),
-			);
+			return Err(ProxyError::SubstrateEgressDenied(
+				"actor is not running or resuming".to_owned(),
+			));
 		}
 		Ok(ActorIdentity {
 			atespace: actor.atespace.clone(),

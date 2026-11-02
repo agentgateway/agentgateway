@@ -5335,14 +5335,14 @@ mod body_streaming_and_trailers {
 				.insert(http::header::CONTENT_LENGTH, bytes.len().into());
 			req.body_mut().record(1024);
 			let request_recording = req.body().recorded().unwrap().clone();
-			let _ = ext_proc.mutate_request(&mut req).await.unwrap();
+			ext_proc.mutate_request(&mut req).await.unwrap();
 			let mut resp = http::Response::new(Body::from(bytes));
 			resp
 				.headers_mut()
 				.insert(http::header::CONTENT_LENGTH, bytes.len().into());
 			resp.body_mut().record(1024);
 			let response_recording = resp.body().recorded().unwrap().clone();
-			let _ = ext_proc.mutate_response(&mut resp, None).await.unwrap();
+			ext_proc.mutate_response(&mut resp, None).await.unwrap();
 
 			// Exercise real Content-Length framing, where Hyper may stop without
 			// polling EOF. Recording must retain the bytes without requiring completion.
@@ -5546,7 +5546,7 @@ mod body_streaming_and_trailers {
 			.body(Body::new(http_body_util::StreamBody::new(frames)))
 			.build()
 			.unwrap();
-		let _ = ext_proc_request.mutate_request(&mut req).await.unwrap();
+		ext_proc_request.mutate_request(&mut req).await.unwrap();
 		let collected = req.into_body().collect().await.unwrap();
 		let trailers = collected
 			.trailers()
@@ -5615,7 +5615,7 @@ mod body_streaming_and_trailers {
 		let _ = req.body_mut().inspect(1024).await.unwrap();
 		req.body_mut().record(1024);
 		let recorded = req.body().recorded().unwrap().clone();
-		let _ = ext_proc_request.mutate_request(&mut req).await.unwrap();
+		ext_proc_request.mutate_request(&mut req).await.unwrap();
 
 		assert!(
 			req.body().recorded().is_some(),
@@ -5662,7 +5662,7 @@ mod body_streaming_and_trailers {
 		let _ = resp.body_mut().inspect(1024).await.unwrap();
 		resp.body_mut().record(1024);
 		let recorded = resp.body().recorded().unwrap().clone();
-		let _ = ext_proc_request
+		ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
@@ -5742,7 +5742,7 @@ mod body_streaming_and_trailers {
 			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers)),
 		]);
 		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(frames)));
-		let _ = ext_proc_request
+		ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
@@ -5789,7 +5789,7 @@ mod body_streaming_and_trailers {
 		let _ = resp.body_mut().inspect(1024).await.unwrap();
 		resp.body_mut().record(1024);
 		let recorded = resp.body().recorded().unwrap().clone();
-		let _ = ext_proc_request
+		ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
@@ -5839,7 +5839,7 @@ mod body_streaming_and_trailers {
 		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(
 			tokio_stream::wrappers::ReceiverStream::new(upstream_rx),
 		)));
-		let _ = ext_proc_request
+		ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
