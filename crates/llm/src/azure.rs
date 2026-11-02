@@ -79,6 +79,7 @@ impl Provider {
 		match self.api_version() {
 			"v1" => strng::format!("/openai/v1/{suffix}"),
 			"preview" => strng::format!("/openai/v1/{suffix}?api-version=preview"),
+			_ if route == RouteType::Decisions => strng::format!("/openai/v1/{suffix}"),
 			version if route == RouteType::Responses => {
 				strng::format!("/openai/responses?api-version={version}")
 			},
@@ -92,6 +93,7 @@ impl Provider {
 		match route {
 			RouteType::Embeddings => strng::literal!("embeddings"),
 			RouteType::Responses => strng::literal!("responses"),
+			RouteType::Decisions => strng::literal!("decisions"),
 			_ => strng::literal!("chat/completions"),
 		}
 	}
@@ -224,6 +226,13 @@ mod tests {
 		"gpt-4o-mini",
 		"/openai/v1/chat/completions"
 	)]
+	#[case::openai_decisions(
+		AzureResourceType::OpenAI,
+		RouteType::Decisions,
+		None,
+		"gpt-6-luna",
+		"/openai/v1/decisions"
+	)]
 	#[case::openai_messages(
 		AzureResourceType::OpenAI,
 		RouteType::Messages,
@@ -260,6 +269,13 @@ mod tests {
 		"preview",
 		"gpt-5.1",
 		"/openai/v1/responses?api-version=preview"
+	)]
+	// Decisions is only served on the v1 surface.
+	#[case::decisions_date_version(
+		RouteType::Decisions,
+		"2024-02-15-preview",
+		"gpt-6-luna",
+		"/openai/v1/decisions"
 	)]
 	// Completions with a date-based api-version keeps the deployment-scoped path.
 	#[case::completions_date_version(

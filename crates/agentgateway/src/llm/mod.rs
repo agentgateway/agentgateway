@@ -1060,11 +1060,14 @@ impl AIProvider {
 			},
 			AIProvider::Azure(p) => {
 				let mut formats = vec![Completions, Embeddings, Rerank, Responses];
-				if matches!(p.resource_type, azure::AzureResourceType::Foundry) {
-					formats.push(SystemOne);
-					if p.is_anthropic_model(request_model) {
-						formats.extend([AnthropicTokenCount, Messages]);
-					}
+				match p.resource_type {
+					azure::AzureResourceType::Foundry => {
+						formats.push(SystemOne);
+						if p.is_anthropic_model(request_model) {
+							formats.extend([AnthropicTokenCount, Messages]);
+						}
+					},
+					azure::AzureResourceType::OpenAI => formats.push(Decisions),
 				}
 				formats
 			},
