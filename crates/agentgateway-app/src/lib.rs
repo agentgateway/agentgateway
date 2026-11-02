@@ -255,8 +255,8 @@ fn home_var_name() -> &'static str {
 ///
 /// Windows does not set `HOME`, so looking only at `HOME` left Windows users unable to find
 /// their config file unless they exported it themselves (see #4219). `USERPROFILE` is what
-/// Windows sets instead, with `HOMEDRIVE` + `HOMEPATH` as its legacy pair. Empty values are
-/// skipped so they cannot resolve to a relative path.
+/// Windows sets instead, with `HOMEDRIVE` + `HOMEPATH` as its legacy pair. Non-Windows
+/// checks `HOME` only. Empty values are skipped so they cannot resolve to a relative path.
 ///
 /// CI runs the tests on Windows and macOS as well as Linux, so the platform-specific branch is
 /// exercised for real rather than simulated.
@@ -273,11 +273,9 @@ fn home_dir() -> Option<PathBuf> {
 			Some(drive.join(path))
 		});
 	}
-	var("HOME").or_else(|| var("USERPROFILE")).or_else(|| {
-		let drive = var("HOMEDRIVE")?;
-		let path = var("HOMEPATH")?;
-		Some(drive.join(path))
-	})
+	// Non-Windows checks HOME only: USERPROFILE / HOMEDRIVE / HOMEPATH are
+	// Windows conventions and must not be consulted elsewhere.
+	var("HOME")
 }
 
 fn running_in_official_container() -> bool {
