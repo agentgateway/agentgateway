@@ -123,6 +123,7 @@ pub fn router(
 		let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
 		router
 			.nest_service("/ui", ui_service)
+			// Use a relative redirect so we still end up on the UI if a proxy strips the path prefix.
 			.route("/", get(|| async { Redirect::permanent("ui/") }))
 	};
 	router
@@ -394,6 +395,7 @@ async fn serve_ui_asset(
 ) -> Result<Response, std::convert::Infallible> {
 	let path = req.uri().path();
 	if should_serve_ui_index(path) {
+		// Send /ui to /ui/, otherwise the relative <base> resolves one level too high.
 		let original = req
 			.extensions()
 			.get::<axum::extract::OriginalUri>()
@@ -415,6 +417,7 @@ fn serve_ui_index(assets: &'static Dir<'static>, path: &str) -> Response {
 	let Some(index) = assets.get_file("index.html") else {
 		return StatusCode::NOT_FOUND.into_response();
 	};
+	// Walk <base> back up to match the request depth, so the same build works under any prefix.
 	let depth = path.trim_start_matches('/').matches('/').count();
 	let base = if depth == 0 {
 		"./".to_string()

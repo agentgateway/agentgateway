@@ -1,6 +1,7 @@
 import { apiBaseFrom, uiBaseFrom } from '@/uiBase';
 
 function baseElementHref() {
+	// document.baseURI always has a value, so check the server actually injected a <base>.
 	return document.querySelector('base') ? document.baseURI : undefined;
 }
 
