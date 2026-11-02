@@ -1928,6 +1928,7 @@ fn service_tier_to_value(c: &Option<llm::catalog::PricingTier>) -> Value<'_> {
 		Some(llm::catalog::PricingTier::Flex) => Value::String("flex".into()),
 		Some(llm::catalog::PricingTier::Priority) => Value::String("priority".into()),
 		Some(llm::catalog::PricingTier::Reserved) => Value::String("reserved".into()),
+		Some(llm::catalog::PricingTier::Ultrafast) => Value::String("ultrafast".into()),
 	}
 }
 

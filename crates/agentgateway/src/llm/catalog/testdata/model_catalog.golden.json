@@ -97,6 +97,13 @@
                 "input": "0.25",
                 "output": "1"
               }
+            },
+            {
+              "serviceTier": "ultrafast",
+              "rates": {
+                "input": "1",
+                "output": "4"
+              }
             }
           ],
           "limits": {

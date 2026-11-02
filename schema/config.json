@@ -815,7 +815,8 @@
         "standard",
         "flex",
         "priority",
-        "reserved"
+        "reserved",
+        "ultrafast"
       ]
     },
     "Limits": {
