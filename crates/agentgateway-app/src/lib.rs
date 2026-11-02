@@ -1,6 +1,6 @@
 // Originally derived from https://github.com/istio/ztunnel (Apache 2.0 licensed)
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use agentgateway::ConfigSource;
@@ -236,9 +236,44 @@ fn default_config_dir() -> anyhow::Result<PathBuf> {
 	let config_home = std::env::var_os("XDG_CONFIG_HOME")
 		.filter(|path| !path.is_empty())
 		.map(PathBuf::from)
-		.or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-		.ok_or_else(|| anyhow::anyhow!("HOME is not set; pass --config or --file"))?;
+		.or_else(|| home_dir().map(|home| home.join(".config")))
+		.ok_or_else(|| {
+			anyhow::anyhow!(
+				"could not determine the user's home directory ({} is not set); pass --config or --file",
+				home_var_name()
+			)
+		})?;
 	Ok(config_home.join("agentgateway"))
+}
+
+/// Name of the environment variable holding the user's home directory on this platform.
+fn home_var_name() -> &'static str {
+	if cfg!(windows) { "USERPROFILE" } else { "HOME" }
+}
+
+/// The user's home directory, without its `.config` suffix.
+///
+/// Windows does not set `HOME`, so looking only at `HOME` left Windows users unable to find
+/// their config file unless they exported it themselves (see #4219). On Windows we read
+/// `USERPROFILE`, falling back to the legacy `HOMEDRIVE` + `HOMEPATH` pair. Unix keeps
+/// `HOME`. Every variable is filtered so an empty value does not resolve to a relative path.
+fn home_dir() -> Option<PathBuf> {
+	home_dir_from(|name| std::env::var_os(name))
+}
+
+/// `home_dir` with the variable lookup injected, so the fallback order can be tested without
+/// mutating the process environment.
+fn home_dir_from(lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+	let var = |name: &str| {
+		lookup(name)
+			.filter(|value| !value.is_empty())
+			.map(PathBuf::from)
+	};
+	var("HOME").or_else(|| var("USERPROFILE")).or_else(|| {
+		let drive = var("HOMEDRIVE")?;
+		let path = var("HOMEPATH")?;
+		Some(drive.join(path))
+	})
 }
 
 fn running_in_official_container() -> bool {
@@ -291,4 +326,67 @@ fn is_read_once_path(path: &std::path::Path) -> bool {
 	path == std::path::Path::new("/dev/stdin")
 		|| path.starts_with("/dev/fd")
 		|| path.starts_with("/proc/self/fd")
+}
+
+#[cfg(test)]
+mod tests {
+	use std::collections::HashMap;
+
+	use super::home_dir_from;
+
+	/// Look variables up in a fixed map, so these tests never touch the process environment
+	/// (`set_var` is unsafe and parallel tests would race on it).
+	fn lookup<'a>(
+		vars: &'a [(&'a str, &'a str)],
+	) -> impl Fn(&str) -> Option<std::ffi::OsString> + 'a {
+		let map: HashMap<String, std::ffi::OsString> = vars
+			.iter()
+			.map(|(k, v)| (k.to_string(), std::ffi::OsString::from(v)))
+			.collect();
+		move |name| map.get(name).cloned()
+	}
+
+	#[test]
+	fn home_prefers_home_on_unix() {
+		let dir = home_dir_from(lookup(&[
+			("HOME", "/home/user"),
+			("USERPROFILE", r"C:\Users\user"),
+		]));
+		assert_eq!(dir, Some("/home/user".into()));
+	}
+
+	#[test]
+	fn home_falls_back_to_userprofile_without_home() {
+		// This is the Windows case from #4219: HOME is unset, USERPROFILE is what the OS sets.
+		let dir = home_dir_from(lookup(&[("USERPROFILE", r"C:\Users\user")]));
+		assert_eq!(dir, Some(r"C:\Users\user".into()));
+	}
+
+	#[test]
+	fn home_falls_back_to_homedrive_and_homepath() {
+		let dir = home_dir_from(lookup(&[("HOMEDRIVE", "C:"), ("HOMEPATH", r"\Users\user")]));
+		assert_eq!(dir, Some(r"C:\Users\user".into()));
+	}
+
+	#[test]
+	fn home_ignores_empty_values() {
+		// An empty variable must not resolve to a relative path; the next candidate wins.
+		let dir = home_dir_from(lookup(&[
+			("HOME", ""),
+			("USERPROFILE", ""),
+			("HOMEDRIVE", "C:"),
+			("HOMEPATH", r"\Users\user"),
+		]));
+		assert_eq!(dir, Some(r"C:\Users\user".into()));
+	}
+
+	#[test]
+	fn home_is_none_when_nothing_is_set() {
+		assert_eq!(home_dir_from(lookup(&[])), None);
+	}
+
+	#[test]
+	fn home_requires_both_drive_and_path() {
+		assert_eq!(home_dir_from(lookup(&[("HOMEDRIVE", "C:")])), None);
+	}
 }
