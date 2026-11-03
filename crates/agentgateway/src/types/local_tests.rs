@@ -1382,24 +1382,13 @@ ui:
 
 #[tokio::test]
 async fn test_ui_oidc_under_base_path() {
-	let mut config = test_config();
-	config.ui_base_path = "/team/agw".into();
-	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
-	let normalized = NormalizedLocalConfig::from(
-		&config,
-		&resources,
-		ListenerTarget {
-			gateway_name: "name".into(),
-			gateway_namespace: "ns".into(),
-			listener_name: None,
-			port: None,
-		},
-		&format!(
-			r#"
+	let normalized = normalize_test_yaml(&format!(
+		r#"
 gateways:
   default:
     port: 3000
 ui:
+  basePath: /team/agw
   policies:
     oidc:
       issuer: https://issuer.example.com
@@ -1410,8 +1399,7 @@ ui:
       clientSecret: client-secret
       redirectURI: https://tools.example.com/team/agw/oauth/callback
 "#
-		),
-	)
+	))
 	.await
 	.expect("UI under a base path should normalize");
 
@@ -1424,6 +1412,10 @@ ui:
 	assert!(ui_route.matches.iter().any(
 		|route_match| matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == "/oauth/callback")
 	));
+	assert!(normalized.backends.iter().any(|backend| matches!(
+		&backend.backend,
+		Backend::Internal(_, crate::types::local::InternalBackend::Ui { base_path }) if base_path == "/team/agw"
+	)));
 	let oidc = ui_route
 		.inline_policies
 		.iter()

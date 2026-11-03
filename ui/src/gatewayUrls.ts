@@ -60,7 +60,8 @@ export function llmGatewayOrigin(config: GatewayConfig | null | undefined) {
 		refs.length > 0 &&
 		gatewayRefsOverlap(config, uiGateways, refs)
 	) {
-		return window.location.origin;
+		// The proxy strips ui.basePath for everything on the UI's gateway, not just the UI.
+		return `${window.location.origin}${config.ui?.basePath ?? ''}`;
 	}
 	const gateway = firstGatewayEndpoint(config, refs);
 	if (gateway?.port !== undefined) {
@@ -87,7 +88,7 @@ function playgroundEndpoint(
 		targets.length > 0 &&
 		gatewayRefsOverlap(config, uiGateways, targets)
 	) {
-		return { baseUrl: sameOriginBaseUrl, sameOrigin: true };
+		return { baseUrl: `${config.ui?.basePath ?? ''}${sameOriginBaseUrl}`, sameOrigin: true };
 	}
 
 	const gateway = firstGatewayEndpoint(config, targets);

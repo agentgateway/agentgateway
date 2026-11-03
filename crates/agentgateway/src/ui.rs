@@ -92,8 +92,8 @@ pub fn router(
 		// OIDC intercepts this path to start login; without OIDC, return to the UI.
 		.route(
 			"/api/auth/login",
-			get(|State(app): State<App>| async move {
-				Redirect::to(&format!("{}/ui", app.state.ui_base_path))
+			get(|base_path: Option<Extension<UiBasePath>>| async move {
+				Redirect::to(&format!("{}/ui", ui_base_path(base_path.as_deref())))
 			}),
 		)
 		.route("/api/runtime", get(get_runtime))
@@ -125,13 +125,19 @@ pub fn router(
 	let router = if assets_dir.entries().is_empty() {
 		router.route("/", get(crate::management::admin::handle_dashboard))
 	} else {
-		let base_path = cfg.ui_base_path.clone();
-		let ui_service =
-			tower::service_fn(move |req| serve_ui_asset(req, assets_dir, base_path.clone()));
+		// Split once so each index request only inserts its <base>.
+		let index = assets_dir.get_file("index.html").map(|index| {
+			let html = String::from_utf8_lossy(index.contents());
+			let (head, rest) = html
+				.split_once("<head>")
+				.expect("UI index.html must contain <head>");
+			Arc::new((format!("{head}<head>"), rest.to_string()))
+		});
+		let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir, index.clone()));
 		router.nest_service("/ui", ui_service).route(
 			"/",
-			get(|State(app): State<App>| async move {
-				Redirect::permanent(&format!("{}/ui/", app.state.ui_base_path))
+			get(|base_path: Option<Extension<UiBasePath>>| async move {
+				Redirect::permanent(&format!("{}/ui/", ui_base_path(base_path.as_deref())))
 			}),
 		)
 	};
@@ -401,10 +407,25 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 async fn serve_ui_asset(
 	req: http::Request<axum::body::Body>,
 	assets: &'static Dir<'static>,
-	base_path: agent_core::strng::Strng,
+	index: Option<Arc<(String, String)>>,
 ) -> Result<Response, std::convert::Infallible> {
 	if should_serve_ui_index(req.uri().path()) {
-		return Ok(serve_ui_index(assets, &base_path));
+		let Some(index) = index else {
+			return Ok(StatusCode::NOT_FOUND.into_response());
+		};
+		let (head, rest) = &*index;
+		// Assets are relative; <base> anchors them and tells the UI where it lives.
+		let html = format!(
+			"{head}<base href=\"{}/ui/\">{rest}",
+			ui_base_path(req.extensions().get())
+		);
+		return Ok(
+			(
+				[(http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+				html,
+			)
+				.into_response(),
+		);
 	}
 	ServeDir::new(assets)
 		.oneshot(req)
@@ -412,21 +433,29 @@ async fn serve_ui_asset(
 		.map(|response| response.map(axum::body::Body::new))
 }
 
-fn serve_ui_index(assets: &'static Dir<'static>, base_path: &str) -> Response {
-	let Some(index) = assets.get_file("index.html") else {
-		return StatusCode::NOT_FOUND.into_response();
-	};
-	// Assets are relative; <base> anchors them and tells the UI where it lives.
-	let html = String::from_utf8_lossy(index.contents()).replacen(
-		"<head>",
-		&format!("<head><base href=\"{base_path}/ui/\">"),
-		1,
-	);
-	(
-		[(http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
-		html,
-	)
-		.into_response()
+/// Set by the gateway route the UI is attached to, from `ui.basePath`.
+#[derive(Clone)]
+pub(crate) struct UiBasePath(pub agent_core::strng::Strng);
+
+fn ui_base_path(base_path: Option<&UiBasePath>) -> &str {
+	base_path.map_or("", |v| v.0.as_str())
+}
+
+pub(crate) fn validate_ui_base_path(path: &str) -> anyhow::Result<()> {
+	// Goes into HTML and Location headers, so only plain path characters.
+	if !path.is_empty()
+		&& (!path.starts_with('/')
+			|| path.ends_with('/')
+			|| path.contains("//")
+			|| !path
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || "/-._~%".contains(c)))
+	{
+		anyhow::bail!(
+			"must be a path such as /agentgateway, without a trailing '/', using only letters, digits, '/', '-', '.', '_', '~' and '%'; got {path:?}"
+		);
+	}
+	Ok(())
 }
 
 fn should_serve_ui_index(path: &str) -> bool {
@@ -1811,8 +1840,7 @@ mod tests {
 	#[tokio::test]
 	async fn ui_is_served_under_the_configured_base_path() {
 		for base_path in ["", "/team/agentgateway"] {
-			let mut app = test_app(true);
-			Arc::get_mut(&mut app.state).unwrap().ui_base_path = agent_core::strng::new(base_path);
+			let app = test_app(true);
 			let router = router(
 				app.state.clone(),
 				app.model_catalog.clone(),
@@ -1827,6 +1855,7 @@ mod tests {
 						.oneshot(
 							axum::extract::Request::builder()
 								.uri(uri)
+								.extension(UiBasePath(agent_core::strng::new(base_path)))
 								.body(axum::body::Body::empty())
 								.unwrap(),
 						)
@@ -1863,6 +1892,16 @@ mod tests {
 			let (status, _, body) = get("/ui/assets/index.js").await;
 			assert_eq!(status, StatusCode::OK);
 			assert_eq!(body, "console.log(1)");
+		}
+	}
+
+	#[test]
+	fn ui_base_path_is_validated() {
+		for input in ["", "/agw", "/team/agw"] {
+			assert!(validate_ui_base_path(input).is_ok(), "{input}");
+		}
+		for input in ["/", "/agw/", "agw", "//agw", "/a\"b", "/a?x=1", "/a b"] {
+			assert!(validate_ui_base_path(input).is_err(), "{input}");
 		}
 	}
 }
