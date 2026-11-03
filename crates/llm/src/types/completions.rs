@@ -1301,6 +1301,15 @@ pub mod typed {
 		pub thinking_budget_tokens: Option<u64>,
 	}
 
+	/// A Chat Completions stream event: a chunk, or OpenAI's mid-stream error.
+	#[derive(Serialize)]
+	#[serde(untagged)]
+	#[allow(clippy::large_enum_variant)]
+	pub enum ChatStreamEvent {
+		Chunk(StreamResponse),
+		Error(async_openai::error::WrappedError),
+	}
+
 	#[derive(Debug, Deserialize, Serialize)]
 	pub struct ChatCompletionErrorResponse {
 		pub event_id: Option<String>,
