@@ -6007,11 +6007,21 @@ spec:
                                               maxLength: 16384
                                               minLength: 1
                                               type: string
-                                            description: Extra form params; values
-                                              are CEL expressions over the incoming
-                                              request.
+                                            description: |-
+                                              Extra form params; values are CEL expressions over the incoming request.
+                                              Parameters set by the gateway itself (for example `scope`, `audience`, or `client_id`) may not be overridden.
                                             maxProperties: 64
                                             type: object
+                                            x-kubernetes-validations:
+                                            - message: additionalParams may not override
+                                                a reserved OAuth parameter
+                                              rule: self.all(k, !(k.lowerAscii() in
+                                                ['grant_type', 'subject_token', 'subject_token_type',
+                                                'actor_token', 'actor_token_type',
+                                                'assertion', 'audience', 'resource',
+                                                'scope', 'requested_token_type', 'client_id',
+                                                'client_secret', 'client_assertion',
+                                                'client_assertion_type']))
                                           audiences:
                                             description: Audiences sent to the token
                                               endpoint.
@@ -9409,10 +9419,20 @@ spec:
                                             maxLength: 16384
                                             minLength: 1
                                             type: string
-                                          description: Extra form params; values are
-                                            CEL expressions over the incoming request.
+                                          description: |-
+                                            Extra form params; values are CEL expressions over the incoming request.
+                                            Parameters set by the gateway itself (for example `scope`, `audience`, or `client_id`) may not be overridden.
                                           maxProperties: 64
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: additionalParams may not override
+                                              a reserved OAuth parameter
+                                            rule: self.all(k, !(k.lowerAscii() in
+                                              ['grant_type', 'subject_token', 'subject_token_type',
+                                              'actor_token', 'actor_token_type', 'assertion',
+                                              'audience', 'resource', 'scope', 'requested_token_type',
+                                              'client_id', 'client_secret', 'client_assertion',
+                                              'client_assertion_type']))
                                         audiences:
                                           description: Audiences sent to the token
                                             endpoint.
@@ -15174,10 +15194,19 @@ spec:
                               maxLength: 16384
                               minLength: 1
                               type: string
-                            description: Extra form params; values are CEL expressions
-                              over the incoming request.
+                            description: |-
+                              Extra form params; values are CEL expressions over the incoming request.
+                              Parameters set by the gateway itself (for example `scope`, `audience`, or `client_id`) may not be overridden.
                             maxProperties: 64
                             type: object
+                            x-kubernetes-validations:
+                            - message: additionalParams may not override a reserved
+                                OAuth parameter
+                              rule: self.all(k, !(k.lowerAscii() in ['grant_type',
+                                'subject_token', 'subject_token_type', 'actor_token',
+                                'actor_token_type', 'assertion', 'audience', 'resource',
+                                'scope', 'requested_token_type', 'client_id', 'client_secret',
+                                'client_assertion', 'client_assertion_type']))
                           audiences:
                             description: Audiences sent to the token endpoint.
                             items:
