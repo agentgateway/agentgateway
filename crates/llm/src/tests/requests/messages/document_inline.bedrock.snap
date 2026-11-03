@@ -1,6 +1,5 @@
 ---
 source: crates/llm/src/golden_tests.rs
-assertion_line: 104
 description: src/tests/requests/messages/document_inline.json
 info:
   model: claude-sonnet-5
