@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -23,12 +24,14 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/proxyfeedback"
 )
 
 type Fake struct {
 	Server      *krtxds.DiscoveryServer
 	Addresses   krt.StaticCollection[syncer.Address]
 	Resources   krt.StaticCollection[agwir.AgwResource]
+	Feedback    *proxyfeedback.Tracker
 	BufListener *bufconn.Listener
 	t           *testing.T
 }
@@ -49,7 +52,8 @@ func NewFakeDiscoveryServerWith(t *testing.T, initialAddress []syncer.Address, i
 		krtxds.PerGatewayCollection[agwir.AgwResource, *api.Resource](xdsResource.AsCollection(), agwResourcesByGateway, opts),
 	}
 	// we won't need a mock nack event publisher for this testing, so we pass nil
-	s := krtxds.NewDiscoveryServer(opts.Debugger, nil, reg...)
+	feedback := proxyfeedback.NewTracker()
+	s := krtxds.NewDiscoveryServer(opts.Debugger, nil, feedback, reg...)
 	s.Start(stop)
 	xdsAddress.WaitUntilSynced(stop)
 	xdsResource.WaitUntilSynced(stop)
@@ -81,6 +85,7 @@ func NewFakeDiscoveryServerWith(t *testing.T, initialAddress []syncer.Address, i
 		BufListener: listener,
 		Addresses:   xdsAddress,
 		Resources:   xdsResource,
+		Feedback:    feedback,
 	}
 }
 
@@ -220,4 +225,38 @@ func TestXDSDisconnect(t *testing.T) {
 		assert.Equal(t, len(resp.Resources), 1)
 		assert.Equal(t, len(resp.RemovedResources), 1)
 	})
+}
+
+func TestXDSProxyFeedback(t *testing.T) {
+	policy := func(secret string) agwir.AgwResource {
+		return agwir.AgwResource{Resource: &api.Resource{Kind: &api.Resource_Policy{Policy: &api.Policy{
+			Key:  "auth",
+			Name: &api.TypedResourceName{Kind: "AgentgatewayPolicy", Namespace: "default", Name: "auth"},
+			Kind: &api.Policy_Backend{Backend: &api.BackendPolicySpec{Kind: &api.BackendPolicySpec_Auth{Auth: &api.BackendAuthPolicy{
+				Kind: &api.BackendAuthPolicy_Key{Key: &api.Key{Secret: secret}},
+			}}}},
+		}}}}
+	}
+	s := NewFakeDiscoveryServerWith(t, nil, []agwir.AgwResource{policy("broken")})
+	ads := s.ConnectDeltaADS().WithType(krtxds.TargetTypeResourceUrl)
+
+	ads.Request(nil)
+	resp := ads.ExpectResponse()
+	ads.Request(&discovery.DeltaDiscoveryRequest{
+		ResponseNonce: resp.Nonce,
+		ErrorDetail:   &status.Status{Message: `[{"key":"policy/auth","warn":"bad key"}]`},
+	})
+	// A warning is acknowledged, so nothing is resent.
+	ads.ExpectNoResponse()
+	assert.EventuallyEqual(t, s.Feedback.Snapshot, []proxyfeedback.Diagnostic{{
+		Source:   proxyfeedback.Source{Kind: "AgentgatewayPolicy", Namespace: "default", Name: "auth"},
+		Resource: "policy/auth",
+		Severity: proxyfeedback.SeverityWarning,
+		Message:  "bad key",
+	}})
+
+	s.Resources.UpdateObject(policy("fixed"))
+	resp = ads.ExpectResponse()
+	ads.Request(&discovery.DeltaDiscoveryRequest{ResponseNonce: resp.Nonce})
+	assert.EventuallyEqual(t, func() int { return len(s.Feedback.Snapshot()) }, 0)
 }

@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"istio.io/istio/pilot/pkg/features"
 	istiogrpc "istio.io/istio/pilot/pkg/grpc"
 	"istio.io/istio/pilot/pkg/model"
@@ -44,6 +45,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/proxyfeedback"
 )
 
 var (
@@ -215,7 +217,7 @@ var (
 )
 
 // NewDiscoveryServer creates a DiscoveryServer for agentgateway that sources data from KRT collections via registered generators
-func NewDiscoveryServer(debugger *krt.DebugHandler, nackPublisher *nack.Publisher, reg ...Registration) *DiscoveryServer {
+func NewDiscoveryServer(debugger *krt.DebugHandler, nackPublisher *nack.Publisher, feedback *proxyfeedback.Tracker, reg ...Registration) *DiscoveryServer {
 	out := &DiscoveryServer{
 		concurrentPushLimit: make(chan struct{}, features.PushThrottle),
 		RequestRateLimit:    rate.NewLimiter(rate.Limit(features.RequestLimit), 1),
@@ -227,6 +229,7 @@ func NewDiscoveryServer(debugger *krt.DebugHandler, nackPublisher *nack.Publishe
 		adsClients:          map[string]*Connection{},
 		krtDebugger:         debugger,
 		nackPublisher:       nackPublisher,
+		feedback:            feedback,
 		DebounceOptions: DebounceOptions{
 			DebounceAfter: DebounceAfter,
 			DebounceMax:   DebounceMax,
@@ -288,6 +291,7 @@ type DiscoveryServer struct {
 	registrations []CollectionRegistration
 
 	nackPublisher *nack.Publisher
+	feedback      *proxyfeedback.Tracker
 }
 
 // Proxy contains information about an specific instance of a proxy.
@@ -320,6 +324,9 @@ type Connection struct {
 	deltaStream DeltaDiscoveryStream
 
 	deltaReqChan chan *discovery.DeltaDiscoveryRequest
+
+	// feedback tracks the configuration problems this proxy reports. Nil if not tracked.
+	feedback *proxyfeedback.Connection
 }
 type DeltaDiscoveryStream = discovery.AggregatedDiscoveryService_DeltaAggregatedResourcesServer
 
@@ -558,11 +565,19 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 
 	// Feedback is reported even for an expired nonce: a later response may not have replaced the
 	// resources it describes.
+	var diagnostics []nackDiagnostic
+	structured := true
+	if request.ErrorDetail != nil {
+		diagnostics, structured = parseNackDiagnostics(request.ErrorDetail.GetMessage())
+	}
+	// Unstructured feedback does not say which resources it is about, so it cannot update them.
+	if con.feedback != nil && request.ResponseNonce != "" && structured {
+		con.feedback.Replied(request.TypeUrl, request.ResponseNonce, feedbackReports(diagnostics))
+	}
 	if request.ErrorDetail != nil {
 		message := request.ErrorDetail.GetMessage()
 		// nolint: gosec // error side is bounded
 		errCode := codes.Code(request.ErrorDetail.Code)
-		diagnostics, structured := parseNackDiagnostics(message)
 		hasErrors := !structured
 		hasWarnings := false
 		for _, diagnostic := range diagnostics {
@@ -694,6 +709,19 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 	return true
 }
 
+func feedbackReports(diagnostics []nackDiagnostic) []proxyfeedback.Report {
+	reports := make([]proxyfeedback.Report, 0, len(diagnostics))
+	for _, d := range diagnostics {
+		if d.Error != "" {
+			reports = append(reports, proxyfeedback.Report{Resource: d.Key, Severity: proxyfeedback.SeverityError, Message: d.Error})
+		}
+		if d.Warn != "" {
+			reports = append(reports, proxyfeedback.Report{Resource: d.Key, Severity: proxyfeedback.SeverityWarning, Message: d.Warn})
+		}
+	}
+	return reports
+}
+
 // Push a Delta XDS resource for the given connection.
 func (s *DiscoveryServer) pushDeltaXds(con *Connection, w *model.WatchedResource, req *PushRequest) error {
 	if w == nil {
@@ -729,6 +757,9 @@ func (s *DiscoveryServer) pushDeltaXds(con *Connection, w *model.WatchedResource
 	if err := con.sendDelta(resp); err != nil {
 		log.Debug("send failure", "type", GetShortType(w.TypeUrl), "node", con.proxy.ID, "resources", len(res), "size", ByteCount(configSize), "error", err)
 		return err
+	}
+	if con.feedback != nil {
+		con.feedback.Sent(w.TypeUrl, resp.Nonce, res, deletedRes)
 	}
 
 	log.Info("push response",
@@ -900,6 +931,11 @@ func (s *DiscoveryServer) initConnection(node *envoycorev3.Node, con *Connection
 		}
 	}
 
+	if s.feedback != nil {
+		gateway := AgentgatewayID(node)
+		con.feedback = s.feedback.NewConnection(gateway, s.resourceLookup(gateway))
+	}
+
 	// Register the connection. this allows pushes to be triggered for the proxy. Note: the timing of
 	// this and initializeProxy important. While registering for pushes *after* initialization is complete seems like
 	// a better choice, it introduces a race condition; If we complete initialization of a new push
@@ -916,6 +952,9 @@ func (s *DiscoveryServer) initConnection(node *envoycorev3.Node, con *Connection
 func (s *DiscoveryServer) closeConnection(con *Connection) {
 	if con.ID() == "" {
 		return
+	}
+	if con.feedback != nil {
+		con.feedback.Close()
 	}
 	s.removeCon(con.ID())
 }
@@ -1171,6 +1210,20 @@ func (s *DiscoveryServer) findGenerator(url string) (CollectionGenerator, bool) 
 	return CollectionGenerator{}, false
 }
 
+// resourceLookup returns the resource the given Gateway currently receives under a name.
+func (s *DiscoveryServer) resourceLookup(gw types.NamespacedName) func(typeURL, name string) *anypb.Any {
+	return func(typeURL, name string) *anypb.Any {
+		gen, ok := s.findGenerator(typeURL)
+		if !ok {
+			return nil
+		}
+		if r := gen.lookup(gw, name); r != nil {
+			return r.Resource.Resource
+		}
+		return nil
+	}
+}
+
 var connectionNumber = int64(0)
 
 func connectionID(node string) string {
@@ -1213,29 +1266,10 @@ func (e CollectionGenerator) GenerateDeltas(req *PushRequest, w *model.WatchedRe
 	var deletes []string
 
 	for k := range k {
-		originalKey := k
-		var keys []string
-		if e.PerGateway {
-			// Lookup both unscoped and for our gateway
-			keys = []string{types.NamespacedName{}.String() + "/" + k, gw.String() + "/" + k}
+		if v := e.lookup(gw, k); v != nil {
+			res = append(res, v.Resource)
 		} else {
-			// Just lookup the key, no need to worry about gateways
-			keys = []string{k}
-		}
-		found := false
-		for _, key := range keys {
-			v := e.Col.GetKey(key)
-			if v != nil && !v.IsForGateway(gw) {
-				v = nil
-			}
-			if v != nil {
-				found = true
-				res = append(res, v.Resource)
-				break
-			}
-		}
-		if !found {
-			deletes = append(deletes, originalKey)
+			deletes = append(deletes, k)
 		}
 	}
 
@@ -1245,6 +1279,21 @@ func (e CollectionGenerator) GenerateDeltas(req *PushRequest, w *model.WatchedRe
 	}
 
 	return res, deletes, nil
+}
+
+// lookup returns the resource the given Gateway receives under name.
+func (e CollectionGenerator) lookup(gw types.NamespacedName, name string) *DiscoveryResource {
+	keys := []string{name}
+	if e.PerGateway {
+		// Lookup both unscoped and for our gateway
+		keys = []string{types.NamespacedName{}.String() + "/" + name, gw.String() + "/" + name}
+	}
+	for _, key := range keys {
+		if v := e.Col.GetKey(key); v != nil && v.IsForGateway(gw) {
+			return v
+		}
+	}
+	return nil
 }
 
 type TypeUrl string

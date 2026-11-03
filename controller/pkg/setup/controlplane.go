@@ -20,6 +20,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/proxyfeedback"
 )
 
 const (
@@ -60,6 +61,7 @@ func runXDSServer(
 	xdsAuth bool,
 	certProvider certificateProvider,
 	nackPublisher *nack.Publisher,
+	feedback *proxyfeedback.Tracker,
 	reg ...krtxds.Registration,
 ) {
 	baseLogger := slog.Default().With("component", "agentgateway-controlplane")
@@ -67,7 +69,7 @@ func runXDSServer(
 	serverOpts := getGRPCServerOpts(authenticators, xdsAuth, certProvider, baseLogger)
 	grpcServer := grpc.NewServer(serverOpts...)
 
-	ds := krtxds.NewDiscoveryServer(nil, nackPublisher, reg...)
+	ds := krtxds.NewDiscoveryServer(nil, nackPublisher, feedback, reg...)
 	stop := make(chan struct{})
 	context.AfterFunc(ctx, func() {
 		close(stop)
