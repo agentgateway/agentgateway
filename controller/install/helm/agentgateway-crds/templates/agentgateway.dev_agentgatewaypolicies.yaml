@@ -7254,13 +7254,48 @@ spec:
                         x-kubernetes-validations:
                         - message: maxConnectionDuration must be at least 1 second
                           rule: duration(self) >= duration('1s')
+                      normalize:
+                        description: |-
+                          `normalize` defines path normalization rules applied before route matching.
+                          The normalized path is used for routing, policies and the upstream request;
+                          access logs keep the original path. Rules are applied in a fixed order
+                          regardless of how they are listed: percent-decoding, then `MergeSlash`,
+                          then `DotSegment`.
+
+                          Malformed percent-encoding and `%00` are rejected with 400 whenever any rule
+                          other than `MergeSlash` is set.
+
+                          `MergeSlash` collapses repeated slashes into one, treating `\` as `/`.
+                          `DotSegment` resolves `.` and `..` segments, treating `%2E` as `.`, `\` as `/`,
+                          and ignoring parameters on dot segments (`..;x`).
+                          `DecodeUnreserved` decodes percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`).
+                          `RejectEscapedSlash` rejects requests whose path contains `%2F` or `%5C` with 400.
+                          `UnescapeSlash` decodes `%2F` and `%5C` into `/`.
+                        items:
+                          enum:
+                          - DecodeUnreserved
+                          - DotSegment
+                          - MergeSlash
+                          - RejectEscapedSlash
+                          - UnescapeSlash
+                          type: string
+                        maxItems: 5
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-type: set
+                        x-kubernetes-validations:
+                        - message: RejectEscapedSlash and UnescapeSlash are mutually
+                            exclusive
+                          rule: '!(self.exists(x, x == ''RejectEscapedSlash'') &&
+                            self.exists(x, x == ''UnescapeSlash''))'
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
                         http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
                         http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
-                        maxConcurrentRequests maxConnectionDuration] must be set
-                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConcurrentRequests),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                        maxConcurrentRequests maxConnectionDuration normalize] must
+                        be set
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConcurrentRequests),has(self.maxConnectionDuration),has(self.normalize)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
