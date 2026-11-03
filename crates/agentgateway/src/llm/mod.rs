@@ -2498,7 +2498,7 @@ impl AIProvider {
 		if guardrail_rejection.is_none()
 			&& policies
 				.and_then(|p| p.prompt_guard.as_ref())
-				.is_some_and(|g| g.email_pseudonymization_enabled())
+				.is_some_and(|g| g.email_tokenization_enabled())
 		{
 			if original_format != InputFormat::Completions {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
@@ -2507,7 +2507,7 @@ impl AIProvider {
 			}
 			parts
 				.extensions
-				.insert(policy::pseudonymization::EmailTokens::tokenize(req)?);
+				.insert(policy::tokenization::EmailTokens::tokenize(req)?);
 		}
 
 		let mut llm_info =
@@ -2906,7 +2906,7 @@ impl AIProvider {
 			{
 				llm_resp.service_tier = Some(strng::new(tier));
 			}
-			if let Some(tokens) = &rate_limit.pseudonymization {
+			if let Some(tokens) = &rate_limit.tokenization {
 				tokens.restore_response(resp.as_mut());
 			}
 			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
@@ -3357,7 +3357,7 @@ impl AIProvider {
 		{
 			use policy::PromptGuard;
 			let temp_guard = PromptGuard {
-				pseudonymization: None,
+				tokenization: None,
 				streaming: policy::PromptGuardStreamingMode::Enabled,
 				request: vec![],
 				response: response_policies.prompt_guard.clone(),
@@ -3372,7 +3372,7 @@ impl AIProvider {
 			vec![]
 		};
 
-		let pseudonymization = response_policies.pseudonymization.clone();
+		let tokenization = response_policies.tokenization.clone();
 		let logger = AmendOnDrop::new(log, response_policies, req_snapshot, model_catalog).into_llm();
 		let stream_format = match self {
 			AIProvider::Bedrock(_) => "awsEventStream",
@@ -3424,7 +3424,7 @@ impl AIProvider {
 		} else {
 			translated.map(|b| b.transform_stream(|b| GuardedSseBody::new(b, evaluators, buffer, None)))
 		};
-		Ok(if let Some(tokens) = pseudonymization {
+		Ok(if let Some(tokens) = tokenization {
 			guarded.map(|b| b.transform_stream(|b| tokens.restore_stream(b, buffer)))
 		} else {
 			guarded

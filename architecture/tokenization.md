@@ -6,11 +6,9 @@ Enable **Email addresses** under **LLM Guardrails > Data tokenization**, or conf
 llm:
   policies:
     guardrails:
-      pseudonymization:
+      tokenization:
         email: true
 ```
-
-The configuration key remains `pseudonymization` for compatibility with saved settings
 
 This configuration applies to Chat Completions requests. Other LLM route types are rejected when this policy is enabled. The provider can use a different wire format internally, provided the gateway translates it to and from Chat Completions. No provider streaming flag is required
 
@@ -31,5 +29,5 @@ The local configuration and admin API support this policy. The xDS protocol has 
 Run the focused behavior tests with
 
 ```sh
-cargo test --locked --profile ci -p agentgateway --lib pseudonymization
+cargo test --locked --profile ci -p agentgateway --lib tokenization
 ```

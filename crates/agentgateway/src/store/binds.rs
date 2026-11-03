@@ -587,7 +587,7 @@ impl LLMRequestPolicies {
 
 #[derive(Debug, Default)]
 pub struct LLMResponsePolicies {
-	pub pseudonymization: Option<Arc<llm::policy::pseudonymization::EmailTokens>>,
+	pub tokenization: Option<Arc<llm::policy::tokenization::EmailTokens>>,
 	pub local_rate_limit: Vec<http::localratelimit::ChargedBucket>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
 	pub request_traceparent: Option<HeaderValue>,
@@ -4663,7 +4663,7 @@ mod tests {
 		}));
 		let prompt_guard_policy = BackendTrafficPolicy::AI(Arc::new(llm::Policy {
 			prompt_guard: Some(PromptGuard {
-				pseudonymization: None,
+				tokenization: None,
 				streaming: Default::default(),
 				request: vec![RequestGuard {
 					rejection: Default::default(),
@@ -4713,7 +4713,7 @@ mod tests {
 		let attached = BackendPolicies {
 			llm: Some(Arc::new(llm::Policy {
 				prompt_guard: Some(PromptGuard {
-					pseudonymization: None,
+					tokenization: None,
 					streaming: Default::default(),
 					request: vec![RequestGuard {
 						rejection: Default::default(),

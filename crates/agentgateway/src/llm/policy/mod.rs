@@ -84,11 +84,11 @@ mod bedrock_guardrails;
 mod google_model_armor;
 mod moderation;
 mod pii;
-pub mod pseudonymization;
 pub mod streaming_guardrails;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+pub mod tokenization;
 
 /// Routes stored in a deterministic order: **longest key to shortest key**, with `"*"` always last.
 ///
@@ -306,7 +306,7 @@ pub struct PromptEnrichment {
 pub struct PromptGuard {
 	/// Reversible replacement of sensitive text before provider calls.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub pseudonymization: Option<pseudonymization::Pseudonymization>,
+	pub tokenization: Option<tokenization::Tokenization>,
 	/// Apply prompt guards to streaming responses and realtime websocket messages.
 	#[serde(default, skip_serializing_if = "PromptGuardStreamingMode::is_disabled")]
 	pub streaming: PromptGuardStreamingMode,
@@ -319,8 +319,8 @@ pub struct PromptGuard {
 }
 
 impl PromptGuard {
-	pub fn email_pseudonymization_enabled(&self) -> bool {
-		self.pseudonymization.as_ref().is_some_and(|p| p.email)
+	pub fn email_tokenization_enabled(&self) -> bool {
+		self.tokenization.as_ref().is_some_and(|p| p.email)
 	}
 
 	pub(crate) fn validate(&self) -> Result<(), String> {

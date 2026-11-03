@@ -1372,7 +1372,7 @@ function draftFromGuardrails(guardrails: LlmGuardrail): GuardrailDraft {
 	return {
 		request: (guardrails.request ?? []).map(draftFromGuard),
 		response: ((guardrails.response ?? []) as GuardObject[]).map(draftFromGuard),
-		email: guardrails.pseudonymization?.email ?? false
+		email: guardrails.tokenization?.email ?? false
 	};
 }
 
@@ -1510,7 +1510,7 @@ function buildGuardrails(draft: GuardrailDraft, original: LlmGuardrail): LlmGuar
 		...original,
 		request: request.length ? request : undefined,
 		response: response.length ? response : undefined,
-		pseudonymization: draft.email ? { email: true } : undefined
+		tokenization: draft.email ? { email: true } : undefined
 	}) as LlmGuardrail;
 }
 
