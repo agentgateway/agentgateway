@@ -1925,7 +1925,9 @@ type OAuthTokenExchange struct {
 	RequestedTokenType *OAuthTokenType `json:"requestedTokenType,omitempty"`
 
 	// Extra form params; values are CEL expressions over the incoming request.
+	// Parameters set by the gateway itself (for example `scope`, `audience`, or `client_id`) may not be overridden.
 	// +kubebuilder:validation:MaxProperties=64
+	// +kubebuilder:validation:XValidation:rule="self.all(k, !(k.lowerAscii() in ['grant_type', 'subject_token', 'subject_token_type', 'actor_token', 'actor_token_type', 'assertion', 'audience', 'resource', 'scope', 'requested_token_type', 'client_id', 'client_secret', 'client_assertion', 'client_assertion_type']))",message="additionalParams may not override a reserved OAuth parameter"
 	// +optional
 	AdditionalParams map[string]CELExpression `json:"additionalParams,omitempty"`
 

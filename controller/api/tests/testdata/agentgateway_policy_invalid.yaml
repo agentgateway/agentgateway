@@ -1679,6 +1679,19 @@ spec:
         url: https://oauth.example.com/token
         path: /token
 ---
+_err: 'additionalParams may not override a reserved OAuth parameter'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-reserved-additional-param
+spec:
+  backend:
+    auth:
+      oauthTokenExchange:
+        url: https://oauth.example.com/token
+        additionalParams:
+          Scope: '"read"'
+---
 _err: 'url path is only valid with protocol HTTP'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
