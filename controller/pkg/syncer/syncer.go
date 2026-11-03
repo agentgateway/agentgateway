@@ -756,14 +756,22 @@ func (s *Syncer) buildAgwResources(
 
 	// Phase 2: Build policies with the fully-populated reference index.
 	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, refGrants, krtopts)
-	for _, col := range policyStatuses {
-		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
+	for gk, col := range policyStatuses {
+		getStatus := s.agwPlugins.ContributesPolicies[gk].GetStatus
+		if getStatus == nil {
+			getStatus = translator.GetStatus
+		}
+		status.RegisterStatus(s.statusCollections, col, getStatus)
 	}
 
 	// Build the backend collection with backend+route references
 	agwBackends, agwBackendStatus := AgwBackendCollection(s.agwPlugins, referenceIndex, refGrants, krtopts)
-	for _, col := range agwBackendStatus {
-		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
+	for gk, col := range agwBackendStatus {
+		getStatus := s.agwPlugins.ContributesBackends[gk].GetStatus
+		if getStatus == nil {
+			getStatus = translator.GetStatus
+		}
+		status.RegisterStatus(s.statusCollections, col, getStatus)
 	}
 	// Join all Agw resources
 	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("resources/AllResources")...)
