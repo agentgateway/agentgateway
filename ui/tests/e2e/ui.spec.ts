@@ -1915,7 +1915,7 @@ test('email tokenization saves and reloads without changing existing guards', as
 	await page.getByRole('button', { name: 'Save guardrails', exact: true }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
 	expect(gateway.postedConfigs[0]).toMatchObject({
-		llm: { policies: { guardrails: { ...original, pseudonymization: { email: true } } } }
+		llm: { policies: { guardrails: { ...original, tokenization: { email: true } } } }
 	});
 	await page.reload();
 	await expect(page.getByRole('checkbox', { name: 'Email addresses' })).toBeChecked();

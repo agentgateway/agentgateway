@@ -14,7 +14,7 @@ use crate::llm::types::{RequestType, ResponseType};
 use crate::*;
 
 #[apply(schema!)]
-pub struct Pseudonymization {
+pub struct Tokenization {
 	/// Replace standard email addresses in Chat Completions text with request-scoped tokens and restore them in replies, including streams.
 	#[serde(default)]
 	pub email: bool,
@@ -342,5 +342,5 @@ impl StreamTokens {
 }
 
 #[cfg(test)]
-#[path = "pseudonymization_tests.rs"]
+#[path = "tokenization_tests.rs"]
 mod tests;

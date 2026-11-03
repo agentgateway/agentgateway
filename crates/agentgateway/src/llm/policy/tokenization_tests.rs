@@ -209,7 +209,7 @@ async fn stream_emits_before_upstream_finishes_and_errors_on_truncation() {
 }
 
 #[tokio::test]
-async fn gateway_pseudonymization_masks_upstream_and_restores_after_response_guards() {
+async fn gateway_tokenization_masks_upstream_and_restores_after_response_guards() {
 	use wiremock::{Mock, MockServer, ResponseTemplate};
 
 	use crate::llm::{AIProvider, openai};
@@ -244,7 +244,7 @@ async fn gateway_pseudonymization_masks_upstream_and_restores_after_response_gua
 		);
 		provider.policies = Some(
 			serde_json::from_value(json!({"ai":{"promptGuard":{
-				"pseudonymization":{"email":true}, "streaming":"Enabled",
+				"tokenization":{"email":true}, "streaming":"Enabled",
 				"response":[{"regex":{"action":"reject","rules":[{"builtin":"email"}]}}]
 			}}}))
 			.unwrap(),
@@ -285,7 +285,7 @@ async fn gateway_pseudonymization_masks_upstream_and_restores_after_response_gua
 }
 
 #[tokio::test]
-async fn gateway_pseudonymization_rejects_unsupported_routes_before_upstream() {
+async fn gateway_tokenization_rejects_unsupported_routes_before_upstream() {
 	use wiremock::MockServer;
 
 	use crate::llm::{AIProvider, openai};
@@ -312,7 +312,7 @@ async fn gateway_pseudonymization_rejects_unsupported_routes_before_upstream() {
 		);
 		provider.policies = Some(
 			serde_json::from_value(json!({"ai":{
-				"routes":{"*":route}, "promptGuard":{"pseudonymization":{"email":true}}
+				"routes":{"*":route}, "promptGuard":{"tokenization":{"email":true}}
 			}}))
 			.unwrap(),
 		);

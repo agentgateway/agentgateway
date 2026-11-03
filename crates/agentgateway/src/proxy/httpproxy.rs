@@ -669,9 +669,9 @@ async fn apply_llm_request_policies(
 		.as_deref()
 		.and_then(|llm| llm.prompt_guard.as_ref());
 	Ok(store::LLMResponsePolicies {
-		pseudonymization: req
+		tokenization: req
 			.extensions()
-			.get::<Arc<llm::policy::pseudonymization::EmailTokens>>()
+			.get::<Arc<llm::policy::tokenization::EmailTokens>>()
 			.cloned(),
 		local_rate_limit,
 		remote_rate_limit: response,
@@ -2951,15 +2951,12 @@ async fn make_backend_call(
 				.llm
 				.as_ref()
 				.and_then(|p| p.prompt_guard.as_ref())
-				.is_some_and(|g| g.email_pseudonymization_enabled())
+				.is_some_and(|g| g.email_tokenization_enabled())
 				&& route_type != RouteType::Completions
 			{
-				return Err(
-					ProxyError::AIRequest(llm::AIError::UnsupportedConversion(strng::literal!(
-						"email tokenization requires Chat Completions"
-					)))
-					.into(),
-				);
+				return Err(ProxyError::AIRequest(llm::AIError::UnsupportedConversion(
+					strng::literal!("email tokenization requires Chat Completions"),
+				)));
 			}
 			if matches!(route_type, RouteType::Detect | RouteType::Passthrough)
 				&& let Some(provider_model) = llm.provider.override_model()
@@ -4128,7 +4125,7 @@ mod tests {
 	) -> crate::store::LLMResponsePolicies {
 		let policy = llm::Policy {
 			prompt_guard: Some(PromptGuard {
-				pseudonymization: None,
+				tokenization: None,
 				streaming,
 				request: vec![],
 				response: vec![response_regex_guard()],
