@@ -2956,7 +2956,7 @@ async fn make_backend_call(
 			{
 				return Err(
 					ProxyError::AIRequest(llm::AIError::UnsupportedConversion(strng::literal!(
-						"email pseudonymization requires Chat Completions"
+						"email tokenization requires Chat Completions"
 					)))
 					.into(),
 				);

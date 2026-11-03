@@ -1901,9 +1901,7 @@ test('login loads without protected API requests and preserves the return destin
 	await expect(page.getByText('OAuth started')).toBeVisible();
 });
 
-test('email pseudonymization saves and reloads without changing existing guards', async ({
-	page
-}) => {
+test('email tokenization saves and reloads without changing existing guards', async ({ page }) => {
 	const config = emptyConfig();
 	const original = {
 		streaming: 'Enabled',
@@ -1912,7 +1910,7 @@ test('email pseudonymization saves and reloads without changing existing guards'
 	(config.llm as Record<string, unknown>).policies = { guardrails: original };
 	const gateway = await mockGateway(page, config);
 	await page.goto('/llm/guardrails');
-	await expect(page.getByRole('heading', { name: 'Pseudonymization', exact: true })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Data tokenization', exact: true })).toBeVisible();
 	await page.getByRole('checkbox', { name: 'Email addresses' }).check();
 	await page.getByRole('button', { name: 'Save guardrails', exact: true }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
