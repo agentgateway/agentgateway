@@ -230,11 +230,6 @@ inferenceExtension:
   # -- Enable Inference Extension support in the agentgateway controller.
   enabled: false
 
-# -- Configure the AgentgatewayModel API.
-agentgatewayModels:
-  # -- Enable AgentgatewayModel support in the agentgateway controller.
-  enabled: true
-
 # -- Configure the experimental Gateway API XBackend resource.
 xBackend:
   # -- Enable XBackend support in the agentgateway controller.

@@ -1128,7 +1128,6 @@ func BuildListener(
 	listenerIndex int,
 	portErr error,
 	forListenerSet bool,
-	enableAgentgatewayModels bool,
 ) ([]string, *TLSInfo, ListenerFilterResult, []gwv1.ListenerStatus, bool) {
 	listenerConditions := map[string]*Condition{
 		string(gwv1.ListenerConditionAccepted): {
@@ -1235,7 +1234,7 @@ func BuildListener(
 		ok = false
 	}
 
-	updatedStatus := reportListenerCondition(listenerIndex, l, obj, status, listenerConditions, enableAgentgatewayModels)
+	updatedStatus := reportListenerCondition(listenerIndex, l, obj, status, listenerConditions)
 	return hostnames, tlsInfo, filterResult, updatedStatus, ok
 }
 
