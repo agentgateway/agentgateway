@@ -1296,7 +1296,7 @@ message TrafficPolicySpec {
     }
 
     message RequestDecompression {
-      repeated Algorithm accepted_algorithms = 1;
+      repeated Algorithm algorithms = 1;
     }
 
     optional ResponseCompression response = 1;

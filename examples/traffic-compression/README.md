@@ -32,7 +32,7 @@ policies:
     response:
       algorithms: [gzip, brotli, zstd]
     request:
-      acceptedAlgorithms: [gzip]
+      algorithms: [gzip]
 ```
 
 `response` compresses textual responses (HTML, JSON, CSS, JavaScript, XML, plain text, SVG) using an algorithm the client accepts.

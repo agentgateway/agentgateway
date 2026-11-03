@@ -29,11 +29,37 @@ async fn response_is_compressed_for_accepting_client() {
 }
 
 #[tokio::test]
+async fn head_gets_same_encoding_headers_as_get() {
+	let (_mock, mut bind, _) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"compression": {"response": {"algorithms": ["gzip"]}},
+		}))
+		.await;
+
+	let mut headers = Vec::new();
+	for method in [Method::GET, Method::HEAD] {
+		let res = RequestBuilder::new(method, "http://lo/compressed")
+			.header(header::ACCEPT_ENCODING, "gzip")
+			.send(bind.serve_http(BIND_KEY))
+			.await
+			.unwrap();
+		assert_eq!(res.status(), 200);
+		headers.push((
+			res.headers().get(header::CONTENT_ENCODING).cloned(),
+			res.headers().get(header::VARY).cloned(),
+		));
+	}
+	assert_eq!(headers[0].0.as_ref().unwrap(), "gzip");
+	assert_eq!(headers[0], headers[1]);
+}
+
+#[tokio::test]
 async fn request_body_is_decoded_for_policies_and_backend() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
 		.attach_route_policy(json!({
-			"compression": {"request": {"acceptedAlgorithms": ["gzip"]}},
+			"compression": {"request": {"algorithms": ["gzip"]}},
 			"transformations": {"request": {"set": {"x-body": "string(request.body)"}}},
 		}))
 		.await;

@@ -1,22 +1,17 @@
 use std::convert::Infallible;
 
 use futures_util::FutureExt;
-use headers::{ContentEncoding, HeaderMapExt};
-use http::header::{
-	ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE, ETAG,
-};
+use headers::{CacheControl, ContentEncoding, ContentLength, ContentType, HeaderMapExt};
+use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_LENGTH, ETAG};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use tower::ServiceExt;
 use tower_http::compression::Compression as CompressionService;
-use tower_http::compression::predicate::{Predicate, SizeAbove};
 
 use super::{BR, DEFLATE, EncodingDecision, GZIP, ZSTD, decompress_body, detect_encoding};
 use crate::http::{Body, Request, Response};
 use crate::{apply, schema};
 
-// Compression only pays off for textual payloads. Binary formats (images, video, archives,
-// protobuf) are usually already compressed, and streaming types such as SSE would be delayed by
-// encoder buffering, so anything not listed here is sent as-is.
+// Binary formats are usually already compressed.
 const COMPRESSIBLE_CONTENT_TYPES: &[&str] = &[
 	"application/javascript",
 	"application/json",
@@ -29,6 +24,9 @@ const COMPRESSIBLE_CONTENT_TYPES: &[&str] = &[
 	"text/plain",
 	"text/xml",
 ];
+
+// Matches tower-http's SizeAbove default.
+const MIN_COMPRESS_SIZE: u64 = 32;
 
 /// An HTTP content coding supported by the compression policy.
 #[apply(schema!)]
@@ -57,10 +55,14 @@ fn default_algorithms() -> Vec<CompressionAlgorithm> {
 
 #[apply(schema!)]
 pub struct Compression {
-	/// Compress response bodies sent to the client.
+	/// Compress response bodies sent to the client. Only textual content types with a known
+	/// `Content-Length` of at least 32 bytes are compressed, so streamed responses are sent as-is.
+	/// Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`
+	/// are never compressed.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseCompression>,
-	/// Decompress request bodies before body-aware policies run and before forwarding.
+	/// Decompress request bodies after authorization, before body-aware policies run and before
+	/// forwarding.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub request: Option<RequestDecompression>,
 }
@@ -78,7 +80,7 @@ pub struct RequestDecompression {
 	/// Algorithms decoded from request bodies. Bodies using any other (or more than one)
 	/// encoding are forwarded untouched. Defaults to gzip.
 	#[serde(default = "default_algorithms")]
-	pub accepted_algorithms: Vec<CompressionAlgorithm>,
+	pub algorithms: Vec<CompressionAlgorithm>,
 }
 
 impl crate::store::RequestPolicyTrait for Compression {
@@ -96,17 +98,17 @@ impl crate::store::RequestPolicyTrait for Compression {
 }
 
 impl RequestDecompression {
-	/// Install a streaming decoder; nothing is read here. Replacing the body content also drops
-	/// any inspection cached from the encoded bytes, so later body-aware CEL must re-inspect.
+	/// Installs a streaming decoder without reading the body. This drops any inspection cached from
+	/// the encoded bytes.
 	pub fn apply(&self, req: &mut Request) -> Result<(), crate::proxy::ProxyError> {
 		let Some(encoding) = req.headers().typed_get::<ContentEncoding>() else {
 			return Ok(());
 		};
-		// Layered or unknown encodings are left alone: decoding one layer would misrepresent the body.
+		// Decoding only one layer of a layered encoding would misrepresent the body.
 		let EncodingDecision::Single(token) = detect_encoding(&encoding) else {
 			return Ok(());
 		};
-		if !self.accepted_algorithms.iter().any(|a| a.token() == token) {
+		if !self.algorithms.iter().any(|a| a.token() == token) {
 			return Ok(());
 		}
 		let (body, _) = decompress_body(std::mem::take(req.body_mut()), Some(&encoding))
@@ -119,10 +121,9 @@ impl RequestDecompression {
 }
 
 impl ResponseCompression {
-	/// Capture the client's Accept-Encoding now, since request policies may strip it before the
-	/// request is forwarded.
+	/// Captures Accept-Encoding before request policies can strip it.
 	pub fn for_request(&self, req: &Request) -> Option<ResponseCompressor> {
-		if req.method() == http::Method::HEAD || !req.headers().contains_key(ACCEPT_ENCODING) {
+		if !req.headers().contains_key(ACCEPT_ENCODING) {
 			return None;
 		}
 		let mut accept_encoding = HeaderMap::new();
@@ -143,8 +144,7 @@ pub struct ResponseCompressor {
 }
 
 impl ResponseCompressor {
-	/// Negotiate and apply compression using tower-http. This must run after every policy that can
-	/// read or replace the response body, since the body is only encoded as it is sent.
+	/// Must run after every policy that can read or replace the response body.
 	pub fn apply(self, resp: &mut Response) {
 		let status = resp.status();
 		if status.is_informational()
@@ -166,10 +166,11 @@ impl ResponseCompressor {
 		.br(enabled(CompressionAlgorithm::Brotli))
 		.deflate(enabled(CompressionAlgorithm::Deflate))
 		.zstd(enabled(CompressionAlgorithm::Zstd))
-		.compress_when(SizeAbove::default().and(is_compressible));
+		.compress_when(is_compressible);
 
 		let mut request = ::http::Request::new(());
 		*request.headers_mut() = self.accept_encoding;
+		// The inner service is always ready and `Compression` only maps its future.
 		let compressed = service
 			.oneshot(request)
 			.now_or_never()
@@ -177,8 +178,7 @@ impl ResponseCompressor {
 			.expect("inner service is infallible");
 
 		let (mut parts, body) = compressed.into_parts();
-		// tower-http answers 406 when no offered coding is acceptable; a proxy must not rewrite the
-		// upstream status, so keep it and send the body unencoded.
+		// tower-http answers 406 when nothing is acceptable; keep the upstream status instead.
 		parts.status = status;
 		if !already_encoded && parts.headers.contains_key(CONTENT_ENCODING) {
 			weaken_etag(&mut parts.headers);
@@ -193,31 +193,34 @@ fn is_compressible(
 	headers: &HeaderMap,
 	_: &http::Extensions,
 ) -> bool {
-	// RFC 9111 §5.2.2.6: intermediaries must not transform a no-transform payload.
-	let no_transform = headers
-		.get_all(CACHE_CONTROL)
-		.iter()
-		.filter_map(|v| v.to_str().ok())
-		.flat_map(|v| v.split(','))
-		.any(|d| d.trim().eq_ignore_ascii_case("no-transform"));
-	if no_transform {
+	if headers
+		.typed_get::<CacheControl>()
+		.is_some_and(|c| c.no_transform())
+	{
 		return false;
 	}
-	let Some(essence) = headers
-		.get(CONTENT_TYPE)
-		.and_then(|v| v.to_str().ok())
-		.and_then(|v| v.split(';').next())
-		.map(|v| v.trim().to_ascii_lowercase())
+	// The encoder does not flush while the body is pending, so streamed bodies would stall.
+	// Using the header rather than the body size also gives HEAD the same headers as GET.
+	if !headers
+		.typed_get::<ContentLength>()
+		.is_some_and(|ContentLength(n)| n >= MIN_COMPRESS_SIZE)
+	{
+		return false;
+	}
+	let Some(mime) = headers
+		.typed_get::<ContentType>()
+		.map(crate::http::mime::Mime::from)
 	else {
 		return false;
 	};
-	COMPRESSIBLE_CONTENT_TYPES.contains(&essence.as_str())
-		|| essence.ends_with("+json")
-		|| essence.ends_with("+xml")
+	let essence = mime.essence_str();
+	COMPRESSIBLE_CONTENT_TYPES.contains(&essence)
+		|| mime
+			.suffix()
+			.is_some_and(|s| s == crate::http::mime::JSON || s == crate::http::mime::XML)
 }
 
-// The encoded representation differs byte-wise, so a strong validator no longer holds
-// (RFC 9110 §8.8.1); weakening keeps conditional requests working.
+// A strong validator no longer holds once the bytes change (RFC 9110 section 8.8.1).
 fn weaken_etag(headers: &mut HeaderMap) {
 	if let Some(etag) = headers.get(ETAG)
 		&& !etag.as_bytes().starts_with(b"W/")

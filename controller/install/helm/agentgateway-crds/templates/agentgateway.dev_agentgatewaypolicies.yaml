@@ -8369,16 +8369,16 @@ spec:
                           transformations) run and before forwarding to the backend. Authentication and
                           authorization run first and observe the encoded body.
                         properties:
-                          acceptedAlgorithms:
+                          algorithms:
                             description: |-
                               Algorithms decoded from request bodies. Bodies using any other (or more than one) encoding
                               are forwarded untouched.
                               If unset, defaults to Gzip.
                             items:
                               enum:
-                              - Gzip
                               - Brotli
                               - Deflate
+                              - Gzip
                               - Zstd
                               type: string
                             maxItems: 4
@@ -8389,7 +8389,10 @@ spec:
                       response:
                         description: |-
                           Compresses response bodies when the client advertises support in Accept-Encoding.
-                          Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) are compressed.
+                          Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) with a known
+                          `Content-Length` of at least 32 bytes are compressed, so streamed responses are sent as-is.
+                          Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`
+                          are never compressed.
                         properties:
                           algorithms:
                             description: |-
@@ -8397,9 +8400,9 @@ spec:
                               If unset, defaults to Gzip.
                             items:
                               enum:
-                              - Gzip
                               - Brotli
                               - Deflate
+                              - Gzip
                               - Zstd
                               type: string
                             maxItems: 4

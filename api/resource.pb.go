@@ -13969,10 +13969,10 @@ func (x *TrafficPolicySpec_Compression_ResponseCompression) GetAlgorithms() []Tr
 }
 
 type TrafficPolicySpec_Compression_RequestDecompression struct {
-	state              protoimpl.MessageState                    `protogen:"open.v1"`
-	AcceptedAlgorithms []TrafficPolicySpec_Compression_Algorithm `protobuf:"varint,1,rep,packed,name=accepted_algorithms,json=acceptedAlgorithms,proto3,enum=agentgateway.dev.resource.TrafficPolicySpec_Compression_Algorithm" json:"accepted_algorithms,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state         protoimpl.MessageState                    `protogen:"open.v1"`
+	Algorithms    []TrafficPolicySpec_Compression_Algorithm `protobuf:"varint,1,rep,packed,name=algorithms,proto3,enum=agentgateway.dev.resource.TrafficPolicySpec_Compression_Algorithm" json:"algorithms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TrafficPolicySpec_Compression_RequestDecompression) Reset() {
@@ -14005,9 +14005,9 @@ func (*TrafficPolicySpec_Compression_RequestDecompression) Descriptor() ([]byte,
 	return file_resource_proto_rawDescGZIP(), []int{57, 15, 1}
 }
 
-func (x *TrafficPolicySpec_Compression_RequestDecompression) GetAcceptedAlgorithms() []TrafficPolicySpec_Compression_Algorithm {
+func (x *TrafficPolicySpec_Compression_RequestDecompression) GetAlgorithms() []TrafficPolicySpec_Compression_Algorithm {
 	if x != nil {
-		return x.AcceptedAlgorithms
+		return x.Algorithms
 	}
 	return nil
 }
@@ -19442,7 +19442,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xd5[\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xc3[\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -19703,16 +19703,18 @@ const file_resource_proto_rawDesc = "" +
 	"\tFAIL_OPEN\x10\x01B\n" +
 	"\n" +
 	"\b_requestB\v\n" +
-	"\t_response\x1a\xc6\x04\n" +
+	"\t_response\x1a\xb4\x04\n" +
 	"\vCompression\x12m\n" +
 	"\bresponse\x18\x01 \x01(\v2L.agentgateway.dev.resource.TrafficPolicySpec.Compression.ResponseCompressionH\x00R\bresponse\x88\x01\x01\x12l\n" +
 	"\arequest\x18\x02 \x01(\v2M.agentgateway.dev.resource.TrafficPolicySpec.Compression.RequestDecompressionH\x01R\arequest\x88\x01\x01\x1ay\n" +
 	"\x13ResponseCompression\x12b\n" +
 	"\n" +
 	"algorithms\x18\x01 \x03(\x0e2B.agentgateway.dev.resource.TrafficPolicySpec.Compression.AlgorithmR\n" +
-	"algorithms\x1a\x8b\x01\n" +
-	"\x14RequestDecompression\x12s\n" +
-	"\x13accepted_algorithms\x18\x01 \x03(\x0e2B.agentgateway.dev.resource.TrafficPolicySpec.Compression.AlgorithmR\x12acceptedAlgorithms\"8\n" +
+	"algorithms\x1az\n" +
+	"\x14RequestDecompression\x12b\n" +
+	"\n" +
+	"algorithms\x18\x01 \x03(\x0e2B.agentgateway.dev.resource.TrafficPolicySpec.Compression.AlgorithmR\n" +
+	"algorithms\"8\n" +
 	"\tAlgorithm\x12\b\n" +
 	"\x04GZIP\x10\x00\x12\n" +
 	"\n" +
@@ -21075,7 +21077,7 @@ var file_resource_proto_depIdxs = []int32{
 	199, // 287: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry.value:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
 	31,  // 288: agentgateway.dev.resource.TrafficPolicySpec.Buffer.BufferBody.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.Buffer.FailureMode
 	32,  // 289: agentgateway.dev.resource.TrafficPolicySpec.Compression.ResponseCompression.algorithms:type_name -> agentgateway.dev.resource.TrafficPolicySpec.Compression.Algorithm
-	32,  // 290: agentgateway.dev.resource.TrafficPolicySpec.Compression.RequestDecompression.accepted_algorithms:type_name -> agentgateway.dev.resource.TrafficPolicySpec.Compression.Algorithm
+	32,  // 290: agentgateway.dev.resource.TrafficPolicySpec.Compression.RequestDecompression.algorithms:type_name -> agentgateway.dev.resource.TrafficPolicySpec.Compression.Algorithm
 	231, // 291: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_guard:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
 	233, // 292: agentgateway.dev.resource.BackendPolicySpec.Ai.defaults:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
 	234, // 293: agentgateway.dev.resource.BackendPolicySpec.Ai.overrides:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry

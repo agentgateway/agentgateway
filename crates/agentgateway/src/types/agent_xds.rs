@@ -3317,7 +3317,7 @@ fn traffic_policy_from_proto(
 					.as_ref()
 					.map(|r| -> Result<_, ProtoError> {
 						Ok(http::compression::RequestDecompression {
-							accepted_algorithms: algorithms(&r.accepted_algorithms)?,
+							algorithms: algorithms(&r.algorithms)?,
 						})
 					})
 					.transpose()?,
@@ -6962,5 +6962,61 @@ mod tests {
 			"error should name the group, got: {err}"
 		);
 		assert_eq!(diagnostics.into_warnings().len(), 1);
+	}
+
+	#[test]
+	fn compression_from_proto() {
+		use proto::agent::traffic_policy_spec::Compression as ProtoCompression;
+		use proto::agent::traffic_policy_spec::compression::{
+			Algorithm, RequestDecompression, ResponseCompression,
+		};
+
+		use crate::http::compression::CompressionAlgorithm;
+
+		let spec = |response: Vec<i32>, request: Vec<i32>| proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::Compression(
+				ProtoCompression {
+					response: Some(ResponseCompression {
+						algorithms: response,
+					}),
+					request: Some(RequestDecompression {
+						algorithms: request,
+					}),
+				},
+			)),
+		};
+
+		let policy = traffic_policy_from_proto(
+			&spec(
+				vec![Algorithm::Zstd as i32, Algorithm::Brotli as i32],
+				vec![],
+			),
+			&mut Diagnostics::default(),
+		)
+		.unwrap();
+		let TrafficPolicy::Compression(policy) = policy else {
+			panic!("expected compression policy");
+		};
+		let compression = &policy.iter().next().unwrap().pol;
+		assert_eq!(
+			compression.response.as_ref().unwrap().algorithms,
+			vec![CompressionAlgorithm::Zstd, CompressionAlgorithm::Brotli]
+		);
+		// An empty list falls back to gzip, matching the local config default.
+		assert_eq!(
+			compression.request.as_ref().unwrap().algorithms,
+			vec![CompressionAlgorithm::Gzip]
+		);
+
+		for (response, request) in [
+			(vec![99], vec![]),
+			(vec![], vec![Algorithm::Gzip as i32, 99]),
+		] {
+			assert!(
+				traffic_policy_from_proto(&spec(response, request), &mut Diagnostics::default()).is_err(),
+				"unknown algorithm must be rejected"
+			);
+		}
 	}
 }

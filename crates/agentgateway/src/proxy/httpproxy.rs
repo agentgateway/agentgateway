@@ -324,7 +324,9 @@ async fn apply_request_policies(
 		.compression
 		.apply_selected("compression", c, l, req, rp.headers())
 		.await?;
-	l.cel.ctx().maybe_buffer_request_body(req).await;
+	if compression.as_ref().is_some_and(|c| c.request.is_some()) {
+		l.cel.ctx().maybe_buffer_request_body(req).await;
+	}
 	// Capture Accept-Encoding before the request header modifier may strip it for the upstream.
 	rp.response_compressor = compression.and_then(|c| c.response.as_ref()?.for_request(req));
 

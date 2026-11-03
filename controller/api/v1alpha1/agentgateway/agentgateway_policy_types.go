@@ -1604,7 +1604,10 @@ type Buffer struct {
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Compression struct {
 	// Compresses response bodies when the client advertises support in Accept-Encoding.
-	// Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) are compressed.
+	// Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) with a known
+	// `Content-Length` of at least 32 bytes are compressed, so streamed responses are sent as-is.
+	// Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`
+	// are never compressed.
 	// +optional
 	Response *ResponseCompression `json:"response,omitempty"`
 	// Decompresses request bodies before body-aware policies (rate limiting, ext_proc,
@@ -1614,7 +1617,7 @@ type Compression struct {
 	Request *RequestDecompression `json:"request,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Gzip;Brotli;Deflate;Zstd
+// +k8s:enum
 type CompressionAlgorithm string
 
 const (
@@ -1642,7 +1645,7 @@ type RequestDecompression struct {
 	// +listType=set
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=4
-	AcceptedAlgorithms []CompressionAlgorithm `json:"acceptedAlgorithms,omitempty"`
+	Algorithms []CompressionAlgorithm `json:"algorithms,omitempty"`
 }
 
 type SecretSelector struct {

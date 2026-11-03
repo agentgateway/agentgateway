@@ -9,6 +9,6 @@ binds:
           response:
             algorithms: [gzip, brotli, zstd]
           request:
-            acceptedAlgorithms: [gzip]
+            algorithms: [gzip]
       backends:
       - host: localhost:8080

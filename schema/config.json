@@ -8640,7 +8640,7 @@
       "type": "object",
       "properties": {
         "response": {
-          "description": "Compress response bodies sent to the client.",
+          "description": "Compress response bodies sent to the client. Only textual content types with a known\n`Content-Length` of at least 32 bytes are compressed, so streamed responses are sent as-is.\nResponses that are already encoded, partial (`Content-Range`), or marked `no-transform`\nare never compressed.",
           "anyOf": [
             {
               "$ref": "#/$defs/ResponseCompression"
@@ -8651,7 +8651,7 @@
           ]
         },
         "request": {
-          "description": "Decompress request bodies before body-aware policies run and before forwarding.",
+          "description": "Decompress request bodies after authorization, before body-aware policies run and before\nforwarding.",
           "anyOf": [
             {
               "$ref": "#/$defs/RequestDecompression"
@@ -8693,7 +8693,7 @@
     "RequestDecompression": {
       "type": "object",
       "properties": {
-        "acceptedAlgorithms": {
+        "algorithms": {
           "description": "Algorithms decoded from request bodies. Bodies using any other (or more than one)\nencoding are forwarded untouched. Defaults to gzip.",
           "type": "array",
           "items": {
