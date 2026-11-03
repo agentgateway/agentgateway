@@ -1847,9 +1847,15 @@ impl ModelRoute {
 				};
 				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
 					discovery: concrete.discovery_provider.as_ref().and_then(|provider| {
+						// Invalid providers are reported by the backend carrying the same config.
+						let provider_config = concrete
+							.discovery_provider_config
+							.as_ref()
+							.and_then(|p| ai_provider_from_proto(p, 0).ok())
+							.map(|(provider, _)| provider);
 						llm::discovery::ModelDiscovery::new(
 							strng::new(provider),
-							None,
+							provider_config.as_ref().and_then(|p| p.override_model()),
 							llm_policy
 								.transformations
 								.as_ref()
@@ -1857,12 +1863,7 @@ impl ModelRoute {
 								.map(AsRef::as_ref),
 						)
 						.map(|d| llm::discovery::ModelDiscovery {
-							// Invalid providers are reported by the backend carrying the same config.
-							provider_config: concrete
-								.discovery_provider_config
-								.as_ref()
-								.and_then(|p| ai_provider_from_proto(p, 0).ok())
-								.map(|(provider, _)| provider),
+							provider_config,
 							..d
 						})
 					}),

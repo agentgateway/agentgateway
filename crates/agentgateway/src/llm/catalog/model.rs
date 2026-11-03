@@ -118,6 +118,7 @@ impl Catalog {
 						bm.name = om.name.or(bm.name);
 						bm.status = om.status.or(bm.status);
 						bm.released = om.released.or(bm.released);
+						bm.endpoints = om.endpoints.or(bm.endpoints);
 						bm.limits = Limits {
 							context: om.limits.context.or(bm.limits.context),
 							input: om.limits.input.or(bm.limits.input),
