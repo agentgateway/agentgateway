@@ -1,6 +1,7 @@
+use http_body_util::BodyExt;
+
 use super::*;
 use crate::llm::types::completions::Request;
-use http_body_util::BodyExt;
 
 fn tokenize(text: &str) -> (Arc<EmailTokens>, String) {
 	let mut req: Request = serde_json::from_value(json!({
@@ -209,11 +210,12 @@ async fn stream_emits_before_upstream_finishes_and_errors_on_truncation() {
 
 #[tokio::test]
 async fn gateway_pseudonymization_masks_upstream_and_restores_after_response_guards() {
+	use wiremock::{Mock, MockServer, ResponseTemplate};
+
 	use crate::llm::{AIProvider, openai};
 	use crate::test_helpers::proxymock::{
 		llm_named_provider, send_request_body, setup_llm_named_provider_mock,
 	};
-	use wiremock::{Mock, MockServer, ResponseTemplate};
 
 	for streaming in [false, true] {
 		let mock = MockServer::start().await;
@@ -284,11 +286,12 @@ async fn gateway_pseudonymization_masks_upstream_and_restores_after_response_gua
 
 #[tokio::test]
 async fn gateway_pseudonymization_rejects_unsupported_routes_before_upstream() {
+	use wiremock::MockServer;
+
 	use crate::llm::{AIProvider, openai};
 	use crate::test_helpers::proxymock::{
 		llm_named_provider, send_request_body, setup_llm_named_provider_mock,
 	};
-	use wiremock::MockServer;
 
 	for route in [
 		"responses",
@@ -426,4 +429,53 @@ fn choice_finish_flushes_partial_tool_and_legacy_arguments() {
 	assert_eq!(delta["tool_calls"][1]["index"], 3);
 	assert_eq!(delta["tool_calls"][1]["custom"]["input"], partial);
 	stream.check_finished().unwrap();
+}
+
+#[test]
+fn buffered_response_restores_tokens_in_content_parts() {
+	let (tokens, token) = tokenize("alice@example.org");
+	let mut response: crate::llm::types::completions::Response = serde_json::from_value(json!({
+		"id":"chat-test", "object":"chat.completion", "created":0, "model":"test",
+		"choices":[{"index":0,"message":{"role":"assistant","content":[
+			{"type":"thinking","thinking":format!("Contact {token}")},
+			{"type":"text","text":format!("Email {token}")}
+		]},"finish_reason":"stop"}]
+	}))
+	.unwrap();
+	tokens.restore_response(&mut response);
+	let value = serde_json::to_value(response).unwrap();
+	assert_eq!(
+		value["choices"][0]["message"]["content"],
+		json!([
+			{"type":"thinking","thinking":"Contact alice@example.org"},
+			{"type":"text","text":"Email alice@example.org"}
+		])
+	);
+}
+
+#[tokio::test]
+async fn stream_preserves_upstream_error_after_a_partial_token() {
+	let (tokens, token) = tokenize("alice@example.org");
+	let error = json!({"error":{"message":"upstream interrupted","type":"upstream_error","code":"upstream_error"}});
+	let wire = format!(
+		"data: {}\n\ndata: {error}\n\ndata: [DONE]\n\n",
+		json!({
+			"choices":[{"index":0,"delta":{"content":format!("Hello {}", &token[..20])}}]
+		})
+	);
+	let bytes = tokens
+		.restore_stream(agent_http::RawBody::from(wire), 65536)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+	let text = String::from_utf8(bytes.to_vec()).unwrap();
+	let events: Vec<_> = text
+		.lines()
+		.filter_map(|line| line.strip_prefix("data: "))
+		.collect();
+	let first: Value = serde_json::from_str(events[0]).unwrap();
+	assert_eq!(first["choices"][0]["delta"]["content"], "Hello ");
+	assert_eq!(serde_json::from_str::<Value>(events[1]).unwrap(), error);
+	assert_eq!(events[2], "[DONE]");
 }
