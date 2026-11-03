@@ -289,43 +289,35 @@ impl H2Pool {
 		}
 	}
 	fn reserve(&mut self, now: Instant) -> Option<ReservedHttp2Connection> {
-		while let Some(h) = self.0.front() {
+		// The peer can lower its limit at any time, so a full connection may be in front of one with
+		// capacity. Check each connection at most once.
+		for _ in 0..self.0.len() {
+			let h = self.0.pop_front()?;
 			if !h.tx.is_ready() {
 				// Connection is dead... remove it.
-				let _ = self.0.pop_front();
 				debug!("removing dead http2 connection");
 				continue;
 			}
 			if h.info.past_deadline(now) {
 				// expired, do not attach new streams.
-				let _ = self.0.pop_front();
 				debug!("removing past-deadline http2 connection");
 				continue;
 			}
 			match h.load.try_reserve_stream_slot() {
 				CapacityReservationResult::NoCapacity => {
-					// We know the front is the one that was most recently returned, thus must be available
-					return None;
+					self.0.push_back(h);
 				},
 				CapacityReservationResult::ReservedAndFilled => {
-					let ret = Some(ReservedHttp2Connection {
-						info: h.info.clone(),
-						tx: h.tx.clone(),
-						load: h.load.clone(),
-					});
+					let ret = h.clone_without_load_incremented();
 					// Move the connection to the back of the queue.
-					if let Some(v) = self.0.pop_front() {
-						self.0.push_back(v);
-					}
-					return ret;
+					self.0.push_back(h);
+					return Some(ret);
 				},
 				CapacityReservationResult::ReservedButNotFilled => {
+					let ret = h.clone_without_load_incremented();
 					// Keep the connection at the front.
-					return Some(ReservedHttp2Connection {
-						info: h.info.clone(),
-						tx: h.tx.clone(),
-						load: h.load.clone(),
-					});
+					self.0.push_front(h);
+					return Some(ret);
 				},
 			}
 		}
@@ -2450,6 +2442,43 @@ mod tests {
 				res => panic!("waiter {i} was lost: {res:?}"),
 			}
 		}
+	}
+
+	#[tokio::test]
+	async fn test_h2_peer_lowers_max_streams_on_front_connection() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+
+		// Connection A, whose peer will lower its limit.
+		let peer_max = Arc::new(AtomicUsize::new(2));
+		let HttpConnection::Http2(mut a) = mock_http2_connection(2).await else {
+			unreachable!("mock is http2")
+		};
+		a.load = Arc::new(H2Load::new(2, {
+			let peer_max = peer_max.clone();
+			move || Some(peer_max.load(Ordering::Acquire))
+		}));
+		let a_load = a.load.clone();
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+		pool.insert_new_connection(sc, HttpConnection::Http2(a));
+		let a1 = w.await.unwrap().unwrap();
+		let _a2 = must_checkout(&pool, key.clone());
+
+		// A is full, so connection B is created.
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+		pool.insert_new_connection(sc, mock_http2_connection(2).await);
+		let _b1 = w.await.unwrap().unwrap();
+
+		// Releasing a stream moves A in front of B; then the peer lowers A's limit.
+		drop(a1);
+		peer_max.store(1, Ordering::Release);
+
+		// B still has capacity and must be used.
+		let p = must_checkout(&pool, key);
+		let HttpConnection::Http2(h2) = p.as_ref() else {
+			unreachable!("mock is http2")
+		};
+		assert!(!Arc::ptr_eq(&h2.load, &a_load));
 	}
 
 	#[tokio::test]
