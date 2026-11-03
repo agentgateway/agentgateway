@@ -807,8 +807,17 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			JwtValidationOptions: translateJWTValidationOptions(pp.Validation),
 		}
 		if i := pp.JWKS.Inline; i != nil {
-			if _, err := jwks.ParseKeySet([]byte(*i)); err != nil {
+			if ks, err := jwks.ParseKeySet([]byte(*i)); err != nil {
 				errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS", idx, pp.Issuer))
+			} else {
+				// The data plane rejects the whole provider for any of these, so surface them here.
+				for _, k := range ks.Keys {
+					if k.KeyID == "" {
+						errs = append(errs, fmt.Errorf("provider %d (issuer %q): inline JWKS key is missing `kid`", idx, pp.Issuer))
+					} else if _, symmetric := k.Key.([]byte); symmetric {
+						errs = append(errs, fmt.Errorf("provider %d (issuer %q): inline JWKS key %q is symmetric (oct); only RSA, EC, and Ed25519 keys are supported", idx, pp.Issuer, k.KeyID))
+					}
+				}
 			}
 			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: *i}
 			p.Providers = append(p.Providers, jp)
