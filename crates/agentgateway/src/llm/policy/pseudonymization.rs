@@ -196,7 +196,7 @@ struct SseRestorer {
 }
 
 fn stream_error() -> std::io::Error {
-	std::io::Error::other("invalid or incomplete pseudonymized Chat Completions stream")
+	std::io::Error::other("invalid or incomplete tokenized Chat Completions stream")
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

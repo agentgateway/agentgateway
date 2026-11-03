@@ -272,7 +272,7 @@ export function GuardrailsPage() {
 					onConfirm={remove}
 				>
 					<p>
-						Remove all request and response guardrails and pseudonymization? These protections will
+						Remove all request and response guardrails and data tokenization? These protections will
 						no longer apply to LLM traffic.
 					</p>
 				</ConfirmDialog>
@@ -359,8 +359,11 @@ function GuardrailsEditor(props: {
 						<ShieldCheck size={17} />
 					</span>
 					<div>
-						<h4>Pseudonymization</h4>
-						<p>Replace sensitive text with temporary tokens and restore it in replies.</p>
+						<h4>Data tokenization</h4>
+						<p>
+							Replace sensitive data with temporary tokens before sending it to the model. Restore
+							original values in replies, including streaming replies.
+						</p>
 					</div>
 				</div>
 				<div className="policy-form-section-body">
@@ -373,14 +376,13 @@ function GuardrailsEditor(props: {
 						<span>Email addresses</span>
 					</label>
 					<p className="muted-copy">
-						Standard email addresses in message text and tool arguments are replaced before they
-						reach the model. Tokens are private to each request. Replies are restored automatically,
-						including streaming replies.
+						Detects standard ASCII email addresses in message text and tool arguments. Repeated
+						addresses reuse the same token within a request. Tokens are private to each request.
 					</p>
 					<p className="muted-copy">
-						Supports Chat Completions only. Other LLM endpoints are blocked while enabled. Images,
-						attachments, metadata and tool definitions are not inspected. Request guards run before
-						replacement. Response guards run before restoration.
+						Supports Chat Completions only. Other LLM inference endpoints are blocked while enabled.
+						Images, attachments, metadata and tool definitions are not inspected. Request guards run
+						before tokenization. Response guards run before restoration.
 					</p>
 				</div>
 			</section>

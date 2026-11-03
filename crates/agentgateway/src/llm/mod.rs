@@ -2502,7 +2502,7 @@ impl AIProvider {
 		{
 			if original_format != InputFormat::Completions {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
-					"email pseudonymization requires Chat Completions"
+					"email tokenization requires Chat Completions"
 				)));
 			}
 			parts
