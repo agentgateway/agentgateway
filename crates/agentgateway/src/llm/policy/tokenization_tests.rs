@@ -285,54 +285,114 @@ async fn gateway_tokenization_masks_upstream_and_restores_after_response_guards(
 }
 
 #[tokio::test]
-async fn gateway_tokenization_rejects_unsupported_routes_before_upstream() {
-	use wiremock::MockServer;
+async fn gateway_tokenization_leaves_other_api_formats_unchanged() {
+	use wiremock::{Mock, MockServer, ResponseTemplate};
 
 	use crate::llm::{AIProvider, openai};
 	use crate::test_helpers::proxymock::{
 		llm_named_provider, send_request_body, setup_llm_named_provider_mock,
 	};
 
-	for route in [
-		"responses",
-		"messages",
-		"embeddings",
-		"realtime",
-		"detect",
-		"passthrough",
+	for (route, path, request) in [
+		(
+			"responses",
+			"/v1/responses",
+			json!({"model":"test","input":"alice@example.org"}),
+		),
+		(
+			"messages",
+			"/v1/messages",
+			json!({"model":"test","max_tokens":64,"messages":[{"role":"user","content":"alice@example.org"}]}),
+		),
+		(
+			"embeddings",
+			"/v1/embeddings",
+			json!({"model":"test","input":"alice@example.org"}),
+		),
+		(
+			"detect",
+			"/v1/custom",
+			json!({"model":"test","input":"alice@example.org"}),
+		),
+		(
+			"passthrough",
+			"/v1/custom",
+			json!({"model":"test","input":"alice@example.org"}),
+		),
 	] {
-		let mock = MockServer::start().await;
-		let mut provider = llm_named_provider(
-			&mock,
-			AIProvider::OpenAI(openai::Provider {
-				model_override: None,
-				moderation: None,
-			}),
-			false,
-		);
-		provider.policies = Some(
-			serde_json::from_value(json!({"ai":{
-				"routes":{"*":route}, "promptGuard":{"tokenization":{"email":true}}
-			}}))
-			.unwrap(),
-		);
-		let (mock, _gateway, io) = setup_llm_named_provider_mock(mock, provider, "{}");
-		let response = send_request_body(
-			io,
-			::http::Method::POST,
-			"http://localhost/v1/unsupported",
-			br#"{"model":"test","input":"alice@example.org"}"#,
-		)
-		.await;
-		assert!(
-			response.status().is_client_error(),
-			"route {route}: {}",
-			response.status()
-		);
-		assert!(
-			mock.received_requests().await.unwrap().is_empty(),
-			"route {route}"
-		);
+		let mut results = Vec::new();
+		for enabled in [false, true] {
+			let mock = MockServer::start().await;
+			Mock::given(wiremock::matchers::any())
+				.respond_with(move |_: &wiremock::Request| {
+					let response = if matches!(route, "responses" | "messages") {
+                        use crate::llm::types::responses::{ResponseBuilder, typed};
+
+                        let mut response = ResponseBuilder::new("resp-test", "test")
+                            .response(typed::Status::Completed, None, None, None);
+                        response.created_at = 0;
+                        response.output = serde_json::from_value(json!([
+                            {"id":"msg-test","type":"message","role":"assistant","status":"completed",
+                             "content":[{"type":"output_text","text":"alice@example.org","annotations":[]}]}
+                        ])).unwrap();
+                        serde_json::to_value(response).unwrap()
+					} else if route == "embeddings" {
+						json!({"object":"list","model":"test","data":[{"object":"embedding","index":0,"embedding":[0.5]}]})
+					} else {
+						json!({"text":"alice@example.org"})
+					};
+					ResponseTemplate::new(200).set_body_json(response)
+				})
+				.expect(1)
+				.mount(&mock)
+				.await;
+			let mut provider = llm_named_provider(
+				&mock,
+				AIProvider::OpenAI(openai::Provider {
+					model_override: None,
+					moderation: None,
+				}),
+				false,
+			);
+			provider.policies = Some(
+				serde_json::from_value(json!({"ai":{
+					"routes":{"*":route}, "promptGuard":{"tokenization":{"email":enabled}}
+				}}))
+				.unwrap(),
+			);
+			let (mock, _gateway, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+			let response = send_request_body(
+				io,
+				::http::Method::POST,
+				&format!("http://localhost{path}"),
+				&serde_json::to_vec(&request).unwrap(),
+			)
+			.await;
+			assert_eq!(
+				response.status(),
+				200,
+				"route {route}, tokenization {enabled}"
+			);
+			let body = response.into_body().collect().await.unwrap().to_bytes();
+			let response: Value = serde_json::from_slice(&body).unwrap();
+			let received = mock.received_requests().await.unwrap();
+			assert_eq!(received.len(), 1, "route {route}");
+			let forwarded: Value = serde_json::from_slice(&received[0].body).unwrap();
+			assert!(
+				forwarded.to_string().contains("alice@example.org"),
+				"route {route}: {forwarded}"
+			);
+			if route == "embeddings" {
+				assert_eq!(response["data"][0]["embedding"], json!([0.5]));
+			} else {
+				assert!(
+					response.to_string().contains("alice@example.org"),
+					"route {route}: {response}"
+				);
+			}
+			results.push((forwarded, response));
+		}
+		assert_eq!(results[0], results[1], "route {route}");
 	}
 }
 

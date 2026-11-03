@@ -2496,15 +2496,11 @@ impl AIProvider {
 		}
 
 		if guardrail_rejection.is_none()
+			&& original_format == InputFormat::Completions
 			&& policies
 				.and_then(|p| p.prompt_guard.as_ref())
 				.is_some_and(|g| g.email_tokenization_enabled())
 		{
-			if original_format != InputFormat::Completions {
-				return Err(AIError::UnsupportedConversion(strng::literal!(
-					"email tokenization requires Chat Completions"
-				)));
-			}
 			parts
 				.extensions
 				.insert(policy::tokenization::EmailTokens::tokenize(req)?);
