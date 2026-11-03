@@ -1,0 +1,21 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_error.json
+---
+data: {"id":"msg_stream_error","choices":[{"index":0,"delta":{"content":"Hi there","role":"assistant"}}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"error":{"message":"Overloaded","type":"server_error","param":null,"code":"server_is_overloaded"}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 1,
+  "total_tokens": 16,
+  "provider_model": "claude-haiku-4-5-20251001",
+  "completion": [
+    "Hi there"
+  ]
+}
