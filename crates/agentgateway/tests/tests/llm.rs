@@ -1069,6 +1069,82 @@ llm:
 }
 
 #[tokio::test]
+async fn llm_nested_virtual_models() {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: fast
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{0}/v1
+    transformation:
+      max_tokens: "256"
+  - name: other
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{0}/v1
+  virtualModels:
+  - name: entry
+    routing:
+      conditional:
+        targets:
+        - model: pool
+          when: request.headers["x-route"] == "pool"
+        - model: other
+  - name: pool
+    routing:
+      weighted:
+        targets:
+        - model: fast
+          weight: 1
+  # Shadows the concrete model of the same name.
+  - name: fast
+    routing:
+      weighted:
+        targets:
+        - model: fast
+          weight: 1
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+
+	for (model, headers) in [
+		("entry", &[("x-route", "pool")][..]),
+		("entry", &[][..]),
+		("fast", &[][..]),
+	] {
+		let res = send_completions_with_model(io.clone(), model, headers).await;
+		assert_eq!(res.status(), StatusCode::OK);
+	}
+
+	let got = mock
+		.received_requests()
+		.await
+		.expect("upstream requests")
+		.iter()
+		.map(|request| {
+			let body: Value = serde_json::from_slice(&request.body).expect("upstream request JSON");
+			(body["model"].clone(), body["max_tokens"].clone())
+		})
+		.collect::<Vec<_>>();
+	assert_eq!(
+		got,
+		vec![
+			(json!("fast"), json!(256)),
+			(json!("other"), Value::Null),
+			(json!("fast"), json!(256)),
+		]
+	);
+}
+
+#[tokio::test]
 async fn llm_model_router_handles_multipart_audio_detect_request() {
 	let mock = body_mock(br#"{"text":"Hello world","usage":{"type":"duration","seconds":9}}"#).await;
 	let config = format!(
