@@ -258,6 +258,8 @@ impl BudgetExceededAction {
 pub struct MatchedBudgets {
 	pub(crate) api_key: String,
 	pub(crate) api_key_id: String,
+	/// Key hash, which older releases used in place of the key id; see [`BudgetPolicy::flush`].
+	pub(crate) api_key_hash: String,
 	pub(crate) budgets: Vec<Budget>,
 }
 
@@ -276,6 +278,10 @@ pub struct BudgetPolicy {
 	/// share runtime counters with the process-wide policy but do not mutate them until reload succeeds.
 	#[serde(skip)]
 	registration: Option<Arc<DashMap<String, BudgetDefinition>>>,
+	/// Budget ids whose usage may still be stored under the key hash used by older releases, mapped
+	/// to that legacy id. Drained by the next successful flush.
+	#[serde(skip)]
+	legacy_ids: Arc<DashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -343,6 +349,7 @@ impl BudgetPolicy {
 			database: self.database.clone(),
 			flush_lock: self.flush_lock.clone(),
 			registration: Some(Arc::new(DashMap::new())),
+			legacy_ids: self.legacy_ids.clone(),
 		}
 	}
 
@@ -407,6 +414,12 @@ impl BudgetPolicy {
 				continue;
 			};
 			for budget in &budgets.budgets {
+				if budgets.api_key_hash != budgets.api_key_id {
+					self.legacy_ids.insert(
+						budget_id(&budgets.api_key_id, budget),
+						budget_id(&budgets.api_key_hash, budget),
+					);
+				}
 				let budget_id = budget_id(&budgets.api_key_id, budget);
 				if let Some(registration) = &self.registration {
 					BudgetCounter::configured(&budgets.api_key, budget, now)?;
@@ -597,6 +610,44 @@ mod tests {
 	}
 
 	#[test]
+	fn budgets_follow_the_key_id_when_the_key_value_changes() {
+		let budget_id_for = |key: &str, metadata: serde_json::Value| {
+			let keys: crate::http::apikey::LocalAPIKeys = serde_json::from_value(serde_json::json!({
+				"keys": [{
+					"key": key,
+					"metadata": metadata,
+					"budgets": [{
+						"name": "daily",
+						"limit": {"unit": "USD", "amount": 10},
+						"onBudgetExceeded": "Block"
+					}]
+				}]
+			}))
+			.unwrap();
+			let authentication = keys.compile().unwrap();
+			let budgets = authentication
+				.users
+				.values()
+				.next()
+				.unwrap()
+				.budgets
+				.clone()
+				.unwrap();
+			budget_id(&budgets.api_key_id, &budgets.budgets[0])
+		};
+		let with_id = serde_json::json!({"name": "team", "agentgateway.dev/id": "key-id"});
+		assert_eq!(
+			budget_id_for("sk-old", with_id.clone()),
+			budget_id_for("sk-new", with_id)
+		);
+		let without_id = serde_json::json!({"name": "team"});
+		assert_ne!(
+			budget_id_for("sk-old", without_id.clone()),
+			budget_id_for("sk-new", without_id)
+		);
+	}
+
+	#[test]
 	fn registration_replaces_definitions_only_when_applied() {
 		let current: crate::http::apikey::LocalAPIKeys = serde_json::from_value(serde_json::json!({
 			"keys": [{
@@ -781,6 +832,90 @@ CREATE TABLE budget_usage (
 				.pending
 				.is_zero()
 		);
+	}
+
+	#[tokio::test]
+	async fn usage_keyed_by_the_key_hash_is_moved_to_the_key_id() {
+		let pool = sqlx::sqlite::SqlitePoolOptions::new()
+			.max_connections(1)
+			.connect("sqlite::memory:")
+			.await
+			.unwrap();
+		let budget = serde_json::json!({
+			"name": "lifetime",
+			"limit": {"unit": "Tokens", "amount": 10},
+			"onBudgetExceeded": "Block"
+		});
+		let keys: crate::http::apikey::LocalAPIKeys = serde_json::from_value(serde_json::json!({
+			"keys": [{
+				"key": "sk-upgraded",
+				"metadata": {"name": "upgraded", "agentgateway.dev/id": "upgraded-id"},
+				"budgets": [budget]
+			}, {
+				"key": "sk-fresh",
+				"metadata": {"name": "fresh", "agentgateway.dev/id": "fresh-id"},
+				"budgets": [budget]
+			}]
+		}))
+		.unwrap();
+		let authentication = keys.compile().unwrap();
+		let upgraded = authentication
+			.users
+			.values()
+			.find_map(|policy| {
+				policy
+					.budgets
+					.clone()
+					.filter(|budgets| budgets.api_key == "upgraded")
+			})
+			.unwrap();
+		let legacy_id = budget_id(&upgraded.api_key_hash, &upgraded.budgets[0]);
+		let budget_id = budget_id(&upgraded.api_key_id, &upgraded.budgets[0]);
+
+		// Usage persisted by a release that keyed budgets by the key hash.
+		let schema = Arc::new(BudgetPolicy::default());
+		schema
+			.initialize(crate::database::DatabasePool::Sqlite(pool.clone()))
+			.await
+			.unwrap();
+		let (window_start, window_end) = budget_window(Utc::now(), UNBOUNDED_WINDOW).unwrap();
+		sqlx::query(
+			"INSERT INTO budget_usage (budget_id, window_start, window_end, unit, used_amount, updated_at) VALUES (?, ?, ?, 'Tokens', 7, 0)",
+		)
+		.bind(&legacy_id)
+		.bind(window_start.timestamp_millis())
+		.bind(window_end.timestamp_millis())
+		.execute(&pool)
+		.await
+		.unwrap();
+
+		let policy = Arc::new(BudgetPolicy::default());
+		policy
+			.initialize(crate::database::DatabasePool::Sqlite(pool.clone()))
+			.await
+			.unwrap();
+		policy.register(&authentication, true).unwrap();
+		{
+			let mut counter = policy.counters.get_mut(&budget_id).unwrap();
+			counter.amount += Decimal::from(2);
+			counter.pending += Decimal::from(2);
+		}
+		// The first flush moves the row before charging it; the second one has nothing left to move.
+		policy.flush().await.unwrap();
+		policy.flush().await.unwrap();
+
+		let persisted = sqlx::query_as::<_, (String, i64)>(
+			"SELECT budget_id, used_amount FROM budget_usage ORDER BY budget_id",
+		)
+		.fetch_all(&pool)
+		.await
+		.unwrap();
+		assert_eq!(persisted, vec![(budget_id.clone(), 9)]);
+		assert_eq!(
+			policy.counters.get(&budget_id).unwrap().amount,
+			Decimal::from(9)
+		);
+		assert!(policy.legacy_ids.is_empty());
 	}
 
 	#[tokio::test]

@@ -17,6 +17,10 @@ const SQLITE_SCHEMA: &str = include_str!("sqlite_schema.sql");
 const POSTGRES_SCHEMA: &str = include_str!("postgres_schema.sql");
 const SQLITE_UPSERT: &str = include_str!("sqlite_upsert.sql");
 const POSTGRES_UPSERT: &str = include_str!("postgres_upsert.sql");
+const SQLITE_RENAME: &str = "UPDATE budget_usage SET budget_id = ? WHERE budget_id = ? \
+	AND NOT EXISTS (SELECT 1 FROM budget_usage WHERE budget_id = ?)";
+const POSTGRES_RENAME: &str = "UPDATE budget_usage SET budget_id = $1 WHERE budget_id = $2 \
+	AND NOT EXISTS (SELECT 1 FROM budget_usage WHERE budget_id = $1)";
 
 impl BudgetPolicy {
 	/// Initializes and migrates the budget tables, prunes expired rows, preloads every persisted
@@ -207,10 +211,27 @@ impl BudgetPolicy {
 			))
 		});
 
-		if !pending.is_empty() {
+		// Usage persisted under a legacy id moves to the current id before it is charged. The move
+		// is a no-op once done, so every replica can attempt it; sorting avoids lock-order deadlocks.
+		let mut renames = self
+			.legacy_ids
+			.iter()
+			.map(|entry| (entry.key().clone(), entry.value().clone()))
+			.collect::<Vec<_>>();
+		renames.sort();
+
+		if !pending.is_empty() || !renames.is_empty() {
 			match pool {
 				crate::database::DatabasePool::Sqlite(pool) => {
 					let mut transaction = pool.begin().await?;
+					for (budget_id, legacy_id) in &renames {
+						sqlx::query(SQLITE_RENAME)
+							.bind(budget_id)
+							.bind(legacy_id)
+							.bind(budget_id)
+							.execute(&mut *transaction)
+							.await?;
+					}
 					for counter in &pending {
 						sqlx::query(SQLITE_UPSERT)
 							.bind(&counter.budget_id)
@@ -226,6 +247,13 @@ impl BudgetPolicy {
 				},
 				crate::database::DatabasePool::Postgres(pool) => {
 					let mut transaction = pool.begin().await?;
+					for (budget_id, legacy_id) in &renames {
+						sqlx::query(POSTGRES_RENAME)
+							.bind(budget_id)
+							.bind(legacy_id)
+							.execute(&mut *transaction)
+							.await?;
+					}
 					for counter in &pending {
 						sqlx::query(POSTGRES_UPSERT)
 							.bind(&counter.budget_id)
@@ -239,6 +267,9 @@ impl BudgetPolicy {
 					}
 					transaction.commit().await?;
 				},
+			}
+			for (budget_id, _) in renames {
+				self.legacy_ids.remove(&budget_id);
 			}
 		}
 		for flushed in pending {

@@ -554,9 +554,18 @@ impl LocalAPIKey {
 				"budget limit exceeds database integer range"
 			);
 		}
+		// Budget usage follows the server-managed key id, so regenerating the key value keeps the
+		// usage. File keys without an id fall back to the key hash.
+		let api_key_id = metadata
+			.get(crate::config_store::API_KEY_ID_METADATA)
+			.and_then(serde_json::Value::as_str)
+			.filter(|id| !id.is_empty())
+			.unwrap_or(key_hash.as_str())
+			.to_owned();
 		let budgets = (!budgets.is_empty()).then(|| MatchedBudgets {
 			api_key: api_key.expect("budget API keys have a name"),
-			api_key_id: key_hash.as_str().to_owned(),
+			api_key_id,
+			api_key_hash: key_hash.as_str().to_owned(),
 			budgets,
 		});
 		Ok((
