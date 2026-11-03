@@ -879,10 +879,28 @@ func ReferenceAllowed(
 	if !matched {
 		return &ParentError{
 			Reason:  ParentErrorNotAllowed,
-			Message: fmt.Sprintf("kind %v is not allowed", routeKind),
+			Message: kindNotAllowedMessage(routeKind, parent, parentRef),
 		}
 	}
 	return nil
+}
+
+// kindNotAllowedMessage names the rejecting parent and the kinds it does accept, e.g.
+// "kind AgentgatewayModel is not allowed by ServiceEntry default/egress (allowed kinds: HTTPRoute, GRPCRoute)".
+func kindNotAllowedMessage(routeKind schema.GroupVersionKind, parent *ParentInfo, parentRef ParentReference) string {
+	target := fmt.Sprintf("%s %s/%s", parentRef.Kind, parentRef.Namespace, parentRef.Name)
+	if parent.SectionName != "" {
+		target += fmt.Sprintf(" listener %q", parent.SectionName)
+	}
+	allowed := make([]string, 0, len(parent.AllowedKinds))
+	for _, ak := range parent.AllowedKinds {
+		allowed = append(allowed, string(ak.Kind))
+	}
+	allowedText := "none"
+	if len(allowed) > 0 {
+		allowedText = strings.Join(allowed, ", ")
+	}
+	return fmt.Sprintf("kind %s is not allowed by %s (allowed kinds: %s)", routeKind.Kind, target, allowedText)
 }
 
 func extractParentReferenceInfo(ctx RouteContext, obj controllers.Object) []RouteParentReference {
