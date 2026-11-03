@@ -4040,6 +4040,13 @@ fn scoped_routes(listener_key: &ListenerKey, routes: Vec<Route>) -> Vec<Route> {
 		.collect()
 }
 
+fn strip_ui_base_path<'a>(path: &'a str, base_path: &str) -> &'a str {
+	match path.strip_prefix(base_path) {
+		Some(rest) if !base_path.is_empty() && rest.starts_with('/') => rest,
+		_ => path,
+	}
+}
+
 fn ui_oidc_redirect_path(policies: Option<&LocalUIPolicy>) -> anyhow::Result<Option<Strng>> {
 	let Some(oidc) = policies.and_then(|pol| pol.oidc.as_ref()) else {
 		return Ok(None);
@@ -4166,7 +4173,10 @@ async fn convert_attached_ui(
 		bail!("ui.policies.oidc.login and logout are managed by the built-in UI and must be omitted");
 	}
 	let route_key = strng::new("ui");
-	let route_matches = ui_matches(ui_oidc_redirect_path(ui_config.policies.as_ref())?);
+	let route_matches = ui_matches(
+		ui_oidc_redirect_path(ui_config.policies.as_ref())?
+			.map(|path| strng::new(strip_ui_base_path(&path, &config.ui_base_path))),
+	);
 	let mut resolved_policies = if let Some(mut pol) = ui_config.policies {
 		// The UI's API is also used by CLI clients, which authenticate with bearer tokens.
 		if let Some(oidc) = pol.oidc.as_mut() {
@@ -4179,6 +4189,8 @@ async fn convert_attached_ui(
 		ResolvedPolicies::default()
 	};
 	// The built-in UI has a public login page; regular OIDC routes retain automatic login.
+	// Login and logout send the browser here, so add the stripped prefix.
+	let login_page = format!("{}/ui/login", config.ui_base_path);
 	for policy in &mut resolved_policies.route_policies {
 		if let TrafficPolicy::Oidc(oidc) = policy {
 			*oidc = RequestPolicy::from_policy_inners(
@@ -4187,13 +4199,21 @@ async fn convert_attached_ui(
 					.into_iter()
 					.map(|mut entry| {
 						let policy = Arc::make_mut(&mut entry.pol);
+						// The IdP calls the public URL, but the proxy forwards it without the prefix.
+						let callback = strip_ui_base_path(
+							policy.redirect_uri.callback_path.path(),
+							&config.ui_base_path,
+						);
+						if let Ok(callback) = callback.parse() {
+							policy.redirect_uri.callback_path = callback;
+						}
 						policy.login = Some(crate::http::oidc::OidcLogin {
 							path: "/api/auth/login".into(),
-							redirect: Some("/ui/login".into()),
+							redirect: Some(login_page.clone()),
 						});
 						policy.logout = Some(crate::http::oidc::OidcLogout {
 							path: "/api/auth/logout".into(),
-							redirect: Some("/ui/login".into()),
+							redirect: Some(login_page.clone()),
 						});
 						entry
 					}),

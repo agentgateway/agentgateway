@@ -90,7 +90,12 @@ pub fn router(
 	};
 	let router = Router::new()
 		// OIDC intercepts this path to start login; without OIDC, return to the UI.
-		.route("/api/auth/login", get(|| async { Redirect::to("/ui") }))
+		.route(
+			"/api/auth/login",
+			get(|State(app): State<App>| async move {
+				Redirect::to(&format!("{}/ui", app.state.ui_base_path))
+			}),
+		)
 		.route("/api/runtime", get(get_runtime))
 		.route("/api/config", get(get_config).post(write_config))
 		.route(
@@ -120,11 +125,15 @@ pub fn router(
 	let router = if assets_dir.entries().is_empty() {
 		router.route("/", get(crate::management::admin::handle_dashboard))
 	} else {
-		let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
-		router
-			.nest_service("/ui", ui_service)
-			// Use a relative redirect so we still end up on the UI if a proxy strips the path prefix.
-			.route("/", get(|| async { Redirect::permanent("ui/") }))
+		let base_path = cfg.ui_base_path.clone();
+		let ui_service =
+			tower::service_fn(move |req| serve_ui_asset(req, assets_dir, base_path.clone()));
+		router.nest_service("/ui", ui_service).route(
+			"/",
+			get(|State(app): State<App>| async move {
+				Redirect::permanent(&format!("{}/ui/", app.state.ui_base_path))
+			}),
+		)
 	};
 	router
 		.layer(axum::middleware::from_fn_with_state(
@@ -392,20 +401,10 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 async fn serve_ui_asset(
 	req: http::Request<axum::body::Body>,
 	assets: &'static Dir<'static>,
+	base_path: agent_core::strng::Strng,
 ) -> Result<Response, std::convert::Infallible> {
-	let path = req.uri().path();
-	if should_serve_ui_index(path) {
-		// Send /ui to /ui/, otherwise the relative <base> resolves one level too high.
-		let original = req
-			.extensions()
-			.get::<axum::extract::OriginalUri>()
-			.map(|uri| uri.path())
-			.unwrap_or(path);
-		if path == "/" && !original.ends_with('/') {
-			let last = original.rsplit('/').next().unwrap_or_default();
-			return Ok(Redirect::permanent(&format!("{last}/")).into_response());
-		}
-		return Ok(serve_ui_index(assets, path));
+	if should_serve_ui_index(req.uri().path()) {
+		return Ok(serve_ui_index(assets, &base_path));
 	}
 	ServeDir::new(assets)
 		.oneshot(req)
@@ -413,20 +412,14 @@ async fn serve_ui_asset(
 		.map(|response| response.map(axum::body::Body::new))
 }
 
-fn serve_ui_index(assets: &'static Dir<'static>, path: &str) -> Response {
+fn serve_ui_index(assets: &'static Dir<'static>, base_path: &str) -> Response {
 	let Some(index) = assets.get_file("index.html") else {
 		return StatusCode::NOT_FOUND.into_response();
 	};
-	// Walk <base> back up to match the request depth, so the same build works under any prefix.
-	let depth = path.trim_start_matches('/').matches('/').count();
-	let base = if depth == 0 {
-		"./".to_string()
-	} else {
-		"../".repeat(depth)
-	};
+	// Assets are relative; <base> anchors them and tells the UI where it lives.
 	let html = String::from_utf8_lossy(index.contents()).replacen(
 		"<head>",
-		&format!("<head><base href=\"{base}\">"),
+		&format!("<head><base href=\"{base_path}/ui/\">"),
 		1,
 	);
 	(
@@ -1816,62 +1809,60 @@ mod tests {
 	);
 
 	#[tokio::test]
-	async fn ui_is_served_relative_to_its_own_path() {
-		let app = test_app(true);
-		let router = router(
-			app.state.clone(),
-			app.model_catalog.clone(),
-			None,
-			app.resource_manager.clone(),
-			&TEST_UI_ASSETS,
-		);
-		let get = |uri: &'static str| {
-			let router = router.clone();
-			async move {
-				let response = router
-					.oneshot(
-						axum::extract::Request::builder()
-							.uri(uri)
-							.body(axum::body::Body::empty())
-							.unwrap(),
-					)
-					.await
-					.unwrap();
-				let status = response.status();
-				let location = response
-					.headers()
-					.get(http::header::LOCATION)
-					.map(|v| v.to_str().unwrap().to_string());
-				let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-					.await
-					.unwrap();
-				(status, location, String::from_utf8(body.to_vec()).unwrap())
-			}
-		};
-
-		for (uri, location) in [("/", "ui/"), ("/ui", "ui/")] {
-			let (status, got, _) = get(uri).await;
-			assert_eq!(status, StatusCode::PERMANENT_REDIRECT, "{uri}");
-			assert_eq!(got.as_deref(), Some(location), "{uri}");
-		}
-		for (uri, base) in [
-			("/ui/", "./"),
-			("/ui/llm", "./"),
-			("/ui/llm/models", "../"),
-			("/ui/llm/models/", "../../"),
-			("/ui/settings/ui?tab=1", "../"),
-		] {
-			let (status, _, body) = get(uri).await;
-			assert_eq!(status, StatusCode::OK, "{uri}");
-			assert!(
-				body.starts_with(&format!(
-					"<!doctype html><html><head><base href=\"{base}\"><script"
-				)),
-				"{uri}: {body}"
+	async fn ui_is_served_under_the_configured_base_path() {
+		for base_path in ["", "/team/agentgateway"] {
+			let mut app = test_app(true);
+			Arc::get_mut(&mut app.state).unwrap().ui_base_path = agent_core::strng::new(base_path);
+			let router = router(
+				app.state.clone(),
+				app.model_catalog.clone(),
+				None,
+				app.resource_manager.clone(),
+				&TEST_UI_ASSETS,
 			);
+			let get = |uri: &'static str| {
+				let router = router.clone();
+				async move {
+					let response = router
+						.oneshot(
+							axum::extract::Request::builder()
+								.uri(uri)
+								.body(axum::body::Body::empty())
+								.unwrap(),
+						)
+						.await
+						.unwrap();
+					let status = response.status();
+					let location = response
+						.headers()
+						.get(http::header::LOCATION)
+						.map(|v| v.to_str().unwrap().to_string());
+					let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+						.await
+						.unwrap();
+					(status, location, String::from_utf8(body.to_vec()).unwrap())
+				}
+			};
+
+			let (status, location, _) = get("/").await;
+			assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
+			assert_eq!(location, Some(format!("{base_path}/ui/")));
+			let (status, location, _) = get("/api/auth/login").await;
+			assert_eq!(status, StatusCode::SEE_OTHER);
+			assert_eq!(location, Some(format!("{base_path}/ui")));
+			for uri in ["/ui", "/ui/", "/ui/llm/models", "/ui/settings/ui?tab=1"] {
+				let (status, _, body) = get(uri).await;
+				assert_eq!(status, StatusCode::OK, "{uri}");
+				assert!(
+					body.starts_with(&format!(
+						"<!doctype html><html><head><base href=\"{base_path}/ui/\"><script"
+					)),
+					"{uri}: {body}"
+				);
+			}
+			let (status, _, body) = get("/ui/assets/index.js").await;
+			assert_eq!(status, StatusCode::OK);
+			assert_eq!(body, "console.log(1)");
 		}
-		let (status, _, body) = get("/ui/assets/index.js").await;
-		assert_eq!(status, StatusCode::OK);
-		assert_eq!(body, "console.log(1)");
 	}
 }

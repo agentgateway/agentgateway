@@ -284,6 +284,13 @@
             "null"
           ]
         },
+        "uiBasePath": {
+          "description": "Prefix a reverse proxy strips before forwarding (e.g. `/agentgateway`); used in UI links, assets and login redirects.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "standardAttributes": {
           "description": "Standard request log attributes populated for database-backed local runtime features.",
           "anyOf": [

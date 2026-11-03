@@ -203,6 +203,8 @@ pub struct RawConfig {
 
 	/// Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	admin_addr: Option<String>,
+	/// Prefix a reverse proxy strips before forwarding (e.g. `/agentgateway`); used in UI links, assets and login redirects.
+	ui_base_path: Option<String>,
 	/// Standard request log attributes populated for database-backed local runtime features.
 	standard_attributes: Option<RawStandardAttributes>,
 	/// Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
@@ -704,6 +706,8 @@ pub struct Config {
 	/// Specify the number of worker threads the Tokio Runtime will use.
 	pub num_worker_threads: usize,
 	pub admin_addr: Address,
+	/// `""` or `/prefix`, no trailing slash.
+	pub ui_base_path: Strng,
 	pub stats_addr: Address,
 	pub histograms: HistogramMode,
 	pub readiness_addr: Address,

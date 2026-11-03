@@ -353,6 +353,12 @@ pub fn parse_config(
 		.transpose()
 		.ctx("invalid ADMIN_ADDR/config.adminAddr")?
 		.unwrap_or(Address::Localhost(ipv6_localhost_enabled, 15000));
+	let ui_base_path = parse::<String>("UI_BASE_PATH")?
+		.or(raw.ui_base_path)
+		.map(|path| normalize_ui_base_path(&path))
+		.transpose()
+		.ctx("invalid UI_BASE_PATH/config.uiBasePath")?
+		.unwrap_or_default();
 	// Parse stats_addr from environment variable or config file
 	let stats_addr = parse::<String>("STATS_ADDR")?
 		.or(raw.stats_addr)
@@ -447,6 +453,7 @@ pub fn parse_config(
 		network: network.clone().into(),
 		self_identity,
 		admin_addr,
+		ui_base_path,
 		stats_addr,
 		readiness_addr,
 		self_addr,
@@ -1223,6 +1230,26 @@ async fn persist_session_key(path: &Path) -> anyhow::Result<String> {
 	Ok(key)
 }
 
+fn normalize_ui_base_path(path: &str) -> anyhow::Result<Strng> {
+	let path = path.trim_end_matches('/');
+	if path.is_empty() {
+		return Ok(Strng::default());
+	}
+	if !path.starts_with('/') || path.contains("//") {
+		anyhow::bail!("must be an absolute path such as /agentgateway, got {path:?}");
+	}
+	// Goes into HTML and Location headers, so only plain path characters.
+	if let Some(c) = path
+		.chars()
+		.find(|c| !(c.is_ascii_alphanumeric() || "/-._~%".contains(*c)))
+	{
+		anyhow::bail!(
+			"{path:?} contains {c:?}; only letters, digits, '/', '-', '.', '_', '~' and '%' are allowed"
+		);
+	}
+	Ok(strng::new(path))
+}
+
 #[cfg(test)]
 mod tests {
 	use std::env;
@@ -1958,5 +1985,24 @@ config:
 			.spiffe
 			.expect("spiffe.endpoint should enable the SPIFFE Workload API");
 		assert_eq!(spiffe.endpoint, "unix:///run/spire/agent.sock");
+	}
+
+	#[test]
+	fn ui_base_path_is_normalized() {
+		for (input, want) in [
+			("", ""),
+			("/", ""),
+			("/agw", "/agw"),
+			("/team/agw/", "/team/agw"),
+		] {
+			assert_eq!(
+				normalize_ui_base_path(input).unwrap().as_str(),
+				want,
+				"{input}"
+			);
+		}
+		for input in ["agw", "//agw", "/a\"b", "/a?x=1", "/a b"] {
+			assert!(normalize_ui_base_path(input).is_err(), "{input}");
+		}
 	}
 }

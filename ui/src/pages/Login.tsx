@@ -3,9 +3,13 @@ import { useEffect } from 'react';
 import { apiBase } from '@/api/base';
 import logoDark from '@/assets/agw-dark.svg';
 import logoLight from '@/assets/agw-light.svg';
+import { withBasePath } from '@/uiBase';
 
 export function LoginPage() {
-	const returnTo = new URLSearchParams(window.location.search).get('returnTo') || '/ui';
+	const returnTo = withBasePath(
+		new URLSearchParams(window.location.search).get('returnTo') || '/ui',
+		apiBase
+	);
 	const query = new URLSearchParams({ returnTo });
 
 	useEffect(() => {

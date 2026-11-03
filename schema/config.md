@@ -84,6 +84,7 @@
 |`config.clusterId`|string|Identifier for the cluster this gateway runs in. Defaults to "Kubernetes".|
 |`config.network`|string|Network name for this gateway, used for locality-aware routing.|
 |`config.adminAddr`|string|Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
+|`config.uiBasePath`|string|Prefix a reverse proxy strips before forwarding (e.g. `/agentgateway`); used in UI links, assets and login redirects.|
 |`config.standardAttributes`|object|Standard request log attributes populated for database-backed local runtime features.|
 |`config.standardAttributes.user`|string|CEL expression used to populate the `agentgateway.user` request log attribute.|
 |`config.standardAttributes.group`|string|CEL expression used to populate the `agentgateway.group` request log attribute.|

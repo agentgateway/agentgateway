@@ -1,4 +1,5 @@
 import { defaultApiBase } from '@/basePath';
+import { withBasePath } from '@/uiBase';
 
 export const apiBase = import.meta.env.VITE_AGENTGATEWAY_API ?? defaultApiBase();
 
@@ -26,7 +27,11 @@ export async function requestApi(path: string, init?: RequestInit): Promise<Resp
 				return new Promise<Response>(() => {});
 			}
 			const returnTo = window.location.pathname + window.location.search + window.location.hash;
-			const destination = new URL(`${apiBase}${location}`, window.location.href);
+			// The server's login redirect already has the base path; only add it if missing.
+			const target = apiBase.startsWith('/')
+				? withBasePath(location ?? '', apiBase)
+				: `${apiBase}${location}`;
+			const destination = new URL(target, window.location.href);
 			destination.searchParams.set('returnTo', returnTo);
 			window.location.replace(destination.href);
 		}
