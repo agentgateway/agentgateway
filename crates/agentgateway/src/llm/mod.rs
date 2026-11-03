@@ -1065,6 +1065,8 @@ impl AIProvider {
 					if p.is_anthropic_model(request_model) {
 						formats.extend([AnthropicTokenCount, Messages]);
 					}
+				} else {
+					formats.push(Decisions);
 				}
 				formats
 			},

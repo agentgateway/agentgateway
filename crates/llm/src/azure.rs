@@ -75,6 +75,9 @@ impl Provider {
 	}
 
 	fn openai_path(&self, route: RouteType, model: &str) -> Strng {
+		if route == RouteType::Decisions {
+			return strng::literal!("/openai/v1/decisions");
+		}
 		let suffix = Self::openai_suffix(route);
 		match self.api_version() {
 			"v1" => strng::format!("/openai/v1/{suffix}"),
@@ -253,6 +256,13 @@ mod tests {
 		"/openai/responses?api-version=2026-01-01-preview"
 	)]
 	// Responses on the v1 surface.
+	#[case::decisions_v1(RouteType::Decisions, "v1", "deployment-alias", "/openai/v1/decisions")]
+	#[case::decisions_date_version(
+		RouteType::Decisions,
+		"2024-10-21",
+		"deployment-alias",
+		"/openai/v1/decisions"
+	)]
 	#[case::responses_v1(RouteType::Responses, "v1", "gpt-5.1", "/openai/v1/responses")]
 	// Responses on the v1 preview surface.
 	#[case::responses_preview(
