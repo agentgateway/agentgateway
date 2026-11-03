@@ -1,0 +1,74 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/caller_tool_json_object_response.json
+info:
+  id: msg_caller_tool
+  type: message
+  role: assistant
+  model: claude-opus-4-5
+  content:
+    - type: tool_use
+      id: toolu_caller
+      name: json_object_response
+      input:
+        query: x
+  stop_reason: tool_use
+  stop_sequence: ~
+  usage:
+    input_tokens: 40
+    output_tokens: 12
+---
+{
+  "response": {
+    "model": "claude-opus-4-5",
+    "usage": {
+      "prompt_tokens": 40,
+      "completion_tokens": 12,
+      "total_tokens": 52
+    },
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "type": "function",
+              "id": "toolu_caller",
+              "function": {
+                "name": "json_object_response",
+                "arguments": "{\"query\":\"x\"}"
+              }
+            }
+          ]
+        },
+        "index": 0,
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "id": "[id]",
+    "created": "[date]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 40,
+    "output_tokens": 12,
+    "total_tokens": 52,
+    "provider_model": "claude-opus-4-5",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "toolu_caller",
+            "name": "json_object_response",
+            "arguments": {
+              "query": "x"
+            }
+          }
+        ],
+        "finish_reason": "tool_calls"
+      }
+    ]
+  }
+}

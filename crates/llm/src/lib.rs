@@ -298,6 +298,8 @@ pub enum ProviderState {
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
 	VertexGemini,
+	/// Completions json_object sent to Claude as a forced tool call.
+	MessagesJsonObject,
 	SystemOneDecisions(Arc<conversion::systemone::from_decisions::State>),
 	DecisionsSystemOne(Arc<conversion::systemone::from_systemone::State>),
 }

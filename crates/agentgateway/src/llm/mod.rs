@@ -347,6 +347,7 @@ struct ChatResponseContext<'a> {
 	model: &'a str,
 	tool_name_map: Option<&'a conversion::bedrock::BedrockToolNameMap>,
 	namespaces: Option<&'a conversion::namespace_tools::NamespaceToolMap>,
+	json_object: bool,
 }
 
 /// Log handles and content-capture flags threaded through response processing.
@@ -365,6 +366,7 @@ struct ChatStreamContext {
 	log_content: LogContentFields,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
 	namespaces: Option<Arc<conversion::namespace_tools::NamespaceToolMap>>,
+	json_object: bool,
 }
 
 /// Ordered chat conversion table.
@@ -614,6 +616,8 @@ impl ChatTranslation {
 		if let AIProvider::Bedrock(p) = ctx.provider {
 			p.sanitize_runtime_request(&mut req, ctx.catalog);
 		}
+		let json_object = matches!(self.output, ChatFormat::AnthropicMessages)
+			&& matches!(&req, types::ChatRequest::Completions(req) if conversion::messages::from_completions::emulates_json_object(req));
 		let body = match self.output {
 			ChatFormat::OpenAICompletions => return render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
@@ -631,7 +635,7 @@ impl ChatTranslation {
 		}?;
 		Ok(RenderedChatRequest {
 			body,
-			provider_state: None,
+			provider_state: json_object.then_some(ProviderState::MessagesJsonObject),
 		})
 	}
 
@@ -676,7 +680,7 @@ impl ChatTranslation {
 			ChatFormat::AnthropicMessages => match self.input {
 				InputFormat::Messages => AIProvider::parse_response::<types::messages::Response>(bytes),
 				InputFormat::Completions => {
-					conversion::messages::from_completions::translate_response(bytes)
+					conversion::messages::from_completions::translate_response(bytes, ctx.json_object)
 				},
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
@@ -777,6 +781,7 @@ impl ChatTranslation {
 						ctx.buffer_limit,
 						ctx.logger,
 						ctx.log_content,
+						ctx.json_object,
 					)
 				}),
 				_ => resp,
@@ -3249,6 +3254,7 @@ impl AIProvider {
 				model: &req.request_model,
 				tool_name_map: bedrock_tool_name_map(req),
 				namespaces: namespace_tool_map(req).map(Arc::as_ref),
+				json_object: matches!(req.provider_state, Some(ProviderState::MessagesJsonObject)),
 			},
 		)
 	}
@@ -3273,6 +3279,7 @@ impl AIProvider {
 		let input_format = req.input_format;
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
 		let namespaces = namespace_tool_map(&req).cloned();
+		let json_object = matches!(req.provider_state, Some(ProviderState::MessagesJsonObject));
 		let chat_translation = if input_format.is_chat() {
 			Some(self.chat_translation(
 				input_format,
@@ -3378,6 +3385,7 @@ impl AIProvider {
 					log_content,
 					tool_name_map: bedrock_tool_name_map,
 					namespaces,
+					json_object,
 				},
 			)
 		} else {
