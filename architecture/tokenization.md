@@ -1,6 +1,6 @@
 # Email data tokenization
 
-Enable **Email addresses** under **LLM Guardrails > Data tokenization**, or configure it in YAML
+Enable **Email addresses** tokenization under **LLM Guardrails > Data tokenization**, or configure it in YAML
 
 ```yaml
 llm:
