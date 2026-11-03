@@ -8,6 +8,8 @@ data: {"id":"resp_terminal","choices":[{"index":0,"delta":{"content":null,"tool_
 
 data: {"id":"resp_terminal","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"function":{"arguments":"{\"city\":"}}]}}],"created":123,"model":"gpt-5.6-luna","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
 
+data: {"error":{"message":"provider failed","type":"server_error","param":null,"code":null}}
+
 data: [DONE]
 
 
