@@ -1,8 +1,8 @@
 //! Configurable browser login and logout endpoints.
 use ::http::{Method, StatusCode, Uri, header};
 
-use super::{OidcPolicy, build_redirect_response, session};
-use crate::http::{PolicyResponse, Request};
+use super::{OidcPolicy, OidcResponse, build_redirect_response, session};
+use crate::http::Request;
 use crate::proxy::ProxyError;
 
 impl OidcPolicy {
@@ -21,7 +21,7 @@ impl OidcPolicy {
 		}
 	}
 
-	pub(super) fn handle_logout(&self, req: &Request) -> Result<Option<PolicyResponse>, ProxyError> {
+	pub(super) fn handle_logout(&self, req: &Request) -> Result<Option<OidcResponse>, ProxyError> {
 		if !self
 			.logout
 			.as_ref()
@@ -77,6 +77,6 @@ impl OidcPolicy {
 			header::CACHE_CONTROL,
 			http::HeaderValue::from_static("no-store"),
 		);
-		Ok(Some(PolicyResponse::default().with_response(response)))
+		Ok(Some(OidcResponse::default().with_response(response)))
 	}
 }

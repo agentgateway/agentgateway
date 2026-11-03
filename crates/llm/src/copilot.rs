@@ -89,7 +89,7 @@ impl Provider {
 			m if m.starts_with("gpt-") => {
 				vec![ChatFormat::OpenAIResponses]
 			},
-			m if m.starts_with("microsoft-decision-") => vec![],
+			m if m.starts_with("microsoft-decision-") || m.starts_with("text-embedding-") => vec![],
 			_ => vec![ChatFormat::OpenAICompletions],
 		}
 	}
@@ -150,5 +150,11 @@ mod tests {
 			Provider::supported_formats_for_model("grok-2", catalog),
 			vec![ChatFormat::OpenAIResponses]
 		);
+	}
+
+	#[test]
+	fn embedding_model_has_no_chat_formats_and_uses_embeddings_path() {
+		assert!(Provider::supported_formats_for_model("text-embedding-3-small", None).is_empty());
+		assert_eq!(path_suffix(RouteType::Embeddings), "/embeddings");
 	}
 }

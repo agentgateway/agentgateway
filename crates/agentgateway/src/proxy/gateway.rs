@@ -795,12 +795,7 @@ impl Gateway {
 							.await
 						{
 							Ok(identity) => Some(identity),
-							Err(error) => {
-								return Ok(match error {
-									crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
-									crate::proxy::ProxyResponse::DirectResponse(response) => *response,
-								});
-							},
+							Err(error) => return Ok(error.into_response_with_grpc(false)),
 						}
 					} else {
 						None
@@ -1814,6 +1809,7 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		http2_keepalive_timeout,
 		max_connection_duration: _, // Not handled here
 		max_concurrent_requests: _, // Not handled here
+		normalize: _,               // Not handled here
 	} = c.unwrap_or(&def);
 
 	if let Some(m) = http1_max_headers {

@@ -27,6 +27,11 @@ spec:
       http2MaxHeaderSize: 16Ki
       maxBufferSize: 2Ki
       maxConcurrentRequests: 100
+      normalize:
+      - MergeSlash
+      - DotSegment
+      - DecodeUnreserved
+      - RejectEscapedSlash
 ---
 # Output
 output:
@@ -42,6 +47,11 @@ output:
           http2MaxHeaderSize: 16384
           maxBufferSize: 2048
           maxConcurrentRequests: 100
+          normalize:
+          - MERGE_SLASH
+          - DOT_SEGMENT
+          - DECODE_UNRESERVED
+          - REJECT_ESCAPED_SLASH
       key: frontend/default/http-policy:frontend-http:default/test
       name:
         kind: AgentgatewayPolicy

@@ -33,7 +33,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.rates.perAudioMinute`|string|Cost per minute of input audio, for models billed by duration (such as `whisper-1`).|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers`|[]object|Pricing rules ordered by increasing context threshold within each service tier.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].contextOver`|integer|Context-token threshold above which this rule applies. Defaults to zero.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers[].serviceTier`|enum|Normalized served service tier; absent matches any service tier.<br>Possible values: `standard`, `flex`, `priority`, `reserved`.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].serviceTier`|enum|Normalized served service tier; absent matches any service tier.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `ultrafast`.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates`|object|Pricing rates for this tier, overlaid on the base model rates.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.output`|string|Cost per 1M output (completion) tokens.|
@@ -1595,6 +1595,7 @@
 |`frontendPolicies.http.http2KeepaliveTimeout`|string|Time to wait for an HTTP/2 keepalive ping response.|
 |`frontendPolicies.http.maxConnectionDuration`|string|Maximum time a connection may stay open. After this duration, the connection is gracefully<br>closed after the current in-flight request completes. Useful for even traffic distribution<br>behind load balancers during scaling events.|
 |`frontendPolicies.http.maxConcurrentRequests`|integer|Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests<br>and HTTP/2 streams. Requests over the limit are rejected immediately.|
+|`frontendPolicies.http.normalize`|[]enum|Path normalization rules applied before route matching. The normalized path is used for<br>routing, policies and the upstream request. Access logs keep the original path.<br>Possible values: `mergeSlash`, `dotSegment`, `decodeUnreserved`, `rejectEscapedSlash`, `unescapeSlash`.|
 |`frontendPolicies.tls`|object|Settings for handling incoming TLS connections.|
 |`frontendPolicies.tls.handshakeTimeout`|string|Maximum time allowed to complete the downstream TLS handshake.|
 |`frontendPolicies.tls.alpn`|array|ALPN protocols advertised to downstream clients.|

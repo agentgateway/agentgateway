@@ -549,6 +549,7 @@ function ModelsEditorPage() {
 					config={config.data}
 					databaseBacked={editingDatabaseVirtualModel}
 					baseModels={models}
+					virtualModels={virtualModels}
 					providers={providers}
 					help={help}
 					saving={saving}
@@ -1268,6 +1269,7 @@ function VirtualModelEditor(props: {
 	databaseBacked: boolean;
 	previousName?: string;
 	baseModels: LlmModel[];
+	virtualModels: LlmVirtualModel[];
 	providers: LlmProvider[];
 	help: SchemaHelp;
 	saving: boolean;
@@ -1287,6 +1289,19 @@ function VirtualModelEditor(props: {
 	const failoverTargets = model.routing.failover?.targets ?? [];
 	const conditionalTargets = model.routing.conditional?.targets ?? [];
 	const targetOptions = modelTargetOptions(props.baseModels, props.providers);
+	// Weighted and conditional targets may point at other virtual models; failover targets may not.
+	const nestedVirtualModels = props.virtualModels
+		.map(virtualModel => virtualModel.name)
+		.filter(name => name !== model.name && name !== props.previousName);
+	const nestedTargetOptions = [
+		...targetOptions,
+		...nestedVirtualModels.map(name => ({
+			value: name,
+			label: name,
+			icon: <GitBranch size={16} />,
+			searchText: `${name} virtual model`
+		}))
+	];
 	const merged = useMergedEdits(
 		props.previousName ? props.initial : undefined,
 		cleanEmpty(model) as LlmVirtualModel | undefined,
@@ -1300,7 +1315,10 @@ function VirtualModelEditor(props: {
 				? failoverTargets
 				: conditionalTargets;
 	const hasInvalidTarget = activeTargets.some(
-		target => !target.model.trim() || isIncompleteWildcardTarget(target.model, props.baseModels)
+		target =>
+			!target.model.trim() ||
+			((strategy === 'failover' || !nestedVirtualModels.includes(target.model)) &&
+				isIncompleteWildcardTarget(target.model, props.baseModels))
 	);
 	const hasInvalidConditionalFallback =
 		strategy === 'conditional' &&
@@ -1494,7 +1512,8 @@ function VirtualModelEditor(props: {
 									label="Model"
 									targetModel={target.model}
 									baseModels={props.baseModels}
-									options={targetOptions}
+									virtualModels={nestedVirtualModels}
+									options={nestedTargetOptions}
 									providers={props.providers}
 									onChange={value => updateWeighted(index, { model: value })}
 								/>
@@ -1730,7 +1749,8 @@ function VirtualModelEditor(props: {
 											label="Target model"
 											targetModel={target.model}
 											baseModels={props.baseModels}
-											options={targetOptions}
+											virtualModels={nestedVirtualModels}
+											options={nestedTargetOptions}
 											providers={props.providers}
 											onChange={value => updateConditional(index, { model: value })}
 										/>
@@ -1802,6 +1822,7 @@ function VirtualTargetSelector(props: {
 	label: string;
 	targetModel: string;
 	baseModels: LlmModel[];
+	virtualModels?: string[];
 	options: Array<{
 		value: string;
 		label: ReactNode;
@@ -1811,8 +1832,13 @@ function VirtualTargetSelector(props: {
 	providers: LlmProvider[];
 	onChange: (model: string) => void;
 }) {
-	const selectedModelName = selectedConfiguredModelName(props.targetModel, props.baseModels);
-	const selectedModel = props.baseModels.find(model => model.name === selectedModelName);
+	const isVirtualTarget = props.virtualModels?.includes(props.targetModel) ?? false;
+	const selectedModelName = isVirtualTarget
+		? props.targetModel
+		: selectedConfiguredModelName(props.targetModel, props.baseModels);
+	const selectedModel = isVirtualTarget
+		? undefined
+		: props.baseModels.find(model => model.name === selectedModelName);
 	const provider = selectedModel
 		? resolvedProviderLabel(selectedModel.provider, props.providers)
 		: null;

@@ -584,6 +584,10 @@ a {
 	padding: 28px;
 }
 
+.content > .status-banner {
+	margin-bottom: 18px;
+}
+
 .page-stack {
 	display: flex;
 	flex-direction: column;

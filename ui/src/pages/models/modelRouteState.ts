@@ -6,7 +6,12 @@ export type ModelHash =
 	| { kind: 'add'; type: 'model' | 'virtual' };
 
 export function modelHashFromUrl(): ModelHash | null {
-	const raw = decodeURIComponent(window.location.hash.replace(/^#/, ''));
+	let raw: string;
+	try {
+		raw = decodeURIComponent(window.location.hash.replace(/^#/, ''));
+	} catch {
+		return null;
+	}
 	if (!raw) return null;
 	if (raw.startsWith('edit=')) {
 		const modelId = raw.slice('edit='.length);

@@ -34,6 +34,7 @@ pub enum PricingTier {
 	Flex,
 	Priority,
 	Reserved,
+	Ultrafast,
 }
 
 impl PricingTier {
@@ -58,18 +59,23 @@ impl PricingTier {
 			},
 			// https://developers.openai.com/api/docs/guides/fast-mode
 			// https://developers.openai.com/api/docs/guides/flex-processing
+			// https://developers.openai.com/api/docs/guides/ultrafast-mode
 			// https://openai.com/api-scale-tier/
-			(provider, tier)
-				if provider == openai::Provider::NAME.as_str()
-					|| provider == azure::Provider::NAME.as_str() =>
-			{
-				match tier {
-					"default" => Self::Standard,
-					"flex" => Self::Flex,
-					"fast" | "priority" => Self::Priority,
-					"scale" => Self::Reserved,
-					_ => return None,
-				}
+			(provider, tier) if provider == openai::Provider::NAME.as_str() => match tier {
+				"default" => Self::Standard,
+				"flex" => Self::Flex,
+				"fast" | "priority" => Self::Priority,
+				"scale" => Self::Reserved,
+				"ultrafast" => Self::Ultrafast,
+				_ => return None,
+			},
+			// Azure does not offer the ultrafast tier.
+			(provider, tier) if provider == azure::Provider::NAME.as_str() => match tier {
+				"default" => Self::Standard,
+				"flex" => Self::Flex,
+				"fast" | "priority" => Self::Priority,
+				"scale" => Self::Reserved,
+				_ => return None,
 			},
 			// https://platform.claude.com/docs/en/api/service-tiers
 			(provider, tier) if provider == anthropic::Provider::NAME.as_str() => match tier {
@@ -79,11 +85,14 @@ impl PricingTier {
 			},
 			// https://docs.aws.amazon.com/bedrock/latest/userguide/service-tiers-inference.html
 			// Anthropic models on Bedrock may report Anthropic service tiers.
+			// OpenAI models on Bedrock may be served at the ultrafast tier:
+			// https://aws.amazon.com/about-aws/whats-new/2026/09/openai-gpt-6-astra-ultrafast-on-amazon-bedrock/
 			(provider, tier) if provider == bedrock::Provider::NAME.as_str() => match tier {
 				"default" | "standard" => Self::Standard,
 				"flex" => Self::Flex,
 				"priority" => Self::Priority,
 				"reserved" => Self::Reserved,
+				"ultrafast" => Self::Ultrafast,
 				_ => return None,
 			},
 			_ => return None,
@@ -1098,6 +1107,72 @@ mod tests {
 		assert_eq!(price(300_000, Some("ON_DEMAND_FLEX")), Some(0.225));
 		assert_eq!(price(100_000, Some("ON_DEMAND_FLEX")), Some(0.05));
 		assert_eq!(price(300_000, Some("ON_DEMAND")), Some(0.6));
+		assert_eq!(price(100_000, None), Some(0.1));
+	}
+
+	#[test]
+	fn detect_maps_ultrafast_service_tier() {
+		// OpenAI offers an ultrafast tier:
+		// https://developers.openai.com/api/docs/guides/ultrafast-mode
+		assert_eq!(
+			PricingTier::detect(openai::Provider::NAME.as_str(), "ultrafast"),
+			Some(PricingTier::Ultrafast)
+		);
+		// Bedrock offers it for OpenAI models:
+		// https://aws.amazon.com/about-aws/whats-new/2026/10/openai-gpt-sol-ultrafast-amazon/
+		assert_eq!(
+			PricingTier::detect(bedrock::Provider::NAME.as_str(), "ultrafast"),
+			Some(PricingTier::Ultrafast)
+		);
+		// Azure does not offer ultrafast.
+		assert_eq!(
+			PricingTier::detect(azure::Provider::NAME.as_str(), "ultrafast"),
+			None
+		);
+		// Existing mappings are unchanged.
+		assert_eq!(
+			PricingTier::detect(openai::Provider::NAME.as_str(), "fast"),
+			Some(PricingTier::Priority)
+		);
+		assert_eq!(
+			PricingTier::detect(azure::Provider::NAME.as_str(), "priority"),
+			Some(PricingTier::Priority)
+		);
+		assert_eq!(
+			PricingTier::detect(openai::Provider::NAME.as_str(), "default"),
+			Some(PricingTier::Standard)
+		);
+	}
+
+	#[test]
+	fn ultrafast_tier_rates_are_applied() {
+		let catalog = CatalogSnapshot::parse(
+			r#"{"providers":{"openai":{"models":{"m":{
+				"rates":{"input":"1"},
+				"tiers":[
+					{"serviceTier":"ultrafast","rates":{"input":"6"}}
+				]
+			}}}}}"#,
+		)
+		.unwrap();
+		let price = |tokens: u64, served_tier: Option<&str>| {
+			catalog
+				.price(
+					openai::Provider::NAME.as_str(),
+					"m",
+					&LLMResponse {
+						input_tokens: Some(tokens),
+						service_tier: served_tier.map(Into::into),
+						..Default::default()
+					},
+					CacheTokenConvention::InputIncludesCache,
+				)
+				.0
+		};
+		// Served at ultrafast: the ultrafast tier rate applies.
+		assert_eq!(price(100_000, Some("ultrafast")), Some(0.6));
+		// Served at default: base rates apply.
+		assert_eq!(price(100_000, Some("default")), Some(0.1));
 		assert_eq!(price(100_000, None), Some(0.1));
 	}
 

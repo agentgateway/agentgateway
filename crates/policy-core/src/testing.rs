@@ -15,9 +15,8 @@
 //!
 //! let mut test = PolicyTest::<P>::new(serde_json::json!({ "condition": "jwt.sub == \"me\"" }))
 //!     .vars(serde_json::json!({ "jwt": { "sub": "me" } }));
-//! let response = test.request(TestRequest::get("/hello")).await;
-//! assert!(!response.should_short_circuit());
-//! test.response(TestResponse::default()).await;
+//! test.request(TestRequest::get("/hello")).await.expect("request continues");
+//! test.response(TestResponse::default()).await.expect("response continues");
 //! # }
 //! ```
 
@@ -37,8 +36,6 @@ use crate::{
 };
 
 /// Runs one policy through its request and response phases against a mock host.
-///
-/// Phase failures panic, since this is only used in tests.
 pub struct PolicyTest<P: RequestPolicy> {
 	policy: P,
 	cel: JsonCel,
@@ -82,35 +79,32 @@ impl<P: RequestPolicy> PolicyTest<P> {
 	}
 
 	/// Runs the request phase, retaining any response state for [`Self::response`].
-	pub async fn request(&mut self, request: TestRequest) -> &PolicyResponse {
+	pub async fn request(&mut self, request: TestRequest) -> Result<&PolicyResponse, P::Error> {
 		let mut request = request.into_request();
 		let context = PolicyContext::new(&self.cel).with_backend(self.backend.dispatcher());
-		let action = self
-			.policy
-			.apply(context, &mut request)
-			.await
-			.unwrap_or_else(|err| panic!("request phase failed: {err}"));
+		let action = self.policy.apply(context, &mut request).await;
 		self.request = Some(request);
+		let action = action?;
 		self.response_state = action.response_state;
 		self.request_result = action.response;
-		&self.request_result
+		Ok(&self.request_result)
 	}
 
 	/// Runs the response phase with the state returned by [`Self::request`].
-	pub async fn response(&mut self, response: TestResponse) -> &PolicyResponse {
+	pub async fn response(&mut self, response: TestResponse) -> Result<&PolicyResponse, P::Error> {
 		let state = self
 			.response_state
 			.take()
 			.expect("request phase did not return response state");
 		let mut response = response.into_response();
 		let context = PolicyContext::new(&self.cel).with_backend(self.backend.dispatcher());
-		self.response_result = self
+		let result = self
 			.policy
 			.apply_response(context, state, &mut response)
-			.await
-			.unwrap_or_else(|err| panic!("response phase failed: {err}"));
+			.await;
 		self.response = Some(response);
-		&self.response_result
+		self.response_result = result?;
+		Ok(&self.response_result)
 	}
 
 	pub fn request_headers(&self) -> &HeaderMap {

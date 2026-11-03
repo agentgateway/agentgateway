@@ -594,6 +594,15 @@ mod usage_reporting_streaming {
 	use crate::types::completions::typed as completions;
 
 	#[test]
+	fn chunk_without_model_parses() {
+		let chunk: completions::StreamResponse = serde_json::from_str(
+			r#"{"id":"c","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":2,"total_tokens":9}}"#,
+		)
+		.unwrap();
+		assert_eq!(chunk.model, "");
+	}
+
+	#[test]
 	fn final_chunk_without_delta_still_reports_usage() {
 		// GLM and friends end the stream with a choice that carries only `finish_reason` and
 		// `index`. `delta` used to be a required field, so the whole chunk failed to parse and the

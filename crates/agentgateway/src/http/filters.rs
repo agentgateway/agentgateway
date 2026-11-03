@@ -9,7 +9,7 @@ use crate::http::uri::Scheme;
 use crate::http::{
 	HeaderMap, HeaderName, HeaderValue, PolicyResponse, Request, Response, StatusCode, Uri,
 };
-use crate::proxy::ProxyResponse;
+use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{Severity, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicyTrait, RequestPolicyTrait};
@@ -105,7 +105,7 @@ impl store::ResponsePolicyTrait for HeaderModifier {
 		&self,
 		_log: &mut RequestLog,
 		resp: &mut Response,
-	) -> Result<PolicyResponse, ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		self
 			.apply(resp.headers_mut())
 			.map_err(proxy::ProxyError::from)?;
@@ -119,7 +119,7 @@ impl BackendPolicyTrait for HeaderModifier {
 		_client: &PolicyClient,
 		_log: &mut Option<&mut RequestLog>,
 		req: &mut Request,
-	) -> Result<PolicyResponse, ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		self.apply_request(req).map_err(proxy::ProxyError::from)?;
 		Ok(PolicyResponse::default())
 	}
@@ -131,7 +131,7 @@ impl RequestPolicyTrait for HeaderModifier {
 		_client: &proxy::httpproxy::PolicyClient,
 		_log: &mut RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		self.apply_request(req).map_err(proxy::ProxyError::from)?;
 		Ok(PolicyResponse::default())
 	}
@@ -165,7 +165,7 @@ pub struct RequestRedirect {
 }
 
 impl RequestRedirect {
-	pub fn apply(&self, req: &mut Request) -> Result<PolicyResponse, Error> {
+	pub fn apply(&self, req: &mut Request) -> Result<Response, Error> {
 		const DEFAULT_PATH: &PathMatch = &PathMatch::PathPrefix(strng::literal!("/"));
 		let path_match = req.extensions().get::<PathMatch>().unwrap_or(DEFAULT_PATH);
 		let RequestRedirect {
@@ -205,7 +205,7 @@ impl RequestRedirect {
 			.header(http::header::LOCATION, new.to_string())
 			.body(http::Body::empty())?;
 
-		Ok(PolicyResponse::default().with_response(dr))
+		Ok(dr)
 	}
 }
 
@@ -215,11 +215,8 @@ impl crate::store::RequestPolicyTrait for RequestRedirect {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
-		self
-			.apply(req)
-			.map_err(crate::proxy::ProxyError::from)
-			.map_err(Into::into)
+	) -> Result<PolicyResponse, ProxyError> {
+		Err(ProxyError::direct_response(self.apply(req)?))
 	}
 }
 
@@ -308,7 +305,7 @@ impl crate::store::RequestPolicyTrait for UrlRewrite {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		self.apply(req).map_err(crate::proxy::ProxyError::from)?;
 		Ok(PolicyResponse::default())
 	}
@@ -387,11 +384,8 @@ impl crate::store::RequestPolicyTrait for DirectResponse {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
-		Ok(
-			PolicyResponse::default()
-				.with_response(self.apply(req).map_err(crate::proxy::ProxyError::from)?),
-		)
+	) -> Result<PolicyResponse, ProxyError> {
+		Err(ProxyError::direct_response(self.apply(req)?))
 	}
 
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {

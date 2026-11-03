@@ -43,6 +43,7 @@ const BEDROCK_COHERE_V4: &str = "bedrock-cohere-v4";
 const BEDROCK_NOVA: &str = "bedrock-nova";
 const BEDROCK_PROMPT_CACHING: &str = "bedrock-prompt-caching";
 const COHERE: &str = "cohere";
+const COPILOT: &str = "copilot";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
 const RESPONSES: &str = "responses";
@@ -252,10 +253,17 @@ mod requests {
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
 		(
 			"basic",
-			&[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, BEDROCK_NOVA, VERTEX],
+			&[
+				OPENAI,
+				COPILOT,
+				BEDROCK_TITAN,
+				BEDROCK_COHERE,
+				BEDROCK_NOVA,
+				VERTEX,
+			],
 		),
 		("cohere-v4", &[BEDROCK_COHERE]),
-		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
+		("array", &[OPENAI, COPILOT, BEDROCK_COHERE, VERTEX]),
 		("full", &[VERTEX]),
 		("embed-content", &[VERTEX]),
 	];
@@ -478,6 +486,9 @@ mod requests {
 				match *provider {
 					OPENAI => test_request(OPENAI, &path, |i: &mut types::embeddings::Request| {
 						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
+					}),
+					COPILOT => test_request(COPILOT, &path, |i: &mut types::embeddings::Request| {
+						conversion::copilot::from_embeddings::translate(i)
 					}),
 					BEDROCK_TITAN => test_request(
 						BEDROCK_TITAN,
@@ -994,6 +1005,7 @@ mod responses {
 			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
 		),
 		("openrouter_reasoning", ALL_COMPLETIONS),
+		("mistral_reasoning", ALL_COMPLETIONS),
 		(
 			"reasoning",
 			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
@@ -1057,6 +1069,8 @@ mod responses {
 			BEDROCK_COHERE_V4,
 		),
 		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
+		("response/copilot/embeddings.json", COPILOT),
+		("response/openai/gemini-embeddings.json", COPILOT),
 		("response/vertex/embeddings.json", VERTEX),
 		("response/vertex/embed-content.json", VERTEX_EMBED_CONTENT),
 		("response/openai/embeddings.json", OPENAI),
@@ -1110,10 +1124,15 @@ mod responses {
 			"stream_tool_empty_args",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
 		),
+		(
+			"stream_error",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		("stream", ALL_COMPLETIONS),
+		("stream_mistral_reasoning", ALL_COMPLETIONS),
 		(
 			"stream_tool_empty_content",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
@@ -1436,6 +1455,9 @@ mod responses {
 				}),
 				VERTEX_EMBED_CONTENT => test_response(provider, path, |i| {
 					conversion::vertex::from_embeddings::translate_response(&i, &vertex, "gemini-embedding-2")
+				}),
+				COPILOT => test_response(provider, path, |i| {
+					conversion::copilot::from_embeddings::translate_response(&i, "text-embedding-3-small")
 				}),
 				OPENAI => test_response(provider, path, |i| {
 					serde_json::from_slice::<types::embeddings::Response>(&i)

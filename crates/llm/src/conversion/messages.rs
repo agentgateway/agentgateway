@@ -1044,6 +1044,27 @@ pub mod from_completions {
 		))
 	}
 
+	// Same shape as OpenAI's mid-stream error, which the SDKs raise on.
+	fn stream_error(error: messages::MessagesError) -> async_openai::error::WrappedError {
+		// Anthropic error type → OpenAI type and code.
+		let (r#type, code) = match error.r#type.as_str() {
+			"rate_limit_error" => ("rate_limit_error", Some("rate_limit_exceeded")),
+			"overloaded_error" => ("server_error", Some("server_is_overloaded")),
+			"billing_error" => ("insufficient_quota", Some("insufficient_quota")),
+			"api_error" => ("server_error", None),
+			other => (other, None),
+		};
+		async_openai::error::WrappedError {
+			error: async_openai::error::ApiError {
+				message: error.message,
+				r#type: Some(r#type.to_string()),
+				param: None,
+				code: code.map(str::to_string),
+				misalignment: None,
+			},
+		}
+	}
+
 	pub fn translate_stream(
 		b: Body,
 		buffer_limit: usize,
@@ -1077,23 +1098,25 @@ pub mod from_completions {
 		// https://docs.anthropic.com/en/docs/build-with-claude/streaming
 		let body = parse::sse::json_transform::<
 			messages::MessagesStreamEvent,
-			completions::StreamResponse,
+			completions::ChatStreamEvent,
 		>(b, buffer_limit, move |f| {
 			let mut mk = |mut choices: Vec<completions::ChatChoiceStream>,
 			              usage: Option<completions::Usage>| {
 				if let Some(first) = choices.first_mut() {
 					first.delta.role = pending_role.take();
 				}
-				Some(completions::StreamResponse {
-					id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
-					model: model.clone(),
-					object: "chat.completion.chunk".to_string(),
-					system_fingerprint: None,
-					service_tier: service_tier.clone(),
-					created,
-					choices,
-					usage,
-				})
+				Some(completions::ChatStreamEvent::Chunk(
+					completions::StreamResponse {
+						id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
+						model: model.clone(),
+						object: "chat.completion.chunk".to_string(),
+						system_fingerprint: None,
+						service_tier: service_tier.clone(),
+						created,
+						choices,
+						usage,
+					},
+				))
 			};
 			// ignore errors... what else can we do?
 			let f = f.ok()?;
@@ -1296,15 +1319,21 @@ pub mod from_completions {
 				},
 				messages::MessagesStreamEvent::Ping => None,
 				messages::MessagesStreamEvent::Error { error } => {
-					tracing::warn!(
-						"Messages stream error during completions translation: {}",
-						error.message
-					);
-					None
+					log.update(|r| {
+						if let Some(completion) = completion.take() {
+							r.response.completion = Some(vec![completion]);
+						}
+						if r.response.output_messages.is_none() {
+							r.response.output_messages = tool_calls.take_output_messages(None);
+						}
+					});
+					// Send the error instead of ending the stream as a success.
+					Some(completions::ChatStreamEvent::Error(stream_error(error)))
 				},
 			}
 		});
 
+		// [DONE] still follows the error; clients stop at the error.
 		parse::sse::append_done_on_success(body)
 	}
 }

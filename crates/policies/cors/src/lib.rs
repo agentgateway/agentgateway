@@ -6,12 +6,12 @@ use std::time::Duration;
 use agent_core::define_schema_aliases;
 use agent_core::serdes::{apply, ser_string_or_bytes_option, serde_dur_option};
 use agent_core::strng::Strng;
-use agent_http::{PolicyResponse, Request};
+use agent_http::{PolicyResponse, Request, Response, SyncResponse};
 use agent_policy::{
-	BoxError, PolicyContext, RequestAction, RequestPolicy, TraceSeverity as Severity, pol_result,
+	PolicyContext, PolicyError, RequestAction, RequestPolicy, TraceSeverity as Severity, pol_result,
 };
 use http::{HeaderValue, Method, StatusCode, header};
-use serde::de::Error;
+use serde::de::Error as _;
 use serde::{Serialize, Serializer};
 
 define_schema_aliases!();
@@ -150,8 +150,33 @@ impl TryFrom<CorsSerde> for Cors {
 	}
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	#[error("answered preflight request")]
+	Preflight(SyncResponse),
+	#[error("failed to build preflight response: {0}")]
+	Http(#[from] http::Error),
+}
+
+impl PolicyError for Error {
+	fn status(&self) -> StatusCode {
+		match self {
+			Error::Preflight(response) => response.status(),
+			Error::Http(_) => StatusCode::INTERNAL_SERVER_ERROR,
+		}
+	}
+
+	fn into_response(self) -> Result<Response, Self> {
+		match self {
+			Error::Preflight(response) => Ok(response.into_response()),
+			other => Err(other),
+		}
+	}
+}
+
 impl RequestPolicy for Cors {
 	type ResponseState = Infallible;
+	type Error = Error;
 
 	/// Apply applies the CORS header. It seems a lot of implementations handle this differently wrt when
 	/// to add or not add headers, and when to forward the request.
@@ -160,7 +185,7 @@ impl RequestPolicy for Cors {
 		&self,
 		_ctx: PolicyContext<'_>,
 		req: &mut Request,
-	) -> Result<RequestAction<Infallible>, BoxError> {
+	) -> Result<RequestAction<Infallible>, Error> {
 		// If no origin, return immediately
 		let Some(origin) = req.headers().get(header::ORIGIN) else {
 			pol_result!(Severity::Info, Skip, "request has no Origin header");
@@ -203,13 +228,7 @@ impl RequestPolicy for Cors {
 				let response = ::http::Response::builder()
 					.status(StatusCode::OK)
 					.body(agent_http::Body::empty())?;
-				return Ok(
-					PolicyResponse {
-						direct_response: Some(response),
-						response_headers: None,
-					}
-					.into(),
-				);
+				return Err(Error::Preflight(SyncResponse::new(response)));
 			} else {
 				// If not a preflight, and origin is not allowed, do nothing (let it pass through without CORS headers).
 				pol_result!(Severity::Warn, Skip, "origin {origin:?} is not allowed");
@@ -243,13 +262,7 @@ impl RequestPolicy for Cors {
 				rb = rb.header(header::ACCESS_CONTROL_EXPOSE_HEADERS, h);
 			}
 			let response = rb.body(agent_http::Body::empty())?;
-			return Ok(
-				PolicyResponse {
-					direct_response: Some(response),
-					response_headers: None,
-				}
-				.into(),
-			);
+			return Err(Error::Preflight(SyncResponse::new(response)));
 		}
 
 		pol_result!(
@@ -269,7 +282,6 @@ impl RequestPolicy for Cors {
 		// but since we only have access to the request here, we return None
 		Ok(
 			PolicyResponse {
-				direct_response: None,
 				response_headers: Some(response_headers),
 			}
 			.into(),
@@ -545,10 +557,10 @@ mod tests {
 					),
 			)
 			.await;
-		let direct = response
-			.direct_response
-			.as_ref()
-			.expect("preflight response");
+		let direct = match response {
+			Err(Error::Preflight(direct)) => direct.into_response(),
+			other => panic!("expected a preflight response, got {other:?}"),
+		};
 		assert_eq!(
 			direct
 				.headers()
