@@ -10,33 +10,10 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-// DnsLookupFamily controls the DNS lookup family for all static clusters created via Backend resources.
-type DnsLookupFamily string
 type XdsMode string
 type BackendRefGrantMode string
 
 const (
-	// DnsLookupFamilyV4Preferred is the default value for DnsLookupFamily.
-	// The DNS resolver will first perform a lookup for addresses in the IPv4 family
-	// and fallback to a lookup for addresses in the IPv6 family. The callback target
-	// will only get v6 addresses if there were no v4 addresses to return.
-	DnsLookupFamilyV4Preferred DnsLookupFamily = "V4_PREFERRED"
-	// DnsLookupFamilyV4Only is the value for DnsLookupFamily that only performs
-	// DNS lookups for addresses in the IPv4 family.
-	DnsLookupFamilyV4Only DnsLookupFamily = "V4_ONLY"
-	// DnsLookupFamilyV6Only is the value for DnsLookupFamily that only performs
-	// DNS lookups for addresses in the IPv6 family.
-	DnsLookupFamilyV6Only DnsLookupFamily = "V6_ONLY"
-	// DnsLookupFamilyAll is the value for DnsLookupFamily that performs lookups
-	// for both IPv4 and IPv6 families and returns all resolved addresses.
-	DnsLookupFamilyAll DnsLookupFamily = "ALL"
-	// DnsLookupFamilyAuto is the value for DnsLookupFamily that first performs
-	// a lookup for addresses in the IPv6 family and falls back to a lookup for
-	// addresses in the IPv4 family. This is semantically equivalent to a
-	// non-existent V6_PREFERRED option and is a legacy name that will be
-	// deprecated in favor of V6_PREFERRED in a future major version.
-	DnsLookupFamilyAuto DnsLookupFamily = "AUTO"
-
 	XdsModePlaintext XdsMode = "plaintext"
 	XdsModeTLS       XdsMode = "tls"
 	XdsModeEither    XdsMode = "either"
@@ -45,18 +22,6 @@ const (
 	BackendRefGrantModeRoute          BackendRefGrantMode = "route"
 	BackendRefGrantModeNone           BackendRefGrantMode = "none"
 )
-
-// Decode implements envconfig.Decoder.
-func (m *DnsLookupFamily) Decode(value string) error {
-	mode := DnsLookupFamily(value)
-	switch mode {
-	case DnsLookupFamilyV4Preferred, DnsLookupFamilyV4Only, DnsLookupFamilyV6Only, DnsLookupFamilyAll, DnsLookupFamilyAuto:
-		*m = mode
-		return nil
-	default:
-		return fmt.Errorf("invalid DNS lookup family: %q", value)
-	}
-}
 
 // Decode implements envconfig.Decoder.
 func (m *XdsMode) Decode(value string) error {
@@ -156,17 +121,6 @@ type Settings struct {
 	// Defaults to localhost. A non-loopback address unsafely makes the admin server network-accessible.
 	UnsafeAdminBindAddress string `split_words:"true" default:"localhost"`
 
-	// Controls the DnsLookupFamily for all static clusters created via Backend resources.
-	// If not set, agentgateway will default to "V4_PREFERRED". Note that this is different
-	// from the Envoy default of "AUTO", which is effectively "V6_PREFERRED".
-	// Supported values are: "ALL", "AUTO", "V4_PREFERRED", "V4_ONLY", "V6_ONLY"
-	// Details on the behavior of these options are available on the Envoy documentation:
-	// https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto#enum-config-cluster-v3-cluster-dnslookupfamily
-	DnsLookupFamily DnsLookupFamily `split_words:"true" default:"V4_PREFERRED"`
-
-	// Controls the listener bind address. Can be either V4 or V6
-	ListenerBindIpv6 bool `split_words:"true" default:"true"`
-
 	// IstioNamespace is the namespace where Istio control plane components are installed.
 	// Defaults to "istio-system".
 	IstioNamespace string `split_words:"true" default:"istio-system"`
@@ -188,7 +142,7 @@ type Settings struct {
 	IstioCaAddress string `split_words:"true"`
 
 	// XdsServiceHost is the host that serves xDS config.
-	// It overrides xdsServiceName if set.
+	// It overrides XdsServiceName if set.
 	XdsServiceHost string `split_words:"true"`
 
 	// AdditionalXdsTLSHosts are extra DNS names or IP addresses to include in the generated xDS serving certificate.
@@ -223,9 +177,7 @@ type Settings struct {
 	// This keeps the LoadBalancer provisioned and address stable across transitions to zero listeners.
 	NoListenersDummyPort uint16 `split_words:"true" default:"443"`
 
-	// EnableInferExt defines whether to enable/disable support for Gateway API inference extension.
-	// If enabled, EnableAgentgateway should also be set to true. Enabling inference extension without agentgateway
-	// is deprecated in v2.1 and will not be supported in v2.2.
+	// EnableInferExt enables Gateway API Inference Extension support.
 	EnableInferExt bool `split_words:"true"`
 
 	// EnableXBackend enables the experimental Gateway API XBackend resource.
@@ -251,15 +203,8 @@ type Settings struct {
 	// Since these metrics can be numerous, it is disabled by default.
 	EnableBuiltinDefaultMetrics bool `split_words:"true" default:"false"`
 
-	// GlobalPolicyNamespace is the namespace where policies that can attach to resources
-	// in any namespace are defined.
-	GlobalPolicyNamespace string `split_words:"true"`
-
 	// Controls if leader election is disabled. Defaults to false.
 	DisableLeaderElection bool `split_words:"true" default:"false"`
-
-	// EnableExperimentalGatewayAPIFeatures enables support for experimental features and APIs
-	EnableExperimentalGatewayAPIFeatures bool `split_words:"true" default:"true"`
 
 	// ControllerName is the value written to GatewayClass.spec.controllerName that this controller
 	// reconciles; Gateways referencing a GatewayClass with this controllerName are managed here.
