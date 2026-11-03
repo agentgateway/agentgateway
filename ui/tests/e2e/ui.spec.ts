@@ -1910,7 +1910,12 @@ test('email tokenization saves and reloads without changing existing guards', as
 	(config.llm as Record<string, unknown>).policies = { guardrails: original };
 	const gateway = await mockGateway(page, config);
 	await page.goto('/llm/guardrails');
-	await expect(page.getByRole('heading', { name: 'Data tokenization', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: 'Data tokenization (Beta)', exact: true })
+	).toBeVisible();
+	await expect(
+		page.getByText(/Other APIs continue normally without email tokenization/)
+	).toBeVisible();
 	await page.getByRole('checkbox', { name: 'Email addresses' }).check();
 	await page.getByRole('button', { name: 'Save guardrails', exact: true }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);

@@ -2947,17 +2947,6 @@ async fn make_backend_call(
 				model_route_type,
 				req.uri().path(),
 			);
-			if llm_request_policies
-				.llm
-				.as_ref()
-				.and_then(|p| p.prompt_guard.as_ref())
-				.is_some_and(|g| g.email_tokenization_enabled())
-				&& route_type != RouteType::Completions
-			{
-				return Err(ProxyError::AIRequest(llm::AIError::UnsupportedConversion(
-					strng::literal!("email tokenization requires Chat Completions"),
-				)));
-			}
 			if matches!(route_type, RouteType::Detect | RouteType::Passthrough)
 				&& let Some(provider_model) = llm.provider.override_model()
 			{

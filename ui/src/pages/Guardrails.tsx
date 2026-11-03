@@ -359,7 +359,9 @@ function GuardrailsEditor(props: {
 						<ShieldCheck size={17} />
 					</span>
 					<div>
-						<h4>Data tokenization</h4>
+						<h4>
+							Data tokenization <span className="badge warn">(Beta)</span>
+						</h4>
 						<p>
 							Replace sensitive data with temporary tokens before sending it to the model. Restore
 							original values in replies, including streaming replies.
@@ -380,9 +382,11 @@ function GuardrailsEditor(props: {
 						addresses reuse the same token within a request. Tokens are private to each request.
 					</p>
 					<p className="muted-copy">
-						Supports Chat Completions only. Other LLM inference endpoints are blocked while enabled.
-						Images, attachments, metadata and tool definitions are not inspected. Request guards run
-						before tokenization. Response guards run before restoration.
+						This early feature applies only to Chat Completions, including streaming replies. Other
+						APIs continue normally without email tokenization and can send email addresses to the
+						provider unchanged. Images, attachments, metadata and tool definitions are not
+						inspected. Request guards run before tokenization. Response guards run before
+						restoration.
 					</p>
 				</div>
 			</section>
