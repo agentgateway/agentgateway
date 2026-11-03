@@ -215,8 +215,8 @@ type ModelBackendAuth struct {
 	Location *AuthorizationLocation `json:"location,omitempty"`
 
 	// Credentials is a list of additional credentials to inject on the backend
-	// request. Each entry resolves a Secret key and writes its value to the
-	// entry's location. `credentials` is independent of the primary
+	// request. Each entry writes its value to the entry's location.
+	//  `credentials` is independent of the primary
 	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
 	// alongside it.
 	// +optional

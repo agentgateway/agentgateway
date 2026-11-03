@@ -593,8 +593,8 @@ spec:
                       credentials:
                         description: |-
                           Credentials is a list of additional credentials to inject on the backend
-                          request. Each entry resolves a Secret key and writes its value to the
-                          entry's location. `credentials` is independent of the primary
+                          request. Each entry writes its value to the entry's location.
+                           `credentials` is independent of the primary
                           `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
                           alongside it.
                         items:
@@ -602,6 +602,68 @@ spec:
                             BackendAuthCredential specifies one additional credential to inject on the
                             backend request.
                           properties:
+                            gcp:
+                              description: Mint a GCP token.
+                              properties:
+                                audience:
+                                  description: |-
+                                    Explicit `aud` value for the ID token. Only
+                                    valid with `IdToken` type. If not set, the `aud` is automatically
+                                    derived from the backend hostname.
+                                  maxLength: 256
+                                  minLength: 1
+                                  type: string
+                                secretRef:
+                                  description: |-
+                                    Credential source for ADC-compatible Google credential JSON, defaulting to
+                                    a Kubernetes `Secret`. By default, the value is read from
+                                    `credentials.json`; set `secretRef.key` to override it. When omitted,
+                                    ambient credentials are used.
+                                  properties:
+                                    group:
+                                      description: API group of the referenced credential;
+                                        empty selects the core API group
+                                      type: string
+                                    key:
+                                      description: Key in the referenced Secret. If
+                                        omitted, a location-specific default is used
+                                      maxLength: 253
+                                      minLength: 1
+                                      type: string
+                                    kind:
+                                      description: Kind of the referenced credential;
+                                        empty defaults to `Secret`
+                                      type: string
+                                    name:
+                                      description: Name of the referenced credential
+                                      maxLength: 253
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                  x-kubernetes-validations:
+                                  - message: custom credential refs must set both
+                                      group and kind
+                                    rule: '(!has(self.group) || size(self.group) ==
+                                      0) ? (!has(self.kind) || size(self.kind) ==
+                                      0 || self.kind == ''Secret'') : (has(self.kind)
+                                      && size(self.kind) > 0)'
+                                type:
+                                  description: |-
+                                    The type of token to generate. To authenticate to GCP services,
+                                    generally an `AccessToken` is used. To authenticate to Cloud Run, an
+                                    `IdToken` is used.
+                                  enum:
+                                  - AccessToken
+                                  - IdToken
+                                  type: string
+                              type: object
+                              x-kubernetes-validations:
+                              - message: audience is only valid with IdToken
+                                rule: 'has(self.audience) ? self.type == ''IdToken''
+                                  : true'
                             location:
                               description: Where the credential is inserted on the
                                 backend request.
@@ -685,8 +747,12 @@ spec:
                                   > 0)'
                           required:
                           - location
-                          - secretRef
                           type: object
+                          x-kubernetes-validations:
+                          - message: exactly one of the fields in [secretRef gcp]
+                              must be set
+                            rule: (has(self.secretRef)?1:0)+(has(self.gcp)?1:0) ==
+                              1
                         maxItems: 8
                         minItems: 1
                         type: array

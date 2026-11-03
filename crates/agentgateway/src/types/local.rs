@@ -2497,7 +2497,7 @@ pub struct LocalBackendAuth {
 pub struct LocalBackendAuthCredential {
 	/// Where the credential is inserted on the backend request.
 	pub location: crate::http::auth::AuthorizationLocation,
-	/// Credential value. Exactly one of `key` or `expression` must be set.
+	/// Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<FileOrInline>"))]
 	pub key: Option<FileOrInline>,
@@ -2505,6 +2505,9 @@ pub struct LocalBackendAuthCredential {
 	/// If it fails or does not return a string, the credential location is cleared instead.
 	#[serde(default)]
 	pub expression: Option<Arc<crate::cel::Expression>>,
+	/// Mint a GCP token.
+	#[serde(default)]
+	pub gcp: Option<crate::http::auth::GcpAuth>,
 }
 
 impl LocalBackendAuth {
@@ -2541,10 +2544,20 @@ impl LocalBackendAuth {
 		};
 		let mut credentials = Vec::with_capacity(self.credentials.len());
 		for credential in self.credentials {
+			let source = match credential.gcp {
+				Some(gcp) => {
+					if credential.key.is_some() || credential.expression.is_some() {
+						anyhow::bail!("backendAuth: exactly one of 'key', 'expression', or 'gcp' must be set");
+					}
+					crate::http::auth::BackendAuthCredentialSource::Gcp(gcp)
+				},
+				None => crate::http::auth::BackendAuthCredentialSource::Key(
+					load_backend_auth_value(credential.key, credential.expression, "key", resources).await?,
+				),
+			};
 			credentials.push(crate::http::auth::BackendAuthCredential {
 				location: credential.location,
-				key: load_backend_auth_value(credential.key, credential.expression, "key", resources)
-					.await?,
+				source,
 			});
 		}
 		Ok(BackendAuth { kind, credentials })

@@ -380,8 +380,12 @@ message BackendAuthPolicy {
 message BackendAuthCredential {
   // Where the credential is inserted. Required; `expression` locations are not valid here.
   AuthorizationLocation location = 1;
-  // Credential value.
-  string value = 2;
+  oneof source {
+    // Credential value.
+    string value = 2;
+    // GCP token.
+    Gcp gcp = 3;
+  }
 }
 
 message AuthorizationLocation {

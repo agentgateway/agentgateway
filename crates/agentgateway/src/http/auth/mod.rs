@@ -163,7 +163,10 @@ impl BackendAuth {
 		kind
 			.into_iter()
 			.chain(aws.into_iter().flatten())
-			.chain(self.credentials.iter().filter_map(|c| c.key.expression()))
+			.chain(self.credentials.iter().filter_map(|c| match &c.source {
+				BackendAuthCredentialSource::Key(value) => value.expression(),
+				BackendAuthCredentialSource::Gcp(_) => None,
+			}))
 	}
 }
 
@@ -172,8 +175,19 @@ impl BackendAuth {
 pub struct BackendAuthCredential {
 	/// Where the credential is inserted on the backend request.
 	pub location: AuthorizationLocation,
+	#[serde(flatten)]
+	pub source: BackendAuthCredentialSource,
+}
+
+/// Where an additional credential's value comes from.
+#[derive(Clone, Debug, serde::Serialize)]
+pub enum BackendAuthCredentialSource {
 	/// Credential value.
-	pub key: BackendAuthValue,
+	#[serde(rename = "key")]
+	Key(BackendAuthValue),
+	/// GCP token.
+	#[serde(rename = "gcp")]
+	Gcp(gcp::GcpAuth),
 }
 
 /// A credential value inserted on the backend request.
@@ -288,7 +302,13 @@ pub async fn apply_backend_auth(
 		apply_backend_auth_kind(backend_info, kind, req).await?;
 	}
 	for credential in &auth.credentials {
-		let Some(value) = credential.key.resolve(req) else {
+		let value = match &credential.source {
+			BackendAuthCredentialSource::Key(value) => value.resolve(req).map(Cow::into_owned),
+			BackendAuthCredentialSource::Gcp(g) => {
+				Some(gcp::fetch_token(g, &backend_info.call_target).await?)
+			},
+		};
+		let Some(value) = value else {
 			credential.location.remove(req)?;
 			continue;
 		};

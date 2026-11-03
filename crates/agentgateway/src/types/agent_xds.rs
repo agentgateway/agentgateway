@@ -1298,18 +1298,53 @@ fn convert_backend_ai_policy(
 
 fn backend_auth_credentials_from_proto(
 	credentials: Vec<proto::agent::BackendAuthCredential>,
+	diagnostics: &mut Diagnostics,
 ) -> Result<Vec<crate::http::auth::BackendAuthCredential>, ProtoError> {
+	use proto::agent::backend_auth_credential::Source;
 	credentials
 		.into_iter()
 		.map(|c| {
 			let location = optional_authorization_location(c.location.as_ref())?
 				.ok_or(ProtoError::MissingRequiredField)?;
-			Ok(crate::http::auth::BackendAuthCredential {
-				location,
-				key: secrecy::SecretString::from(c.value).into(),
-			})
+			let source = match c.source.unwrap_or(Source::Value(String::new())) {
+				Source::Value(value) => {
+					auth::BackendAuthCredentialSource::Key(secrecy::SecretString::from(value).into())
+				},
+				Source::Gcp(g) => {
+					auth::BackendAuthCredentialSource::Gcp(gcp_auth_from_proto(g, diagnostics))
+				},
+			};
+			Ok(crate::http::auth::BackendAuthCredential { location, source })
 		})
 		.collect()
+}
+
+fn gcp_auth_from_proto(g: proto::agent::Gcp, diagnostics: &mut Diagnostics) -> GcpAuth {
+	use proto::agent::gcp;
+	let credential =
+		g.credential.map(
+			|credential| match auth::gcp::GcpCredential::new(credential.into()) {
+				Ok(credential) => credential,
+				Err(error) => {
+					let reason = auth::gcp::sanitize_credential_error(&error);
+					diagnostics.add_warning(format!(
+						"GCP credential is invalid; requests using this policy will be rejected: {reason}"
+					));
+					auth::gcp::GcpCredential::new_invalid(reason)
+				},
+			},
+		);
+	match g.token_type {
+		None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
+			r#type: Some(auth::gcp::AccessToken),
+			credential,
+		},
+		Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
+			r#type: auth::gcp::IdToken,
+			audience,
+			credential,
+		},
+	}
 }
 
 fn jwt_sign_from_proto(
@@ -1352,8 +1387,8 @@ fn backend_auth_kind_from_proto(
 	s: proto::agent::BackendAuthPolicy,
 	diagnostics: &mut Diagnostics,
 ) -> Result<Option<BackendAuthKind>, ProtoError> {
+	use proto::agent::azure_explicit_config;
 	use proto::agent::azure_managed_identity_credential::user_assigned_identity;
-	use proto::agent::{azure_explicit_config, gcp};
 	Ok(Some(match s.kind {
 		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuthKind::Passthrough {
 			location: optional_authorization_location(p.authorization_location.as_ref())?,
@@ -1363,30 +1398,7 @@ fn backend_auth_kind_from_proto(
 			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
-			let credential =
-				g.credential.map(
-					|credential| match auth::gcp::GcpCredential::new(credential.into()) {
-						Ok(credential) => credential,
-						Err(error) => {
-							let reason = auth::gcp::sanitize_credential_error(&error);
-							diagnostics.add_warning(format!(
-								"GCP credential is invalid; requests using this policy will be rejected: {reason}"
-							));
-							auth::gcp::GcpCredential::new_invalid(reason)
-						},
-					},
-				);
-			BackendAuthKind::Gcp(match g.token_type {
-				None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
-					r#type: Some(auth::gcp::AccessToken),
-					credential,
-				},
-				Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
-					r#type: auth::gcp::IdToken,
-					audience,
-					credential,
-				},
-			})
+			BackendAuthKind::Gcp(gcp_auth_from_proto(g, diagnostics))
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Aws(a)) => {
 			let service_name = if a.service_name.is_empty() {
@@ -2674,7 +2686,7 @@ fn backend_policy_from_proto(
 			BackendTrafficPolicy::BackendTLS(tls)
 		},
 		Some(bps::Kind::Auth(auth)) => {
-			let credentials = backend_auth_credentials_from_proto(auth.credentials.clone())?;
+			let credentials = backend_auth_credentials_from_proto(auth.credentials.clone(), diagnostics)?;
 			let auth_kind = backend_auth_kind_from_proto(auth.clone(), diagnostics)?;
 			if auth_kind.is_none() && credentials.is_empty() {
 				return Err(ProtoError::MissingRequiredField);
@@ -5913,6 +5925,90 @@ mod tests {
 			assert!(warnings[0].contains(expected_warning));
 			assert!(!warnings[0].contains("MARKER"));
 		}
+	}
+
+	#[test]
+	fn credential_without_source_is_an_empty_value() {
+		let credentials = backend_auth_credentials_from_proto(
+			vec![proto::agent::BackendAuthCredential {
+				location: Some(proto::agent::AuthorizationLocation {
+					kind: Some(proto::agent::authorization_location::Kind::Header(
+						proto::agent::authorization_location::Header {
+							name: "x-api-key".to_string(),
+							prefix: None,
+						},
+					)),
+				}),
+				source: None,
+			}],
+			&mut Diagnostics::default(),
+		)
+		.expect("a credential without a source should convert");
+		assert!(matches!(
+			&credentials[0].source,
+			auth::BackendAuthCredentialSource::Key(auth::BackendAuthValue::Static(value))
+				if secrecy::ExposeSecret::expose_secret(value).is_empty()
+		));
+	}
+
+	#[test]
+	fn gcp_credential_conversion() {
+		let mut diagnostics = Diagnostics::default();
+		let credentials = backend_auth_credentials_from_proto(
+			vec![
+				proto::agent::BackendAuthCredential {
+					location: Some(proto::agent::AuthorizationLocation {
+						kind: Some(proto::agent::authorization_location::Kind::Header(
+							proto::agent::authorization_location::Header {
+								name: "Proxy-Authorization".to_string(),
+								prefix: Some("Bearer ".to_string()),
+							},
+						)),
+					}),
+					source: Some(proto::agent::backend_auth_credential::Source::Gcp(
+						proto::agent::Gcp {
+							credential: None,
+							token_type: Some(proto::agent::gcp::TokenType::IdToken(
+								proto::agent::gcp::IdToken {
+									audience: Some("iap-client-id".to_string()),
+								},
+							)),
+						},
+					)),
+				},
+				proto::agent::BackendAuthCredential {
+					location: Some(proto::agent::AuthorizationLocation {
+						kind: Some(proto::agent::authorization_location::Kind::Header(
+							proto::agent::authorization_location::Header {
+								name: "x-goog-token".to_string(),
+								prefix: None,
+							},
+						)),
+					}),
+					source: Some(proto::agent::backend_auth_credential::Source::Gcp(
+						proto::agent::Gcp {
+							credential: Some("{MARKER".to_string()),
+							token_type: None,
+						},
+					)),
+				},
+			],
+			&mut diagnostics,
+		)
+		.expect("gcp credentials should convert");
+		assert!(matches!(
+			&credentials[0].source,
+			auth::BackendAuthCredentialSource::Gcp(GcpAuth::IdToken { audience: Some(audience), credential: None, .. })
+				if audience == "iap-client-id"
+		));
+		assert!(matches!(
+			&credentials[1].source,
+			auth::BackendAuthCredentialSource::Gcp(GcpAuth::AccessToken { credential: Some(credential), .. })
+				if credential.invalid_reason().is_some()
+		));
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1);
+		assert!(!warnings[0].contains("MARKER"));
 	}
 
 	#[test]

@@ -192,3 +192,57 @@ spec:
 		})
 	}
 }
+
+func TestBackendAuthCredentialSourceValidation(t *testing.T) {
+	const policy = `apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: credentials
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gateway
+  backend:
+    auth:
+      passthrough: {}
+      credentials:
+      - location:
+          header:
+            name: Proxy-Authorization
+            prefix: "Bearer "
+%s
+`
+	const secretRef = `        secretRef:
+          name: credential`
+	const gcp = `        gcp:
+          type: IdToken
+          audience: iap-client-id`
+
+	tests := []struct {
+		name      string
+		source    string
+		wantError bool
+	}{
+		{name: "secretRef", source: secretRef},
+		{name: "gcp", source: gcp},
+		{name: "secretRef and gcp", source: secretRef + "\n" + gcp, wantError: true},
+		{name: "neither", wantError: true},
+	}
+
+	validator := NewAgentgatewayValidator(t)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validator.ValidateCustomResourceYAML(fmt.Sprintf(policy, test.source), nil)
+			if test.wantError {
+				if err == nil || !strings.Contains(err.Error(), "exactly one of the fields in [secretRef gcp] must be set") {
+					t.Fatalf("expected credential source validation error, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected policy to be valid, got %v", err)
+			}
+		})
+	}
+}
