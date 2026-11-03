@@ -324,11 +324,15 @@ async fn apply_request_policies(
 		.compression
 		.apply_selected("compression", c, l, req, rp.headers())
 		.await?;
-	if compression.as_ref().is_some_and(|c| c.request.is_some()) {
+	if compression
+		.as_ref()
+		.is_some_and(|c| c.request.as_ref().is_some_and(|r| r.decompress.is_some()))
+	{
 		l.cel.ctx().maybe_buffer_request_body(req).await;
 	}
 	// Capture Accept-Encoding before the request header modifier may strip it for the upstream.
-	rp.response_compressor = compression.and_then(|c| c.response.as_ref()?.for_request(req));
+	rp.response_compressor =
+		compression.and_then(|c| Some(c.response.as_ref()?.compress.as_ref()?.for_request(req)));
 
 	let mut route_retry = pol.retry.select("retry", req);
 	// Evaluate the retry precondition (if any) against the request before it is consumed.
@@ -812,9 +816,6 @@ impl HTTPProxy {
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
 		// and replace them. Restore the upstream-selected encoding only after every such policy ran.
 		llm::encode_deferred_response(&mut resp);
-		if let Some(compressor) = response_policies.response_compressor.take() {
-			compressor.apply(&mut resp);
-		}
 		if let Some(log) = log.as_mut() {
 			dtrace::snapshot!(Response, "final response", log, &resp);
 		}
@@ -828,6 +829,10 @@ impl HTTPProxy {
 		// Pass the log into the body so it finishes once the stream is entirely complete.
 		// We will also record trailer info there.
 		log.with(|l| set_final_response_fields(l, &reason, &mut resp));
+		// Compress after the log snapshot so logs see the plaintext body.
+		if let Some(compressor) = response_policies.response_compressor.take() {
+			compressor.apply(&mut resp);
+		}
 
 		if let Some(connect) = resp.extensions_mut().remove::<ConnectTunnel>() {
 			handle_connect_tunnel(connect, resp, log)

@@ -1603,18 +1603,32 @@ type Buffer struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Compression struct {
+	// Compression applied to responses sent to the client.
+	// +optional
+	Response *CompressionResponse `json:"response,omitempty"`
+	// Compression applied to requests received from the client.
+	// +optional
+	Request *CompressionRequest `json:"request,omitempty"`
+}
+
+// +kubebuilder:validation:AtLeastOneFieldSet
+type CompressionResponse struct {
 	// Compresses response bodies when the client advertises support in Accept-Encoding.
 	// Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) with a known
-	// `Content-Length` of at least 32 bytes are compressed, so streamed responses are sent as-is.
+	// length of at least 32 bytes are compressed, so streamed responses are sent as-is.
 	// Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`
 	// are never compressed.
 	// +optional
-	Response *ResponseCompression `json:"response,omitempty"`
-	// Decompresses request bodies before body-aware policies (rate limiting, ext_proc,
-	// transformations) run and before forwarding to the backend. Authentication and
-	// authorization run first and observe the encoded body.
+	Compress *ResponseCompression `json:"compress,omitempty"`
+}
+
+// +kubebuilder:validation:AtLeastOneFieldSet
+type CompressionRequest struct {
+	// Decompresses request bodies before route-level body-aware policies (rate limiting,
+	// ext_proc, transformations) run and before forwarding to the backend. Authentication,
+	// authorization and gateway-phase policies run first and observe the encoded body.
 	// +optional
-	Request *RequestDecompression `json:"request,omitempty"`
+	Decompress *RequestDecompression `json:"decompress,omitempty"`
 }
 
 // +k8s:enum
@@ -1629,6 +1643,7 @@ const (
 
 type ResponseCompression struct {
 	// Algorithms that may be negotiated with the client's Accept-Encoding header.
+	// When the client accepts several equally, the first listed wins.
 	// If unset, defaults to Gzip.
 	// +optional
 	// +listType=set

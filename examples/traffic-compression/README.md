@@ -30,10 +30,12 @@ The `compression` policy configures both directions:
 policies:
   compression:
     response:
-      algorithms: [gzip, brotli, zstd]
+      compress:
+        algorithms: [gzip, brotli, zstd]
     request:
-      algorithms: [gzip]
+      decompress:
+        algorithms: [gzip]
 ```
 
-`response` compresses textual responses (HTML, JSON, CSS, JavaScript, XML, plain text, SVG) using an algorithm the client accepts.
-`request` decodes request bodies sent with `Content-Encoding: gzip`, after authentication and authorization, so later policies and the backend see the plain body.
+`response.compress` compresses textual responses (HTML, JSON, CSS, JavaScript, XML, plain text, SVG) using an algorithm the client accepts.
+`request.decompress` decodes request bodies sent with `Content-Encoding: gzip`, after authentication and authorization, so later policies and the backend see the plain body.

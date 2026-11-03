@@ -11,10 +11,12 @@ spec:
   traffic:
     compression:
       response:
-        algorithms:
-          - Brotli
-          - Gzip
-      request: {}
+        compress:
+          algorithms:
+            - Brotli
+            - Gzip
+      request:
+        decompress: {}
 
 ---
 # Output
@@ -36,11 +38,15 @@ output:
           namespace: default
       traffic:
         compression:
-          request: {}
+          request:
+            decompress:
+              algorithms:
+              - GZIP
           response:
-            algorithms:
-            - BROTLI
-            - GZIP
+            compress:
+              algorithms:
+              - BROTLI
+              - GZIP
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy

@@ -3,7 +3,7 @@ use async_compression::tokio::bufread::{
 	ZstdEncoder,
 };
 use bytes::Bytes;
-use futures_util::TryStreamExt;
+use futures_util::{StreamExt, TryStreamExt};
 use headers::{ContentEncoding, Header};
 use http_body::Body;
 use http_body_util::BodyExt;
@@ -17,7 +17,8 @@ const ZSTD: &str = "zstd";
 
 mod policy;
 pub use policy::{
-	Compression, CompressionAlgorithm, RequestDecompression, ResponseCompression, ResponseCompressor,
+	Compression, CompressionAlgorithm, CompressionRequest, CompressionResponse, RequestDecompression,
+	ResponseCompression, ResponseCompressor,
 };
 
 /// Errors that can occur during compression/decompression operations.
@@ -188,16 +189,25 @@ pub async fn to_bytes_with_decompression(
 	}
 }
 
-pub async fn encode_body(body: &[u8], encoding: &str) -> Result<Bytes, axum_core::Error> {
-	let reader = BufReader::new(body);
-
-	let encoder: Box<dyn tokio::io::AsyncRead + Unpin + Send> = match encoding {
+fn encoder<'a, R: tokio::io::AsyncBufRead + Unpin + Send + 'a>(
+	reader: R,
+	encoding: &str,
+) -> Result<Box<dyn AsyncRead + Unpin + Send + 'a>, Error> {
+	Ok(match encoding {
 		GZIP => Box::new(GzipEncoder::new(reader)),
 		DEFLATE => Box::new(ZlibEncoder::new(reader)),
-		BR => Box::new(BrotliEncoder::new(reader)),
+		// The brotli default (11) is far too slow for on-the-fly compression; 4 matches nginx.
+		BR => Box::new(BrotliEncoder::with_quality(
+			reader,
+			async_compression::Level::Precise(4),
+		)),
 		ZSTD => Box::new(ZstdEncoder::new(reader)),
-		_ => return Err(Error::UnsupportedEncoding.into()),
-	};
+		_ => return Err(Error::UnsupportedEncoding),
+	})
+}
+
+pub async fn encode_body(body: &[u8], encoding: &str) -> Result<Bytes, axum_core::Error> {
+	let encoder = encoder(BufReader::new(body), encoding)?;
 
 	// Preallocate assuming ~50% compression (it can grow if we are wrong)
 	read_to_bytes(encoder, body.len() / 2)
@@ -205,7 +215,8 @@ pub async fn encode_body(body: &[u8], encoding: &str) -> Result<Bytes, axum_core
 		.map_err(Into::into)
 }
 
-/// Compress a body as it is sent instead of buffering it again.
+/// Compress a body as it is sent instead of buffering it again. Trailers are passed through
+/// after the encoded data.
 ///
 /// Buffered LLM responses use this at the final response boundary: policies need plaintext while
 /// evaluating and replacing `response.body`, but the selected upstream encoding must be restored
@@ -214,19 +225,37 @@ pub fn encode_body_stream(
 	body: axum_core::body::Body,
 	encoding: &str,
 ) -> Result<axum_core::body::Body, Error> {
-	let byte_stream = TryStreamExt::map_err(body.into_data_stream(), std::io::Error::other);
-	let stream_reader = BufReader::new(StreamReader::new(byte_stream));
-
-	let encoder: Box<dyn AsyncRead + Unpin + Send> = match encoding {
-		GZIP => Box::new(GzipEncoder::new(stream_reader)),
-		DEFLATE => Box::new(ZlibEncoder::new(stream_reader)),
-		BR => Box::new(BrotliEncoder::new(stream_reader)),
-		ZSTD => Box::new(ZstdEncoder::new(stream_reader)),
-		_ => return Err(Error::UnsupportedEncoding),
-	};
-
-	Ok(axum_core::body::Body::from_stream(ReaderStream::new(
-		encoder,
+	let trailers = std::sync::Arc::new(std::sync::Mutex::new(None));
+	let captured = trailers.clone();
+	let byte_stream =
+		TryStreamExt::map_err(http_body_util::BodyStream::new(body), std::io::Error::other)
+			.try_filter_map(move |frame| {
+				let data = match frame.into_data() {
+					Ok(data) => Some(data),
+					Err(frame) => {
+						if let Ok(t) = frame.into_trailers() {
+							*captured.lock().expect("trailers lock") = Some(t);
+						}
+						None
+					},
+				};
+				std::future::ready(Ok(data))
+			});
+	let encoder = encoder(BufReader::new(StreamReader::new(byte_stream)), encoding)?;
+	let frames = ReaderStream::new(encoder)
+		.map_ok(http_body::Frame::data)
+		.chain(
+			futures_util::stream::once(async move {
+				trailers
+					.lock()
+					.expect("trailers lock")
+					.take()
+					.map(|t| Ok(http_body::Frame::trailers(t)))
+			})
+			.filter_map(std::future::ready),
+		);
+	Ok(axum_core::body::Body::new(http_body_util::StreamBody::new(
+		frames,
 	)))
 }
 

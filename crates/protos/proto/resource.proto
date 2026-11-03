@@ -1299,8 +1299,16 @@ message TrafficPolicySpec {
       repeated Algorithm algorithms = 1;
     }
 
-    optional ResponseCompression response = 1;
-    optional RequestDecompression request = 2;
+    message Response {
+      optional ResponseCompression compress = 1;
+    }
+
+    message Request {
+      optional RequestDecompression decompress = 1;
+    }
+
+    optional Response response = 1;
+    optional Request request = 2;
   }
 
   oneof kind {

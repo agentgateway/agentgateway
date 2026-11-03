@@ -8,7 +8,7 @@ async fn response_is_compressed_for_accepting_client() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
 		.attach_route_policy(json!({
-			"compression": {"response": {"algorithms": ["gzip", "brotli"]}},
+			"compression": {"response": {"compress": {"algorithms": ["gzip", "brotli"]}}},
 		}))
 		.await;
 
@@ -33,7 +33,7 @@ async fn head_gets_same_encoding_headers_as_get() {
 	let (_mock, mut bind, _) = basic_setup().await;
 	bind
 		.attach_route_policy(json!({
-			"compression": {"response": {"algorithms": ["gzip"]}},
+			"compression": {"response": {"compress": {"algorithms": ["gzip"]}}},
 		}))
 		.await;
 
@@ -59,7 +59,7 @@ async fn request_body_is_decoded_for_policies_and_backend() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
 		.attach_route_policy(json!({
-			"compression": {"request": {"algorithms": ["gzip"]}},
+			"compression": {"request": {"decompress": {"algorithms": ["gzip"]}}},
 			"transformations": {"request": {"set": {"x-body": "string(request.body)"}}},
 		}))
 		.await;
@@ -84,7 +84,7 @@ async fn denied_request_is_not_decoded() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
 		.attach_route_policy(json!({
-			"compression": {"request": {}},
+			"compression": {"request": {"decompress": {}}},
 			"authorization": {"rules": [{"allow": "has(jwt.sub)"}]},
 			// Body-aware CEL forces the body to be buffered before authorization runs.
 			"transformations": {"request": {"set": {"x-body": "string(request.body)"}}},

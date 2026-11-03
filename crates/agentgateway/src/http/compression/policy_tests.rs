@@ -1,4 +1,6 @@
-use http::header::{CACHE_CONTROL, CONTENT_TYPE, VARY};
+use std::convert::Infallible;
+
+use http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use http_body_util::BodyExt;
 
 use super::*;
@@ -14,9 +16,7 @@ fn compressor(
 		.header(ACCEPT_ENCODING, accept_encoding)
 		.body(Body::empty())
 		.unwrap();
-	ResponseCompression { algorithms }
-		.for_request(&req)
-		.unwrap()
+	ResponseCompression { algorithms }.for_request(&req)
 }
 
 fn response(content_type: &str, body: &'static str) -> Response {
@@ -65,19 +65,40 @@ async fn response_compression_round_trips_every_algorithm() {
 }
 
 #[test]
-fn response_compression_only_offers_configured_algorithms() {
-	let mut resp = response("application/json", JSON);
-	compressor("br", vec![CompressionAlgorithm::Gzip]).apply(&mut resp);
-	assert!(!resp.headers().contains_key(CONTENT_ENCODING));
-	assert_eq!(resp.status(), StatusCode::OK);
-}
-
-#[test]
-fn response_compression_keeps_upstream_status_when_nothing_acceptable() {
-	let mut resp = response("application/json", JSON);
-	compressor("identity;q=0", vec![CompressionAlgorithm::Gzip]).apply(&mut resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert!(!resp.headers().contains_key(CONTENT_ENCODING));
+fn response_compression_negotiation() {
+	use CompressionAlgorithm::{Brotli, Gzip, Zstd};
+	let cases: &[(
+		&[&str],
+		&[CompressionAlgorithm],
+		Option<CompressionAlgorithm>,
+	)] = &[
+		(&["br"], &[Gzip], None),
+		(&["identity;q=0"], &[Gzip], None),
+		(&["gzip;q=0"], &[Gzip], None),
+		(&["*"], &[Zstd], Some(Zstd)),
+		(&["gzip;q=0, *"], &[Gzip, Brotli], Some(Brotli)),
+		(&["gzip;q=0.1", "br"], &[Gzip, Brotli], Some(Brotli)),
+		// Equal q-values: configured order wins.
+		(&["gzip, br"], &[Brotli, Gzip], Some(Brotli)),
+		(&["br, gzip"], &[Gzip, Brotli], Some(Gzip)),
+		// A malformed q-value drops only that entry.
+		(&["gzip;q=abc, br;q=0.5"], &[Gzip, Brotli], Some(Brotli)),
+		(&["GZIP"], &[Gzip], Some(Gzip)),
+		// Identity wins only with a strictly higher q-value.
+		(&["identity;q=1, gzip;q=0.1"], &[Gzip], None),
+		(&["identity, gzip"], &[Gzip], Some(Gzip)),
+	];
+	for (accept, algorithms, want) in cases {
+		let mut headers = HeaderMap::new();
+		for v in *accept {
+			headers.append(ACCEPT_ENCODING, HeaderValue::from_static(v));
+		}
+		assert_eq!(
+			negotiate(algorithms, &headers),
+			*want,
+			"accept-encoding {accept:?}"
+		);
+	}
 }
 
 #[test]
@@ -144,36 +165,28 @@ fn response_compression_keeps_weak_etag_and_merges_vary() {
 }
 
 #[test]
-fn response_compression_negotiates_wildcard_and_repeated_headers() {
-	let mut resp = response("application/json", JSON);
-	compressor("*", vec![CompressionAlgorithm::Zstd]).apply(&mut resp);
-	assert_eq!(resp.headers()[CONTENT_ENCODING], ZSTD);
+fn response_compression_uses_known_size_and_skips_streaming_bodies() {
+	// Proxy-built bodies (e.g. LLM responses) drop Content-Length but keep an exact size.
+	let mut known = response("application/json", JSON);
+	known.headers_mut().remove(CONTENT_LENGTH);
+	compressor(GZIP, vec![CompressionAlgorithm::Gzip]).apply(&mut known);
+	assert_eq!(known.headers()[CONTENT_ENCODING], GZIP);
 
-	let req = ::http::Request::builder()
-		.header(ACCEPT_ENCODING, "gzip;q=0.1")
-		.header(ACCEPT_ENCODING, "br")
-		.body(Body::empty())
+	let mut streaming = ::http::Response::builder()
+		.header(CONTENT_TYPE, "text/plain")
+		.body(Body::from_stream(futures_util::stream::iter([Ok::<
+			_,
+			std::io::Error,
+		>(
+			bytes::Bytes::from_static(JSON.as_bytes()),
+		)])))
 		.unwrap();
-	let mut resp = response("application/json", JSON);
-	ResponseCompression {
-		algorithms: vec![CompressionAlgorithm::Gzip, CompressionAlgorithm::Brotli],
-	}
-	.for_request(&req)
-	.unwrap()
-	.apply(&mut resp);
-	assert_eq!(resp.headers()[CONTENT_ENCODING], BR);
+	compressor(GZIP, vec![CompressionAlgorithm::Gzip]).apply(&mut streaming);
+	assert!(!streaming.headers().contains_key(CONTENT_ENCODING));
 }
 
 #[test]
-fn response_compression_skips_streaming_bodies() {
-	let mut resp = response("text/plain", JSON);
-	resp.headers_mut().remove(CONTENT_LENGTH);
-	compressor(GZIP, vec![CompressionAlgorithm::Gzip]).apply(&mut resp);
-	assert!(!resp.headers().contains_key(CONTENT_ENCODING));
-}
-
-#[test]
-fn response_compression_head_matches_get_headers() {
+fn response_compression_head_and_plaintext_headers() {
 	let policy = ResponseCompression {
 		algorithms: vec![CompressionAlgorithm::Gzip],
 	};
@@ -187,10 +200,17 @@ fn response_compression_head_matches_get_headers() {
 		.header(CONTENT_LENGTH, JSON.len())
 		.body(Body::empty())
 		.unwrap();
-	policy.for_request(&head).unwrap().apply(&mut resp);
+	policy.for_request(&head).apply(&mut resp);
 	assert_eq!(resp.headers()[CONTENT_ENCODING], GZIP);
 	assert!(resp.headers().contains_key(VARY));
-	assert!(policy.for_request(&Request::new(Body::empty())).is_none());
+
+	// A compressible response varies on Accept-Encoding even when this client gets plaintext.
+	let mut plain = response("application/json", JSON);
+	policy
+		.for_request(&Request::new(Body::empty()))
+		.apply(&mut plain);
+	assert!(!plain.headers().contains_key(CONTENT_ENCODING));
+	assert_eq!(plain.headers()[VARY], "accept-encoding");
 }
 
 #[tokio::test]

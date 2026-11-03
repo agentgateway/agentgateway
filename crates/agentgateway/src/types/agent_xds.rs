@@ -3288,7 +3288,9 @@ fn traffic_policy_from_proto(
 
 			let algorithms = |values: &[i32]| -> Result<Vec<_>, ProtoError> {
 				if values.is_empty() {
-					return Ok(vec![CompressionAlgorithm::Gzip]);
+					return Err(ProtoError::Generic(
+						"compression algorithms must not be empty".to_string(),
+					));
 				}
 				values
 					.iter()
@@ -3307,8 +3309,16 @@ fn traffic_policy_from_proto(
 					.response
 					.as_ref()
 					.map(|r| -> Result<_, ProtoError> {
-						Ok(http::compression::ResponseCompression {
-							algorithms: algorithms(&r.algorithms)?,
+						Ok(http::compression::CompressionResponse {
+							compress: r
+								.compress
+								.as_ref()
+								.map(|c| -> Result<_, ProtoError> {
+									Ok(http::compression::ResponseCompression {
+										algorithms: algorithms(&c.algorithms)?,
+									})
+								})
+								.transpose()?,
 						})
 					})
 					.transpose()?,
@@ -3316,8 +3326,16 @@ fn traffic_policy_from_proto(
 					.request
 					.as_ref()
 					.map(|r| -> Result<_, ProtoError> {
-						Ok(http::compression::RequestDecompression {
-							algorithms: algorithms(&r.algorithms)?,
+						Ok(http::compression::CompressionRequest {
+							decompress: r
+								.decompress
+								.as_ref()
+								.map(|d| -> Result<_, ProtoError> {
+									Ok(http::compression::RequestDecompression {
+										algorithms: algorithms(&d.algorithms)?,
+									})
+								})
+								.transpose()?,
 						})
 					})
 					.transpose()?,
@@ -6968,7 +6986,7 @@ mod tests {
 	fn compression_from_proto() {
 		use proto::agent::traffic_policy_spec::Compression as ProtoCompression;
 		use proto::agent::traffic_policy_spec::compression::{
-			Algorithm, RequestDecompression, ResponseCompression,
+			Algorithm, Request, RequestDecompression, Response, ResponseCompression,
 		};
 
 		use crate::http::compression::CompressionAlgorithm;
@@ -6977,11 +6995,15 @@ mod tests {
 			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
 			kind: Some(proto::agent::traffic_policy_spec::Kind::Compression(
 				ProtoCompression {
-					response: Some(ResponseCompression {
-						algorithms: response,
+					response: Some(Response {
+						compress: Some(ResponseCompression {
+							algorithms: response,
+						}),
 					}),
-					request: Some(RequestDecompression {
-						algorithms: request,
+					request: Some(Request {
+						decompress: Some(RequestDecompression {
+							algorithms: request,
+						}),
 					}),
 				},
 			)),
@@ -6990,7 +7012,7 @@ mod tests {
 		let policy = traffic_policy_from_proto(
 			&spec(
 				vec![Algorithm::Zstd as i32, Algorithm::Brotli as i32],
-				vec![],
+				vec![Algorithm::Gzip as i32],
 			),
 			&mut Diagnostics::default(),
 		)
@@ -7000,22 +7022,34 @@ mod tests {
 		};
 		let compression = &policy.iter().next().unwrap().pol;
 		assert_eq!(
-			compression.response.as_ref().unwrap().algorithms,
+			compression
+				.response
+				.as_ref()
+				.and_then(|r| r.compress.as_ref())
+				.unwrap()
+				.algorithms,
 			vec![CompressionAlgorithm::Zstd, CompressionAlgorithm::Brotli]
 		);
-		// An empty list falls back to gzip, matching the local config default.
 		assert_eq!(
-			compression.request.as_ref().unwrap().algorithms,
+			compression
+				.request
+				.as_ref()
+				.and_then(|r| r.decompress.as_ref())
+				.unwrap()
+				.algorithms,
 			vec![CompressionAlgorithm::Gzip]
 		);
 
+		let gzip = || vec![Algorithm::Gzip as i32];
 		for (response, request) in [
-			(vec![99], vec![]),
-			(vec![], vec![Algorithm::Gzip as i32, 99]),
+			(vec![99], gzip()),
+			(gzip(), vec![Algorithm::Gzip as i32, 99]),
+			(vec![], gzip()),
+			(gzip(), vec![]),
 		] {
 			assert!(
 				traffic_policy_from_proto(&spec(response, request), &mut Diagnostics::default()).is_err(),
-				"unknown algorithm must be rejected"
+				"unknown or empty algorithms must be rejected"
 			);
 		}
 	}

@@ -8364,52 +8364,73 @@ spec:
                       request bodies before forwarding.
                     properties:
                       request:
-                        description: |-
-                          Decompresses request bodies before body-aware policies (rate limiting, ext_proc,
-                          transformations) run and before forwarding to the backend. Authentication and
-                          authorization run first and observe the encoded body.
+                        description: Compression applied to requests received from
+                          the client.
                         properties:
-                          algorithms:
+                          decompress:
                             description: |-
-                              Algorithms decoded from request bodies. Bodies using any other (or more than one) encoding
-                              are forwarded untouched.
-                              If unset, defaults to Gzip.
-                            items:
-                              enum:
-                              - Brotli
-                              - Deflate
-                              - Gzip
-                              - Zstd
-                              type: string
-                            maxItems: 4
-                            minItems: 1
-                            type: array
-                            x-kubernetes-list-type: set
+                              Decompresses request bodies before route-level body-aware policies (rate limiting,
+                              ext_proc, transformations) run and before forwarding to the backend. Authentication,
+                              authorization and gateway-phase policies run first and observe the encoded body.
+                            properties:
+                              algorithms:
+                                description: |-
+                                  Algorithms decoded from request bodies. Bodies using any other (or more than one) encoding
+                                  are forwarded untouched.
+                                  If unset, defaults to Gzip.
+                                items:
+                                  enum:
+                                  - Brotli
+                                  - Deflate
+                                  - Gzip
+                                  - Zstd
+                                  type: string
+                                maxItems: 4
+                                minItems: 1
+                                type: array
+                                x-kubernetes-list-type: set
+                            type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: at least one of the fields in [decompress] must
+                            be set
+                          rule: '[has(self.decompress)].filter(x,x==true).size() >=
+                            1'
                       response:
-                        description: |-
-                          Compresses response bodies when the client advertises support in Accept-Encoding.
-                          Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) with a known
-                          `Content-Length` of at least 32 bytes are compressed, so streamed responses are sent as-is.
-                          Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`
-                          are never compressed.
+                        description: Compression applied to responses sent to the
+                          client.
                         properties:
-                          algorithms:
+                          compress:
                             description: |-
-                              Algorithms that may be negotiated with the client's Accept-Encoding header.
-                              If unset, defaults to Gzip.
-                            items:
-                              enum:
-                              - Brotli
-                              - Deflate
-                              - Gzip
-                              - Zstd
-                              type: string
-                            maxItems: 4
-                            minItems: 1
-                            type: array
-                            x-kubernetes-list-type: set
+                              Compresses response bodies when the client advertises support in Accept-Encoding.
+                              Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) with a known
+                              length of at least 32 bytes are compressed, so streamed responses are sent as-is.
+                              Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`
+                              are never compressed.
+                            properties:
+                              algorithms:
+                                description: |-
+                                  Algorithms that may be negotiated with the client's Accept-Encoding header.
+                                  When the client accepts several equally, the first listed wins.
+                                  If unset, defaults to Gzip.
+                                items:
+                                  enum:
+                                  - Brotli
+                                  - Deflate
+                                  - Gzip
+                                  - Zstd
+                                  type: string
+                                maxItems: 4
+                                minItems: 1
+                                type: array
+                                x-kubernetes-list-type: set
+                            type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: at least one of the fields in [compress] must be
+                            set
+                          rule: '[has(self.compress)].filter(x,x==true).size() >=
+                            1'
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [request response] must

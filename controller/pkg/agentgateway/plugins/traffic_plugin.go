@@ -683,6 +683,9 @@ func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, pol
 }
 
 func translateCompressionAlgorithms(algorithms []agentgateway.CompressionAlgorithm) ([]api.TrafficPolicySpec_Compression_Algorithm, error) {
+	if len(algorithms) == 0 {
+		return []api.TrafficPolicySpec_Compression_Algorithm{api.TrafficPolicySpec_Compression_GZIP}, nil
+	}
 	out := make([]api.TrafficPolicySpec_Compression_Algorithm, 0, len(algorithms))
 	for _, a := range algorithms {
 		switch a {
@@ -701,22 +704,27 @@ func translateCompressionAlgorithms(algorithms []agentgateway.CompressionAlgorit
 	return out, nil
 }
 
-// processCompressionPolicy leaves empty algorithm lists empty; the proxy defaults them to gzip.
 func processCompressionPolicy(compression *agentgateway.Compression, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
 	translated := &api.TrafficPolicySpec_Compression{}
 	if r := compression.Response; r != nil {
-		algorithms, err := translateCompressionAlgorithms(r.Algorithms)
-		if err != nil {
-			return nil, err
+		translated.Response = &api.TrafficPolicySpec_Compression_Response{}
+		if c := r.Compress; c != nil {
+			algorithms, err := translateCompressionAlgorithms(c.Algorithms)
+			if err != nil {
+				return nil, err
+			}
+			translated.Response.Compress = &api.TrafficPolicySpec_Compression_ResponseCompression{Algorithms: algorithms}
 		}
-		translated.Response = &api.TrafficPolicySpec_Compression_ResponseCompression{Algorithms: algorithms}
 	}
 	if r := compression.Request; r != nil {
-		algorithms, err := translateCompressionAlgorithms(r.Algorithms)
-		if err != nil {
-			return nil, err
+		translated.Request = &api.TrafficPolicySpec_Compression_Request{}
+		if d := r.Decompress; d != nil {
+			algorithms, err := translateCompressionAlgorithms(d.Algorithms)
+			if err != nil {
+				return nil, err
+			}
+			translated.Request.Decompress = &api.TrafficPolicySpec_Compression_RequestDecompression{Algorithms: algorithms}
 		}
-		translated.Request = &api.TrafficPolicySpec_Compression_RequestDecompression{Algorithms: algorithms}
 	}
 	return &api.Policy{
 		Key:  basePolicyName + compressionSuffix,
