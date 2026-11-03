@@ -322,7 +322,7 @@ fn push_request_log_copy_row(buf: &mut String, record: &StoredRequestLog) -> any
 	push_copy_text_column(buf, &mut first, record.agentgateway_group.as_deref());
 	push_copy_text_column(buf, &mut first, record.user_agent_name.as_deref());
 	push_copy_display_column(buf, &mut first, Some(record.has_payload));
-	push_copy_text_column(buf, &mut first, Some(record.attributes_json.as_ref()));
+	push_copy_serialized_json_column(buf, &mut first, &record.attributes_json)?;
 	buf.push('\n');
 	Ok(())
 }
@@ -355,6 +355,20 @@ fn push_copy_display_column<T: Display>(buf: &mut String, first: &mut bool, valu
 		Some(value) => buf.push_str(&value.to_string()),
 		None => buf.push_str(r"\N"),
 	}
+}
+
+fn push_copy_serialized_json_column(
+	buf: &mut String,
+	first: &mut bool,
+	value: &str,
+) -> anyhow::Result<()> {
+	if value.contains(r"\u0000") {
+		let value: Value = serde_json::from_str(value)?;
+		push_copy_json_column(buf, first, Some(&value))?;
+	} else {
+		push_copy_text_column(buf, first, Some(value));
+	}
+	Ok(())
 }
 
 fn push_copy_json_column(
@@ -694,6 +708,19 @@ mod tests {
 		assert_eq!(copy_json(&json!("\\u0000")), r#""\\\\u0000""#);
 		assert_eq!(copy_json(&json!("\\\u{0}")), r#""\\\\\\ufffd""#);
 		assert_eq!(copy_json(&json!("tab\there")), r#""tab\\there""#);
+	}
+
+	#[test]
+	fn copy_attributes_replaces_nul() {
+		for (attributes, expected) in [
+			(r#"{"k\u0000":"a\u0000b"}"#, r#"{"k\\ufffd":"a\\ufffdb"}"#),
+			(r#"{"literal":"\\u0000"}"#, r#"{"literal":"\\\\u0000"}"#),
+			(r#"{"value":"ordinary"}"#, r#"{"value":"ordinary"}"#),
+		] {
+			let mut buf = String::new();
+			push_copy_serialized_json_column(&mut buf, &mut true, attributes).unwrap();
+			assert_eq!(buf, expected);
+		}
 	}
 
 	#[test]
