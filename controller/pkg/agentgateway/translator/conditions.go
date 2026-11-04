@@ -7,6 +7,7 @@ import (
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -121,12 +122,13 @@ func SetConditions(generation int64, existingConditions []metav1.Condition, cond
 
 func reportListenerCondition(index int, l gwv1.Listener, obj controllers.Object,
 	statusListeners []gwv1.ListenerStatus, conditions map[string]*Condition,
+	modelKinds []schema.GroupVersionKind,
 ) []gwv1.ListenerStatus {
 	for index >= len(statusListeners) {
 		statusListeners = append(statusListeners, gwv1.ListenerStatus{})
 	}
 	cond := statusListeners[index].Conditions
-	supported, valid := GenerateSupportedKinds(l)
+	supported, valid := GenerateSupportedKinds(l, modelKinds)
 	if !valid {
 		conditions[string(gwv1.ListenerConditionResolvedRefs)] = &Condition{
 			Reason:  string(gwv1.ListenerReasonInvalidRouteKinds),
@@ -142,8 +144,9 @@ func reportListenerCondition(index int, l gwv1.Listener, obj controllers.Object,
 	return statusListeners
 }
 
-// GenerateSupportedKinds returns the supported kinds for the listener.
-func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
+// GenerateSupportedKinds returns the supported kinds for the listener. modelKinds
+// lists the model route kinds a listener may opt into.
+func GenerateSupportedKinds(l gwv1.Listener, modelKinds []schema.GroupVersionKind) ([]gwv1.RouteGroupKind, bool) {
 	supported := []gwv1.RouteGroupKind{}
 	switch l.Protocol {
 	case gwv1.HTTPProtocolType, gwv1.HTTPSProtocolType:
@@ -152,15 +155,16 @@ func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
 			toRouteKind(wellknown.HTTPRouteGVK),
 			toRouteKind(wellknown.GRPCRouteGVK),
 		}
-		// AgentgatewayModel is opt-in. Listing it in allowedRoutes enables the
-		// listener's built-in LLM routes; it is not enabled by the default route
-		// kinds.
+		// Each model kind is opt-in: a listener admits a model kind only when
+		// allowedRoutes lists it. Model kinds are not part of the default route kinds.
 		if l.AllowedRoutes != nil {
-			modelKind := toRouteKind(wellknown.AgentgatewayModelGVK)
-			for _, kind := range l.AllowedRoutes.Kinds {
-				if routeGroupKindEqual(modelKind, kind) {
-					supported = append(supported, modelKind)
-					break
+			for _, gvk := range modelKinds {
+				modelKind := toRouteKind(gvk)
+				for _, kind := range l.AllowedRoutes.Kinds {
+					if routeGroupKindEqual(modelKind, kind) {
+						supported = append(supported, modelKind)
+						break
+					}
 				}
 			}
 		}

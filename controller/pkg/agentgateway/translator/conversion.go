@@ -1146,6 +1146,7 @@ func BuildListener(
 	listenerIndex int,
 	portErr error,
 	forListenerSet bool,
+	modelKinds []schema.GroupVersionKind,
 ) ([]string, *TLSInfo, ListenerFilterResult, []gwv1.ListenerStatus, bool) {
 	listenerConditions := map[string]*Condition{
 		string(gwv1.ListenerConditionAccepted): {
@@ -1252,7 +1253,7 @@ func BuildListener(
 		ok = false
 	}
 
-	updatedStatus := reportListenerCondition(listenerIndex, l, obj, status, listenerConditions)
+	updatedStatus := reportListenerCondition(listenerIndex, l, obj, status, listenerConditions, modelKinds)
 	return hostnames, tlsInfo, filterResult, updatedStatus, ok
 }
 
@@ -1890,7 +1891,7 @@ func GetCommonRouteInfo(spec any) ([]gwv1.ParentReference, []gwv1.Hostname, sche
 	case *gwv1.GRPCRoute:
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.GRPCRouteGVK
 	case *agentgateway.AgentgatewayModel:
-		return t.Spec.ParentRefs, nil, wellknown.AgentgatewayModelGVK
+		return t.Spec.ParentRefs, nil, modelGVK(t)
 	default:
 		log.Fatalf("unknown type %T", t)
 		return nil, nil, schema.GroupVersionKind{}

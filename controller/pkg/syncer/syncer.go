@@ -80,6 +80,7 @@ type Syncer struct {
 	buildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 	extraListenerSets           ExtraListenerSetsBuilderFunc
 	allowedListenersResolver    AllowedListenersResolver
+	modelCollections            ModelCollectionsBuilderFunc
 }
 
 func NewAgwSyncer(
@@ -110,6 +111,7 @@ func NewAgwSyncer(
 		buildReferenceTypesFunc:     cfg.BuildReferenceTypesFunc,
 		extraListenerSets:           cfg.ExtraListenerSets,
 		allowedListenersResolver:    cfg.AllowedListenersResolver,
+		modelCollections:            cfg.ModelCollections,
 	}
 	logger.Debug("init agentgateway Syncer", "controllername", controllerName)
 
@@ -413,6 +415,7 @@ func (s *Syncer) buildGatewayCollection(
 		References:          referenceTypes,
 		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 		KrtOpts:             krtopts,
+		ModelKinds:          s.agwCollections.ModelKinds(),
 	}, s.gatewayCollectionOptions...)
 }
 
@@ -439,6 +442,7 @@ func (s *Syncer) buildListenerSetCollection(
 				s.agwCollections.ClusterTrustBundles,
 				referenceTypes,
 				s.agwCollections.Settings.BackendRefGrantMode,
+				s.agwCollections.ModelKinds(),
 			)
 		}, krtopts.ToOptions("translator/ListenerSetListeners")...)
 }
@@ -656,7 +660,6 @@ func (s *Syncer) buildAgwResources(
 		InferencePools:      s.agwCollections.InferencePools,
 		Backends:            s.agwCollections.Backends,
 		Models:              s.agwCollections.Models,
-		ModelsByNamespace:   s.agwCollections.ModelsByNamespace,
 		References:          referenceTypes,
 		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 	}
@@ -686,6 +689,12 @@ func (s *Syncer) buildAgwResources(
 	routeAttachments = krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{routeAttachments, modelAttachments}, krtopts.ToOptions("translator/RouteAttachmentsWithModels")...)
 	routeCollections = append(routeCollections, modelResources)
 	ancestorBackends = krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{ancestorBackends, modelAncestors}, krtopts.ToOptions("translator/AncestorBackendsWithModels")...)
+	if s.modelCollections != nil {
+		extra := s.modelCollections(ModelCollectionsConfig{Inputs: routeInputs, StatusCollections: s.statusCollections, KrtOpts: krtopts})
+		routeCollections = append(routeCollections, extra.Resources)
+		routeAttachments = krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{routeAttachments, extra.Attachments}, krtopts.ToOptions("translator/RouteAttachmentsWithExtraModels")...)
+		ancestorBackends = krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{ancestorBackends, extra.Ancestors}, krtopts.ToOptions("translator/AncestorBackendsWithExtraModels")...)
+	}
 	if s.agwPlugins.AddResourceExtension != nil {
 		if s.agwPlugins.AddResourceExtension.Routes != nil {
 			routeCollections = append(routeCollections, s.agwPlugins.AddResourceExtension.Routes)
