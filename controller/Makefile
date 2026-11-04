@@ -131,6 +131,7 @@ lint: analyze
 
 .PHONY: analyze
 analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options with ANALYZE_ARGS.
+	$(if $(findstring --fix,$(ANALYZE_ARGS)),$(CUSTOM_GOLANGCI_LINT_FMT) ./...)
 	$(CUSTOM_GOLANGCI_LINT_RUN) $(ANALYZE_ARGS) ./...
 
 .PHONY: ensure-custom-golangci-lint
