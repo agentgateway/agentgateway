@@ -44,10 +44,7 @@ impl AgentGateway {
 	pub async fn new(raw_config: impl Into<String>) -> anyhow::Result<Self> {
 		agent_core::telemetry::testing::setup_test_logging();
 		let raw_config = raw_config.into();
-		let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-		let reserved_port = listener.local_addr()?.port();
-		drop(listener);
-		let config = raw_config.replace("$PORT", &reserved_port.to_string());
+		let config = raw_config.replace("$PORT", "0");
 		let mut document: Value =
 			yaml::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
 		let config = document
@@ -77,7 +74,7 @@ impl AgentGateway {
 		info!("starting agent...");
 
 		let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-		let (port_tx, port_rx) = tokio::sync::oneshot::channel::<u16>();
+		let (port_tx, port_rx) = tokio::sync::oneshot::channel::<anyhow::Result<u16>>();
 
 		let task = tokio::task::spawn(async move {
 			let config = Arc::new(
@@ -98,18 +95,22 @@ impl AgentGateway {
 			} else {
 				None
 			};
-			let app = agentgateway::app::run(config, config_resource_store)
-				.await
-				.unwrap();
+			let app = match agentgateway::app::run(config, config_resource_store).await {
+				Ok(app) => app,
+				Err(err) => {
+					let _ = port_tx.send(Err(err));
+					return;
+				},
+			};
 
-			// Report the configured test gateway rather than whichever bind happens to
-			// appear first when the config contains multiple gateways.
-			let addrs = app.bind_addresses();
-			let port = addrs
-				.iter()
-				.find(|address| address.port() == reserved_port)
-				.map(|address| address.port())
-				.unwrap_or(0);
+			let addresses = app.bind_addresses();
+			let port = match addresses.as_slice() {
+				[address] => Ok(address.port()),
+				_ => Err(anyhow::anyhow!(
+					"expected one test gateway bind, found {}",
+					addresses.len()
+				)),
+			};
 			let _ = port_tx.send(port);
 
 			// Wait for either shutdown signal or termination
@@ -123,7 +124,7 @@ impl AgentGateway {
 			}
 		});
 
-		let port = port_rx.await?;
+		let port = port_rx.await??;
 		anyhow::ensure!(port != 0, "bind port was not assigned");
 		info!("waiting for agent...");
 		wait_for_port(port).await?;
