@@ -256,18 +256,19 @@ fn home_var_name() -> &'static str {
 /// Windows sets `USERPROFILE` rather than `HOME`, which is what left Windows users unable to
 /// find their config file (#4219).
 fn home_dir() -> Option<PathBuf> {
-	home_dir_in(cfg!(windows), |name| std::env::var_os(name))
+	home_dir_in(|name| std::env::var_os(name))
 }
 
-/// The platform decision table behind [`home_dir`], split out so tests can drive both branches
-/// on any OS.
-fn home_dir_in(windows: bool, lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+/// The platform decision table behind [`home_dir`], split out so tests can drive the variable
+/// selection without touching the process environment. The platform branch comes from
+/// `cfg!`, so each build exercises its own platform.
+fn home_dir_in(lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
 	let var = |name: &str| {
 		lookup(name)
 			.filter(|value| !value.is_empty())
 			.map(PathBuf::from)
 	};
-	if windows {
+	if cfg!(windows) {
 		return var("USERPROFILE").or_else(|| Some(var("HOMEDRIVE")?.join(var("HOMEPATH")?)));
 	}
 	var("HOME")
@@ -343,43 +344,52 @@ mod tests {
 		move |name| vars.get(name).map(OsString::from)
 	}
 
+	// The platform branch is `cfg!`-selected inside home_dir_in, so each build tests its own
+	// platform -- the same thing CI's per-OS runners would do anyway.
+
+	#[cfg(windows)]
 	#[test]
 	fn windows_prefers_userprofile() {
 		let vars = [("USERPROFILE", "users/u"), ("HOME", "home/u")];
 		assert_eq!(
-			home_dir_in(true, env(&vars)),
+			home_dir_in(env(&vars)),
 			Some(PathBuf::from("users/u"))
 		);
 	}
 
+	#[cfg(windows)]
 	#[test]
 	fn windows_falls_back_to_homedrive_and_homepath() {
 		let vars = [("HOMEDRIVE", "drive"), ("HOMEPATH", "users/u")];
 		assert_eq!(
-			home_dir_in(true, env(&vars)),
+			home_dir_in(env(&vars)),
 			Some(PathBuf::from("drive").join("users/u"))
 		);
 	}
 
+	#[cfg(windows)]
 	#[test]
 	fn windows_needs_both_homedrive_and_homepath() {
-		assert_eq!(home_dir_in(true, env(&[("HOMEDRIVE", "drive")])), None);
-		assert_eq!(home_dir_in(true, env(&[("HOMEPATH", "users/u")])), None);
+		assert_eq!(home_dir_in(env(&[("HOMEDRIVE", "drive")])), None);
+		assert_eq!(home_dir_in(env(&[("HOMEPATH", "users/u")])), None);
 	}
 
+	#[cfg(windows)]
 	#[test]
 	fn windows_returns_none_when_nothing_is_set() {
-		assert_eq!(home_dir_in(true, env(&[])), None);
+		assert_eq!(home_dir_in(env(&[])), None);
 	}
 
+	#[cfg(not(windows))]
 	#[test]
 	fn unix_uses_home() {
 		assert_eq!(
-			home_dir_in(false, env(&[("HOME", "home/u")])),
+			home_dir_in(env(&[("HOME", "home/u")])),
 			Some(PathBuf::from("home/u"))
 		);
 	}
 
+	#[cfg(not(windows))]
 	#[test]
 	fn unix_ignores_windows_variables() {
 		let vars = [
@@ -387,11 +397,12 @@ mod tests {
 			("HOMEDRIVE", "drive"),
 			("HOMEPATH", "users/u"),
 		];
-		assert_eq!(home_dir_in(false, env(&vars)), None);
+		assert_eq!(home_dir_in(env(&vars)), None);
 	}
 
+	#[cfg(windows)]
 	#[test]
-	fn empty_variables_are_skipped() {
+	fn empty_variables_fall_through_to_the_legacy_pair() {
 		// An empty USERPROFILE falls through to the legacy pair rather than resolving to the
 		// current directory.
 		let vars = [
@@ -400,10 +411,14 @@ mod tests {
 			("HOMEPATH", "users/u"),
 		];
 		assert_eq!(
-			home_dir_in(true, env(&vars)),
+			home_dir_in(env(&vars)),
 			Some(PathBuf::from("drive").join("users/u"))
 		);
+	}
 
-		assert_eq!(home_dir_in(false, env(&[("HOME", "")])), None);
+	#[cfg(not(windows))]
+	#[test]
+	fn empty_home_is_skipped() {
+		assert_eq!(home_dir_in(env(&[("HOME", "")])), None);
 	}
 }
