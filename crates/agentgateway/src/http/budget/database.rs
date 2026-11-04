@@ -17,10 +17,8 @@ const SQLITE_SCHEMA: &str = include_str!("sqlite_schema.sql");
 const POSTGRES_SCHEMA: &str = include_str!("postgres_schema.sql");
 const SQLITE_UPSERT: &str = include_str!("sqlite_upsert.sql");
 const POSTGRES_UPSERT: &str = include_str!("postgres_upsert.sql");
-const SQLITE_RENAME: &str = "UPDATE budget_usage SET budget_id = ? WHERE budget_id = ? \
-	AND NOT EXISTS (SELECT 1 FROM budget_usage WHERE budget_id = ?)";
-const POSTGRES_RENAME: &str = "UPDATE budget_usage SET budget_id = $1 WHERE budget_id = $2 \
-	AND NOT EXISTS (SELECT 1 FROM budget_usage WHERE budget_id = $1)";
+const SQLITE_MERGE_LEGACY: &str = include_str!("sqlite_merge_legacy.sql");
+const POSTGRES_MERGE_LEGACY: &str = include_str!("postgres_merge_legacy.sql");
 
 impl BudgetPolicy {
 	/// Initializes and migrates the budget tables, prunes expired rows, preloads every persisted
@@ -136,7 +134,27 @@ impl BudgetPolicy {
 			.collect()
 	}
 
-	fn reconcile(&self, persisted: HashMap<String, PersistedBudgetUsage>, now: UnixDate) {
+	fn reconcile(&self, mut persisted: HashMap<String, PersistedBudgetUsage>, now: UnixDate) {
+		// TODO: temporary migration from key-hash budget ids, see `BudgetPolicy::legacy_rows`. A row
+		// under a known legacy id is not a counter of its own; it is folded in below instead.
+		let aliases = self
+			.counters
+			.iter()
+			.filter_map(|counter| {
+				let legacy_id = counter.definition.as_ref()?.legacy_id.clone()?;
+				Some((legacy_id, counter.key().clone()))
+			})
+			.collect::<Vec<_>>();
+		let mut legacy = Vec::new();
+		for (legacy_id, budget_id) in aliases {
+			self
+				.counters
+				.remove_if(&legacy_id, |_, counter| counter.definition.is_none());
+			if let Some(row) = persisted.remove(&legacy_id) {
+				legacy.push((legacy_id, budget_id, row));
+			}
+		}
+
 		for (budget_id, row) in &persisted {
 			match self.counters.entry(budget_id.clone()) {
 				dashmap::mapref::entry::Entry::Occupied(mut entry) => {
@@ -152,6 +170,22 @@ impl BudgetPolicy {
 				counter.reconcile(None, now);
 			}
 		}
+
+		// Totals were just rebuilt from the database, so adding legacy rows here never counts twice.
+		for (legacy_id, budget_id, row) in legacy {
+			if let Some(mut counter) = self.counters.get_mut(&budget_id)
+				&& row.window_end > now
+			{
+				counter.absorb(
+					row.unit,
+					row.window_start,
+					row.window_end,
+					persisted_amount(&row),
+					row.updated_at,
+				);
+			}
+			self.legacy_rows.insert(legacy_id, budget_id);
+		}
 	}
 
 	/// Snapshots nonzero per-counter deltas, atomically increments them in the database, subtracts
@@ -161,10 +195,11 @@ impl BudgetPolicy {
 			return Ok(());
 		};
 		let _flush = self.flush_lock.lock().await;
-		if !self
-			.counters
-			.iter()
-			.any(|counter| counter.definition.is_some() || !counter.pending.is_zero())
+		if self.legacy_rows.is_empty()
+			&& !self
+				.counters
+				.iter()
+				.any(|counter| counter.definition.is_some() || !counter.pending.is_zero())
 		{
 			return Ok(());
 		}
@@ -211,24 +246,42 @@ impl BudgetPolicy {
 			))
 		});
 
-		// Usage persisted under a legacy id moves to the current id before it is charged. The move
-		// is a no-op once done, so every replica can attempt it; sorting avoids lock-order deadlocks.
-		let mut renames = self
-			.legacy_ids
-			.iter()
-			.map(|entry| (entry.key().clone(), entry.value().clone()))
-			.collect::<Vec<_>>();
-		renames.sort();
+		// TODO: temporary migration from key-hash budget ids, see `BudgetPolicy::legacy_rows`. Each
+		// legacy row is merged into the current row for the window its counter is in, then deleted.
+		// Replaying a merge is harmless: the row is gone after the first one. Ordered like `pending`.
+		let mut merges = Vec::new();
+		for entry in self.legacy_rows.iter() {
+			let window = self
+				.counters
+				.get(entry.value())
+				.and_then(|counter| Some((counter.window_start, counter.window_end, counter.unit?)));
+			if let Some((window_start, window_end, unit)) = window {
+				merges.push(LegacyMerge {
+					legacy_id: entry.key().clone(),
+					budget_id: entry.value().clone(),
+					window_start,
+					window_end,
+					unit,
+				});
+			}
+		}
+		merges.sort_by(|a, b| (&a.budget_id, &a.legacy_id).cmp(&(&b.budget_id, &b.legacy_id)));
 
-		if !pending.is_empty() || !renames.is_empty() {
+		if !pending.is_empty() || !merges.is_empty() {
 			match pool {
 				crate::database::DatabasePool::Sqlite(pool) => {
 					let mut transaction = pool.begin().await?;
-					for (budget_id, legacy_id) in &renames {
-						sqlx::query(SQLITE_RENAME)
-							.bind(budget_id)
-							.bind(legacy_id)
-							.bind(budget_id)
+					for merge in &merges {
+						sqlx::query(SQLITE_MERGE_LEGACY)
+							.bind(&merge.budget_id)
+							.bind(&merge.legacy_id)
+							.bind(merge.window_start.timestamp_millis())
+							.bind(merge.window_end.timestamp_millis())
+							.bind(merge.unit.as_str())
+							.execute(&mut *transaction)
+							.await?;
+						sqlx::query("DELETE FROM budget_usage WHERE budget_id = ?")
+							.bind(&merge.legacy_id)
 							.execute(&mut *transaction)
 							.await?;
 					}
@@ -247,10 +300,17 @@ impl BudgetPolicy {
 				},
 				crate::database::DatabasePool::Postgres(pool) => {
 					let mut transaction = pool.begin().await?;
-					for (budget_id, legacy_id) in &renames {
-						sqlx::query(POSTGRES_RENAME)
-							.bind(budget_id)
-							.bind(legacy_id)
+					for merge in &merges {
+						sqlx::query(POSTGRES_MERGE_LEGACY)
+							.bind(&merge.budget_id)
+							.bind(&merge.legacy_id)
+							.bind(merge.window_start.timestamp_millis())
+							.bind(merge.window_end.timestamp_millis())
+							.bind(merge.unit.as_str())
+							.execute(&mut *transaction)
+							.await?;
+						sqlx::query("DELETE FROM budget_usage WHERE budget_id = $1")
+							.bind(&merge.legacy_id)
 							.execute(&mut *transaction)
 							.await?;
 					}
@@ -268,8 +328,12 @@ impl BudgetPolicy {
 					transaction.commit().await?;
 				},
 			}
-			for (budget_id, _) in renames {
-				self.legacy_ids.remove(&budget_id);
+			for merge in merges {
+				self
+					.legacy_rows
+					.remove_if(&merge.legacy_id, |_, budget_id| {
+						*budget_id == merge.budget_id
+					});
 			}
 		}
 		for flushed in pending {
@@ -289,15 +353,28 @@ impl BudgetPolicy {
 	}
 }
 
+/// TODO: temporary migration from key-hash budget ids, see `BudgetPolicy::legacy_rows`.
+struct LegacyMerge {
+	legacy_id: String,
+	budget_id: String,
+	window_start: UnixDate,
+	window_end: UnixDate,
+	unit: BudgetLimitUnit,
+}
+
+fn persisted_amount(row: &PersistedBudgetUsage) -> Decimal {
+	match row.unit {
+		Some(BudgetLimitUnit::Usd) => Decimal::new(row.used_amount, 9),
+		Some(BudgetLimitUnit::Tokens) => Decimal::from(row.used_amount),
+		None => Decimal::ZERO,
+	}
+}
+
 impl BudgetCounter {
 	fn from_persisted(row: &PersistedBudgetUsage) -> Self {
 		Self {
 			definition: None,
-			amount: match row.unit {
-				Some(BudgetLimitUnit::Usd) => Decimal::new(row.used_amount, 9),
-				Some(BudgetLimitUnit::Tokens) => Decimal::from(row.used_amount),
-				None => Decimal::ZERO,
-			},
+			amount: persisted_amount(row),
 			pending: Decimal::ZERO,
 			unit: row.unit,
 			rolling: (row.window_end - row.window_start)
@@ -332,11 +409,7 @@ impl BudgetCounter {
 		if self.window_start != row.window_start || self.window_end != row.window_end {
 			self.pending = Decimal::ZERO;
 		}
-		self.amount = match row.unit {
-			Some(BudgetLimitUnit::Usd) => Decimal::new(row.used_amount, 9),
-			Some(BudgetLimitUnit::Tokens) => Decimal::from(row.used_amount),
-			None => Decimal::ZERO,
-		} + self.pending;
+		self.amount = persisted_amount(row) + self.pending;
 		self.window_start = row.window_start;
 		self.window_end = row.window_end;
 		self.updated_at = self.updated_at.max(row.updated_at);

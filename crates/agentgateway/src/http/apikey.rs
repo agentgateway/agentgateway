@@ -565,7 +565,6 @@ impl LocalAPIKey {
 		let budgets = (!budgets.is_empty()).then(|| MatchedBudgets {
 			api_key: api_key.expect("budget API keys have a name"),
 			api_key_id,
-			api_key_hash: key_hash.as_str().to_owned(),
 			budgets,
 		});
 		Ok((
@@ -581,6 +580,30 @@ impl LocalAPIKey {
 
 impl LocalAPIKeys {
 	pub fn compile(self) -> anyhow::Result<APIKeyAuthentication> {
+		// Budget usage is stored under the key id, so two budgeted keys sharing an id would silently
+		// share their budgets.
+		let mut budget_key_ids = HashSet::new();
+		for key in &self.keys {
+			let (LocalAPIKey::Key {
+				metadata, budgets, ..
+			}
+			| LocalAPIKey::Sha256 {
+				metadata, budgets, ..
+			}) = key;
+			let Some(id) = metadata
+				.as_ref()
+				.and_then(|metadata| metadata.get(crate::config_store::API_KEY_ID_METADATA))
+				.and_then(serde_json::Value::as_str)
+				.filter(|id| !id.is_empty())
+			else {
+				continue;
+			};
+			anyhow::ensure!(
+				budgets.is_empty() || budget_key_ids.insert(id),
+				"duplicate {} {id:?} on API keys with budgets",
+				crate::config_store::API_KEY_ID_METADATA,
+			);
+		}
 		Ok(APIKeyAuthentication {
 			users: Arc::new(
 				self
