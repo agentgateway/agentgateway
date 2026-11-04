@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-03T08:24:29Z"
+    "generatedAt": "2026-11-04T08:24:19Z"
   },
   "providers": {
     "anthropic": {
@@ -27517,6 +27517,9 @@
         "Qwen/Qwen3-Embedding-8B": {
           "name": "Qwen3-Embedding-8B",
           "released": "2025-06-05",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.01",
             "output": "0"
