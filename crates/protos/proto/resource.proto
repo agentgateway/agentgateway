@@ -990,6 +990,7 @@ message JWTValidationOptions {
 }
 
 message TrafficPolicySpec {
+  reserved 25;
   message RemoteRateLimit {
     string domain = 1;
     repeated Descriptor descriptors = 2;

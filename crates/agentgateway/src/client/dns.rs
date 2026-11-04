@@ -148,6 +148,8 @@ impl Resolver {
 
 impl CachedResolver {
 	pub fn new(config: ResolverConfig, mut opts: ResolverOpts) -> Self {
+		// CachedResolver handles caching and refreshes, including retry backoff for failed lookups.
+		opts.cache_size = 0;
 		// always consult the system's /etc/hosts file when resolving hostnames
 		opts.use_hosts_file = hickory_resolver::config::ResolveHosts::Always;
 		let mut rb =
