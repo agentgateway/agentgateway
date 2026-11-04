@@ -263,25 +263,39 @@ enum GatewayRuntimeMode {
 	Xds,
 }
 
+/// A configuration resource.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UiConfigResource {
+	/// The resource kind.
 	kind: ConfigResourceKind,
+	/// The resource id, unique within its kind.
 	id: String,
+	/// The resource, in the configuration file format of its kind. The value is an object for
+	/// non-policy kinds. For policy kinds, it has the policy's configuration shape, which can be an
+	/// array or null for some IDs.
 	value: Value,
+	/// The stored revision, incremented on each change. Present only for stored resources.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	revision: Option<i64>,
+	/// When the resource was first stored. Present only for stored resources.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	created_at: Option<chrono::DateTime<Utc>>,
+	/// When the resource was last changed. Present only for stored resources.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	updated_at: Option<chrono::DateTime<Utc>>,
+	/// What the write did. Present only on resources returned by a `PUT` in `hybrid` mode;
+	/// `file`-mode `PUT` responses and lists omit it. Rewriting a stored resource with an
+	/// unchanged value reports `unchanged` and does not increment its `revision`.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	result: Option<crate::config_store::WriteResult>,
 }
 
+/// A list of configuration resources.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UiConfigResourcesResponse {
+	/// The resources.
 	resources: Vec<UiConfigResource>,
 }
 
