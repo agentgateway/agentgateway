@@ -206,9 +206,10 @@ impl FromStr for ConfigResourceKind {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigResourceUpsertRequest {
-	/// The resources to write. The server assigns each id: `default` for `modelCatalog`,
-	/// `llm.settings`, and `mcp.settings`, a generated id for `llm.apiKey`, and otherwise the value's
-	/// `name` (`id` or `name` for `llm.model`).
+	/// The resources to write. Policy kinds cannot be written with this request; use
+	/// `PUT /api/config/resources/{kind}/{id}` with the policy id. For other kinds, the server assigns
+	/// each id: `default` for `modelCatalog`, `llm.settings`, and `mcp.settings`, a generated id for
+	/// `llm.apiKey`, and otherwise the value's `name` (`id` or `name` for `llm.model`).
 	#[serde(default)]
 	pub resources: Vec<ConfigResourceUpsert>,
 }
