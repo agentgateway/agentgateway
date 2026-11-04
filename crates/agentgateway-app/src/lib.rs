@@ -351,10 +351,7 @@ mod tests {
 	#[test]
 	fn windows_prefers_userprofile() {
 		let vars = [("USERPROFILE", "users/u"), ("HOME", "home/u")];
-		assert_eq!(
-			home_dir_in(env(&vars)),
-			Some(PathBuf::from("users/u"))
-		);
+		assert_eq!(home_dir_in(env(&vars)), Some(PathBuf::from("users/u")));
 	}
 
 	#[cfg(windows)]
