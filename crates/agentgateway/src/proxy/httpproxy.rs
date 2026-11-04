@@ -3185,6 +3185,11 @@ async fn make_backend_call(
 	}
 	if let Backend::Internal(_, internal) = backend {
 		apply_internal_path(&mut req, internal).map_err(ProxyError::Processing)?;
+		if let InternalBackend::Ui { base_path } = internal {
+			req
+				.extensions_mut()
+				.insert(crate::ui::UiBasePath(base_path.clone()));
+		}
 		let admin = inputs.admin.clone().ok_or_else(|| {
 			ProxyError::ProcessingString("internal backend requires admin service".to_string())
 		})?;

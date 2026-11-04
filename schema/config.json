@@ -13847,6 +13847,13 @@
               "type": "null"
             }
           ]
+        },
+        "basePath": {
+          "description": "basePath is the prefix a reverse proxy in front of the gateway strips before forwarding (e.g. `/agentgateway`).\nIt is added to UI links, assets and login redirects.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

@@ -6897,6 +6897,7 @@
 |`ui.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`ui.policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`ui.policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`ui.basePath`|string|basePath is the prefix a reverse proxy in front of the gateway strips before forwarding (e.g. `/agentgateway`).<br>It is added to UI links, assets and login redirects.|
 
 ## Shared types
 
