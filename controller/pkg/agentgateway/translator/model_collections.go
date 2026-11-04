@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"net/netip"
 	"net/url"
 	"slices"
@@ -226,12 +225,9 @@ func extractModelParentReferenceInfo(ctx RouteContext, model *agentgateway.Agent
 			parents = append(parents, rejected(err.Error()))
 			continue
 		}
-		if optedIn && NormalizeReference(rule.BackendRefs[0].Group, rule.BackendRefs[0].Kind, wellknown.ServiceGVK.GroupKind()) != modelGVK(model).GroupKind() {
-			parents = append(parents, rejected("HTTPRoute rule selects a different model kind"))
-			continue
-		}
+		// A rule selecting any model kind serves every model kind.
 		if !optedIn {
-			parents = append(parents, rejected(fmt.Sprintf("HTTPRoute rule does not select %s backends", modelGVK(model).Kind)))
+			parents = append(parents, rejected("HTTPRoute rule does not select model backends"))
 			continue
 		}
 		if modelServingRuleMatchesRoot(rule) {
@@ -686,7 +682,7 @@ func translateFailoverTarget(
 	if modelGVK(model) == wellknown.AgentgatewayModelGVK && modelGVK(refModel) != wellknown.AgentgatewayModelGVK {
 		return nil, nil, fmt.Errorf("failover target %s/%s is a %s; an AgentgatewayModel may only fail over to AgentgatewayModels", namespace, target.ModelRef.Name, modelGVK(refModel).Kind)
 	}
-	provider, err := translateModelLLMProvider(ctx, refModel, modelIdentityPrefix(refModel)+target.ModelRef.Name, new(modelName))
+	provider, err := translateModelLLMProvider(ctx, refModel, modelIdentityPrefix(refModel)+string(target.ModelRef.Name), new(modelName))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1019,20 +1015,22 @@ func unresolvedModelTargetName(target agentgateway.ModelTargetReference) string 
 	if target.Model != nil {
 		return *target.Model
 	}
-	return target.ModelRef.Name
+	return string(target.ModelRef.Name)
 }
 
-// resolveModelTarget resolves a virtual model target by name in the referring
-// model's namespace. A model of the referring model's own kind wins, then an
-// AgentgatewayModel, then other model kinds.
+// resolveModelTarget resolves a virtual model target in the referring model's
+// namespace. Without group and kind, it selects a model of the referring model's own kind.
 func resolveModelTarget(ctx RouteContext, model *agentgateway.AgentgatewayModel, target agentgateway.ModelTargetReference) (*agentgateway.AgentgatewayModel, string, error) {
 	namespace := model.Namespace
-	var ref *agentgateway.AgentgatewayModel
-	for _, models := range modelTargetCollections(ctx, modelGVK(model).GroupKind()) {
-		if ref = ptr.Flatten(krt.FetchOne(ctx.Krt, models, krt.FilterKey(namespace+"/"+target.ModelRef.Name))); ref != nil {
-			break
-		}
+	kind := modelGVK(model).GroupKind()
+	if target.ModelRef.Kind != nil {
+		kind = schema.GroupKind{Group: string(ptr.OrEmpty(target.ModelRef.Group)), Kind: string(*target.ModelRef.Kind)}
 	}
+	models, ok := modelCollection(ctx, kind)
+	if !ok {
+		return nil, "", fmt.Errorf("model target %s/%s has unsupported kind %s", namespace, target.ModelRef.Name, kind)
+	}
+	ref := ptr.Flatten(krt.FetchOne(ctx.Krt, models, krt.FilterKey(namespace+"/"+string(target.ModelRef.Name))))
 	if ref == nil {
 		return nil, "", fmt.Errorf("model target %s/%s not found", namespace, target.ModelRef.Name)
 	}
@@ -1127,25 +1125,13 @@ func (ctx RouteContext) isModelKind(kind schema.GroupKind) bool {
 	return kind == wellknown.AgentgatewayModelGVK.GroupKind() || contributed
 }
 
-// modelTargetCollections returns the model collections in target lookup order for a
-// model of the given kind.
-func modelTargetCollections(ctx RouteContext, own schema.GroupKind) []krt.Collection[*agentgateway.AgentgatewayModel] {
-	var collections []krt.Collection[*agentgateway.AgentgatewayModel]
-	if source, ok := ctx.modelSource(own); ok {
-		collections = append(collections, source.Models)
+// modelCollection returns the models of the given kind.
+func modelCollection(ctx RouteContext, kind schema.GroupKind) (krt.Collection[*agentgateway.AgentgatewayModel], bool) {
+	if kind == wellknown.AgentgatewayModelGVK.GroupKind() {
+		return ctx.Models, true
 	}
-	collections = append(collections, ctx.Models)
-	if ctx.Collections != nil {
-		kinds := slices.SortedFunc(maps.Keys(ctx.Collections.ModelSources), func(a, b schema.GroupKind) int {
-			return strings.Compare(a.String(), b.String())
-		})
-		for _, kind := range kinds {
-			if kind != own {
-				collections = append(collections, ctx.Collections.ModelSources[kind].Models)
-			}
-		}
-	}
-	return collections
+	source, ok := ctx.modelSource(kind)
+	return source.Models, ok
 }
 
 func allModels(ctx RouteContext) []*agentgateway.AgentgatewayModel {
