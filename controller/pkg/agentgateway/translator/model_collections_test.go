@@ -215,7 +215,7 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 			}}},
 		},
 	}
-	owner := &agentgateway.AgentgatewayModel{ObjectMeta: metav1.ObjectMeta{Namespace: "default"}, Spec: *model}
+	owner := &agentgateway.AgentgatewayModel{Namespace: "default", Spec: *model}
 
 	provider, err := translateModelLLMProvider(RouteContext{}, owner, "openai", nil)
 	if err != nil {
@@ -318,7 +318,7 @@ func TestTranslatePresetProviderBaseURL(t *testing.T) {
 	baseURL := agentgateway.LongString("https://ollama.example/v2")
 	provider, err := translateModelLLMProvider(
 		RouteContext{},
-		&agentgateway.AgentgatewayModel{ObjectMeta: metav1.ObjectMeta{Namespace: "default"}, Spec: agentgateway.AgentgatewayModelSpec{
+		&agentgateway.AgentgatewayModel{Namespace: "default", Spec: agentgateway.AgentgatewayModelSpec{
 			Provider: &providerType,
 			BaseURL:  &baseURL,
 		}},
