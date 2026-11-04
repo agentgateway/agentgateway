@@ -45,6 +45,7 @@ impl<T: Copy> CircularBuffer<T> {
 pub struct CachedResolver {
 	dns: Arc<Resolver>,
 	entries: Arc<Mutex<HashMap<Strng, Arc<CacheEntry>>>>,
+	max_ttl: Option<Duration>,
 }
 
 #[derive(Debug)]
@@ -62,6 +63,7 @@ impl CacheEntry {
 		name: Strng,
 		resolver: Arc<Resolver>,
 		cache: Arc<Mutex<HashMap<Strng, Arc<CacheEntry>>>>,
+		max_ttl: Option<Duration>,
 	) {
 		self.active.store(true, Ordering::Relaxed);
 
@@ -84,6 +86,7 @@ impl CacheEntry {
 					self.entries.store(Some(Arc::new(cb)));
 					// reset backoff on success
 					backoff = ERROR_BACKOFF_BASE;
+					let expiry = max_ttl.map_or(expiry, |m| expiry.min(Instant::now() + m));
 					(expiry, false)
 				},
 				Err(e) => {
@@ -147,7 +150,7 @@ impl Resolver {
 }
 
 impl CachedResolver {
-	pub fn new(config: ResolverConfig, mut opts: ResolverOpts) -> Self {
+	pub fn new(config: ResolverConfig, mut opts: ResolverOpts, max_ttl: Option<Duration>) -> Self {
 		// CachedResolver handles caching and refreshes, including retry backoff for failed lookups.
 		opts.cache_size = 0;
 		// always consult the system's /etc/hosts file when resolving hostnames
@@ -159,6 +162,7 @@ impl CachedResolver {
 		CachedResolver {
 			entries: Arc::new(Mutex::new(HashMap::new())),
 			dns: Arc::new(Resolver::Real(dns_resolver)),
+			max_ttl,
 		}
 	}
 
@@ -184,8 +188,9 @@ impl CachedResolver {
 				let bg_entry = entry.clone();
 				let dns = self.dns.clone();
 				let cache = self.entries.clone();
+				let max_ttl = self.max_ttl;
 				let handle = tokio::task::spawn(async move {
-					bg_entry.background(name, dns, cache).await;
+					bg_entry.background(name, dns, cache, max_ttl).await;
 				});
 				entry.background_task.store(Some(Arc::new(handle)));
 

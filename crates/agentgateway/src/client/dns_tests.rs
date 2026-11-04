@@ -51,6 +51,7 @@ async fn test_basic_resolution() {
 	let resolver = CachedResolver {
 		dns: Arc::new(Resolver::Mock(mock)),
 		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: None,
 	};
 
 	// First resolution should work
@@ -74,6 +75,7 @@ async fn test_ip_change() {
 	let resolver = CachedResolver {
 		dns: Arc::new(Resolver::Mock(mock.clone())),
 		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: None,
 	};
 
 	// First resolution should work
@@ -101,6 +103,7 @@ async fn test_ip_error() {
 	let resolver = CachedResolver {
 		dns: Arc::new(Resolver::Mock(mock.clone())),
 		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: None,
 	};
 
 	// We should get an error, no IPs yet
@@ -124,6 +127,7 @@ async fn test_ip_error_retains_last_known_good() {
 	let resolver = CachedResolver {
 		dns: Arc::new(Resolver::Mock(mock.clone())),
 		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: None,
 	};
 
 	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
@@ -136,6 +140,24 @@ async fn test_ip_error_retains_last_known_good() {
 	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
 }
 
+#[tokio::test(start_paused = true)]
+async fn test_max_ttl() {
+	let mock = Arc::new(Mock::new());
+	mock.add_response("example.com", vec![IP1], 600);
+
+	let resolver = CachedResolver {
+		dns: Arc::new(Resolver::Mock(mock.clone())),
+		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: Some(Duration::from_secs(10)),
+	};
+
+	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
+	mock.add_response("example.com", vec![IP2], 600);
+	tokio::time::sleep(Duration::from_secs(11)).await;
+	tokio::task::yield_now().await;
+	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP2);
+}
+
 #[tokio::test]
 async fn test_multiple_hostnames() {
 	let mock = Arc::new(Mock::new());
@@ -145,6 +167,7 @@ async fn test_multiple_hostnames() {
 	let resolver = CachedResolver {
 		dns: Arc::new(Resolver::Mock(mock)),
 		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: None,
 	};
 
 	let ip1 = resolver.resolve("host1.com".into()).await.unwrap();
@@ -162,6 +185,7 @@ async fn test_resolution_failure() {
 	let resolver = CachedResolver {
 		dns: Arc::new(Resolver::Mock(mock)),
 		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: None,
 	};
 
 	let result = resolver.resolve("nonexistent.com".into()).await;
@@ -176,6 +200,7 @@ async fn test_concurrent_resolution() {
 	let resolver = Arc::new(CachedResolver {
 		dns: Arc::new(Resolver::Mock(mock)),
 		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: None,
 	});
 
 	// Spawn multiple concurrent resolutions

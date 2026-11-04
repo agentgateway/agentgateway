@@ -595,6 +595,7 @@ pub fn parse_config(
 		dns: client::Config {
 			resolver_cfg,
 			resolver_opts,
+			max_ttl: dns.max_ttl,
 		},
 		proxy_metadata: crate::ProxyMetadata {
 			instance_ip: ENV.instance_ip.clone(),

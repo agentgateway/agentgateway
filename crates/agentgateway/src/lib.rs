@@ -150,6 +150,12 @@ pub struct RawDnsConfig {
 	/// When `None`, the system-provided resolver setting is preserved.
 	/// Can also be set via the `DNS_EDNS0` environment variable.
 	edns0: Option<bool>,
+
+	/// Upper bound on how long a DNS record is cached, regardless of the TTL returned by the server.
+	/// Useful when upstream IPs change faster than their advertised TTL.
+	#[serde(default, with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	max_ttl: Option<Duration>,
 }
 
 #[apply(schema_de!)]
