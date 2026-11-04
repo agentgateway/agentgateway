@@ -122,6 +122,11 @@ output:
         backend:
           backend: default/llama/backend.llm
         discoveryProvider: team-a
+        discoveryProviderConfig:
+          custom:
+            formats:
+            - format: COMPLETIONS
+            providerOverride: team-a
       key: default/llama.llm
       listenerKey: default/llm-pool.llm
       match:

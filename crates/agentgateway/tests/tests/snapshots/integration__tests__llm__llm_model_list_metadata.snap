@@ -9,7 +9,11 @@ expression: models
       "id": "local-model",
       "object": "model",
       "created": 0,
-      "owned_by": "openai"
+      "owned_by": "openai",
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/responses"
+      ]
     },
     {
       "id": "gpt-5.5",
@@ -45,6 +49,10 @@ expression: models
         "structured_outputs",
         "tool_choice",
         "tools"
+      ],
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/responses"
       ]
     },
     {
@@ -78,6 +86,10 @@ expression: models
         "temperature",
         "tool_choice",
         "tools"
+      ],
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/responses"
       ]
     },
     {
@@ -114,6 +126,10 @@ expression: models
         "structured_outputs",
         "tool_choice",
         "tools"
+      ],
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/responses"
       ]
     },
     {
@@ -147,6 +163,10 @@ expression: models
         "temperature",
         "tool_choice",
         "tools"
+      ],
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/responses"
       ]
     },
     {
@@ -178,6 +198,10 @@ expression: models
         "reasoning_effort",
         "tool_choice",
         "tools"
+      ],
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/responses"
       ]
     }
   ]

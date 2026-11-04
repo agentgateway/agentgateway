@@ -2413,6 +2413,8 @@ message ModelRoute {
     repeated BackendPolicySpec backend_policies = 3;
     // Catalog provider identity, used to expand wildcards and look up model metadata.
     optional string discovery_provider = 4;
+    // The backend's provider, used to advertise the client endpoints the model serves.
+    AIBackend.Provider discovery_provider_config = 5;
   }
   // Unique resource key for this model route. This is used for xDS resource
   // identity/update/delete, not for virtual model target selection.

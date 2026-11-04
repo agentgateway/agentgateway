@@ -129,6 +129,8 @@ output:
         backend:
           backend: default/catalog/backend.llm
         discoveryProvider: gcp.gemini
+        discoveryProviderConfig:
+          gemini: {}
       key: default/catalog.llm
       listenerKey: default/virtual-models.llm
       match:
@@ -145,6 +147,11 @@ output:
         backend:
           backend: default/custom/backend.llm
         discoveryProvider: groq
+        discoveryProviderConfig:
+          custom:
+            formats:
+            - format: COMPLETIONS
+            providerOverride: groq
       key: default/custom.llm
       listenerKey: default/virtual-models.llm
       match:

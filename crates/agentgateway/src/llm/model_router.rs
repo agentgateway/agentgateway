@@ -505,8 +505,9 @@ impl ModelRouter {
 							// Now check it still matches the model match (e.g 'foo/*') and we are authorized for this model
 							model_name_matches(&model.name, name) && api_key_model_authorized(req, name)
 						})
-						.map(|(id, name)| {
-							llm::model_list::ModelInfo::new(
+						.map(|(id, name)| llm::model_list::ModelInfo {
+							preferred_endpoints: discovery.preferred_endpoints(id, &catalog),
+							..llm::model_list::ModelInfo::new(
 								name.into_owned(),
 								model.created,
 								Some(discovery.provider.clone()),
@@ -569,22 +570,26 @@ impl ModelRouter {
 		model: &VirtualModelRoute,
 		catalog: &llm::catalog::CatalogSnapshot,
 	) -> llm::model_list::ModelInfo {
-		let targets: Vec<&str> = match &model.routing {
-			VirtualModelRouting::Weighted(targets) => targets.iter().map(|t| t.model.as_str()).collect(),
-			VirtualModelRouting::Conditional(targets) => {
-				targets.iter().map(|t| t.model.as_str()).collect()
-			},
+		let targets: Vec<(&str, bool)> = match &model.routing {
+			VirtualModelRouting::Weighted(targets) => targets
+				.iter()
+				.map(|t| (t.model.as_str(), t.invalid))
+				.collect(),
+			VirtualModelRouting::Conditional(targets) => targets
+				.iter()
+				.map(|t| (t.model.as_str(), t.invalid))
+				.collect(),
 			// Failover targets are compiled into a backend and callouts pick targets at request time.
 			VirtualModelRouting::Failover { .. } | VirtualModelRouting::Callout(_) => vec![],
 		};
 		let targets = targets
 			.into_iter()
-			.map(|target| {
-				// An unresolved target leaves its metadata unknown rather than being skipped.
+			.map(|(target, invalid)| {
+				// An unresolved or invalid target leaves its metadata unknown rather than being skipped.
 				match self
 					.models
 					.iter()
-					.find(|route| model_name_matches(&route.name, target))
+					.find(|route| !invalid && model_name_matches(&route.name, target))
 				{
 					Some(route) => model_info(route, target.to_string(), catalog),
 					None => llm::model_list::ModelInfo::default(),
@@ -899,11 +904,15 @@ fn model_info(
 	let Some(discovery) = &route.discovery else {
 		return llm::model_list::ModelInfo::new(name, route.created, None, None);
 	};
-	let entry = catalog
+	let id = catalog
 		.model_ids(&discovery.provider)
 		.map(|ids| discovery.catalog_model(&name, ids))
-		.and_then(|id| catalog.model(&discovery.provider, &id));
-	llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry)
+		.unwrap_or_else(|| discovery.model.as_deref().unwrap_or(&name).to_string());
+	let entry = catalog.model(&discovery.provider, &id);
+	llm::model_list::ModelInfo {
+		preferred_endpoints: discovery.preferred_endpoints(&id, catalog),
+		..llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry)
+	}
 }
 
 fn is_responses_websocket(req: &Request) -> bool {

@@ -626,6 +626,16 @@
             "null"
           ]
         },
+        "endpoints": {
+          "description": "Client endpoints the model serves; absent means a chat model.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "rates": {
           "description": "Base pricing rates for this model.",
           "$ref": "#/$defs/Rates"
