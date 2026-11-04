@@ -77,25 +77,25 @@ impl AgentGateway {
 		let (port_tx, port_rx) = tokio::sync::oneshot::channel::<anyhow::Result<u16>>();
 
 		let task = tokio::task::spawn(async move {
-			let config = Arc::new(
-				agentgateway::config::parse_config(
+			let app = async {
+				let config = Arc::new(agentgateway::config::parse_config(
 					contents,
 					Some(agentgateway::ConfigSource::File(config)),
-				)
-				.unwrap(),
-			);
-			let config_resource_store = if config.storage.mode == agentgateway::ConfigStoreMode::Hybrid {
-				Some(
-					agentgateway::config_store::setup(
-						config.database.as_ref().expect("hybrid database config"),
-					)
-					.await
-					.unwrap(),
-				)
-			} else {
-				None
-			};
-			let app = match agentgateway::app::run(config, config_resource_store).await {
+				)?);
+				let config_resource_store = if config.storage.mode == agentgateway::ConfigStoreMode::Hybrid
+				{
+					let database = config
+						.database
+						.as_ref()
+						.ok_or_else(|| anyhow::anyhow!("hybrid database config is missing"))?;
+					Some(agentgateway::config_store::setup(database).await?)
+				} else {
+					None
+				};
+				agentgateway::app::run(config, config_resource_store).await
+			}
+			.await;
+			let app = match app {
 				Ok(app) => app,
 				Err(err) => {
 					let _ = port_tx.send(Err(err));
@@ -103,14 +103,10 @@ impl AgentGateway {
 				},
 			};
 
-			let addresses = app.bind_addresses();
-			let port = match addresses.as_slice() {
-				[address] => Ok(address.port()),
-				_ => Err(anyhow::anyhow!(
-					"expected one test gateway bind, found {}",
-					addresses.len()
-				)),
-			};
+			let port = app
+				.bind_address("bind/0")
+				.map(|address| address.port())
+				.ok_or_else(|| anyhow::anyhow!("test gateway bind was not created"));
 			let _ = port_tx.send(port);
 
 			// Wait for either shutdown signal or termination

@@ -879,6 +879,14 @@ impl Store {
 	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) -> anyhow::Result<()> {
 		debug!(bind=%bind.key, "insert bind");
 		let old_bind = self.binds.get(&key).cloned();
+		if let Some(old) = old_bind.as_deref()
+			&& old.mode == agent::BindMode::Standard
+			&& bind.mode == agent::BindMode::Standard
+			&& bind.address.port() == 0
+			&& bind.address.ip() == old.address.ip()
+		{
+			bind.address.set_port(old.address.port());
+		}
 
 		// Capture (rather than swallow) any OS bind failure so callers can decide whether it
 		// is fatal. The bind is still recorded below so routing lookups (find_bind, etc.)
@@ -2676,6 +2684,33 @@ mod tests {
 			matches!(events.next().await, Some(BindEvent::Add(updated, _)) if updated.address == bind.address),
 			"changing a standard bind's address should open its new listener"
 		);
+	}
+
+	#[tokio::test]
+	async fn reapplied_ephemeral_bind_keeps_assigned_port() {
+		let mut store = Store::with_ipv6_enabled(true);
+		let mut events = store.subscribe();
+		let bind = Bind {
+			key: strng::literal!("bind/test"),
+			address: "127.0.0.1:0".parse().unwrap(),
+			protocol: BindProtocol::http,
+			tunnel_protocol: TunnelProtocol::Direct,
+			mode: agent::BindMode::Standard,
+		};
+
+		store.insert_bind(bind.clone());
+		let (assigned, listeners) = match events.next().await {
+			Some(BindEvent::Add(assigned, listeners)) => (assigned, listeners),
+			other => panic!("expected bind add event, got {other:?}"),
+		};
+		assert_ne!(assigned.address.port(), 0);
+
+		store.insert_bind(bind);
+		assert_eq!(
+			store.bind(&assigned.key).unwrap().bind.address,
+			assigned.address
+		);
+		drop(listeners);
 	}
 
 	#[test]

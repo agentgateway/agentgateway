@@ -7,6 +7,26 @@ use serde_json::{Value, json};
 use crate::common::gateway::AgentGateway;
 
 #[tokio::test]
+async fn hybrid_startup_returns_database_setup_error() -> anyhow::Result<()> {
+	let dir = tempfile::tempdir()?;
+	let database_url = format!(
+		"sqlite://{}",
+		dir.path().join("missing/config.db").display()
+	);
+	let result = AgentGateway::new(hybrid_config(&database_url)).await;
+	let err = match result {
+		Ok(_) => anyhow::bail!("gateway unexpectedly started"),
+		Err(err) => err,
+	};
+	let details = format!("{err:#}");
+	assert!(
+		details.contains("unable to open database file"),
+		"{details}"
+	);
+	Ok(())
+}
+
+#[tokio::test]
 async fn hybrid_resources_reload_and_survive_restart() -> anyhow::Result<()> {
 	let dir = tempfile::tempdir()?;
 	let database_url = format!("sqlite://{}", dir.path().join("config.db").display());
