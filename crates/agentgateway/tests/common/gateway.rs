@@ -42,9 +42,17 @@ pub struct AgentGateway {
 
 impl AgentGateway {
 	pub async fn new(raw_config: impl Into<String>) -> anyhow::Result<Self> {
+		Self::start(raw_config.into(), None).await
+	}
+
+	pub async fn new_with_port(raw_config: impl Into<String>, port: u16) -> anyhow::Result<Self> {
+		Self::start(raw_config.into(), Some(port)).await
+	}
+
+	async fn start(raw_config: String, fixed_port: Option<u16>) -> anyhow::Result<Self> {
 		agent_core::telemetry::testing::setup_test_logging();
-		let raw_config = raw_config.into();
-		let config = raw_config.replace("$PORT", "0");
+		let port = fixed_port.unwrap_or(0);
+		let config = raw_config.replace("$PORT", &port.to_string());
 		let mut document: Value =
 			yaml::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
 		let config = document
@@ -103,10 +111,21 @@ impl AgentGateway {
 				},
 			};
 
-			let port = app
-				.bind_address("bind/0")
-				.map(|address| address.port())
-				.ok_or_else(|| anyhow::anyhow!("test gateway bind was not created"));
+			let addresses = app.bind_addresses();
+			let port = match fixed_port {
+				Some(port) => addresses
+					.iter()
+					.find(|address| address.port() == port)
+					.map(|address| address.port())
+					.ok_or_else(|| anyhow::anyhow!("test gateway bind was not created")),
+				None => match addresses.as_slice() {
+					[address] => Ok(address.port()),
+					_ => Err(anyhow::anyhow!(
+						"expected one test gateway bind, found {}",
+						addresses.len()
+					)),
+				},
+			};
 			let _ = port_tx.send(port);
 
 			// Wait for either shutdown signal or termination

@@ -31,9 +31,10 @@ async fn hybrid_resources_reload_and_survive_restart() -> anyhow::Result<()> {
 	let dir = tempfile::tempdir()?;
 	let database_url = format!("sqlite://{}", dir.path().join("config.db").display());
 	let config = hybrid_config(&database_url);
-	let traffic_gateway_port = unused_port()?;
+	let gateway_port = unused_port()?;
 
-	let gateway = AgentGateway::new(config.clone()).await?;
+	let gateway = AgentGateway::new_with_port(config.clone(), gateway_port).await?;
+	let traffic_gateway_port = unused_port()?;
 	let response = gateway
 		.send_request_json_method(
 			Method::PUT,
@@ -54,7 +55,7 @@ async fn hybrid_resources_reload_and_survive_restart() -> anyhow::Result<()> {
 	wait_for_traffic_route(&gateway).await?;
 	gateway.shutdown().await;
 
-	let gateway = AgentGateway::new(config).await?;
+	let gateway = AgentGateway::new_with_port(config, gateway_port).await?;
 	assert_resource(&gateway, "db-model").await?;
 	assert_cors_policy(&gateway).await?;
 	assert_traffic_gateway(&gateway).await?;

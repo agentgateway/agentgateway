@@ -303,15 +303,6 @@ impl Bound {
 		self.stores.binds.read().bind_addresses()
 	}
 
-	pub fn bind_address(&self, key: &str) -> Option<std::net::SocketAddr> {
-		self
-			.stores
-			.binds
-			.read()
-			.bind(&strng::new(key))
-			.map(|bind| bind.address)
-	}
-
 	pub async fn wait_termination(self) -> anyhow::Result<()> {
 		// Wait for a signal to shutdown from explicit admin shutdown or signal
 		self.shutdown.wait().await;
