@@ -1089,6 +1089,7 @@ mod responses {
 			"response/detect/bedrock-invoke-anthropic.bin",
 			BEDROCK_TO_DETECT,
 		),
+		("response/detect/bedrock-invoke-openai.bin", BEDROCK_TO_DETECT),
 		("response/detect/bedrock-basic.bin", BEDROCK_TO_DETECT),
 		("response/detect/bedrock-broken.bin", BEDROCK_TO_DETECT),
 		("response/detect/broken-sse", COMPLETIONS_TO_DETECT),
