@@ -42,19 +42,12 @@ pub struct AgentGateway {
 
 impl AgentGateway {
 	pub async fn new(raw_config: impl Into<String>) -> anyhow::Result<Self> {
-		Self::start(raw_config.into(), None).await
-	}
-
-	pub async fn new_with_port(raw_config: impl Into<String>, port: u16) -> anyhow::Result<Self> {
-		Self::start(raw_config.into(), Some(port)).await
-	}
-
-	async fn start(raw_config: String, fixed_port: Option<u16>) -> anyhow::Result<Self> {
 		agent_core::telemetry::testing::setup_test_logging();
-		let port = fixed_port.unwrap_or(0);
-		let config = raw_config.replace("$PORT", &port.to_string());
+		let raw_config = raw_config.into();
+		let config = raw_config.replace("$PORT", "0");
 		let mut document: Value =
 			yaml::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
+		let configured_port = configured_gateway_port(&document);
 		let config = document
 			.get_mut("config")
 			.unwrap()
@@ -112,7 +105,7 @@ impl AgentGateway {
 			};
 
 			let addresses = app.bind_addresses();
-			let port = match fixed_port {
+			let port = match configured_port {
 				Some(port) => addresses
 					.iter()
 					.find(|address| address.port() == port)
@@ -203,6 +196,15 @@ impl AgentGateway {
 	pub fn port(&self) -> u16 {
 		self.port
 	}
+}
+
+fn configured_gateway_port(document: &Value) -> Option<u16> {
+	let gateways = document.get("gateways")?.as_mapping()?;
+	if gateways.len() != 1 {
+		return None;
+	}
+	let port = gateways.values().next()?.get("port")?.as_u64()?;
+	u16::try_from(port).ok().filter(|port| *port != 0)
 }
 
 async fn wait_for_port(port: u16) -> anyhow::Result<()> {

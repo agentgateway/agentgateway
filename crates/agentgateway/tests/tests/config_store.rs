@@ -13,7 +13,7 @@ async fn hybrid_startup_returns_database_setup_error() -> anyhow::Result<()> {
 		"sqlite://{}",
 		dir.path().join("missing/config.db").display()
 	);
-	let result = AgentGateway::new(hybrid_config(&database_url)).await;
+	let result = AgentGateway::new(hybrid_config(&database_url, 0)).await;
 	let err = match result {
 		Ok(_) => anyhow::bail!("gateway unexpectedly started"),
 		Err(err) => err,
@@ -30,10 +30,10 @@ async fn hybrid_startup_returns_database_setup_error() -> anyhow::Result<()> {
 async fn hybrid_resources_reload_and_survive_restart() -> anyhow::Result<()> {
 	let dir = tempfile::tempdir()?;
 	let database_url = format!("sqlite://{}", dir.path().join("config.db").display());
-	let config = hybrid_config(&database_url);
 	let gateway_port = unused_port()?;
+	let config = hybrid_config(&database_url, gateway_port);
 
-	let gateway = AgentGateway::new_with_port(config.clone(), gateway_port).await?;
+	let gateway = AgentGateway::new(config.clone()).await?;
 	let traffic_gateway_port = unused_port()?;
 	let response = gateway
 		.send_request_json_method(
@@ -55,7 +55,7 @@ async fn hybrid_resources_reload_and_survive_restart() -> anyhow::Result<()> {
 	wait_for_traffic_route(&gateway).await?;
 	gateway.shutdown().await;
 
-	let gateway = AgentGateway::new_with_port(config, gateway_port).await?;
+	let gateway = AgentGateway::new(config).await?;
 	assert_resource(&gateway, "db-model").await?;
 	assert_cors_policy(&gateway).await?;
 	assert_traffic_gateway(&gateway).await?;
@@ -233,7 +233,7 @@ async fn assert_cors_policy(gateway: &AgentGateway) -> anyhow::Result<()> {
 	Ok(())
 }
 
-fn hybrid_config(database_url: &str) -> String {
+fn hybrid_config(database_url: &str, gateway_port: u16) -> String {
 	format!(
 		r#"
 config:
@@ -243,7 +243,7 @@ config:
     mode: hybrid
 gateways:
   default:
-    port: $PORT
+    port: {gateway_port}
 ui:
   gateways: default
 llm:
