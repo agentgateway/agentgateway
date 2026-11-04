@@ -19,6 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -229,6 +230,8 @@ type GatewayCollectionConfig struct {
 	References          plugins.ReferenceTypes
 	BackendRefGrantMode apisettings.BackendRefGrantMode
 	KrtOpts             krtutil.KrtOptions
+	// ModelKinds are the model route kinds listeners may opt into.
+	ModelKinds []schema.GroupVersionKind
 
 	listenerIndex      krt.Index[types.NamespacedName, *ListenerSet]
 	transformationFunc GatewayTransformationFunction
@@ -301,13 +304,13 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			// Attached Routes count starts at 0 and gets updated later in the status syncer
 			// when the real count is available after route processing
 
-			hostnames, tlsInfo, filterResult, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.ClusterTrustBundles, cfg.Grants, cfg.References, cfg.BackendRefGrantMode, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false)
+			hostnames, tlsInfo, filterResult, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.ClusterTrustBundles, cfg.Grants, cfg.References, cfg.BackendRefGrantMode, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false, cfg.ModelKinds)
 			status.Listeners = updatedStatus
 
 			lstatus := status.Listeners[i]
 
 			// Generate supported kinds for the listener
-			allowed, _ := GenerateSupportedKinds(l)
+			allowed, _ := GenerateSupportedKinds(l, cfg.ModelKinds)
 
 			// Report the listener conditions managed by this controller.
 			for _, lcond := range lstatus.Conditions {
@@ -561,6 +564,7 @@ func ListenerSetBuilder(
 	clusterTrustBundles krt.Collection[*certificatesv1.ClusterTrustBundle],
 	references plugins.ReferenceTypes,
 	backendRefGrantMode apisettings.BackendRefGrantMode,
+	modelKinds []schema.GroupVersionKind,
 ) (*gwv1.ListenerSetStatus, []*ListenerSet) {
 	result := []*ListenerSet{}
 	ls := obj.Spec
@@ -619,7 +623,7 @@ func ListenerSetBuilder(
 		standardListener := convertListenerSetToListener(l)
 		originalStatus := slices.Map(status.Listeners, convertListenerSetStatusToStandardStatus)
 		hostnames, tlsInfo, filterResult, updatedStatus, programmed := BuildListener(ctx, secrets, configMaps, clusterTrustBundles, grants, references, backendRefGrantMode, namespaces,
-			obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr, true)
+			obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr, true, modelKinds)
 		status.Listeners = slices.Map(updatedStatus, convertStandardStatusToListenerSetStatus)
 
 		if controllerName == constants.ManagedGatewayMeshController || controllerName == constants.ManagedGatewayEastWestController {
@@ -628,7 +632,7 @@ func ListenerSetBuilder(
 		}
 		name := utils.InternalGatewayName(obj.Namespace, obj.Name, string(l.Name))
 
-		allowed, _ := GenerateSupportedKinds(standardListener)
+		allowed, _ := GenerateSupportedKinds(standardListener, modelKinds)
 		pri := ParentInfo{
 			ParentGateway:     parentGwObj.NamespacedName,
 			ListenerKey:       name,

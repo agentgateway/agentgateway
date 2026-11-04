@@ -17,6 +17,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 )
@@ -55,6 +56,15 @@ type PolicyPlugin struct {
 	// GetStatus reads the live status of an object from the status collection, so an unchanged
 	// status isn't rewritten. Defaults to translator.GetStatus, which knows only the built-in kinds.
 	GetStatus func(controllers.Object) any
+}
+
+// ModelSource registers another model API, converted to AgentgatewayModels, so that
+// listeners, HTTPRoute model routers and virtual model targets see its models.
+// Converted models keep their original metadata and set their own GVK. The source
+// translates its models itself; see syncer.WithModelCollections.
+type ModelSource struct {
+	GVK    schema.GroupVersionKind
+	Models krt.Collection[*agentgateway.AgentgatewayModel]
 }
 
 // AgwPolicy wraps an Agw policy for collection handling
