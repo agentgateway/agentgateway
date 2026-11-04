@@ -316,6 +316,24 @@ async fn apply_request_policies(
 		.apply_without_response("substrate ingress", c, l, req, rp.headers())
 		.await?;
 
+	// Decompression runs after authentication and authorization so denied requests never pay for
+	// it; those earlier policies observe the encoded body. Every later body-aware policy sees the
+	// decoded body. Installing the decoder replaced the body content, dropping any inspection cached
+	// from the encoded bytes, so re-buffer for CEL here.
+	let compression = pol
+		.compression
+		.apply_selected("compression", c, l, req, rp.headers())
+		.await?;
+	if compression
+		.as_ref()
+		.is_some_and(|c| c.request.as_ref().is_some_and(|r| r.decompress.is_some()))
+	{
+		l.cel.ctx().maybe_buffer_request_body(req).await;
+	}
+	// Capture Accept-Encoding before the request header modifier may strip it for the upstream.
+	rp.response_compressor =
+		compression.and_then(|c| Some(c.response.as_ref()?.compress.as_ref()?.for_request(req)));
+
 	let mut route_retry = pol.retry.select("retry", req);
 	// Evaluate the retry precondition (if any) against the request before it is consumed.
 	if let Some(retry) = route_retry.as_ref()
@@ -811,6 +829,10 @@ impl HTTPProxy {
 		// Pass the log into the body so it finishes once the stream is entirely complete.
 		// We will also record trailer info there.
 		log.with(|l| set_final_response_fields(l, &reason, &mut resp));
+		// Compress after the log snapshot so logs see the plaintext body.
+		if let Some(compressor) = response_policies.response_compressor.take() {
+			compressor.apply(&mut resp);
+		}
 
 		if let Some(connect) = resp.extensions_mut().remove::<ConnectTunnel>() {
 			handle_connect_tunnel(connect, resp, log)
@@ -5010,6 +5032,8 @@ struct ResponsePolicies {
 	rate_limit_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
 	gateway_ext_proc: Option<ExtProcRequest>,
+	// Applied after every response policy, see `ResponseCompressor::apply`.
+	response_compressor: Option<http::compression::ResponseCompressor>,
 	// Populated by the standard request-policy flow after conditional rate-limit policies are
 	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
 	llm_request_policies: LLMRequestPolicies,

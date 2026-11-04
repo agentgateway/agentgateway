@@ -3281,6 +3281,66 @@ fn traffic_policy_from_proto(
 				response: to_body(buffer.response),
 			}))
 		},
+		Some(tps::Kind::Compression(compression)) => {
+			use proto::agent::traffic_policy_spec::compression::Algorithm;
+
+			use crate::http::compression::CompressionAlgorithm;
+
+			let algorithms = |values: &[i32]| -> Result<Vec<_>, ProtoError> {
+				if values.is_empty() {
+					return Err(ProtoError::Generic(
+						"compression algorithms must not be empty".to_string(),
+					));
+				}
+				values
+					.iter()
+					.map(|v| {
+						Ok(match Algorithm::try_from(*v)? {
+							Algorithm::Gzip => CompressionAlgorithm::Gzip,
+							Algorithm::Brotli => CompressionAlgorithm::Brotli,
+							Algorithm::Deflate => CompressionAlgorithm::Deflate,
+							Algorithm::Zstd => CompressionAlgorithm::Zstd,
+						})
+					})
+					.collect()
+			};
+			TrafficPolicy::Compression(RequestPolicy::single(http::compression::Compression {
+				response: compression
+					.response
+					.as_ref()
+					.map(|r| -> Result<_, ProtoError> {
+						Ok(http::compression::CompressionResponse {
+							compress: r
+								.compress
+								.as_ref()
+								.map(|c| -> Result<_, ProtoError> {
+									Ok(http::compression::ResponseCompression {
+										algorithms: algorithms(&c.algorithms)?,
+									})
+								})
+								.transpose()?,
+						})
+					})
+					.transpose()?,
+				request: compression
+					.request
+					.as_ref()
+					.map(|r| -> Result<_, ProtoError> {
+						Ok(http::compression::CompressionRequest {
+							decompress: r
+								.decompress
+								.as_ref()
+								.map(|d| -> Result<_, ProtoError> {
+									Ok(http::compression::RequestDecompression {
+										algorithms: algorithms(&d.algorithms)?,
+									})
+								})
+								.transpose()?,
+						})
+					})
+					.transpose()?,
+			}))
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -4148,6 +4208,7 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
 		TrafficPolicy::CORS(_) => build!(CORS),
 		TrafficPolicy::Buffer(_) => build!(Buffer),
+		TrafficPolicy::Compression(_) => build!(Compression),
 		other => Err(ProtoError::Generic(format!(
 			"conditional traffic policy kind {} is not supported",
 			traffic_policy_kind_name(other)
@@ -4183,6 +4244,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::RequestMirror(_) => "requestMirror",
 		TrafficPolicy::DirectResponse(_) => "directResponse",
 		TrafficPolicy::Buffer(_) => "buffer",
+		TrafficPolicy::Compression(_) => "compression",
 		TrafficPolicy::CORS(_) => "cors",
 	}
 }
@@ -6918,5 +6980,77 @@ mod tests {
 			"error should name the group, got: {err}"
 		);
 		assert_eq!(diagnostics.into_warnings().len(), 1);
+	}
+
+	#[test]
+	fn compression_from_proto() {
+		use proto::agent::traffic_policy_spec::Compression as ProtoCompression;
+		use proto::agent::traffic_policy_spec::compression::{
+			Algorithm, Request, RequestDecompression, Response, ResponseCompression,
+		};
+
+		use crate::http::compression::CompressionAlgorithm;
+
+		let spec = |response: Vec<i32>, request: Vec<i32>| proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::Compression(
+				ProtoCompression {
+					response: Some(Response {
+						compress: Some(ResponseCompression {
+							algorithms: response,
+						}),
+					}),
+					request: Some(Request {
+						decompress: Some(RequestDecompression {
+							algorithms: request,
+						}),
+					}),
+				},
+			)),
+		};
+
+		let policy = traffic_policy_from_proto(
+			&spec(
+				vec![Algorithm::Zstd as i32, Algorithm::Brotli as i32],
+				vec![Algorithm::Gzip as i32],
+			),
+			&mut Diagnostics::default(),
+		)
+		.unwrap();
+		let TrafficPolicy::Compression(policy) = policy else {
+			panic!("expected compression policy");
+		};
+		let compression = &policy.iter().next().unwrap().pol;
+		assert_eq!(
+			compression
+				.response
+				.as_ref()
+				.and_then(|r| r.compress.as_ref())
+				.unwrap()
+				.algorithms,
+			vec![CompressionAlgorithm::Zstd, CompressionAlgorithm::Brotli]
+		);
+		assert_eq!(
+			compression
+				.request
+				.as_ref()
+				.and_then(|r| r.decompress.as_ref())
+				.unwrap()
+				.algorithms,
+			vec![CompressionAlgorithm::Gzip]
+		);
+
+		let gzip = || vec![Algorithm::Gzip as i32];
+		for (response, request) in [
+			(vec![99], gzip()),
+			(gzip(), vec![Algorithm::Gzip as i32, 99]),
+			(vec![], gzip()),
+			(gzip(), vec![]),
+		] {
+			assert!(
+				traffic_policy_from_proto(&spec(response, request), &mut Diagnostics::default()).is_err(),
+				"unknown or empty algorithms must be rejected"
+			);
+		}
 	}
 }
