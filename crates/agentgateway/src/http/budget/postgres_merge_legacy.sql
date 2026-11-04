@@ -1,10 +1,18 @@
--- TODO: temporary migration from key-hash budget ids. Adds the usage of a legacy row to the current
--- row, but only when it belongs to the current window and unit, with the same semantics as the
--- regular upsert.
+-- TODO: temporary migration from key-hash budget ids. Moves a legacy row into the current row: the
+-- legacy row is always deleted, and its usage is added to the current row only when it belongs to
+-- the current window and unit, with the same semantics as the regular upsert.
+-- Deleting first and inserting what the DELETE returned makes the move atomic: a concurrent writer
+-- of the legacy row is waited for and its usage is moved too, and a concurrent merge of the same
+-- row finds it already deleted, so the usage is never lost or counted twice.
+WITH moved AS (
+    DELETE FROM budget_usage
+    WHERE budget_id = $2
+    RETURNING window_start, window_end, unit, used_amount, updated_at
+)
 INSERT INTO budget_usage (budget_id, window_start, window_end, unit, used_amount, updated_at)
 SELECT $1, window_start, window_end, unit, used_amount, updated_at
-FROM budget_usage
-WHERE budget_id = $2 AND window_start = $3 AND window_end = $4 AND unit = $5
+FROM moved
+WHERE window_start = $3 AND window_end = $4 AND unit = $5
 ON CONFLICT(budget_id) DO UPDATE SET
     window_start = excluded.window_start,
     window_end = excluded.window_end,

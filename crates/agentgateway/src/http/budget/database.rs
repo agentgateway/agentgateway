@@ -248,7 +248,10 @@ impl BudgetPolicy {
 
 		// TODO: temporary migration from key-hash budget ids, see `BudgetPolicy::legacy_rows`. Each
 		// legacy row is merged into the current row for the window its counter is in, then deleted.
-		// Replaying a merge is harmless: the row is gone after the first one. Ordered like `pending`.
+		// Replaying a merge is harmless: the row is gone after the first one. On Postgres the merge
+		// deletes the row first and inserts what was deleted, so concurrent merges and writes from
+		// older replicas cannot lose or double count usage; SQLite holds the write lock from the
+		// merge until commit. Sorted for a deterministic order within each flush.
 		let mut merges = Vec::new();
 		for entry in self.legacy_rows.iter() {
 			let window = self
@@ -307,10 +310,6 @@ impl BudgetPolicy {
 							.bind(merge.window_start.timestamp_millis())
 							.bind(merge.window_end.timestamp_millis())
 							.bind(merge.unit.as_str())
-							.execute(&mut *transaction)
-							.await?;
-						sqlx::query("DELETE FROM budget_usage WHERE budget_id = $1")
-							.bind(&merge.legacy_id)
 							.execute(&mut *transaction)
 							.await?;
 					}
