@@ -5437,15 +5437,33 @@ spec:
                             minLength: 1
                             type: string
                           modelRef:
-                            description: Same-namespace AgentgatewayModel resource
-                              selected by this target.
+                            description: Same-namespace model resource selected by
+                              this target.
                             properties:
-                              name:
-                                default: ""
-                                description: Name of the referent
+                              group:
+                                description: API group of the referenced model, such
+                                  as `agentgateway.dev`.
+                                maxLength: 253
+                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
+                              kind:
+                                description: Kind of the referenced model, such as
+                                  `AgentgatewayModel`.
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                type: string
+                              name:
+                                description: Name of the referenced model.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
                             type: object
-                            x-kubernetes-map-type: atomic
+                            x-kubernetes-validations:
+                            - message: group and kind must be set together
+                              rule: has(self.group) == has(self.kind)
                         required:
                         - modelRef
                         type: object
@@ -5516,15 +5534,33 @@ spec:
                               minLength: 1
                               type: string
                             modelRef:
-                              description: Same-namespace AgentgatewayModel resource
-                                selected by this target.
+                              description: Same-namespace model resource selected
+                                by this target.
                               properties:
-                                name:
-                                  default: ""
-                                  description: Name of the referent
+                                group:
+                                  description: API group of the referenced model,
+                                    such as `agentgateway.dev`.
+                                  maxLength: 253
+                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
+                                kind:
+                                  description: Kind of the referenced model, such
+                                    as `AgentgatewayModel`.
+                                  maxLength: 63
+                                  minLength: 1
+                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                  type: string
+                                name:
+                                  description: Name of the referenced model.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
                               type: object
-                              x-kubernetes-map-type: atomic
+                              x-kubernetes-validations:
+                              - message: group and kind must be set together
+                                rule: has(self.group) == has(self.kind)
                             when:
                               description: |-
                                 CEL expression that must evaluate to true for this target to be selected.
@@ -5563,15 +5599,33 @@ spec:
                               minLength: 1
                               type: string
                             modelRef:
-                              description: Same-namespace AgentgatewayModel resource
-                                selected by this target.
+                              description: Same-namespace model resource selected
+                                by this target.
                               properties:
-                                name:
-                                  default: ""
-                                  description: Name of the referent
+                                group:
+                                  description: API group of the referenced model,
+                                    such as `agentgateway.dev`.
+                                  maxLength: 253
+                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
+                                kind:
+                                  description: Kind of the referenced model, such
+                                    as `AgentgatewayModel`.
+                                  maxLength: 63
+                                  minLength: 1
+                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                  type: string
+                                name:
+                                  description: Name of the referenced model.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
                               type: object
-                              x-kubernetes-map-type: atomic
+                              x-kubernetes-validations:
+                              - message: group and kind must be set together
+                                rule: has(self.group) == has(self.kind)
                             priority:
                               description: |-
                                 Priority of this target. Lower values are preferred. Targets at the same
@@ -5611,15 +5665,33 @@ spec:
                               minLength: 1
                               type: string
                             modelRef:
-                              description: Same-namespace AgentgatewayModel resource
-                                selected by this target.
+                              description: Same-namespace model resource selected
+                                by this target.
                               properties:
-                                name:
-                                  default: ""
-                                  description: Name of the referent
+                                group:
+                                  description: API group of the referenced model,
+                                    such as `agentgateway.dev`.
+                                  maxLength: 253
+                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
+                                kind:
+                                  description: Kind of the referenced model, such
+                                    as `AgentgatewayModel`.
+                                  maxLength: 63
+                                  minLength: 1
+                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                  type: string
+                                name:
+                                  description: Name of the referenced model.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
                               type: object
-                              x-kubernetes-map-type: atomic
+                              x-kubernetes-validations:
+                              - message: group and kind must be set together
+                                rule: has(self.group) == has(self.kind)
                             weight:
                               description: Relative traffic weight. Defaults to 1.
                               format: int32
