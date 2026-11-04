@@ -185,12 +185,22 @@ impl Provider {
 			}
 		}
 		if let ChatRequest::Messages(r) = req
-			&& let Some(tools) = r.tools.as_mut()
+			&& let Some(tools) = r.tools.take()
 		{
-			tools.retain(|t| !is_web_search(&t.rest));
-			if tools.is_empty() {
-				r.tools = None;
+			let mut kept: Vec<crate::types::messages::Tool> = Vec::with_capacity(tools.len());
+			for tool in tools {
+				if !is_web_search(&tool.rest) {
+					kept.push(tool);
+					continue;
+				}
+				// Keep a dropped tool's cache breakpoint on the preceding tool, like Converse does.
+				if let Some(prev) = kept.last_mut()
+					&& prev.cache_control.is_none()
+				{
+					prev.cache_control = tool.cache_control;
+				}
 			}
+			r.tools = (!kept.is_empty()).then_some(kept);
 		}
 	}
 
