@@ -466,6 +466,14 @@
             "boolean",
             "null"
           ]
+        },
+        "maxTtl": {
+          "description": "Maximum interval between DNS refreshes, regardless of the TTL returned by the server.\nUseful when upstream IPs change faster than their advertised TTL. Zero disables caching.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
