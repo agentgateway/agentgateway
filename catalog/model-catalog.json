@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-04T08:24:19Z"
+    "generatedAt": "2026-11-05T08:25:31Z"
   },
   "providers": {
     "anthropic": {
@@ -13422,6 +13422,34 @@
               "high",
               "max"
             ]
+          }
+        },
+        "moonshotai/Kimi-K3.1-Pro": {
+          "name": "Kimi K3.1 Pro",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.2"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 262144
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
           }
         },
         "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B": {
@@ -33136,6 +33164,43 @@
             "effort": [
               "none",
               "low",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "moonshotai/Kimi-K3.1-Pro": {
+          "name": "Kimi K3.1 Pro",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "medium",
               "high",
               "max"
             ]
