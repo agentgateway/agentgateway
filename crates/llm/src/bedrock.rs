@@ -279,12 +279,15 @@ impl Provider {
 	) -> Strng {
 		if matches!(endpoint, BedrockEndpoint::Mantle) {
 			return match route_type {
-				super::RouteType::Responses => strng::literal!("/v1/responses"),
+				super::RouteType::Responses => strng::literal!("/openai/v1/responses"),
 				super::RouteType::Messages => strng::literal!("/anthropic/v1/messages"),
 				super::RouteType::AnthropicTokenCount => {
 					strng::literal!("/anthropic/v1/messages/count_tokens")
 				},
 				super::RouteType::Models => strng::literal!("/v1/models"),
+				super::RouteType::Completions => {
+					strng::literal!("/openai/v1/chat/completions")
+				},
 				_ => strng::literal!("/v1/chat/completions"),
 			};
 		}
@@ -453,12 +456,12 @@ mod tests {
 		assert_eq!(
 			p.get_path_for_route(RouteType::Responses, false, "m", ep, p.native_chat(ep))
 				.as_str(),
-			"/v1/responses"
+			"/openai/v1/responses"
 		);
 		assert_eq!(
 			p.get_path_for_route(RouteType::Completions, false, "m", ep, p.native_chat(ep))
 				.as_str(),
-			"/v1/chat/completions"
+			"/openai/v1/chat/completions"
 		);
 	}
 
