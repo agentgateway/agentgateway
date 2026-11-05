@@ -2594,6 +2594,9 @@ impl OtelAccessLogger {
 
 		let mut trace_id_val: Option<u128> = None;
 		let mut span_id_val: Option<u64> = None;
+		let mut method = None;
+		let mut path = None;
+		let mut status = None;
 
 		for &(k, ref v) in kv {
 			let Some(v) = v else { continue };
@@ -2605,7 +2608,6 @@ impl OtelAccessLogger {
 					{
 						trace_id_val = Some(id);
 					}
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 				},
 				"span.id" => {
 					if let Some(s) = v.to_str()
@@ -2613,12 +2615,13 @@ impl OtelAccessLogger {
 					{
 						span_id_val = Some(id);
 					}
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 				},
-				_ => {
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
-				},
+				"http.request.method" => method = Some(v),
+				"url.path" => path = Some(v),
+				"http.response.status_code" => status = Some(v),
+				_ => {},
 			}
+			record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 		}
 
 		if let Some(tid) = trace_id_val {
@@ -2631,29 +2634,9 @@ impl OtelAccessLogger {
 			);
 		}
 
-		let text = |v: &ValueBag| -> String {
-			v.to_str()
-				.map(|s| s.into_owned())
-				.or_else(|| v.to_i64().map(|i| i.to_string()))
-				.or_else(|| v.to_f64().map(|f| f.to_string()))
-				.unwrap_or_else(|| v.to_string())
-		};
-		let mut method = String::new();
-		let mut path = String::new();
-		let mut status = String::new();
-		for (k, v) in kv {
-			let Some(v) = v else { continue };
-			match *k {
-				"http.request.method" => method = text(v),
-				"url.path" => path = text(v),
-				"http.response.status_code" => status = text(v),
-				_ => {},
-			}
-		}
-		let body = format!("{method} {path} {status}");
-		let body = body.trim();
+		let body = [method, path, status].into_iter().flatten().join(" ");
 		if !body.is_empty() {
-			record.set_body(AnyValue::String(body.to_string().into()));
+			record.set_body(AnyValue::String(body.into()));
 		}
 		record.set_timestamp(std::time::SystemTime::now());
 
