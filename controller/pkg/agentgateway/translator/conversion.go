@@ -1497,7 +1497,14 @@ func bundleCaCertificates(
 		}
 
 		sameNamespace := cred.Source.Namespace == namespace
-		if !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
+		if !sameNamespace && !grants.referenceAllowed(
+			ctx,
+			GvkFromObject(gw).GroupKind(),
+			gwv1.Namespace(namespace),
+			NormalizeReference(&ref.Group, &ref.Kind, schema.GroupKind{}),
+			gwv1.Namespace(cred.Source.Namespace),
+			cred.Source.Name,
+		) {
 			statusErr = updateError(statusErr, &ConfigError{
 				Reason: InvalidListenerRefNotPermitted,
 				Message: fmt.Sprintf(
