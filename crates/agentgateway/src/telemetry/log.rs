@@ -405,7 +405,7 @@ pub struct Config {
 	/// Format sets the logging format (text or json)
 	pub format: crate::LoggingFormat,
 	/// Optional request log database sink.
-	pub database: Option<crate::telemetry::log_store::Config>,
+	pub database: Option<crate::database::DatabaseConfig>,
 }
 
 #[derive(serde::Serialize, Default, Clone, Debug)]

@@ -16,8 +16,8 @@ use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::util::ErrorContext;
 use crate::{
 	Address, Config, ConfigSource, ConfigStoreMode, DnsLookupFamily, NestedRawConfig,
-	RawLoggingFields, RawLoggingLevel, StorageConfig, StringOrInt, ThreadingMode, XDSConfig, cel,
-	client, serdes, telemetry, types,
+	RawLoggingDatabase, RawLoggingFields, RawLoggingLevel, StorageConfig, StringOrInt, ThreadingMode,
+	XDSConfig, cel, client, serdes, telemetry, types,
 };
 
 const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey["agentgateway.dev/owner"], apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
@@ -417,11 +417,24 @@ pub fn parse_config(
 	}
 	if explicit_logging_database
 		.as_ref()
+		.and_then(|logging| logging.database.as_ref())
 		.is_some_and(|database| database.max_connections == Some(0))
 	{
 		anyhow::bail!("config.logging.database.maxConnections must be greater than zero");
 	}
-	let logging_database = explicit_logging_database.or_else(|| database.clone());
+	let logging_database = match explicit_logging_database {
+		Some(RawLoggingDatabase { enabled: false, .. }) => None,
+		Some(RawLoggingDatabase {
+			database: Some(database),
+			..
+		}) => Some(database),
+		// The connection settings are flattened in as an optional group, so a missing url and a
+		// malformed maxConnections both arrive here as `None`.
+		Some(RawLoggingDatabase { database: None, .. }) => anyhow::bail!(
+			"config.logging.database needs a valid url (and a positive integer maxConnections, if set) unless enabled is false"
+		),
+		None => database.clone(),
+	};
 
 	let mut storage_mode = raw.storage.clone().unwrap_or_default().mode;
 	if parse::<bool>("UI_READ_ONLY")?.unwrap_or(false) {
@@ -1632,6 +1645,153 @@ config:
 		assert_eq!(
 			config.logging.database.as_ref().map(|db| db.url.as_str()),
 			Some("sqlite::memory:")
+		);
+	}
+
+	#[test]
+	fn logging_database_enabled_resolution() {
+		let _env_lock = lock_env();
+		let parse = |yaml: &str| parse_config(yaml.to_string(), None).expect("config should parse");
+		let logging_url = |config: &crate::Config| {
+			config
+				.logging
+				.database
+				.as_ref()
+				.map(|db| (db.url.clone(), db.max_connections))
+		};
+
+		// enabled: false disables the log store, even with a url and a primary database.
+		let config = parse(
+			r#"
+config:
+  database:
+    url: "postgres://config.example/database"
+  logging:
+    database:
+      enabled: false
+      url: "postgres://logs.example/database"
+      maxConnections: 3
+"#,
+		);
+		assert!(config.database.is_some());
+		assert_eq!(logging_url(&config), None);
+
+		// enabled: false without a url does not fall back to the primary database.
+		let config = parse(
+			r#"
+config:
+  database:
+    url: "postgres://config.example/database"
+  logging:
+    database:
+      enabled: false
+"#,
+		);
+		assert!(config.database.is_some());
+		assert_eq!(logging_url(&config), None);
+
+		// enabled: true (or unset) with a url uses that database.
+		for enabled in ["enabled: true", ""] {
+			let config = parse(&format!(
+				r#"
+config:
+  database:
+    url: "postgres://config.example/database"
+  logging:
+    database:
+      {enabled}
+      url: "postgres://logs.example/database"
+      maxConnections: 3
+"#
+			));
+			assert_eq!(
+				logging_url(&config),
+				Some(("postgres://logs.example/database".to_string(), Some(3)))
+			);
+		}
+
+		// Without enabled: false, a url is required; a url-less object is an error, not a silent
+		// fallback to the primary database.
+		for logging_database in [
+			"enabled: true",
+			"maxConnections: 3",
+			"{}",
+			"url: \"postgres://logs.example/database\"\n      maxConnections: many",
+		] {
+			let (inline, block) = if logging_database == "{}" {
+				(" {}", String::new())
+			} else {
+				("", format!("\n      {logging_database}"))
+			};
+			let err = parse_config(
+				format!(
+					r#"
+config:
+  database:
+    url: "postgres://config.example/database"
+  logging:
+    database:{inline}{block}
+"#
+				),
+				None,
+			)
+			.expect_err("url-less logging database should fail");
+			assert!(
+				err.to_string().contains(
+					"config.logging.database needs a valid url (and a positive integer maxConnections, if set) unless enabled is false"
+				),
+				"{logging_database}: {err}"
+			);
+		}
+
+		// No logging.database at all falls back to the primary database.
+		let config = parse(
+			r#"
+config:
+  database:
+    url: "postgres://config.example/database"
+"#,
+		);
+		assert_eq!(
+			logging_url(&config),
+			Some(("postgres://config.example/database".to_string(), None))
+		);
+
+		// The logging database url is still redacted when the config is serialized.
+		let config = parse(
+			r#"
+config:
+  logging:
+    database:
+      url: "postgres://user:secret@logs.example/database"
+"#,
+		);
+		let dumped = serde_json::to_string(&config.logging).expect("logging config serializes");
+		assert!(
+			!dumped.contains("secret"),
+			"url should be redacted: {dumped}"
+		);
+	}
+
+	#[test]
+	fn logging_database_pool_size_must_be_usable() {
+		let _env_lock = lock_env();
+		let err = parse_config(
+			r#"
+config:
+  logging:
+    database:
+      url: "sqlite::memory:"
+      maxConnections: 0
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("zero-sized logging pool should fail");
+		assert!(
+			err
+				.to_string()
+				.contains("config.logging.database.maxConnections must be greater than zero")
 		);
 	}
 

@@ -594,13 +594,12 @@ llm:
 
 #[tokio::test]
 async fn llm_attached_rejection_is_stored_in_log_database() {
-	let _guard =
-		agentgateway::telemetry::log_store::setup(&agentgateway::telemetry::log_store::Config {
-			url: "sqlite::memory:".to_string(),
-			max_connections: Some(1),
-		})
-		.await
-		.unwrap();
+	let _guard = agentgateway::telemetry::log_store::setup(&agentgateway::database::DatabaseConfig {
+		url: "sqlite::memory:".to_string(),
+		max_connections: Some(1),
+	})
+	.await
+	.unwrap();
 	let t = setup_local_llm_config(
 		r#"
 gateways:

@@ -164,7 +164,7 @@
           "description": "Primary database used by local runtime features.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Config"
+              "$ref": "#/$defs/DatabaseConfig"
             },
             {
               "type": "null"
@@ -979,11 +979,12 @@
       },
       "additionalProperties": false
     },
-    "Config": {
+    "DatabaseConfig": {
+      "description": "Connection settings for a database.",
       "type": "object",
       "properties": {
         "url": {
-          "description": "Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
+          "description": "Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
           "type": "string"
         },
         "maxConnections": {
@@ -1272,7 +1273,7 @@
           "description": "Log-store database configuration; enables request logging to a database backend.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Config"
+              "$ref": "#/$defs/RawLoggingDatabase"
             },
             {
               "type": "null"
@@ -1301,6 +1302,32 @@
         "text",
         "json"
       ]
+    },
+    "RawLoggingDatabase": {
+      "description": "Connection settings for a database.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Store request logs in a database. Defaults to true. When false, no request log store is\nstarted, even if `config.database` is set, and `url` may be omitted.",
+          "type": "boolean",
+          "default": true
+        },
+        "url": {
+          "description": "Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
+          "type": "string"
+        },
+        "maxConnections": {
+          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nWhen the request log and config stores have matching database settings, they share one pool\nwith this limit.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1,
+          "default": null
+        }
+      },
+      "additionalProperties": false
     },
     "RawMetrics": {
       "type": "object",

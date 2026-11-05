@@ -174,7 +174,7 @@ pub struct RawConfig {
 	/// Model cost catalog sources; entries are merged in order, with later entries taking precedence.
 	model_catalog: Option<Vec<ModelCatalogSource>>,
 	/// Primary database used by local runtime features.
-	database: Option<telemetry::log_store::Config>,
+	database: Option<database::DatabaseConfig>,
 	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
 	storage: Option<RawStorageConfig>,
 
@@ -492,7 +492,18 @@ pub struct RawLogging {
 	/// Log output format: `text` or `json`.
 	format: Option<LoggingFormat>,
 	/// Log-store database configuration; enables request logging to a database backend.
-	database: Option<telemetry::log_store::Config>,
+	database: Option<RawLoggingDatabase>,
+}
+
+#[apply(schema_de!)]
+pub struct RawLoggingDatabase {
+	/// Store request logs in a database. Defaults to true. When false, no request log store is
+	/// started, even if `config.database` is set, and `url` may be omitted.
+	#[serde(default = "crate::types::agent::defaults::always_true")]
+	enabled: bool,
+	/// Connection settings for the request log database. `url` is required unless `enabled` is false.
+	#[serde(flatten)]
+	database: Option<database::DatabaseConfig>,
 }
 
 #[apply(schema_de!)]
@@ -725,7 +736,7 @@ pub struct Config {
 	pub tracing: Option<trc::DeprecatedConfig>,
 	pub metrics: crate::telemetry::log::MetricsConfig,
 	pub logging: crate::telemetry::log::Config,
-	pub database: Option<telemetry::log_store::Config>,
+	pub database: Option<database::DatabaseConfig>,
 	pub storage: StorageConfig,
 	#[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
 	pub sensitive_headers: Vec<::http::HeaderName>,
