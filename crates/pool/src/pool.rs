@@ -891,7 +891,14 @@ impl<K: Key> Pool<K> {
 		);
 
 		// The peer's SETTINGS may have lowered the capacity while we were sending.
-		let capacity = h2_load.map_or(capacity, |load| std::cmp::min(capacity, load.max_streams()));
+		let peer_capacity =
+			h2_load.map_or(capacity, |load| std::cmp::min(capacity, load.max_streams()));
+		// If waiters are left, it only fit the ones it was sent to, even if the limit has since gone back up.
+		let capacity = if host.waiters.is_empty() {
+			peer_capacity
+		} else {
+			std::cmp::min(peer_capacity, deliveries.0.len())
+		};
 		// Min of capacity and expected to handle the over-capacity case.
 		// For under capacity, we handle it below in forget_pending_connection
 		host.expected_connecting_capacity -= std::cmp::min(capacity, expected_capacity);
@@ -905,7 +912,7 @@ impl<K: Key> Pool<K> {
 				expected_capacity, capacity
 			);
 			let excess = expected_capacity - capacity;
-			host.per_connection_capacity_cache = CapacityCache::Cached(capacity);
+			host.per_connection_capacity_cache = CapacityCache::Cached(peer_capacity);
 			host.forget_pending_connection(key, excess, None, true);
 		}
 		drop(host);
@@ -2474,6 +2481,51 @@ mod tests {
 				res => panic!("waiter {i} was lost: {res:?}"),
 			}
 		}
+	}
+
+	#[tokio::test]
+	async fn test_h2_peer_limit_dips_and_recovers_while_sending_new_connection() {
+		let _guard = lock_send_connection_test_hook().await;
+		let pool = pool_with_expected_h2_capacity(3);
+		let key = host_key_h2("foo");
+		let (sc, first) = must_want_new_connection(&pool, key.clone());
+		let waiters = [
+			first,
+			must_wait_for_existing_connection(&pool, key.clone()),
+			must_wait_for_existing_connection(&pool, key.clone()),
+		];
+
+		let peer_max = Arc::new(AtomicUsize::new(3));
+		let HttpConnection::Http2(mut h2) = mock_http2_connection(3).await else {
+			unreachable!("mock is http2")
+		};
+		h2.load = Arc::new(H2Load::new(3, {
+			let peer_max = peer_max.clone();
+			// A lowered limit is seen once, then the peer raises it again.
+			move || Some(peer_max.swap(3, Ordering::AcqRel))
+		}));
+		install_send_connection_test_hook(move || {
+			peer_max.store(1, Ordering::Release);
+			false
+		});
+		pool.insert_new_connection(sc, HttpConnection::Http2(h2));
+
+		// Only the first waiter fit; the rest must be told to retry rather than left waiting.
+		// Check every waiter before dropping any connection, which could hand it to a waiter still left.
+		let results: Vec<_> = waiters.into_iter().map(|mut w| w.try_recv()).collect();
+		for (i, res) in results.into_iter().enumerate() {
+			match res {
+				Ok(Some(Ok(_))) => assert_eq!(i, 0, "waiter {i} exceeded the peer limit"),
+				Ok(Some(Err(ClientConnectError::CheckoutIsClosed(pool::Error::ConnectionLowCapacity)))) => {
+					assert!(i > 0, "waiter {i} should have been sent the connection")
+				},
+				res => panic!("waiter {i} was lost: {res:?}"),
+			}
+		}
+		// The limit recovered, so future connections should still be expected to fit 3.
+		let hosts = pool.hosts.lock_shard(&key);
+		let host = hosts.get(&key).expect("host entry");
+		assert_eq!(host.per_connection_capacity_cache.expected_capacity(3), 3);
 	}
 
 	#[tokio::test]
