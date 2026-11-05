@@ -583,7 +583,7 @@ pub fn parse_config(
 			database: logging_database.clone(),
 				fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))
 					.ctx("invalid config.logging.fields")?,
-				database_fields: Arc::new(arc_swap::ArcSwap::from_pointee(
+				standard_attributes: Arc::new(arc_swap::ArcSwap::from_pointee(
 					standard_attributes(raw.standard_attributes.as_ref())
 						.ctx("invalid config.standardAttributes")?,
 				)),
