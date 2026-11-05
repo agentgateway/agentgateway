@@ -2594,6 +2594,9 @@ impl OtelAccessLogger {
 
 		let mut trace_id_val: Option<u128> = None;
 		let mut span_id_val: Option<u64> = None;
+		let mut method = None;
+		let mut path = None;
+		let mut status = None;
 
 		for &(k, ref v) in kv {
 			let Some(v) = v else { continue };
@@ -2605,7 +2608,6 @@ impl OtelAccessLogger {
 					{
 						trace_id_val = Some(id);
 					}
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 				},
 				"span.id" => {
 					if let Some(s) = v.to_str()
@@ -2613,12 +2615,13 @@ impl OtelAccessLogger {
 					{
 						span_id_val = Some(id);
 					}
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 				},
-				_ => {
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
-				},
+				"http.request.method" => method = Some(v),
+				"url.path" => path = Some(v),
+				"http.response.status_code" => status = Some(v),
+				_ => {},
 			}
+			record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 		}
 
 		if let Some(tid) = trace_id_val {
@@ -2630,6 +2633,12 @@ impl OtelAccessLogger {
 				None,
 			);
 		}
+
+		let body = [method, path, status].into_iter().flatten().join(" ");
+		if !body.is_empty() {
+			record.set_body(AnyValue::String(body.into()));
+		}
+		record.set_timestamp(std::time::SystemTime::now());
 
 		self.inner.logger.emit(record);
 	}
@@ -2950,6 +2959,35 @@ mod tests {
 		assert_eq!(scope.name(), "agentgateway.access");
 		// opentelemetry-proto uses a record target as the wire scope name when one is set.
 		assert!(record.target().is_none());
+	}
+
+	#[test]
+	fn otlp_access_log_carries_a_body_and_timestamp() {
+		let exporter = RecordingLogExporter::default();
+		let provider = SdkLoggerProvider::builder()
+			.with_simple_exporter(exporter.clone())
+			.build();
+		let logger = OtelAccessLogger::from_provider(provider);
+
+		let kv = [
+			("http.request.method", Some(ValueBag::from("POST"))),
+			("url.path", Some(ValueBag::from("/v1/messages"))),
+			("http.response.status_code", Some(ValueBag::from(200_i64))),
+		];
+		logger.emit("info", "request", &kv);
+		logger.inner.provider.force_flush().unwrap();
+
+		let records = exporter.records.lock().unwrap();
+		let (record, _) = &records[0];
+		match record.body() {
+			Some(AnyValue::String(body)) => assert_eq!(body.as_ref(), "POST /v1/messages 200"),
+			other => panic!("unexpected body: {other:?}"),
+		}
+		assert!(
+			record
+				.timestamp()
+				.is_some_and(|t| t > std::time::SystemTime::UNIX_EPOCH)
+		);
 	}
 
 	#[derive(Clone, Debug, Default)]
