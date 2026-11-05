@@ -24,7 +24,12 @@ import {
 	upsertLlmProvider
 } from '@/config';
 import { useStickyQueryParam } from '@/drawerRouteState';
-import { useDeleteConfigResource, useLlmConfigData, useUpsertConfigResource } from '@/hooks';
+import {
+	resetFinishedSaves,
+	useDeleteConfigResource,
+	useLlmConfigData,
+	useUpsertConfigResource
+} from '@/hooks';
 import { ProviderConfigEditor } from '@/pages/models/ProviderConfigEditor';
 import { cleanEmpty } from '@/policies/policyUtils';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
@@ -85,8 +90,7 @@ export function ProvidersPage() {
 	const saved = upsertResource.isSuccess || deleteResource.isSuccess;
 
 	function resetSaves() {
-		upsertResource.reset();
-		deleteResource.reset();
+		resetFinishedSaves(upsertResource, deleteResource);
 	}
 
 	function saveProvider(provider: LlmProvider, previousName?: string) {

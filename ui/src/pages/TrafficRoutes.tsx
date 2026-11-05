@@ -24,6 +24,7 @@ import type {
 	LocalAttachedTCPRoute
 } from '@/gateway-config';
 import {
+	resetFinishedSaves,
 	useConfigDumpMode,
 	useDeleteConfigResource,
 	useTrafficConfigData,
@@ -195,7 +196,7 @@ function TrafficRoutesEditorPage() {
 	}
 
 	function cancelEditor() {
-		update.reset();
+		resetFinishedSaves(update);
 		closeEditor();
 	}
 
@@ -464,7 +465,7 @@ function GatewayRoutesEditorPage() {
 	}
 
 	function cancelEditor() {
-		upsertResource.reset();
+		resetFinishedSaves(upsertResource);
 		closeEditor();
 	}
 

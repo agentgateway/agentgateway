@@ -25,6 +25,7 @@ import type {
 	LocalTLSServerConfig
 } from '@/gateway-config';
 import {
+	resetFinishedSaves,
 	useDeleteConfigResource,
 	useMcpConfigData,
 	useTrafficConfigData,
@@ -110,8 +111,7 @@ export function TrafficGatewaysPage() {
 	}
 
 	function cancelDrawer() {
-		update.reset();
-		upsertResource.reset();
+		resetFinishedSaves(update, upsertResource);
 		closeDrawer();
 	}
 
@@ -170,7 +170,7 @@ export function TrafficGatewaysPage() {
 				}
 			/>
 
-			{saveError && !drawer ? (
+			{saveError && !activeGateway && !activeListener ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>

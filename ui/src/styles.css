@@ -775,9 +775,11 @@ td.row-actions > * + * {
 
 .drawer-save-error {
 	position: sticky;
-	bottom: 0;
+	bottom: -20px;
 	z-index: 1;
-	margin-top: 12px;
+	margin: 12px 0 -20px;
+	background: var(--surface);
+	padding-bottom: 20px;
 }
 
 .drawer-footer {
