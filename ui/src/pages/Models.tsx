@@ -52,6 +52,7 @@ import type {
 	LocalLLMWeightedRouting
 } from '@/gateway-config';
 import {
+	resetFinishedSaves,
 	useConfigDumpMode,
 	useDeleteConfigResource,
 	useLlmConfigData,
@@ -204,8 +205,7 @@ function ModelsEditorPage() {
 
 	useEffect(() => {
 		function syncSelectedFromUrl() {
-			upsertResource.reset();
-			deleteResource.reset();
+			resetFinishedSaves(upsertResource, deleteResource);
 			setEditing(null);
 			setEditingVirtual(null);
 			setModelHashState(modelHashFromUrl());
@@ -266,8 +266,7 @@ function ModelsEditorPage() {
 	}
 
 	function resetSaves() {
-		upsertResource.reset();
-		deleteResource.reset();
+		resetFinishedSaves(upsertResource, deleteResource);
 	}
 
 	function saveModel(model: LlmModel, previousId?: string) {
@@ -322,7 +321,7 @@ function ModelsEditorPage() {
 				}
 			/>
 
-			{saveError ? (
+			{saveError && !activeEditing && !activeVirtualEditing ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
