@@ -36,7 +36,7 @@ impl std::fmt::Debug for EmailTokens {
 impl EmailTokens {
 	pub fn tokenize(req: &mut impl RequestType) -> Result<Arc<Self>, AIError> {
 		let mut tokens = Self {
-			prefix: format!("__AGW_EMAIL_{}_", uuid::Uuid::new_v4().simple()),
+			prefix: format!("<AGW_EMAIL_{}_", uuid::Uuid::new_v4().simple()),
 			values: Vec::new(),
 		};
 		let mut indices = HashMap::<String, usize>::new();
@@ -59,7 +59,7 @@ impl EmailTokens {
 					index
 				};
 				output.push_str(&text[end..found.start]);
-				output.push_str(&format!("{}{index}__", tokens.prefix));
+				output.push_str(&format!("{}{index}>", tokens.prefix));
 				end = found.end;
 			}
 			if end != 0 {
@@ -91,9 +91,9 @@ impl EmailTokens {
 			let tail = &rest[self.prefix.len()..];
 			let digits_end = tail.bytes().take_while(u8::is_ascii_digit).count();
 			let suffix = &tail[digits_end..];
-			if digits_end > 0 && suffix.starts_with("__") {
+			if digits_end > 0 && suffix.starts_with('>') {
 				let digits = &tail[..digits_end];
-				let size = self.prefix.len() + digits_end + 2;
+				let size = self.prefix.len() + digits_end + 1;
 				let value = digits
 					.parse::<usize>()
 					.ok()
@@ -101,7 +101,7 @@ impl EmailTokens {
 					.and_then(|index| self.values.get(index));
 				output.push_str(value.map(String::as_str).unwrap_or(&rest[..size]));
 				rest = &rest[size..];
-			} else if !finished && digits_end <= 20 && (suffix.is_empty() || suffix == "_") {
+			} else if !finished && digits_end <= 20 && suffix.is_empty() {
 				pending.push_str(rest);
 				return output;
 			} else {

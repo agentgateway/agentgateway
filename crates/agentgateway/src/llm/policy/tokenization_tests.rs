@@ -32,6 +32,11 @@ fn email_round_trip_repeats_unicode_and_request_isolation() {
 #[test]
 fn restoration_handles_every_split_and_releases_plain_text_immediately() {
 	let (tokens, masked) = tokenize("alice@example.org");
+	assert!(
+		regex::Regex::new(r"^<AGW_EMAIL_[0-9a-f]{32}_0>$")
+			.unwrap()
+			.is_match(&masked)
+	);
 	for split in 0..=masked.len() {
 		let mut pending = String::new();
 		let first = tokens.restore(&format!("Hello {}", &masked[..split]), &mut pending, false);
@@ -53,9 +58,22 @@ fn restoration_handles_every_split_and_releases_plain_text_immediately() {
 }
 
 #[test]
+fn restoration_preserves_surrounding_angle_brackets_and_markup() {
+	let original = "<p>alice@example.org</p> <alice@example.org> 1 < 2 > 0";
+	let (tokens, masked) = tokenize(original);
+	let mut pending = String::new();
+	let restored: String = masked
+		.chars()
+		.map(|c| tokens.restore(&c.to_string(), &mut pending, false))
+		.collect();
+	assert_eq!(restored + &tokens.restore("", &mut pending, true), original);
+	assert_eq!(tokens.restore(&masked, &mut String::new(), true), original);
+}
+
+#[test]
 fn unknown_and_truncated_tokens_remain_literal() {
 	let (tokens, masked) = tokenize("alice@example.org");
-	let unknown = format!("{}9000__", tokens.prefix);
+	let unknown = format!("{}9000>", tokens.prefix);
 	assert_eq!(tokens.restore(&unknown, &mut String::new(), true), unknown);
 	for split in 0..masked.len() {
 		let partial = &masked[..split];
@@ -131,7 +149,7 @@ async fn sse_transport_preserves_metadata_usage_and_flushes_incomplete_token() {
 	}
 	wire.push_str(&format!(
 		"data: {}\n\n",
-		json!({"choices":[{"index":0,"delta":{"content":"__AGW_"}}]})
+		json!({"choices":[{"index":0,"delta":{"content":"<AGW_"}}]})
 	));
 	wire.push_str("data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n");
 	wire.push_str("data: {\"choices\":[],\"usage\":{\"completion_tokens\":12}}\n\ndata: [DONE]\n\n");
@@ -164,7 +182,7 @@ async fn sse_transport_preserves_metadata_usage_and_flushes_incomplete_token() {
 			usage = Some(value["usage"].clone());
 		}
 	}
-	assert_eq!(content, "alice@example.org__AGW_");
+	assert_eq!(content, "alice@example.org<AGW_");
 	assert_eq!(usage.unwrap()["completion_tokens"], 12);
 	assert!(output.contains(": heartbeat"));
 	assert!(output.contains("chat-1"));
