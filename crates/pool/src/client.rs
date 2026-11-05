@@ -457,20 +457,26 @@ where
 			let cur_max = std::cmp::min(conn.current_max_send_streams(), expected);
 			// The peer's SETTINGS arrive asynchronously and may change at any time, so the limit is
 			// read from the connection whenever the pool reserves or releases a stream.
-			let conn = Arc::new(parking_lot::Mutex::new(conn));
+			let conn = Arc::new(parking_lot::Mutex::new(Some(conn)));
 			let peer_conn = Arc::downgrade(&conn);
 			let load = H2Load::new(cur_max, move || {
 				let conn = peer_conn.upgrade()?;
 				// This is called with the pool lock held, while polling the connection can acquire the
 				// pool lock (by dropping a stream). Do not block; fall back to the last known value.
 				let conn = conn.try_lock()?;
-				Some(std::cmp::min(conn.current_max_send_streams(), expected))
+				Some(std::cmp::min(
+					conn.as_ref()?.current_max_send_streams(),
+					expected,
+				))
 			});
 			trace!("http2 handshake complete, spawning background dispatcher task");
 			executor.execute(
-				poll_fn(move |cx| Pin::new(&mut *conn.lock()).poll(cx))
-					.map_err(|e| debug!("client connection error: {}", e))
-					.map(|_| ()),
+				poll_fn({
+					let driver = H2Driver(conn);
+					move |cx| driver.poll(cx)
+				})
+				.map_err(|e| debug!("client connection error: {}", e))
+				.map(|_| ()),
 			);
 
 			// Wait for 'conn' to ready up before we
@@ -682,6 +688,25 @@ fn is_schema_secure(uri: &Uri) -> bool {
 		.scheme_str()
 		.map(|scheme_str| matches!(scheme_str, "wss" | "https"))
 		.unwrap_or_default()
+}
+
+/// Drives an HTTP/2 connection whose stream limit the pool also reads.
+/// Only the driver may drop the connection: that drops any queued requests, which return their capacity
+/// to the pool and take the pool lock, which a reader may be holding.
+struct H2Driver<C>(Arc<parking_lot::Mutex<Option<C>>>);
+
+impl<C: Future + Unpin> H2Driver<C> {
+	fn poll(&self, cx: &mut Context<'_>) -> Poll<C::Output> {
+		let mut conn = self.0.lock();
+		Pin::new(conn.as_mut().expect("connection is only taken on drop")).poll(cx)
+	}
+}
+
+impl<C> Drop for H2Driver<C> {
+	fn drop(&mut self) {
+		let conn = self.0.lock().take();
+		drop(conn);
+	}
 }
 
 #[derive(Clone)]
@@ -1146,5 +1171,26 @@ impl Error {
 
 	fn tx(src: hyper::Error) -> Self {
 		e!(SendRequest, src)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn h2_driver_drops_connection_outside_lock() {
+		struct Conn(std::sync::Weak<parking_lot::Mutex<Option<Conn>>>);
+		impl Drop for Conn {
+			fn drop(&mut self) {
+				// Dropping the connection can take the pool lock; it must not happen under this one.
+				let shared = self.0.upgrade().expect("shared handle is alive");
+				assert!(shared.try_lock().is_some());
+			}
+		}
+		let shared = Arc::new_cyclic(|w| parking_lot::Mutex::new(Some(Conn(w.clone()))));
+		// The pool may still hold the shared handle; the driver must destroy the connection anyway.
+		drop(H2Driver(shared.clone()));
+		assert!(shared.lock().is_none());
 	}
 }
