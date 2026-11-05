@@ -392,6 +392,69 @@ async fn llm_token_budget_persists_and_blocks_requests() {
 }
 
 #[tokio::test]
+async fn llm_token_budget_scope_is_shared_across_rotated_keys() {
+	let pool =
+		agentgateway::database::DatabasePool::connect_with_max_connections("sqlite::memory:", Some(1))
+			.await
+			.unwrap();
+	let budget = json!([{
+		"name": "tokens",
+		"limit": {"unit": "Tokens", "amount": 40},
+		"window": {"rolling": "1h"},
+		"onBudgetExceeded": "Block"
+	}]);
+	let policy = json!({
+		"apiKey": {
+			"keys": [
+				{"key": "sk-old", "metadata": {"name": "rotated", "budgetScope": "team-a"}, "budgets": budget},
+				{"key": "sk-new", "metadata": {"name": "rotated", "budgetScope": "team-a"}, "budgets": budget},
+				{"key": "sk-other", "metadata": {"name": "rotated", "budgetScope": "team-b"}, "budgets": budget}
+			],
+			"mode": "strict"
+		}
+	});
+
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation: None,
+		}),
+		false,
+	);
+	let config = agentgateway::config::parse_config("{}".to_string(), None).unwrap();
+	config.budget_policy.initialize(pool).await.unwrap();
+	let (mock, mut bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
+	bind.attach_route_policy(policy).await;
+
+	let send = |key: &'static str| {
+		let io = io.clone();
+		async move {
+			let response = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+				.header("authorization", format!("Bearer {key}"))
+				.body(Body::from(
+					include_bytes!("../../../llm/src/tests/requests/completions/basic.json").to_vec(),
+				))
+				.send(io)
+				.await
+				.unwrap();
+			let status = response.status();
+			response.into_body().collect().await.unwrap();
+			status
+		}
+	};
+
+	assert_eq!(send("sk-old").await, StatusCode::OK);
+	assert_eq!(send("sk-new").await, StatusCode::TOO_MANY_REQUESTS);
+	assert_eq!(send("sk-other").await, StatusCode::OK);
+	assert_eq!(mock.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test]
 async fn llm_detect_mode_passthrough_without_rewrite() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
