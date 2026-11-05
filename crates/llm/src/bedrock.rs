@@ -128,7 +128,7 @@ impl Provider {
 		}
 	}
 
-	/// Adjusts the inbound request for what Runtime's native APIs reject:
+	/// Adjusts the inbound request for what the endpoint's native APIs reject:
 	/// * `metadata` values outside the Converse requestMetadata pattern
 	///   `[a-zA-Z0-9\s:_@$#=/+,.-]{0,256}`, unlike InvokeModel and Mantle. Claude Code sends JSON as
 	///   `metadata.user_id`, which also flows into the metadata of a request translated to Responses,
@@ -137,22 +137,45 @@ impl Provider {
 	/// * Responses `web_search` tools, which Codex sends by default, and Messages `web_search_*`
 	///   server tools, which Claude Code sends. Drop them like other server tools Bedrock cannot
 	///   execute.
+	/// * Mantle chat rejects `max_tokens` for the gpt-5.x models, so it moves that limit into
+	///   `max_completion_tokens`.
 	pub fn sanitize_runtime_request(
 		&self,
 		req: &mut crate::types::ChatRequest,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) {
 		use crate::types::ChatRequest;
-		let (model, rest) = match req {
-			ChatRequest::Messages(r) => (r.model.as_deref(), &mut r.rest),
-			ChatRequest::Completions(r) => (r.model.as_deref(), &mut r.rest),
-			ChatRequest::Responses(r) => (r.model.as_deref(), &mut r.rest),
+		let request_model = match req {
+			ChatRequest::Messages(r) => r.model.clone(),
+			ChatRequest::Completions(r) => r.model.clone(),
+			ChatRequest::Responses(r) => r.model.clone(),
 			ChatRequest::Gemini(_) => return,
 		};
-		let endpoint = self.resolve_endpoint(super::RouteType::Messages, model, catalog);
-		if endpoint != BedrockEndpoint::Runtime || !self.native_chat(endpoint) {
+		let endpoint = self.resolve_endpoint(
+			super::RouteType::Messages,
+			request_model.as_deref(),
+			catalog,
+		);
+		if endpoint == BedrockEndpoint::Mantle {
+			if let ChatRequest::Completions(r) = req
+				&& request_model.as_deref().is_some_and(|m| m.contains("gpt-"))
+			{
+				if r.max_completion_tokens.is_none() {
+					r.max_completion_tokens = r.max_tokens;
+				}
+				r.max_tokens = None;
+			}
 			return;
 		}
+		if !self.native_chat(endpoint) {
+			return;
+		}
+		let rest = match req {
+			ChatRequest::Messages(r) => &mut r.rest,
+			ChatRequest::Completions(r) => &mut r.rest,
+			ChatRequest::Responses(r) => &mut r.rest,
+			ChatRequest::Gemini(_) => return,
+		};
 		let clean = |s: &mut String| {
 			s.retain(|c| {
 				c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || ":_@$#=/+,.-".contains(c)
@@ -434,6 +457,39 @@ mod tests {
 			p.resolve_endpoint(RouteType::Embeddings, Some("only.mantle"), catalog),
 			BedrockEndpoint::Runtime
 		);
+	}
+
+	#[test]
+	fn mantle_chat_moves_the_token_limit_to_max_completion_tokens() {
+		use crate::model_catalog::{TestCatalog, tags};
+		let p = provider(BedrockEndpointPreference::MantlePreferred);
+		let cat = TestCatalog::new([("openai.gpt-5.6-sol", &[tags::MANTLE][..])]);
+		let build = |model: &str| {
+			crate::types::ChatRequest::Completions(
+				serde_json::from_value(serde_json::json!({
+					"model": model,
+					"max_tokens": 64,
+					"messages": [{"role": "user", "content": "hi"}]
+				}))
+				.unwrap(),
+			)
+		};
+
+		let mut gpt = build("openai.gpt-5.6-sol");
+		p.sanitize_runtime_request(&mut gpt, Some(&cat));
+		let crate::types::ChatRequest::Completions(gpt) = gpt else {
+			unreachable!()
+		};
+		assert_eq!(gpt.max_tokens, None);
+		assert_eq!(gpt.max_completion_tokens, Some(64));
+
+		let mut grok = build("xai.grok-4.3");
+		p.sanitize_runtime_request(&mut grok, Some(&cat));
+		let crate::types::ChatRequest::Completions(grok) = grok else {
+			unreachable!()
+		};
+		assert_eq!(grok.max_tokens, Some(64));
+		assert_eq!(grok.max_completion_tokens, None);
 	}
 
 	#[test]
