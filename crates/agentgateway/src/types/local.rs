@@ -2505,7 +2505,7 @@ pub struct LocalBackendAuthCredential {
 	/// If it fails or does not return a string, the credential location is cleared instead.
 	#[serde(default)]
 	pub expression: Option<Arc<crate::cel::Expression>>,
-	/// Mint a GCP token.
+	/// Fetch a Google Cloud access or ID token.
 	#[serde(default)]
 	pub gcp: Option<crate::http::auth::GcpAuth>,
 }
@@ -2544,13 +2544,16 @@ impl LocalBackendAuth {
 		};
 		let mut credentials = Vec::with_capacity(self.credentials.len());
 		for credential in self.credentials {
+			let sources = [
+				credential.key.is_some(),
+				credential.expression.is_some(),
+				credential.gcp.is_some(),
+			];
+			if sources.into_iter().filter(|set| *set).count() != 1 {
+				anyhow::bail!("backendAuth: exactly one of 'key', 'expression', or 'gcp' must be set");
+			}
 			let source = match credential.gcp {
-				Some(gcp) => {
-					if credential.key.is_some() || credential.expression.is_some() {
-						anyhow::bail!("backendAuth: exactly one of 'key', 'expression', or 'gcp' must be set");
-					}
-					crate::http::auth::BackendAuthCredentialSource::Gcp(gcp)
-				},
+				Some(gcp) => crate::http::auth::BackendAuthCredentialSource::Gcp(gcp),
 				None => crate::http::auth::BackendAuthCredentialSource::Key(
 					load_backend_auth_value(credential.key, credential.expression, "key", resources).await?,
 				),

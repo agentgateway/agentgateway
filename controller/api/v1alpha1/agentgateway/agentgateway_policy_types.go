@@ -1748,9 +1748,8 @@ type BackendAuth struct {
 
 	// Credentials is a list of additional credentials to inject on the backend
 	// request. Each entry writes its value to the entry's location.
-	// `credentials` is independent of the primary
-	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
-	// alongside it.
+	// `credentials` is independent of the primary `key`/`secretRef`/`passthrough`
+	// mechanism and may be set on its own or alongside it.
 	//
 	// +optional
 	// +kubebuilder:validation:MinItems=1
@@ -1773,7 +1772,7 @@ type BackendAuthCredential struct {
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
-	// Mint a GCP token.
+	// Fetches a Google Cloud access or ID token and writes it to `location`.
 	// +optional
 	GCP *GcpAuth `json:"gcp,omitempty"`
 }

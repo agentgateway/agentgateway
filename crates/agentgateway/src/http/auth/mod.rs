@@ -302,10 +302,12 @@ pub async fn apply_backend_auth(
 		apply_backend_auth_kind(backend_info, kind, req).await?;
 	}
 	for credential in &auth.credentials {
+		let token;
 		let value = match &credential.source {
-			BackendAuthCredentialSource::Key(value) => value.resolve(req).map(Cow::into_owned),
+			BackendAuthCredentialSource::Key(value) => value.resolve(req),
 			BackendAuthCredentialSource::Gcp(g) => {
-				Some(gcp::fetch_token(g, &backend_info.call_target).await?)
+				token = gcp::fetch_token(g, &backend_info.call_target).await?;
+				Some(Cow::Borrowed(token.as_str()))
 			},
 		};
 		let Some(value) = value else {

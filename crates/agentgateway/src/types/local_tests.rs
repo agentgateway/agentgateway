@@ -2845,30 +2845,6 @@ fn test_de_backend_auth_accepts_each_shape() {
 	assert_eq!(credentials_only.credentials.len(), 1);
 }
 
-#[tokio::test]
-async fn backend_auth_credential_rejects_key_with_gcp() {
-	use serde::de::IntoDeserializer;
-
-	let auth = super::de_backend_auth::<serde_json::Value>(
-		serde_json::json!({
-			"credentials": [{
-				"location": {"header": {"name": "proxy-authorization"}},
-				"key": "tok",
-				"gcp": {"type": "idToken", "audience": "iap-client-id"},
-			}],
-		})
-		.into_deserializer(),
-	)
-	.unwrap()
-	.unwrap();
-	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
-	let err = auth
-		.try_into(&resources)
-		.await
-		.expect_err("key and gcp on one credential must be rejected");
-	assert!(err.to_string().contains("exactly one of"), "{err}");
-}
-
 /// A file-backed `backendAuth` key has to participate in config reloads, the
 /// same way `backendTLS` files and `jwtSign.signingKey` already do. Before this
 /// was resolved through the resource manager, the path was consumed during

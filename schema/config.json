@@ -4819,7 +4819,7 @@
           "default": null
         },
         "gcp": {
-          "description": "Mint a GCP token.",
+          "description": "Fetch a Google Cloud access or ID token.",
           "anyOf": [
             {
               "$ref": "#/$defs/GcpAuth"
