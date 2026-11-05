@@ -2121,16 +2121,7 @@ impl AIProvider {
 				.ok_or_else(|| AIError::MissingField("model not specified".into()))?,
 		);
 		if use_local {
-			let count = num_tokens(
-				req.model.as_deref().unwrap_or_default(),
-				&req.get_messages_v2(),
-				req
-					.rest
-					.get("tools")
-					.and_then(serde_json::Value::as_array)
-					.into_iter()
-					.flatten(),
-			);
+			let count = local_token_count(&req);
 			let body = serde_json::to_vec(&types::count_tokens::Response {
 				input_tokens: count,
 			})
@@ -2154,6 +2145,17 @@ impl AIProvider {
 				false,
 				log,
 				move |provider, req, parts, llm| {
+					if let AIProvider::Bedrock(p) = provider
+						&& p.resolve_endpoint(
+							RouteType::AnthropicTokenCount,
+							Some(&llm.request_model),
+							catalog,
+						) == bedrock::BedrockEndpoint::Runtime
+					{
+						llm.provider_state = Some(ProviderState::BedrockCountTokens {
+							local_count: local_token_count(req),
+						});
+					}
 					provider.render_count_tokens_request(req, &parts.headers, &llm.request_model, catalog)
 				},
 			)
@@ -2980,6 +2982,30 @@ impl AIProvider {
 			managed_body,
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
+		if let Some(local_count) = bedrock_count_tokens_fallback(&req, &parts, &bytes) {
+			parts.status = ::http::StatusCode::OK;
+			parts.headers.remove("x-amzn-errortype");
+			parts.headers.insert(
+				header::CONTENT_TYPE,
+				::http::HeaderValue::from_static("application/json"),
+			);
+			let body = serde_json::to_vec(&types::count_tokens::Response {
+				input_tokens: local_count,
+			})
+			.map_err(AIError::ResponseMarshal)?;
+			return Ok(Self::finalize_response(
+				parts,
+				body.into(),
+				managed_body,
+				req,
+				LLMResponse {
+					count_tokens: Some(local_count),
+					..Default::default()
+				},
+				model_catalog,
+				log,
+			));
+		}
 		if !parts.status.is_success() {
 			let body = self.process_error(
 				&req,
@@ -3673,6 +3699,44 @@ fn namespace_tool_map(
 		) => Some(namespaces),
 		_ => None,
 	}
+}
+
+fn local_token_count(req: &types::count_tokens::Request) -> u64 {
+	num_tokens(
+		req.model.as_deref().unwrap_or_default(),
+		&req.get_messages_v2(),
+		req
+			.rest
+			.get("tools")
+			.and_then(serde_json::Value::as_array)
+			.into_iter()
+			.flatten(),
+	)
+}
+
+/// Bedrock Runtime rejects CountTokens for some Claude models, including cross-Region inference
+/// profiles, with this exact ValidationException. Any other failure is the client's to see.
+fn bedrock_count_tokens_fallback(
+	req: &LLMRequest,
+	parts: &::http::response::Parts,
+	body: &[u8],
+) -> Option<u64> {
+	#[derive(serde::Deserialize)]
+	struct BedrockError<'a> {
+		message: &'a str,
+	}
+	let Some(ProviderState::BedrockCountTokens { local_count }) = req.provider_state else {
+		return None;
+	};
+	let validation = parts
+		.headers
+		.get("x-amzn-errortype")
+		.and_then(|v| v.to_str().ok())
+		.is_some_and(|v| v.split(':').next() == Some("ValidationException"));
+	let unsupported = serde_json::from_slice::<BedrockError>(body)
+		.is_ok_and(|e| e.message == "The provided model doesn't support counting tokens.");
+	(parts.status == ::http::StatusCode::BAD_REQUEST && validation && unsupported)
+		.then_some(local_count)
 }
 
 fn unsupported_encoding(headers: &::http::HeaderMap) -> AIError {

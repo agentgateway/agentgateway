@@ -294,6 +294,10 @@ pub enum ProviderState {
 		tool_names: Arc<conversion::bedrock::BedrockToolNameMap>,
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
+	/// Answer for a Bedrock Runtime model without CountTokens support.
+	BedrockCountTokens {
+		local_count: u64,
+	},
 	OpenAICompletions {
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
