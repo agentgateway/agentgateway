@@ -69,7 +69,7 @@ impl Request {
 		self
 			.model
 			.as_deref()
-			.is_some_and(|model| model.starts_with("gpt-"))
+			.is_some_and(|model| model.starts_with("gpt-") || model.contains("openai.gpt-"))
 	}
 }
 
