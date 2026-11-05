@@ -7160,9 +7160,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendPolicies>.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendPolicies>.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<BackendPolicies>.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<BackendPolicies>.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<BackendPolicies>.http`|object|HTTP protocol settings for this backend.|
 |`<BackendPolicies>.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<BackendPolicies>.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7562,9 +7568,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendAuth>.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendAuth>.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<BackendAuth>.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<BackendAuth>.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<BackendAuth>.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<BackendAuth>.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<BackendAuth>.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<BackendAuth>.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 
 ### `<Guardrails>`
 
@@ -7837,9 +7849,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8125,9 +8143,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8407,9 +8431,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8689,9 +8719,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8969,9 +9005,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9273,9 +9315,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9563,9 +9611,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9845,9 +9899,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10125,9 +10185,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|

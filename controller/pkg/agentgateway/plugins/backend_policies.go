@@ -1595,8 +1595,20 @@ func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.Backend
 	translated := make([]*api.BackendAuthCredential, 0, len(creds))
 	for _, c := range creds {
 		locName := credentialLocationName(c.Location)
+		credential := &api.BackendAuthCredential{
+			Location: translateAuthorizationLocation(&c.Location),
+		}
+		translated = append(translated, credential)
+		if c.GCP != nil {
+			gcp, err := buildGcp(ctx, c.GCP, namespace)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
+			}
+			credential.Source = &api.BackendAuthCredential_Gcp{Gcp: gcp}
+			continue
+		}
 		var value string
-		data, secretKey, err := ctx.ResolveCredentialKeyRef(c.SecretRef, namespace, wellknown.Authorization)
+		data, secretKey, err := ctx.ResolveCredentialKeyRef(*c.SecretRef, namespace, wellknown.Authorization)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
 		} else if resolvedValue, ok := kubeutils.GetSecretDataValue(data, secretKey); !ok {
@@ -1605,10 +1617,7 @@ func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.Backend
 		} else {
 			value = resolvedValue
 		}
-		translated = append(translated, &api.BackendAuthCredential{
-			Location: translateAuthorizationLocation(&c.Location),
-			Value:    value,
-		})
+		credential.Source = &api.BackendAuthCredential_Value{Value: value}
 	}
 	return translated, errs
 }
@@ -1868,6 +1877,15 @@ func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespa
 }
 
 func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace string) (*api.BackendAuthPolicy, error) {
+	gcp, err := buildGcp(ctx, auth, namespace)
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_Gcp{
+			Gcp: gcp,
+		},
+	}, err
+}
+
+func buildGcp(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace string) (*api.Gcp, error) {
 	var errs []error
 	var credential *string
 	if auth.SecretRef != nil {
@@ -1899,11 +1917,7 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 			},
 		}
 	}
-	return &api.BackendAuthPolicy{
-		Kind: &api.BackendAuthPolicy_Gcp{
-			Gcp: gcp,
-		},
-	}, errors.Join(errs...)
+	return gcp, errors.Join(errs...)
 }
 
 func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, namespace string) (*api.BackendAuthPolicy, error) {
