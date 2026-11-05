@@ -148,14 +148,35 @@ async fn test_max_ttl() {
 	let resolver = CachedResolver {
 		dns: Arc::new(Resolver::Mock(mock.clone())),
 		entries: Arc::new(Mutex::new(HashMap::new())),
-		max_ttl: Some(Duration::from_secs(10)),
+		max_ttl: Some(Duration::from_secs(1)),
 	};
 
 	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
 	mock.add_response("example.com", vec![IP2], 600);
-	tokio::time::sleep(Duration::from_secs(11)).await;
+	tokio::time::sleep(Duration::from_secs(2)).await;
 	tokio::task::yield_now().await;
 	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP2);
+}
+
+#[tokio::test]
+async fn test_zero_max_ttl() {
+	let mock = Arc::new(Mock::new());
+	mock.add_response("example.com", vec![IP1, IP2], 600);
+	let resolver = CachedResolver {
+		dns: Arc::new(Resolver::Mock(mock.clone())),
+		entries: Arc::new(Mutex::new(HashMap::new())),
+		max_ttl: Some(Duration::ZERO),
+	};
+
+	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
+	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
+	mock.add_response("example.com", vec![IP2, IP1], 600);
+	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP2);
+	mock.remove_response("example.com");
+	assert!(resolver.resolve("example.com".into()).await.is_err());
+	mock.add_response("example.com", vec![], 600);
+	assert!(resolver.resolve("example.com".into()).await.is_err());
+	assert!(resolver.entries.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -13,6 +13,7 @@ use hickory_resolver::net::runtime::TokioRuntimeProvider;
 
 use crate::*;
 
+const MINIMUM_TTL: Duration = Duration::from_secs(5);
 const ERROR_BACKOFF_MAX: Duration = Duration::from_secs(5);
 const ERROR_BACKOFF_BASE: Duration = Duration::from_millis(100);
 
@@ -80,14 +81,15 @@ impl CacheEntry {
 				}
 				return;
 			}
-			let (next_refresh, respect_small_value) = match resolver.resolve(name.as_str()).await {
+			let next_refresh = match resolver.resolve(name.as_str()).await {
 				Ok((ips, expiry)) => {
 					let cb = CircularBuffer::new(ips);
 					self.entries.store(Some(Arc::new(cb)));
 					// reset backoff on success
 					backoff = ERROR_BACKOFF_BASE;
-					let expiry = max_ttl.map_or(expiry, |m| expiry.min(Instant::now() + m));
-					(expiry, false)
+					let now = Instant::now();
+					let expiry = expiry.max(now + MINIMUM_TTL);
+					max_ttl.map_or(expiry, |m| expiry.min(now + m))
 				},
 				Err(e) => {
 					if self.entries.load().is_none() {
@@ -98,13 +100,13 @@ impl CacheEntry {
 					debug!("resolution failed: {e:?}");
 
 					backoff = std::cmp::min(backoff * 2, ERROR_BACKOFF_MAX);
-					(Instant::now() + backoff, true)
+					Instant::now() + backoff
 				},
 			};
 			// NB: this will run even on error, so the first fetch for a failed response will hit this and
 			// not block
 			self.notify.notify_waiters();
-			sleep_until_expired(next_refresh, respect_small_value).await;
+			tokio::time::sleep_until(next_refresh.into()).await;
 		}
 	}
 
@@ -167,6 +169,10 @@ impl CachedResolver {
 	}
 
 	pub async fn resolve(&self, name: Strng) -> anyhow::Result<IpAddr> {
+		if self.max_ttl == Some(Duration::ZERO) {
+			let (ips, _) = self.dns.resolve(name.as_str()).await?;
+			return ips.first().copied().ok_or_else(|| anyhow!("no ip"));
+		}
 		// Check if we already have an entry
 		let entry = {
 			let mut cache = self.entries.lock().unwrap();
@@ -201,19 +207,6 @@ impl CachedResolver {
 		// Return next IP
 		entry.next().await.ok_or_else(|| anyhow!("no ip"))
 	}
-}
-
-async fn sleep_until_expired(valid_until: Instant, respect_small_value: bool) {
-	const MINIMUM_TTL: Duration = Duration::from_secs(5);
-	let minimum = Instant::now() + MINIMUM_TTL;
-
-	let deadline = if respect_small_value || valid_until >= minimum {
-		valid_until
-	} else {
-		minimum
-	};
-
-	tokio::time::sleep_until(deadline.into()).await;
 }
 
 #[cfg(test)]
