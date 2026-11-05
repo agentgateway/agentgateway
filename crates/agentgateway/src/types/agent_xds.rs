@@ -2018,6 +2018,7 @@ impl ModelRoute {
 								target: resolve_reference(failover.backend.as_ref()).into(),
 								inline_policies: vec![],
 							},
+							targets: vec![],
 						}
 					},
 					None => {
@@ -6237,7 +6238,7 @@ mod tests {
 		let ModelRouteKind::Virtual(model) = route.kind else {
 			panic!("expected virtual model route");
 		};
-		let llm::model_router::VirtualModelRouting::Failover { backend } = model.routing else {
+		let llm::model_router::VirtualModelRouting::Failover { backend, .. } = model.routing else {
 			panic!("expected failover routing");
 		};
 		assert_eq!(backend.weight, 1);

@@ -745,6 +745,14 @@ llm:
           weight: 1
         - model: fast
           weight: 1
+  - name: resilient
+    routing:
+      failover:
+        targets:
+        - model: gpt-5.5
+          priority: 0
+        - model: fast
+          priority: 1
 "#;
 	let mut t = setup_local_llm_config(config).await;
 	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
@@ -779,10 +787,18 @@ llm:
 	assert_eq!(res.status(), StatusCode::NOT_FOUND);
 	// Entries without catalog metadata carry the config load time.
 	for model in models["data"].as_array_mut().unwrap() {
-		if model["id"] == "local-model" || model["id"] == "blend" {
+		if ["local-model", "blend", "resilient"].contains(&model["id"].as_str().unwrap()) {
 			model["created"] = json!(0);
 		}
 	}
+	let listed = models["data"].as_array().unwrap();
+	let described = |id: &str| {
+		let mut model = listed.iter().find(|m| m["id"] == id).unwrap().clone();
+		model.as_object_mut().unwrap().remove("id");
+		model
+	};
+	assert_eq!(described("resilient")["max_tokens"], 64000);
+	assert_eq!(described("resilient"), described("blend"));
 	insta::assert_json_snapshot!(models);
 }
 

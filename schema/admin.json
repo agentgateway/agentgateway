@@ -1135,6 +1135,13 @@
               "properties": {
                 "backend": {
                   "$ref": "#/$defs/RouteBackendReference"
+                },
+                "targets": {
+                  "description": "Target model names in priority order, used only to describe the virtual model.",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               },
               "additionalProperties": false,

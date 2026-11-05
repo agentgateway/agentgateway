@@ -224,7 +224,12 @@ pub struct VirtualModelRoute {
 #[apply(schema_ser_schema!)]
 pub enum VirtualModelRouting {
 	Weighted(Vec<WeightedTarget>),
-	Failover { backend: RouteBackendReference },
+	Failover {
+		backend: RouteBackendReference,
+		/// Target model names in priority order, used only to describe the virtual model.
+		#[serde(skip_serializing_if = "Vec::is_empty")]
+		targets: Vec<strng::Strng>,
+	},
 	Conditional(Vec<ConditionalTarget>),
 	Callout(Arc<llm::router_callout::VirtualModelCallout>),
 }
@@ -579,8 +584,12 @@ impl ModelRouter {
 				.iter()
 				.map(|t| (t.model.as_str(), t.invalid))
 				.collect(),
-			// Failover targets are compiled into a backend and callouts pick targets at request time.
-			VirtualModelRouting::Failover { .. } | VirtualModelRouting::Callout(_) => vec![],
+			// Failover targets are always concrete models.
+			VirtualModelRouting::Failover { targets, .. } => {
+				targets.iter().map(|t| (t.as_str(), false)).collect()
+			},
+			// Callouts pick targets at request time.
+			VirtualModelRouting::Callout(_) => vec![],
 		};
 		let targets = targets
 			.into_iter()
@@ -627,7 +636,7 @@ impl ModelRouter {
 						},
 					}
 				},
-				VirtualModelRouting::Failover { backend } => {
+				VirtualModelRouting::Failover { backend, .. } => {
 					// A callout earlier in the chain may have set fields; apply them since we will not reach the
 					// rewrite below. The failover providers override the model themselves.
 					if !fields.is_empty()
@@ -1678,6 +1687,7 @@ mod tests {
 							target: RouteBackendTarget::Invalid,
 							inline_policies: vec![],
 						},
+						targets: vec![],
 					},
 				},
 			],
