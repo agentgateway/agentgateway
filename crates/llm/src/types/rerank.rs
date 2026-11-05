@@ -120,6 +120,7 @@ impl RequestType for Request {
 			input_format: InputFormat::Rerank,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
+			original_model: None,
 			provider,
 			streaming: false,
 			params: LLMRequestParams::default(),

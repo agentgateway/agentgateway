@@ -891,10 +891,19 @@ spec:
                               maxLength: 16384
                               minLength: 1
                               type: string
-                            description: Extra form params; values are CEL expressions
-                              over the incoming request.
+                            description: |-
+                              Extra form params; values are CEL expressions over the incoming request.
+                              Parameters set by the gateway itself (for example `scope`, `audience`, or `client_id`) may not be overridden.
                             maxProperties: 64
                             type: object
+                            x-kubernetes-validations:
+                            - message: additionalParams may not override a reserved
+                                OAuth parameter
+                              rule: self.all(k, !(k.lowerAscii() in ['grant_type',
+                                'subject_token', 'subject_token_type', 'actor_token',
+                                'actor_token_type', 'assertion', 'audience', 'resource',
+                                'scope', 'requested_token_type', 'client_id', 'client_secret',
+                                'client_assertion', 'client_assertion_type']))
                           audiences:
                             description: Audiences sent to the token endpoint.
                             items:
@@ -2228,9 +2237,9 @@ spec:
                                               credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                             properties:
                                               file:
-                                                description: Paths on the agentgateway
-                                                  pod's local filesystem. Required
-                                                  when `kind` is `File`.
+                                                description: |-
+                                                  Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                  gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                 properties:
                                                   cert:
                                                     description: Path to the client
@@ -2324,6 +2333,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: caCertificateRefs may not be combined
+                                          with a File mtlsCertificateRef; use file.root
+                                          instead
+                                        rule: '!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef)
+                                          || !self.mtlsCertificateRef.exists(r, has(r.kind)
+                                          && r.kind == ''File'')'
                                       - message: certificateSource SPIFFE may not
                                           be combined with mtlsCertificateRef, caCertificateRefs,
                                           or insecureSkipVerify
@@ -2734,9 +2749,9 @@ spec:
                                               credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                             properties:
                                               file:
-                                                description: Paths on the agentgateway
-                                                  pod's local filesystem. Required
-                                                  when `kind` is `File`.
+                                                description: |-
+                                                  Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                  gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                 properties:
                                                   cert:
                                                     description: Path to the client
@@ -2830,6 +2845,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: caCertificateRefs may not be combined
+                                          with a File mtlsCertificateRef; use file.root
+                                          instead
+                                        rule: '!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef)
+                                          || !self.mtlsCertificateRef.exists(r, has(r.kind)
+                                          && r.kind == ''File'')'
                                       - message: certificateSource SPIFFE may not
                                           be combined with mtlsCertificateRef, caCertificateRefs,
                                           or insecureSkipVerify
@@ -3261,9 +3282,9 @@ spec:
                                               credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                             properties:
                                               file:
-                                                description: Paths on the agentgateway
-                                                  pod's local filesystem. Required
-                                                  when `kind` is `File`.
+                                                description: |-
+                                                  Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                  gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                 properties:
                                                   cert:
                                                     description: Path to the client
@@ -3357,6 +3378,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: caCertificateRefs may not be combined
+                                          with a File mtlsCertificateRef; use file.root
+                                          instead
+                                        rule: '!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef)
+                                          || !self.mtlsCertificateRef.exists(r, has(r.kind)
+                                          && r.kind == ''File'')'
                                       - message: certificateSource SPIFFE may not
                                           be combined with mtlsCertificateRef, caCertificateRefs,
                                           or insecureSkipVerify
@@ -4180,9 +4207,9 @@ spec:
                                               credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                             properties:
                                               file:
-                                                description: Paths on the agentgateway
-                                                  pod's local filesystem. Required
-                                                  when `kind` is `File`.
+                                                description: |-
+                                                  Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                  gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                 properties:
                                                   cert:
                                                     description: Path to the client
@@ -4276,6 +4303,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: caCertificateRefs may not be combined
+                                          with a File mtlsCertificateRef; use file.root
+                                          instead
+                                        rule: '!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef)
+                                          || !self.mtlsCertificateRef.exists(r, has(r.kind)
+                                          && r.kind == ''File'')'
                                       - message: certificateSource SPIFFE may not
                                           be combined with mtlsCertificateRef, caCertificateRefs,
                                           or insecureSkipVerify
@@ -4686,9 +4719,9 @@ spec:
                                               credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                             properties:
                                               file:
-                                                description: Paths on the agentgateway
-                                                  pod's local filesystem. Required
-                                                  when `kind` is `File`.
+                                                description: |-
+                                                  Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                  gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                 properties:
                                                   cert:
                                                     description: Path to the client
@@ -4782,6 +4815,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: caCertificateRefs may not be combined
+                                          with a File mtlsCertificateRef; use file.root
+                                          instead
+                                        rule: '!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef)
+                                          || !self.mtlsCertificateRef.exists(r, has(r.kind)
+                                          && r.kind == ''File'')'
                                       - message: certificateSource SPIFFE may not
                                           be combined with mtlsCertificateRef, caCertificateRefs,
                                           or insecureSkipVerify
@@ -5259,8 +5298,9 @@ spec:
                             credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                           properties:
                             file:
-                              description: Paths on the agentgateway pod's local filesystem.
-                                Required when `kind` is `File`.
+                              description: |-
+                                Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                               properties:
                                 cert:
                                   description: Path to the client certificate file.
@@ -5346,6 +5386,11 @@ spec:
                         be set together
                       rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                         : true'
+                    - message: caCertificateRefs may not be combined with a File mtlsCertificateRef;
+                        use file.root instead
+                      rule: '!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef)
+                        || !self.mtlsCertificateRef.exists(r, has(r.kind) && r.kind
+                        == ''File'')'
                     - message: certificateSource SPIFFE may not be combined with mtlsCertificateRef,
                         caCertificateRefs, or insecureSkipVerify
                       rule: '!has(self.certificateSource) || self.certificateSource
@@ -5488,6 +5533,7 @@ spec:
                 - Huggingface
                 - Meta
                 - Mistral
+                - Nebius
                 - Ollama
                 - OpenAI
                 - Openrouter
@@ -5633,15 +5679,33 @@ spec:
                             minLength: 1
                             type: string
                           modelRef:
-                            description: Same-namespace AgentgatewayModel resource
-                              selected by this target.
+                            description: Same-namespace model resource selected by
+                              this target.
                             properties:
-                              name:
-                                default: ""
-                                description: Name of the referent
+                              group:
+                                description: API group of the referenced model, such
+                                  as `agentgateway.dev`.
+                                maxLength: 253
+                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
+                              kind:
+                                description: Kind of the referenced model, such as
+                                  `AgentgatewayModel`.
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                type: string
+                              name:
+                                description: Name of the referenced model.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
                             type: object
-                            x-kubernetes-map-type: atomic
+                            x-kubernetes-validations:
+                            - message: group and kind must be set together
+                              rule: has(self.group) == has(self.kind)
                         required:
                         - modelRef
                         type: object
@@ -5698,8 +5762,9 @@ spec:
                     properties:
                       targets:
                         description: |-
-                          Concrete model targets evaluated in order. The first matching condition is
-                          selected. One final target may omit when to act as the fallback.
+                          Model targets evaluated in order. The first matching condition is
+                          selected. One final target may omit when to act as the fallback. Targets
+                          may be concrete or virtual models.
                         items:
                           properties:
                             model:
@@ -5711,15 +5776,33 @@ spec:
                               minLength: 1
                               type: string
                             modelRef:
-                              description: Same-namespace AgentgatewayModel resource
-                                selected by this target.
+                              description: Same-namespace model resource selected
+                                by this target.
                               properties:
-                                name:
-                                  default: ""
-                                  description: Name of the referent
+                                group:
+                                  description: API group of the referenced model,
+                                    such as `agentgateway.dev`.
+                                  maxLength: 253
+                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
+                                kind:
+                                  description: Kind of the referenced model, such
+                                    as `AgentgatewayModel`.
+                                  maxLength: 63
+                                  minLength: 1
+                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                  type: string
+                                name:
+                                  description: Name of the referenced model.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
                               type: object
-                              x-kubernetes-map-type: atomic
+                              x-kubernetes-validations:
+                              - message: group and kind must be set together
+                                rule: has(self.group) == has(self.kind)
                             when:
                               description: |-
                                 CEL expression that must evaluate to true for this target to be selected.
@@ -5758,15 +5841,33 @@ spec:
                               minLength: 1
                               type: string
                             modelRef:
-                              description: Same-namespace AgentgatewayModel resource
-                                selected by this target.
+                              description: Same-namespace model resource selected
+                                by this target.
                               properties:
-                                name:
-                                  default: ""
-                                  description: Name of the referent
+                                group:
+                                  description: API group of the referenced model,
+                                    such as `agentgateway.dev`.
+                                  maxLength: 253
+                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
+                                kind:
+                                  description: Kind of the referenced model, such
+                                    as `AgentgatewayModel`.
+                                  maxLength: 63
+                                  minLength: 1
+                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                  type: string
+                                name:
+                                  description: Name of the referenced model.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
                               type: object
-                              x-kubernetes-map-type: atomic
+                              x-kubernetes-validations:
+                              - message: group and kind must be set together
+                                rule: has(self.group) == has(self.kind)
                             priority:
                               description: |-
                                 Priority of this target. Lower values are preferred. Targets at the same
@@ -5792,7 +5893,9 @@ spec:
                     description: Weight-based model selection.
                     properties:
                       targets:
-                        description: Concrete model targets and their relative weights.
+                        description: |-
+                          Model targets and their relative weights. Targets may be concrete or
+                          virtual models.
                         items:
                           properties:
                             model:
@@ -5804,15 +5907,33 @@ spec:
                               minLength: 1
                               type: string
                             modelRef:
-                              description: Same-namespace AgentgatewayModel resource
-                                selected by this target.
+                              description: Same-namespace model resource selected
+                                by this target.
                               properties:
-                                name:
-                                  default: ""
-                                  description: Name of the referent
+                                group:
+                                  description: API group of the referenced model,
+                                    such as `agentgateway.dev`.
+                                  maxLength: 253
+                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
+                                kind:
+                                  description: Kind of the referenced model, such
+                                    as `AgentgatewayModel`.
+                                  maxLength: 63
+                                  minLength: 1
+                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                  type: string
+                                name:
+                                  description: Name of the referenced model.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
                               type: object
-                              x-kubernetes-map-type: atomic
+                              x-kubernetes-validations:
+                              - message: group and kind must be set together
+                                rule: has(self.group) == has(self.kind)
                             weight:
                               description: Relative traffic weight. Defaults to 1.
                               format: int32

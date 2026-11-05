@@ -22,6 +22,9 @@ pub mod envoy_proto_common;
 pub mod expiring_cache;
 pub mod ext_authz;
 pub mod ext_proc;
+#[cfg(any(test, feature = "internal_benches"))]
+#[path = "normalize_tests.rs"]
+mod normalize_tests;
 pub(crate) mod oauth;
 pub mod oidc;
 pub mod outlierdetection;
@@ -35,8 +38,8 @@ pub mod transformation_cel;
 
 pub use agent_http::{
 	Body, BodyContent, BodyInspection, BufferLimit, Error, PolicyResponse, RawBody, RecordedBody,
-	RecordedBodyHandle, Request, RequestBodyExt, Response, ResponseBodyExt, buffer_limit,
-	merge_in_headers, read_body_with_limit, response_buffer_limit, x_headers,
+	RecordedBodyHandle, Request, RequestBodyExt, Response, ResponseBodyExt, SyncResponse,
+	buffer_limit, merge_in_headers, read_body_with_limit, response_buffer_limit, x_headers,
 };
 pub use agent_policy_cors as cors;
 
@@ -84,34 +87,6 @@ pub(crate) fn strip_request_cookies_by_prefix(req: &mut Request, prefix: &str) {
 		let hv =
 			HeaderValue::from_str(&preserved.join("; ")).expect("re-joined cookie header is valid");
 		req.headers_mut().insert(header::COOKIE, hv);
-	}
-}
-
-// SendDirectResponse is a Response that has been buffered so that it is Send.
-pub struct SendDirectResponse(pub ::http::Response<Bytes>);
-
-impl Debug for SendDirectResponse {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("SendDirectResponse")
-			.field("status", &self.0.status())
-			.finish()
-	}
-}
-
-impl Deref for SendDirectResponse {
-	type Target = ::http::Response<Bytes>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl SendDirectResponse {
-	pub async fn new(response: Response) -> Result<Self, Error> {
-		let (head, bytes) = read_response_body(response).await?;
-		Ok(SendDirectResponse(::http::Response::from_parts(
-			head, bytes,
-		)))
 	}
 }
 
@@ -258,7 +233,6 @@ impl RequestOrResponse<'_> {
 
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
-use std::ops::Deref;
 use std::str::FromStr;
 
 pub use ::http::uri::{Authority, Scheme};
@@ -274,9 +248,10 @@ use url::{Url, form_urlencoded};
 
 use crate::cel::{BackendContext, DestinationContext, LLMContext, RequestTime, SourceContext};
 use crate::client::PoolKey;
-use crate::proxy::{ProxyError, ProxyResponse};
+use crate::proxy::ProxyError;
 use crate::transport::stream::TCPConnectionInfo;
 use crate::types::agent::{HeaderValueMatch, PathMatch};
+use crate::types::frontend::PathNormalization;
 
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -554,6 +529,237 @@ pub fn modify_req_uri(
 	Ok(())
 }
 
+pub fn normalize_path_for_proxy(
+	req: &mut Request,
+	normalize: &[PathNormalization],
+) -> Result<(), ProxyError> {
+	if normalize.is_empty() {
+		return Ok(());
+	}
+
+	let Some(orig) = req.uri().path_and_query() else {
+		return Ok(());
+	};
+
+	let path = normalize_path(orig.path(), normalize).map_err(|e| {
+		tracing::debug!(path = orig.path(), "rejecting request path: {e}");
+		ProxyError::InvalidRequest
+	})?;
+	let Some(path) = path else {
+		return Ok(());
+	};
+
+	modify_req_uri(req, |uri| set_path_keep_query(uri, path)).map_err(ProxyError::Processing)
+}
+
+/// Replaces the path of `uri`, keeping its query.
+pub fn set_path_keep_query(uri: &mut uri::Parts, mut path: String) -> anyhow::Result<()> {
+	if let Some(query) = uri.path_and_query.as_ref().and_then(|pq| pq.query()) {
+		path.push('?');
+		path.push_str(query);
+	}
+	uri.path_and_query = Some(PathAndQuery::from_maybe_shared(path)?);
+	Ok(())
+}
+
+/// Applies the configured rules in a fixed order, see [`PathNormalization`]
+fn normalize_path(path: &str, normalize: &[PathNormalization]) -> anyhow::Result<Option<String>> {
+	let decode_unreserved = normalize.contains(&PathNormalization::DecodeUnreserved);
+	let reject_escaped_slash = normalize.contains(&PathNormalization::RejectEscapedSlash);
+	let unescape_slash = normalize.contains(&PathNormalization::UnescapeSlash);
+	let apply_merge_slash = normalize.contains(&PathNormalization::MergeSlash);
+	let apply_dot_segment = normalize.contains(&PathNormalization::DotSegment);
+
+	let mut path = Cow::Borrowed(path);
+	if (decode_unreserved || apply_dot_segment || reject_escaped_slash || unescape_slash)
+		&& let Some(normalized) = decode_percent(
+			path.as_ref(),
+			decode_unreserved,
+			apply_dot_segment,
+			reject_escaped_slash,
+			unescape_slash,
+		)? {
+		path = Cow::Owned(normalized);
+	}
+	// Many backends (IIS, Windows, some Java and Node servers) treat `\` as a separator.
+	if (apply_merge_slash || apply_dot_segment) && path.contains('\\') {
+		path = Cow::Owned(path.replace('\\', "/"));
+	}
+	if apply_merge_slash && let Some(normalized) = merge_adjacent_slashes(path.as_ref()) {
+		path = Cow::Owned(normalized);
+	}
+	if apply_dot_segment {
+		if let Some(normalized) = strip_dot_segment_params(path.as_ref()) {
+			path = Cow::Owned(normalized);
+		}
+		if let Some(normalized) = remove_dot_segments(path.as_ref()) {
+			path = Cow::Owned(normalized);
+		}
+	}
+	Ok(match path {
+		Cow::Borrowed(_) => None,
+		Cow::Owned(path) => Some(path),
+	})
+}
+
+/// Rewrites percent-encoded octets in `path`.
+///
+/// With `decode_unreserved`, unreserved characters (RFC 3986 section 2.3) are decoded. With
+/// `decode_dot`, only `%2E` is decoded, so dot segments cannot hide behind encoding.
+///
+/// Escaped slashes (`%2F`, `%5C`) are rejected with `reject_escaped_slash`, or decoded to `/` with
+/// `unescape_slash`.
+///
+/// Every other octet is kept encoded with uppercase hex digits. Malformed escapes and `%00` are
+/// rejected, as backends disagree on how to interpret them.
+fn decode_percent(
+	path: &str,
+	decode_unreserved: bool,
+	decode_dot: bool,
+	reject_escaped_slash: bool,
+	unescape_slash: bool,
+) -> anyhow::Result<Option<String>> {
+	const HEX: &[u8; 16] = b"0123456789ABCDEF";
+
+	let Some(first) = path.find('%') else {
+		return Ok(None);
+	};
+	let hex = |b: Option<&u8>| b.and_then(|b| (*b as char).to_digit(16));
+	let bytes = path.as_bytes();
+	let mut out = String::with_capacity(path.len());
+	out.push_str(&path[..first]);
+	let mut i = first;
+	while i < bytes.len() {
+		if bytes[i] != b'%' {
+			let next = path[i..].find('%').map_or(bytes.len(), |n| i + n);
+			out.push_str(&path[i..next]);
+			i = next;
+			continue;
+		}
+		let (Some(hi), Some(lo)) = (hex(bytes.get(i + 1)), hex(bytes.get(i + 2))) else {
+			anyhow::bail!("invalid percent-encoding in path");
+		};
+		let b = (hi << 4 | lo) as u8;
+		match b {
+			0 => anyhow::bail!("escaped NUL in path"),
+			b'.' if decode_dot => out.push('.'),
+			b'/' | b'\\' if reject_escaped_slash => {
+				anyhow::bail!("escaped slash in path")
+			},
+			b'/' | b'\\' if unescape_slash => out.push('/'),
+			b if decode_unreserved
+				&& (b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~')) =>
+			{
+				out.push(b as char)
+			},
+			b => {
+				out.push('%');
+				out.push(HEX[usize::from(b >> 4)] as char);
+				out.push(HEX[usize::from(b & 0xF)] as char);
+			},
+		}
+		i += 3;
+	}
+	Ok((out != path).then_some(out))
+}
+
+fn merge_adjacent_slashes(path: &str) -> Option<String> {
+	let first_double_slash = path.as_bytes().windows(2).position(|w| w == b"//")?;
+	let mut out = String::with_capacity(path.len());
+	out.push_str(&path[..first_double_slash + 1]);
+	let mut prev_was_slash = true;
+
+	for ch in path[first_double_slash + 1..].chars() {
+		if ch == '/' {
+			if !prev_was_slash {
+				out.push(ch);
+			}
+			prev_was_slash = true;
+		} else {
+			out.push(ch);
+			prev_was_slash = false;
+		}
+	}
+
+	Some(out)
+}
+
+/// Drops parameters from `.` and `..` segments, as servlet containers do: `/a/..;x/b` is `/a/../b`.
+fn strip_dot_segment_params(path: &str) -> Option<String> {
+	if !path.contains(".;") {
+		return None;
+	}
+	let stripped = path
+		.split('/')
+		.map(|segment| match segment.split_once(';') {
+			Some((dots @ ("." | ".."), _)) => dots,
+			_ => segment,
+		})
+		.collect::<Vec<_>>()
+		.join("/");
+	(stripped != path).then_some(stripped)
+}
+
+fn remove_dot_segments(path: &str) -> Option<String> {
+	if !needs_dot_segment_normalization(path) {
+		return None;
+	}
+
+	let mut input = path;
+	let mut output = String::with_capacity(path.len());
+
+	while !input.is_empty() {
+		if let Some(rest) = input.strip_prefix("../") {
+			input = rest;
+		} else if let Some(rest) = input.strip_prefix("./") {
+			input = rest;
+		} else if input.starts_with("/./") {
+			input = &input[2..];
+		} else if input == "/." {
+			input = "/";
+		} else if input.starts_with("/../") {
+			input = &input[3..];
+			pop_last_segment(&mut output);
+		} else if input == "/.." {
+			input = "/";
+			pop_last_segment(&mut output);
+		} else if input == "." || input == ".." {
+			input = "";
+		} else {
+			let segment_end = if let Some(rest) = input.strip_prefix('/') {
+				rest.find('/').map(|idx| idx + 1).unwrap_or(input.len())
+			} else {
+				input.find('/').unwrap_or(input.len())
+			};
+			output.push_str(&input[..segment_end]);
+			input = &input[segment_end..];
+		}
+	}
+
+	Some(output)
+}
+
+fn pop_last_segment(output: &mut String) {
+	if let Some(last_slash) = output.rfind('/') {
+		output.truncate(last_slash);
+	} else {
+		output.clear();
+	}
+}
+
+fn needs_dot_segment_normalization(path: &str) -> bool {
+	path == "."
+		|| path == ".."
+		|| path == "/."
+		|| path == "/.."
+		|| path.starts_with("./")
+		|| path.starts_with("../")
+		|| path.contains("/./")
+		|| path.contains("/../")
+		|| path.ends_with("/.")
+		|| path.ends_with("/..")
+}
+
 pub fn modify_uri(
 	head: &mut http::request::Parts,
 	f: impl FnOnce(&mut uri::Parts) -> anyhow::Result<()>,
@@ -781,23 +987,6 @@ pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
 pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
 	let lim = response_buffer_limit(resp);
 	resp.body_mut().inspect(lim).await
-}
-
-// Small extension to allow apply()ing a PolicyResponse which doesn't have access to a ProxyResponse.
-pub trait PolicyResponseExt {
-	fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse>;
-}
-
-impl PolicyResponseExt for PolicyResponse {
-	fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse> {
-		if let Some(mut dr) = self.direct_response {
-			merge_in_headers(self.response_headers, dr.headers_mut());
-			Err(ProxyResponse::DirectResponse(Box::new(dr)))
-		} else {
-			merge_in_headers(self.response_headers, hm);
-			Ok(())
-		}
-	}
 }
 
 // DebugExtensions is a wrapper that logs a requests known-extensions in the Debug implementation.

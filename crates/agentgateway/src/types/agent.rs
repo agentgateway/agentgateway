@@ -34,6 +34,7 @@ use crate::http::{
 	timeout,
 };
 use crate::mcp::{FailureMode, McpAuthorization};
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
@@ -145,10 +146,16 @@ impl Listener {
 	}
 
 	pub fn matches(&self, hostname: &str) -> bool {
-		self.hostname == hostname
+		self.hostname.eq_ignore_ascii_case(hostname)
 			|| self.hostname.is_empty()
-			|| (self.hostname.starts_with("*") && hostname.ends_with(&self.hostname[1..]))
+			|| (self.hostname.starts_with("*")
+				&& ends_with_ignore_ascii_case(hostname, &self.hostname[1..]))
 	}
+}
+
+fn ends_with_ignore_ascii_case(s: &str, suffix: &str) -> bool {
+	s.len() >= suffix.len()
+		&& s.as_bytes()[s.len() - suffix.len()..].eq_ignore_ascii_case(suffix.as_bytes())
 }
 
 type Alpns = Vec<Vec<u8>>;
@@ -2168,7 +2175,7 @@ impl ListenerSet {
 			.inner
 			.values()
 			.filter(|l| filter(&l.protocol))
-			.find(|l| l.hostname == host)
+			.find(|l| l.hostname.eq_ignore_ascii_case(host))
 		{
 			trace!("found best match for {host} (exact)");
 			return Some(best.clone());
@@ -2179,7 +2186,7 @@ impl ListenerSet {
 			.filter(|l| {
 				filter(&l.protocol)
 					&& l.hostname.starts_with("*")
-					&& host.ends_with(&l.hostname.as_str()[1..])
+					&& ends_with_ignore_ascii_case(host, &l.hostname.as_str()[1..])
 			})
 			.max_by_key(|l| l.hostname.len())
 		{
@@ -2261,10 +2268,12 @@ impl<'a> From<&'a HostnameMatch> for HostnameMatchRef<'a> {
 
 impl From<Strng> for HostnameMatch {
 	fn from(s: Strng) -> Self {
+		// Hostnames are case-insensitive; requests are looked up lowercased.
+		let s = s.to_ascii_lowercase();
 		if let Some(s) = s.strip_prefix("*.") {
 			HostnameMatch::Wildcard(strng::new(s))
 		} else {
-			HostnameMatch::Exact(s.clone())
+			HostnameMatch::Exact(strng::new(s))
 		}
 	}
 }
@@ -2995,6 +3004,7 @@ pub enum TrafficPolicy {
 	RequestMirror(Vec<filters::RequestMirror>),
 	DirectResponse(RequestPolicy<filters::DirectResponse>),
 	Buffer(RequestPolicy<http::buffer::Buffer>),
+	Compression(RequestPolicy<http::compression::Compression>),
 	#[serde(rename = "cors")]
 	CORS(RequestPolicy<http::cors::Cors>),
 }
@@ -3104,20 +3114,20 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 		client: &crate::proxy::httpproxy::PolicyClient,
 		log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		if let Some(auth) = &self.mcp {
 			if !crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
 				self.jwt.apply(Some(log), req).await.map_err(|e| {
-					crate::proxy::ProxyResponse::from(crate::mcp::auth::create_auth_required_response(
+					crate::mcp::auth::create_auth_required_response(
 						crate::proxy::ProxyError::JwtAuthenticationFailure(e),
 						req,
 						auth,
-					))
+					)
 				})?;
 			}
 
 			if let Some(resp) = crate::mcp::auth::handle_mcp_request(req, auth, client).await? {
-				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
+				return Err(ProxyError::direct_response(resp));
 			}
 			return Ok(crate::http::PolicyResponse::default());
 		}
@@ -3126,8 +3136,7 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 			.jwt
 			.apply(Some(log), req)
 			.await
-			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)
-			.map_err(crate::proxy::ProxyResponse::from)?;
+			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)?;
 		Ok(crate::http::PolicyResponse::default())
 	}
 

@@ -1,7 +1,6 @@
 package agentgateway
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -282,6 +281,7 @@ const (
 	ModelProviderMeta        ModelProvider = "Meta"
 	ModelProviderPerplexity  ModelProvider = "Perplexity"
 	ModelProviderTypesafe    ModelProvider = "Typesafe"
+	ModelProviderNebius      ModelProvider = "Nebius"
 	ModelProviderCustom      ModelProvider = "Custom"
 )
 
@@ -318,7 +318,8 @@ type VirtualModel struct {
 }
 
 type WeightedModelRouting struct {
-	// Concrete model targets and their relative weights.
+	// Model targets and their relative weights. Targets may be concrete or
+	// virtual models.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +required
@@ -358,8 +359,9 @@ type FailoverModelTarget struct {
 }
 
 type ConditionalModelRouting struct {
-	// Concrete model targets evaluated in order. The first matching condition is
-	// selected. One final target may omit when to act as the fallback.
+	// Model targets evaluated in order. The first matching condition is
+	// selected. One final target may omit when to act as the fallback. Targets
+	// may be concrete or virtual models.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +kubebuilder:validation:XValidation:message="conditional targets without when must be last",rule="self.filter(e, !has(e.when)).size() <= 1 && (!self.exists(e, !has(e.when)) || !has(self[size(self) - 1].when))"
@@ -443,9 +445,9 @@ type CalloutCache struct {
 }
 
 type ModelTargetReference struct {
-	// Same-namespace AgentgatewayModel resource selected by this target.
+	// Same-namespace model resource selected by this target.
 	// +required
-	ModelRef corev1.LocalObjectReference `json:"modelRef"`
+	ModelRef ModelObjectReference `json:"modelRef"`
 
 	// Concrete model name selected through the referenced model. It is required
 	// when modelRef points to a wildcard match.model. When omitted, the referenced
@@ -460,4 +462,21 @@ type AgentgatewayModelStatus struct {
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
 	Parents []gwv1.RouteParentStatus `json:"parents,omitempty"`
+}
+
+// References a same-namespace model resource. When group and kind are omitted,
+// the reference selects a model of the referring model's own kind.
+// +kubebuilder:validation:XValidation:rule="has(self.group) == has(self.kind)",message="group and kind must be set together"
+type ModelObjectReference struct {
+	// API group of the referenced model, such as `agentgateway.dev`.
+	// +optional
+	Group *gwv1.Group `json:"group,omitempty"`
+
+	// Kind of the referenced model, such as `AgentgatewayModel`.
+	// +optional
+	Kind *gwv1.Kind `json:"kind,omitempty"`
+
+	// Name of the referenced model.
+	// +required
+	Name gwv1.ObjectName `json:"name"`
 }

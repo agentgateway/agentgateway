@@ -8,8 +8,8 @@ use tonic::Code;
 
 use super::{ActorIdentity, EgressActorResolution, TRACE_POLICY_KIND};
 use crate::http::{PolicyResponse, Request};
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::{DynamicBackendOverride, PolicyClient};
-use crate::proxy::{ProxyError, ProxyResponse};
 use crate::store::RequestPolicyTrait;
 use crate::telemetry::log::RequestLog;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
@@ -121,7 +121,7 @@ impl RequestPolicyTrait for SubstrateEgress {
 		client: &PolicyClient,
 		log: &mut RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, ProxyResponse> {
+	) -> Result<PolicyResponse, ProxyError> {
 		let identity = req
 			.extensions()
 			.get::<ActorIdentity>()
@@ -196,7 +196,7 @@ impl SubstrateEgress {
 		identity: &ActorIdentity,
 		effects: Option<&protos::ateapi::HttpRuleEffects>,
 		req: &mut Request,
-	) -> Result<(), ProxyResponse> {
+	) -> Result<(), ProxyError> {
 		let Some(effects) = effects else {
 			return Ok(());
 		};
@@ -211,12 +211,9 @@ impl SubstrateEgress {
 				},
 				("", Some(source)) => self.actor_jwt(client, identity, source).await?,
 				_ => {
-					return Err(
-						ProxyError::SubstrateEgressDenied(
-							"credential effect must specify exactly one credential source".to_owned(),
-						)
-						.into(),
-					);
+					return Err(ProxyError::SubstrateEgressDenied(
+						"credential effect must specify exactly one credential source".to_owned(),
+					));
 				},
 			};
 			let (name, value) = credential_header(injection, secret)?;
@@ -230,7 +227,7 @@ impl SubstrateEgress {
 		client: &PolicyClient,
 		identity: &ActorIdentity,
 		source: &protos::ateapi::ActorJwtSource,
-	) -> Result<Vec<u8>, ProxyResponse> {
+	) -> Result<Vec<u8>, ProxyError> {
 		let mut audiences = source.audiences.clone();
 		audiences.sort_unstable();
 		let key = CredentialCacheKey {
@@ -283,7 +280,7 @@ impl SubstrateEgress {
 		identity: &ActorIdentity,
 		provider: &CredentialProvider,
 		uri: &str,
-	) -> Result<Vec<u8>, ProxyResponse> {
+	) -> Result<Vec<u8>, ProxyError> {
 		let actor_identity = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
 		let key = CredentialCacheKey {
 			actor_identity: actor_identity.clone(),
@@ -328,7 +325,7 @@ impl SubstrateEgress {
 		Ok(secret)
 	}
 
-	fn provider_for_uri(&self, uri: &str) -> Result<&CredentialProvider, ProxyResponse> {
+	fn provider_for_uri(&self, uri: &str) -> Result<&CredentialProvider, ProxyError> {
 		let name = provider_name(uri)
 			.ok_or_else(|| ProxyError::SubstrateEgressDenied(format!("invalid credential URI: {uri}")))?;
 		self
@@ -338,7 +335,6 @@ impl SubstrateEgress {
 			.ok_or_else(|| {
 				ProxyError::SubstrateEgressDenied(format!("no credential provider configured for {name}"))
 			})
-			.map_err(Into::into)
 	}
 }
 
@@ -356,17 +352,14 @@ fn actor_spiffe_uri(atespace: &str, actor_name: &str) -> String {
 fn credential_header(
 	injection: &protos::ateapi::CredentialHeader,
 	secret: Vec<u8>,
-) -> Result<(HeaderName, HeaderValue), ProxyResponse> {
+) -> Result<(HeaderName, HeaderValue), ProxyError> {
 	let name = HeaderName::from_str(&injection.header).map_err(|error| {
 		ProxyError::SubstrateEgressDenied(format!("invalid credential header: {error}"))
 	})?;
 	if protected_credential_header(&name) {
-		return Err(
-			ProxyError::SubstrateEgressDenied(format!(
-				"credential effects cannot modify protected header {name}"
-			))
-			.into(),
-		);
+		return Err(ProxyError::SubstrateEgressDenied(format!(
+			"credential effects cannot modify protected header {name}"
+		)));
 	}
 	let secret = credential_secret(secret)?;
 	let mut value = injection.prefix.as_bytes().to_vec();
@@ -415,16 +408,13 @@ fn actor_jwt_error(status: tonic::Status) -> ProxyError {
 	}
 }
 
-fn credential_secret(secret: Vec<u8>) -> Result<Vec<u8>, ProxyResponse> {
+fn credential_secret(secret: Vec<u8>) -> Result<Vec<u8>, ProxyError> {
 	let secret = secret.strip_suffix(b"\n").unwrap_or(&secret);
 	let secret = secret.strip_suffix(b"\r").unwrap_or(secret);
 	if secret.is_empty() || secret.iter().any(|byte| byte.is_ascii_control()) {
-		return Err(
-			ProxyError::SubstrateEgressUnavailable(
-				"credential provider returned an unusable secret".to_owned(),
-			)
-			.into(),
-		);
+		return Err(ProxyError::SubstrateEgressUnavailable(
+			"credential provider returned an unusable secret".to_owned(),
+		));
 	}
 	Ok(secret.to_vec())
 }
@@ -533,7 +523,7 @@ enum MatchPhase {
 fn matching_rule<'a>(
 	policy: &'a protos::ateapi::EgressPolicy,
 	req: &Request,
-) -> Result<&'a protos::ateapi::EgressRule, ProxyResponse> {
+) -> Result<&'a protos::ateapi::EgressRule, ProxyError> {
 	let destination = req
 		.extensions()
 		.get::<cel::DestinationContext>()
@@ -557,7 +547,7 @@ fn matching_rule<'a>(
 		phase,
 	)
 	.ok_or_else(|| {
-		ProxyError::SubstrateEgressDenied("actor egress policy denied destination".to_owned()).into()
+		ProxyError::SubstrateEgressDenied("actor egress policy denied destination".to_owned())
 	})
 }
 

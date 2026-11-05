@@ -282,7 +282,7 @@ impl crate::store::RequestPolicyTrait for RateLimits {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut http::Request,
-	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<http::PolicyResponse, ProxyError> {
 		let exec = Executor::new_request(req);
 		let mut status: Option<RateLimitStatus> = None;
 		let mut taken = Vec::new();
@@ -298,7 +298,7 @@ impl crate::store::RequestPolicyTrait for RateLimits {
 					for bucket in taken {
 						bucket.refund();
 					}
-					return Err(e.into());
+					return Err(e);
 				},
 			}
 		}
@@ -437,6 +437,7 @@ mod policy_tests {
 			let mut req = request("alice");
 			req.extensions_mut().insert(crate::cel::RequestModel {
 				request_model: model.into(),
+				original_model: model.into(),
 			});
 			req
 		};

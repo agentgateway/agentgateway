@@ -275,6 +275,10 @@ pub struct LLMRequest {
 	pub input_format: InputFormat,
 	pub cache_convention: CacheTokenConvention,
 	pub request_model: Strng,
+	/// The model the client asked for, before any virtual model or alias rewrite. Unset when the
+	/// model was not rewritten.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub original_model: Option<Strng>,
 	pub provider: Strng,
 	pub streaming: bool,
 	pub params: LLMRequestParams,

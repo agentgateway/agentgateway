@@ -678,9 +678,11 @@ pub mod from_embeddings {
 }
 
 pub mod from_completions {
-	use std::collections::HashMap;
+	use std::cell::RefCell;
+	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;
 
+	use agent_core::strng;
 	use agent_http::Body;
 	use bytes::Bytes;
 	use itertools::Itertools;
@@ -689,6 +691,7 @@ pub mod from_completions {
 
 	use super::helpers;
 	use crate::bedrock::Provider;
+	use crate::conversion::completions::parse_data_url;
 	use crate::types::ResponseType;
 	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
@@ -711,6 +714,7 @@ pub mod from_completions {
 	fn text_blocks_from_user_content(
 		content: &completions::RequestUserMessageContent,
 		cache_points_used: &mut usize,
+		used_doc_names: &RefCell<HashSet<String>>,
 	) -> Result<Vec<bedrock::ContentBlock>, AIError> {
 		let mut out = Vec::new();
 		match content {
@@ -736,8 +740,54 @@ pub mod from_completions {
 								cache_points_used,
 							);
 						},
-						completions::RequestUserMessageContentPart::InputAudio(_)
-						| completions::RequestUserMessageContentPart::File(_) => {},
+						completions::RequestUserMessageContentPart::File(file) => {
+							let file_data = file.file.file_data.as_deref().unwrap_or_default();
+							let Some((media_type, data)) = parse_data_url(file_data) else {
+								if let Some(file_id) = file.file.file_id.as_deref() {
+									return Err(AIError::UnsupportedConversion(strng::new(format!(
+										"bedrock path cannot resolve OpenAI file_id ({file_id}); send file.file_data as an inline data: URI"
+									))));
+								}
+								return Err(AIError::UnsupportedConversion(strng::literal!(
+									"file content part requires file.file_data as an inline base64 data: URI"
+								)));
+							};
+							let format = super::from_responses::derive_doc_format(
+								Some(media_type),
+								file.file.filename.as_deref(),
+							)?;
+							// Bedrock requires document names to be unique within a request; track
+							// names already used so repeated filenames (or missing ones) get a
+							// numeric suffix.
+							let mut name =
+								super::from_responses::sanitize_doc_name(file.file.filename.as_deref());
+							{
+								let mut used = used_doc_names.borrow_mut();
+								if !used.insert(name.clone()) {
+									let mut i = 2;
+									name = loop {
+										let candidate = format!("{name} [{i}]");
+										if used.insert(candidate.clone()) {
+											break candidate;
+										}
+										i += 1;
+									};
+								}
+							}
+							out.push(bedrock::ContentBlock::Document(bedrock::DocumentBlock {
+								format: format.to_string(),
+								name,
+								source: bedrock::DocumentSource {
+									bytes: data.to_string(),
+								},
+							}));
+							helpers::maybe_insert_cache_point(
+								&mut out,
+								file.prompt_cache_breakpoint.as_ref(),
+								cache_points_used,
+							);
+						},
+						completions::RequestUserMessageContentPart::InputAudio(_) => {},
 					}
 				}
 			},
@@ -961,6 +1011,7 @@ pub mod from_completions {
 			}
 		}
 		let mut cache_points_used = 0;
+		let used_doc_names = RefCell::new(HashSet::<String>::new());
 		let has_explicit_system_cache = system_parts.iter().any(|(_, marked)| marked.is_some());
 		let system_content = if system_parts.is_empty() {
 			None
@@ -1036,7 +1087,8 @@ pub mod from_completions {
 			let msg = match msg {
 				completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_) => None,
 				completions::RequestMessage::User(user) => {
-					let content = text_blocks_from_user_content(&user.content, &mut cache_points_used)?;
+					let content =
+						text_blocks_from_user_content(&user.content, &mut cache_points_used, &used_doc_names)?;
 					(!content.is_empty()).then_some(bedrock::Message {
 						role: bedrock::Role::User,
 						content,
@@ -1490,6 +1542,7 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
+	use std::cell::RefCell;
 	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;
 
@@ -1560,6 +1613,7 @@ pub mod from_messages {
 			}
 		}
 		let mut cache_points_used = 0;
+		let used_doc_names = RefCell::new(HashSet::<String>::new());
 		// Converse placement note (AWS docs):
 		// - Anthropic-specific params are sent via additionalModelRequestFields for Converse:
 		//   https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-call.html
@@ -1876,10 +1930,61 @@ pub mod from_messages {
 						None,
 					),
 					messages::ContentBlock::Document(messages::ContentDocumentBlock {
+						source,
 						cache_control,
+						title,
 						..
-					})
-					| messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
+					}) => {
+						let base64_source = (source.get("type").and_then(|v| v.as_str()) == Some("base64"))
+							.then(|| {
+								let media_type = source.get("media_type").and_then(|v| v.as_str())?;
+								let data = source.get("data").and_then(|v| v.as_str())?;
+								Some((media_type, data))
+							})
+							.flatten();
+						let Some((media_type, data)) = base64_source else {
+							// Other document source types (text, url, content) aren't supported by
+							// Bedrock Converse. Keep the breakpoint on the retained prefix when dropping.
+							helpers::insert_cache_point_on_retained_prefix(
+								&mut content,
+								&mut messages,
+								system_content.as_mut(),
+								cache_control.as_ref(),
+								&mut cache_points_used,
+							);
+							continue;
+						};
+						let format =
+							super::from_responses::derive_doc_format(Some(media_type), title.as_deref())?;
+						// Bedrock requires document names to be unique within a request; track
+						// names already used so repeated titles (or missing ones) get a numeric
+						// suffix.
+						let mut name = super::from_responses::sanitize_doc_name(title.as_deref());
+						{
+							let mut used = used_doc_names.borrow_mut();
+							if !used.insert(name.clone()) {
+								let mut i = 2;
+								name = loop {
+									let candidate = format!("{name} [{i}]");
+									if used.insert(candidate.clone()) {
+										break candidate;
+									}
+									i += 1;
+								};
+							}
+						}
+						(
+							bedrock::ContentBlock::Document(bedrock::DocumentBlock {
+								format: format.to_string(),
+								name,
+								source: bedrock::DocumentSource {
+									bytes: data.to_string(),
+								},
+							}),
+							cache_control,
+						)
+					},
+					messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
 						cache_control,
 						..
 					})
@@ -2516,7 +2621,7 @@ pub mod from_responses {
 		}
 	}
 
-	fn derive_doc_format(
+	pub(super) fn derive_doc_format(
 		media_type: Option<&str>,
 		filename: Option<&str>,
 	) -> Result<&'static str, AIError> {
@@ -2537,7 +2642,7 @@ pub mod from_responses {
 	// Bedrock document names may only contain alphanumerics, whitespace, hyphens,
 	// parentheses, and square brackets, with no consecutive whitespace. Notably this
 	// excludes periods, so "notes.txt" must be rewritten before sending.
-	fn sanitize_doc_name(filename: Option<&str>) -> String {
+	pub(super) fn sanitize_doc_name(filename: Option<&str>) -> String {
 		let Some(name) = filename else {
 			return "document".to_string();
 		};
@@ -4292,13 +4397,16 @@ mod helpers {
 		))
 	}
 
-	/// Drops `anthropic-beta` values outside the allowlist from a native Anthropic Messages request,
-	/// only when the allowlist is explicitly configured.
+	/// Drops `anthropic-beta` values from a native Anthropic Messages request: `oauth-*` (Claude Code
+	/// OAuth logins), which Bedrock rejects, and, when the allowlist is explicitly configured, values
+	/// outside it.
 	pub fn filter_native_beta_header(headers: &mut http::HeaderMap) -> Result<(), AIError> {
-		if !*FILTER_NATIVE_BETA_HEADERS {
-			return Ok(());
-		}
-		let joined = allowed_beta_headers(headers, |_| true)?.join(",");
+		let joined = beta_headers(headers, |f| {
+			!f.is_empty()
+				&& !f.starts_with("oauth-")
+				&& (!*FILTER_NATIVE_BETA_HEADERS || ALLOWED_BETA_HEADERS.iter().any(|a| a == f))
+		})?
+		.join(",");
 		headers.remove("anthropic-beta");
 		if !joined.is_empty() {
 			let value = http::HeaderValue::from_str(&joined)
@@ -4314,6 +4422,16 @@ mod helpers {
 		headers: &http::HeaderMap,
 		filter: impl Fn(&str) -> bool,
 	) -> Result<Vec<&str>, AIError> {
+		beta_headers(headers, |feature| {
+			ALLOWED_BETA_HEADERS.iter().any(|f| f == feature) && filter(feature)
+		})
+	}
+
+	/// Comma-separated `anthropic-beta` values, across all headers, that pass `filter`.
+	fn beta_headers(
+		headers: &http::HeaderMap,
+		filter: impl Fn(&str) -> bool,
+	) -> Result<Vec<&str>, AIError> {
 		let mut features = Vec::new();
 		for value in headers.get_all("anthropic-beta") {
 			let header_str = value
@@ -4323,7 +4441,7 @@ mod helpers {
 				header_str
 					.split(',')
 					.map(str::trim)
-					.filter(|feature| ALLOWED_BETA_HEADERS.iter().any(|f| f == feature) && filter(feature)),
+					.filter(|feature| filter(feature)),
 			);
 		}
 		Ok(features)

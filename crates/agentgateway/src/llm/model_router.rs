@@ -1,6 +1,7 @@
 use std::sync::{Arc, LazyLock};
 
 use agent_core::strng;
+use agent_policy::PolicyError;
 use bytes::Bytes;
 use futures_util::stream;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -11,6 +12,7 @@ use serde_json::Value;
 
 use crate::http::{self, Request, RequestBodyExt, Response};
 use crate::llm::router_callout::VirtualModelCalloutFailureMode;
+use crate::proxy::ProxyResponseReason;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{
 	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
@@ -227,10 +229,20 @@ pub enum VirtualModelRouting {
 	Callout(Arc<llm::router_callout::VirtualModelCallout>),
 }
 
-/// The model name the client asked for, before any virtual model rewrite. The router stores it as
-/// a request extension so the proxy can attach it to the request log.
+/// The model name the client asked for, before any virtual model or alias rewrite. Stored as a
+/// request extension so it can be attached to the request log and used for cost lookups.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OriginalModel(pub String);
+
+impl OriginalModel {
+	/// Records the client's model before a rewrite. A model router runs first, so keep its value:
+	/// that is the name the client actually sent.
+	pub(crate) fn record(extensions: &mut ::http::Extensions, model: String) {
+		if extensions.get::<OriginalModel>().is_none() {
+			extensions.insert(OriginalModel(model));
+		}
+	}
+}
 
 #[apply(schema_ser_schema!)]
 pub struct WeightedTarget {
@@ -268,11 +280,64 @@ pub struct ResolvedBackend {
 }
 
 pub enum ResolveResult {
+	/// A response the router serves itself, such as the model list.
 	DirectResponse(Response),
+	Rejected(ProxyResponseReason, Response),
+	Error(Error),
 	Backend(ResolvedBackend),
 }
 
+/// Model routing failures that are logged as errors. Clients get the same JSON error body as other
+/// model router rejections.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	#[error("model {0} is not allowed for this API key")]
+	ApiKeyModelDenied(String),
+	#[error("virtual model {model} callout failed: {cause}")]
+	CalloutFailed { model: String, cause: String },
+}
+
+impl Error {
+	pub fn reason(&self) -> ProxyResponseReason {
+		match self {
+			Error::ApiKeyModelDenied(_) => ProxyResponseReason::Authorization,
+			Error::CalloutFailed { .. } => ProxyResponseReason::ModelRouting,
+		}
+	}
+}
+
+impl PolicyError for Error {
+	fn status(&self) -> ::http::StatusCode {
+		match self {
+			Error::ApiKeyModelDenied(_) => ::http::StatusCode::FORBIDDEN,
+			Error::CalloutFailed { .. } => ::http::StatusCode::SERVICE_UNAVAILABLE,
+		}
+	}
+
+	fn external_message(&self) -> std::borrow::Cow<'static, str> {
+		match self {
+			Error::ApiKeyModelDenied(_) => "Model is not allowed for this API key".into(),
+			Error::CalloutFailed { model, .. } => format!("Virtual model {model} callout failed").into(),
+		}
+	}
+
+	fn into_response(self) -> Result<Response, Self> {
+		let code = match self {
+			Error::ApiKeyModelDenied(_) => "model_not_allowed",
+			Error::CalloutFailed { .. } => "virtual_model_callout_failed",
+		};
+		Ok(llm_error_response(
+			self.status(),
+			&self.external_message(),
+			code,
+		))
+	}
+}
+
 type RouterResult<T> = Result<T, Box<Response>>;
+
+/// Bounds virtual model nesting so a cycle cannot loop forever.
+const MAX_VIRTUAL_MODEL_DEPTH: usize = 4;
 
 struct RequestedModel {
 	model: String,
@@ -352,11 +417,14 @@ impl ModelRouter {
 				Ok(())
 			});
 			if rewritten.is_err() {
-				return ResolveResult::DirectResponse(llm_error_response(
-					::http::StatusCode::NOT_FOUND,
-					"Request does not match llm.pathPrefix",
-					"not_found",
-				));
+				return ResolveResult::Rejected(
+					ProxyResponseReason::NotFound,
+					llm_error_response(
+						::http::StatusCode::NOT_FOUND,
+						"Request does not match llm.pathPrefix",
+						"not_found",
+					),
+				);
 			}
 			req
 				.extensions_mut()
@@ -372,17 +440,17 @@ impl ModelRouter {
 				::http::header::ALLOW,
 				::http::HeaderValue::from_static("POST"),
 			);
-			return ResolveResult::DirectResponse(response);
+			return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, response);
 		}
 		if is_model_list_request(req) {
 			return ResolveResult::DirectResponse(self.model_list_response(req, catalog));
 		}
 		let requested_model = match requested_model(req).await {
 			Ok(requested_model) => requested_model,
-			Err(resp) => return ResolveResult::DirectResponse(*resp),
+			Err(resp) => return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp),
 		};
 		if !api_key_model_authorized(req, &requested_model.model) {
-			return ResolveResult::DirectResponse(api_key_model_authorization_denied_response());
+			return ResolveResult::Error(Error::ApiKeyModelDenied(requested_model.model));
 		}
 		req
 			.extensions_mut()
@@ -404,8 +472,13 @@ impl ModelRouter {
 
 		match self.resolve_concrete_model(&requested_model.model, false, req) {
 			Ok(Some(route)) => ResolveResult::Backend(route),
-			Ok(None) => ResolveResult::DirectResponse(model_not_found_response()),
-			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
+			Ok(None) => {
+				ResolveResult::Rejected(ProxyResponseReason::NotFound, model_not_found_response())
+			},
+			Err(()) => ResolveResult::Rejected(
+				ProxyResponseReason::Authorization,
+				model_authorization_denied_response(),
+			),
 		}
 	}
 
@@ -432,8 +505,9 @@ impl ModelRouter {
 							// Now check it still matches the model match (e.g 'foo/*') and we are authorized for this model
 							model_name_matches(&model.name, name) && api_key_model_authorized(req, name)
 						})
-						.map(|(id, name)| {
-							llm::model_list::ModelInfo::new(
+						.map(|(id, name)| llm::model_list::ModelInfo {
+							preferred_endpoints: discovery.preferred_endpoints(id, &catalog),
+							..llm::model_list::ModelInfo::new(
 								name.into_owned(),
 								model.created,
 								Some(discovery.provider.clone()),
@@ -496,22 +570,26 @@ impl ModelRouter {
 		model: &VirtualModelRoute,
 		catalog: &llm::catalog::CatalogSnapshot,
 	) -> llm::model_list::ModelInfo {
-		let targets: Vec<&str> = match &model.routing {
-			VirtualModelRouting::Weighted(targets) => targets.iter().map(|t| t.model.as_str()).collect(),
-			VirtualModelRouting::Conditional(targets) => {
-				targets.iter().map(|t| t.model.as_str()).collect()
-			},
+		let targets: Vec<(&str, bool)> = match &model.routing {
+			VirtualModelRouting::Weighted(targets) => targets
+				.iter()
+				.map(|t| (t.model.as_str(), t.invalid))
+				.collect(),
+			VirtualModelRouting::Conditional(targets) => targets
+				.iter()
+				.map(|t| (t.model.as_str(), t.invalid))
+				.collect(),
 			// Failover targets are compiled into a backend and callouts pick targets at request time.
 			VirtualModelRouting::Failover { .. } | VirtualModelRouting::Callout(_) => vec![],
 		};
 		let targets = targets
 			.into_iter()
-			.map(|target| {
-				// An unresolved target leaves its metadata unknown rather than being skipped.
+			.map(|(target, invalid)| {
+				// An unresolved or invalid target leaves its metadata unknown rather than being skipped.
 				match self
 					.models
 					.iter()
-					.find(|route| model_name_matches(&route.name, target))
+					.find(|route| !invalid && model_name_matches(&route.name, target))
 				{
 					Some(route) => model_info(route, target.to_string(), catalog),
 					None => llm::model_list::ModelInfo::default(),
@@ -529,99 +607,140 @@ impl ModelRouter {
 		client: &PolicyClient,
 	) -> ResolveResult {
 		let mut fields = Vec::new();
-		let (target, invalid) = match &virtual_model.routing {
-			VirtualModelRouting::Weighted(targets) => {
-				match targets.choose_weighted(&mut rand::rng(), |target| target.weight) {
-					Ok(target) => (target.model.clone(), target.invalid),
-					Err(err) => {
-						tracing::debug!(%err, "failed to select weighted virtual model target");
-						return ResolveResult::DirectResponse(llm_error_response(
-							::http::StatusCode::NOT_FOUND,
-							&format!("Virtual model {} could not be resolved", virtual_model.name),
-							"virtual_model_not_resolved",
-						));
-					},
-				}
-			},
-			VirtualModelRouting::Failover { backend } => {
-				return ResolveResult::Backend(ResolvedBackend {
-					backend: backend.clone(),
-					route_type: classify_route(req.uri().path()).unwrap_or(llm::RouteType::Passthrough),
-					llm_policy: virtual_model.llm_policy.clone(),
-				});
-			},
-			VirtualModelRouting::Conditional(targets) => {
-				let exec = cel::Executor::new_request(req);
-				match targets.iter().find(|target| {
-					target
-						.when
-						.as_ref()
-						.map(|expr| exec.eval_bool(expr))
-						.unwrap_or(true)
-				}) {
-					Some(target) => (target.model.clone(), target.invalid),
-					None => {
-						return ResolveResult::DirectResponse(llm_error_response(
-							::http::StatusCode::BAD_REQUEST,
-							&format!(
-								"Virtual model {} did not match any conditional target",
-								virtual_model.name
-							),
-							"virtual_model_no_matching_target",
-						));
-					},
-				}
-			},
-			VirtualModelRouting::Callout(callout) => {
-				let selection = match callout.select(client, req).await {
-					Ok(selection) if self.has_model(&selection.model) => Some(selection),
-					Ok(selection) => {
-						tracing::debug!(
-							virtual_model = %virtual_model.name,
-							target_model = %selection.model,
-							"virtual model callout selected unknown model",
-						);
-						None
-					},
-					Err(err) => {
-						tracing::debug!(virtual_model = %virtual_model.name, %err, "virtual model callout failed");
-						None
-					},
-				};
-				match (selection, &callout.failure_mode) {
-					(Some(selection), _) => {
-						fields = selection.fields;
-						(selection.model, false)
-					},
-					(None, VirtualModelCalloutFailureMode::Fallback(model)) => (model.clone(), false),
-					(None, VirtualModelCalloutFailureMode::FailClosed) => {
-						return ResolveResult::DirectResponse(llm_error_response(
-							::http::StatusCode::SERVICE_UNAVAILABLE,
-							&format!("Virtual model {} callout failed", virtual_model.name),
-							"virtual_model_callout_failed",
-						));
-					},
-				}
-			},
+		let mut virtual_model = virtual_model;
+		let mut depth = 0;
+		let target = loop {
+			let (target, invalid) = match &virtual_model.routing {
+				VirtualModelRouting::Weighted(targets) => {
+					match targets.choose_weighted(&mut rand::rng(), |target| target.weight) {
+						Ok(target) => (target.model.clone(), target.invalid),
+						Err(err) => {
+							tracing::debug!(%err, "failed to select weighted virtual model target");
+							return ResolveResult::Rejected(
+								ProxyResponseReason::ModelRouting,
+								llm_error_response(
+									::http::StatusCode::NOT_FOUND,
+									&format!("Virtual model {} could not be resolved", virtual_model.name),
+									"virtual_model_not_resolved",
+								),
+							);
+						},
+					}
+				},
+				VirtualModelRouting::Failover { backend } => {
+					// A callout earlier in the chain may have set fields; apply them since we will not reach the
+					// rewrite below. The failover providers override the model themselves.
+					if !fields.is_empty()
+						&& let Err(resp) = Box::pin(rewrite_request_model(
+							req,
+							location,
+							&virtual_model.name,
+							fields,
+						))
+						.await
+					{
+						return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp);
+					}
+					return ResolveResult::Backend(ResolvedBackend {
+						backend: backend.clone(),
+						route_type: classify_route(req.uri().path()).unwrap_or(llm::RouteType::Passthrough),
+						llm_policy: virtual_model.llm_policy.clone(),
+					});
+				},
+				VirtualModelRouting::Conditional(targets) => {
+					let exec = cel::Executor::new_request(req);
+					match targets.iter().find(|target| {
+						target
+							.when
+							.as_ref()
+							.map(|expr| exec.eval_bool(expr))
+							.unwrap_or(true)
+					}) {
+						Some(target) => (target.model.clone(), target.invalid),
+						None => {
+							return ResolveResult::Rejected(
+								ProxyResponseReason::ModelRouting,
+								llm_error_response(
+									::http::StatusCode::BAD_REQUEST,
+									&format!(
+										"Virtual model {} did not match any conditional target",
+										virtual_model.name
+									),
+									"virtual_model_no_matching_target",
+								),
+							);
+						},
+					}
+				},
+				VirtualModelRouting::Callout(callout) => {
+					let selection = match callout.select(client, req).await {
+						Ok(selection) if self.has_model(&selection.model) => Ok(selection),
+						Ok(selection) => Err(format!("selected unknown model {}", selection.model)),
+						Err(err) => Err(err.to_string()),
+					};
+					match (selection, &callout.failure_mode) {
+						(Ok(selection), _) => {
+							fields.extend(selection.fields);
+							(selection.model, false)
+						},
+						(Err(cause), VirtualModelCalloutFailureMode::Fallback(model)) => {
+							tracing::debug!(virtual_model = %virtual_model.name, %cause, "virtual model callout failed, using fallback");
+							(model.clone(), false)
+						},
+						(Err(cause), VirtualModelCalloutFailureMode::FailClosed) => {
+							return ResolveResult::Error(Error::CalloutFailed {
+								model: virtual_model.name.clone(),
+								cause,
+							});
+						},
+					}
+				},
+			};
+			if invalid {
+				tracing::debug!(
+					virtual_model = %virtual_model.name,
+					target_model = %target,
+					"virtual model selected an invalid target",
+				);
+				return ResolveResult::Rejected(
+					ProxyResponseReason::ModelRouting,
+					llm_error_response(
+						::http::StatusCode::NOT_FOUND,
+						&format!(
+							"Virtual model {} selected invalid target {target}",
+							virtual_model.name
+						),
+						"virtual_model_target_not_found",
+					),
+				);
+			}
+			// A target may itself be a virtual model; keep resolving until we reach a concrete model.
+			// A target with the virtual model's own name refers to the concrete model it shadows.
+			let next = (target != virtual_model.name)
+				.then(|| self.virtual_models.iter().find(|m| m.name == target))
+				.flatten();
+			let Some(next) = next else {
+				break target;
+			};
+			depth += 1;
+			if depth >= MAX_VIRTUAL_MODEL_DEPTH {
+				return ResolveResult::Rejected(
+					ProxyResponseReason::ModelRouting,
+					llm_error_response(
+						::http::StatusCode::NOT_FOUND,
+						&format!(
+							"Virtual model {} exceeded the maximum nesting depth",
+							virtual_model.name
+						),
+						"virtual_model_not_resolved",
+					),
+				);
+			}
+			virtual_model = next;
 		};
-		if invalid {
-			tracing::debug!(
-				virtual_model = %virtual_model.name,
-				target_model = %target,
-				"virtual model selected an invalid target",
-			);
-			return ResolveResult::DirectResponse(llm_error_response(
-				::http::StatusCode::NOT_FOUND,
-				&format!(
-					"Virtual model {} selected invalid target {target}",
-					virtual_model.name
-				),
-				"virtual_model_target_not_found",
-			));
-		}
 
 		if let Err(resp) = Box::pin(rewrite_request_model(req, location, &target, fields)).await {
-			return ResolveResult::DirectResponse(*resp);
+			return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp);
 		}
 		match self.resolve_concrete_model(&target, true, req) {
 			Ok(Some(route)) => ResolveResult::Backend(route),
@@ -631,24 +750,31 @@ impl ModelRouter {
 					target_model = %target,
 					"virtual model selected target with no declared concrete model",
 				);
-				ResolveResult::DirectResponse(llm_error_response(
-					::http::StatusCode::NOT_FOUND,
-					&format!(
-						"Virtual model {} selected target {target}, but no matching model was found",
-						virtual_model.name
+				ResolveResult::Rejected(
+					ProxyResponseReason::ModelRouting,
+					llm_error_response(
+						::http::StatusCode::NOT_FOUND,
+						&format!(
+							"Virtual model {} selected target {target}, but no matching model was found",
+							virtual_model.name
+						),
+						"virtual_model_target_not_found",
 					),
-					"virtual_model_target_not_found",
-				))
+				)
 			},
-			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
+			Err(()) => ResolveResult::Rejected(
+				ProxyResponseReason::Authorization,
+				model_authorization_denied_response(),
+			),
 		}
 	}
 
 	fn has_model(&self, model: &str) -> bool {
-		self
-			.models
-			.iter()
-			.any(|route| model_name_matches(&route.name, model))
+		self.virtual_models.iter().any(|route| route.name == model)
+			|| self
+				.models
+				.iter()
+				.any(|route| model_name_matches(&route.name, model))
 	}
 
 	fn resolve_concrete_model(
@@ -699,14 +825,6 @@ fn model_authorization_denied_response() -> Response {
 		::http::StatusCode::FORBIDDEN,
 		"Model authorization denied",
 		"model_authorization_denied",
-	)
-}
-
-fn api_key_model_authorization_denied_response() -> Response {
-	llm_error_response(
-		::http::StatusCode::FORBIDDEN,
-		"Model is not allowed for this API key",
-		"model_not_allowed",
 	)
 }
 
@@ -786,11 +904,15 @@ fn model_info(
 	let Some(discovery) = &route.discovery else {
 		return llm::model_list::ModelInfo::new(name, route.created, None, None);
 	};
-	let entry = catalog
+	let id = catalog
 		.model_ids(&discovery.provider)
 		.map(|ids| discovery.catalog_model(&name, ids))
-		.and_then(|id| catalog.model(&discovery.provider, &id));
-	llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry)
+		.unwrap_or_else(|| discovery.model.as_deref().unwrap_or(&name).to_string());
+	let entry = catalog.model(&discovery.provider, &id);
+	llm::model_list::ModelInfo {
+		preferred_endpoints: discovery.preferred_endpoints(&id, catalog),
+		..llm::model_list::ModelInfo::new(name, route.created, Some(discovery.provider.clone()), entry)
+	}
 }
 
 fn is_responses_websocket(req: &Request) -> bool {
@@ -864,8 +986,12 @@ fn model_name_matches(pattern: &str, model: &str) -> bool {
 /// Exposes the request model as `llm.requestModel` and, if requested, the parsed JSON body as
 /// `llmRequest` to policy CEL.
 pub(crate) async fn set_llm_cel_context(req: &mut Request, include_body: bool) -> RouterResult<()> {
-	// Clear first so a failed parse below leaves no model rather than a stale one.
-	req.extensions_mut().remove::<cel::RequestModel>();
+	// Clear first so a failed parse below leaves no model rather than a stale one. This runs again
+	// after route policies and virtual model rewrites, so keep the model seen first.
+	let previous = req
+		.extensions_mut()
+		.remove::<cel::RequestModel>()
+		.map(|m| m.original_model);
 	let path_model = llm::types::detect::extract_model_from_path(req.uri().path()).is_some();
 	if include_body || !path_model {
 		// Reject unreadable bodies (too large, or failing to decode) rather than evaluating policies
@@ -876,8 +1002,16 @@ pub(crate) async fn set_llm_cel_context(req: &mut Request, include_body: bool) -
 		let _ = json_body(req).await;
 	}
 	if let Ok(requested) = requested_model(req).await {
+		let request_model = strng::new(requested.model);
+		let original_model = req
+			.extensions()
+			.get::<OriginalModel>()
+			.map(|m| strng::new(&m.0))
+			.or(previous)
+			.unwrap_or_else(|| request_model.clone());
 		req.extensions_mut().insert(cel::RequestModel {
-			request_model: requested.model.into(),
+			request_model,
+			original_model,
 		});
 	}
 	Ok(())
@@ -996,6 +1130,7 @@ pub(crate) fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult
 	let Some(path) = rewrite_path_model(path_and_query.path(), target) else {
 		return Ok(());
 	};
+	let original = crate::llm::types::detect::extract_model_from_path(path_and_query.path());
 	let path_and_query = if let Some(query) = path_and_query.query() {
 		format!("{path}?{query}")
 	} else {
@@ -1019,6 +1154,9 @@ pub(crate) fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult
 			"request_uri_rewrite_failed",
 		))
 	})?;
+	if let Some(original) = original {
+		OriginalModel::record(req.extensions_mut(), original.to_string());
+	}
 	Ok(())
 }
 
@@ -1096,9 +1234,10 @@ pub(crate) async fn rewrite_multipart_request_model(
 		return Ok(());
 	};
 	let body = body_bytes(req).await?;
-	let Some(body) = rewrite_multipart_body_model(&body, &boundary, target).await? else {
+	let Some((body, original)) = rewrite_multipart_body_model(&body, &boundary, target).await? else {
 		return Ok(());
 	};
+	OriginalModel::record(req.extensions_mut(), original);
 	req.replace_body_bytes(body);
 	req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
 	Ok(())
@@ -1137,12 +1276,12 @@ pub(crate) async fn rewrite_multipart_body_model(
 	body: &Bytes,
 	boundary: &str,
 	target: &str,
-) -> RouterResult<Option<Bytes>> {
+) -> RouterResult<Option<(Bytes, String)>> {
 	// Parse once to avoid rebuilding an already-correct body. Comparing decoded text also
-	// respects a model field's declared charset.
+	// respects a model field's declared charset. Returns the rewritten body and the replaced model.
 	let stream = stream::once(std::future::ready(Ok::<Bytes, multer::Error>(body.clone())));
 	let mut multipart = multer::Multipart::new(stream, boundary);
-	let mut needs_rewrite = false;
+	let mut original = None;
 	while let Some(field) = multipart.next_field().await.map_err(|err| {
 		tracing::debug!(%err, "failed to parse LLM multipart request body for model rewrite");
 		Box::new(llm_error_response(
@@ -1162,13 +1301,13 @@ pub(crate) async fn rewrite_multipart_body_model(
 				"invalid_model",
 			))
 		})?;
-		if model != target {
-			needs_rewrite = true;
+		if model != target && original.is_none() {
+			original = Some(model);
 		}
 	}
-	if !needs_rewrite {
+	let Some(original) = original else {
 		return Ok(None);
-	}
+	};
 
 	// Multer does not expose raw offsets, so rebuild the multipart envelope from the fields it
 	// parsed. File and non-model field bytes are preserved; header formatting is normalized.
@@ -1228,7 +1367,7 @@ pub(crate) async fn rewrite_multipart_body_model(
 	rewritten.extend_from_slice(b"--");
 	rewritten.extend_from_slice(boundary.as_bytes());
 	rewritten.extend_from_slice(b"--\r\n");
-	Ok(Some(Bytes::from(rewritten)))
+	Ok(Some((Bytes::from(rewritten), original)))
 }
 
 async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
@@ -1450,6 +1589,13 @@ mod tests {
 			.respond_with(ResponseTemplate::new(500))
 			.mount(&server)
 			.await;
+		Mock::given(path("/nested"))
+			.respond_with(
+				ResponseTemplate::new(200)
+					.set_body_json(serde_json::json!({"model": "ha", "effort": "low"})),
+			)
+			.mount(&server)
+			.await;
 
 		let model = |name: &str| ModelRoute {
 			discovery: None,
@@ -1512,6 +1658,28 @@ mod tests {
 						"transformation": {"model": "callout.body.model"},
 					}),
 				),
+				callout(
+					"nested",
+					serde_json::json!({
+						"host": format!("http://{}/nested", server.address()),
+						"transformation": {
+							"model": "callout.body.model",
+							"reasoning_effort": "callout.body.effort",
+						},
+					}),
+				),
+				VirtualModelRoute {
+					name: "ha".to_string(),
+					created: 0,
+					llm_policy: Arc::default(),
+					routing: VirtualModelRouting::Failover {
+						backend: RouteBackendReference {
+							weight: 1,
+							target: RouteBackendTarget::Invalid,
+							inline_policies: vec![],
+						},
+					},
+				},
 			],
 		);
 		let client = crate::test_helpers::policy_client();
@@ -1555,10 +1723,18 @@ mod tests {
 		assert_eq!(body(req).await["model"], "economy-model");
 
 		let (result, _) = resolve("closed").await;
-		let ResolveResult::DirectResponse(resp) = result else {
-			panic!("expected direct response");
+		let ResolveResult::Error(error) = result else {
+			panic!("expected an error");
 		};
-		assert_eq!(resp.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
+		assert_eq!(error.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
+
+		// A callout can select a failover virtual model; its fields still apply.
+		let (result, req) = resolve("nested").await;
+		assert!(matches!(result, ResolveResult::Backend(_)));
+		assert_eq!(
+			body(req).await,
+			serde_json::json!({"model": "ha", "max_tokens": 256, "reasoning_effort": "low"})
+		);
 	}
 
 	#[rstest::rstest]
@@ -1652,7 +1828,7 @@ mod tests {
 				.body(http::Body::empty())
 				.unwrap();
 			assert!(router.trace_path(&req).is_none());
-			let ResolveResult::DirectResponse(response) = router
+			let ResolveResult::Rejected(_, response) = router
 				.resolve(
 					&mut req,
 					&llm::catalog::ModelCatalog::default(),
@@ -1686,7 +1862,7 @@ mod tests {
 			.body(http::Body::from(r#"{"model":"weighted-model"}"#))
 			.expect("valid request");
 
-		let ResolveResult::DirectResponse(resp) = router
+		let ResolveResult::Rejected(_, resp) = router
 			.resolve(
 				&mut req,
 				&llm::catalog::ModelCatalog::default(),
@@ -1735,7 +1911,7 @@ mod tests {
 			.body(http::Body::from(r#"{"model":"conditional-model"}"#))
 			.expect("valid request");
 
-		let ResolveResult::DirectResponse(resp) = router
+		let ResolveResult::Rejected(_, resp) = router
 			.resolve(
 				&mut req,
 				&llm::catalog::ModelCatalog::default(),
@@ -2009,7 +2185,8 @@ mod tests {
 		let rewritten = rewrite_multipart_body_model(&body, "audio-boundary", "upstream-model")
 			.await
 			.expect("multipart body should parse")
-			.expect("model fields should change");
+			.expect("model fields should change")
+			.0;
 		let stream = stream::once(std::future::ready(Ok::<Bytes, multer::Error>(rewritten)));
 		let mut multipart = multer::Multipart::new(stream, "audio-boundary");
 		let mut model_fields = 0;
@@ -2077,7 +2254,8 @@ mod tests {
 			rewrite_multipart_body_model(&Bytes::from(body), "charset-boundary", "upstream-model")
 				.await
 				.expect("multipart body should parse")
-				.expect("model field should change");
+				.expect("model field should change")
+				.0;
 		let stream = stream::once(std::future::ready(Ok::<Bytes, multer::Error>(rewritten)));
 		let mut multipart = multer::Multipart::new(stream, "charset-boundary");
 		let field = multipart

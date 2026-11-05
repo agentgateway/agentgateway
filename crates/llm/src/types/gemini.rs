@@ -278,6 +278,7 @@ impl RequestType for Request {
 			input_format: InputFormat::Gemini,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
+			original_model: None,
 			provider,
 			streaming: self.streaming,
 			params: LLMRequestParams {
@@ -456,6 +457,7 @@ impl RequestType for CountTokensRequest {
 			input_format: InputFormat::GeminiCountTokens,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new(self.model.as_deref().unwrap_or_default()),
+			original_model: None,
 			provider,
 			streaming: false,
 			params: Default::default(),

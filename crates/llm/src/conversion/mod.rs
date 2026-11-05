@@ -1,5 +1,6 @@
 pub mod bedrock;
 pub mod completions;
+pub mod copilot;
 pub mod gemini;
 pub mod messages;
 pub mod namespace_tools;
@@ -83,8 +84,10 @@ pub(crate) fn supports_prompt_cache_breakpoint(model: &str) -> bool {
 	model
 		.strip_prefix("gpt-")
 		.and_then(|model| model.split('-').next())
-		.and_then(|version| version.split_once('.'))
-		.and_then(|(major, minor)| Some((major.parse::<u32>().ok()?, minor.parse::<u32>().ok()?)))
+		.and_then(|version| {
+			let (major, minor) = version.split_once('.').unwrap_or((version, "0"));
+			Some((major.parse::<u32>().ok()?, minor.parse::<u32>().ok()?))
+		})
 		.is_some_and(|version| version >= (5, 6))
 }
 

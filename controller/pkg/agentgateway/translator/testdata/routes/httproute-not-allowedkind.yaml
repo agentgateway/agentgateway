@@ -49,7 +49,8 @@ status:
     parents:
     - conditions:
       - lastTransitionTime: fake
-        message: kind gateway.networking.k8s.io/v1, Kind=HTTPRoute is not allowed
+        message: 'kind HTTPRoute is not allowed by Gateway default/http-mixed-route-kind-gateway
+          listener "only-allow-grpc-routes" (allowed kinds: GRPCRoute)'
         reason: NotAllowedByListeners
         status: "False"
         type: Accepted

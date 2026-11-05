@@ -50,6 +50,7 @@ impl RequestType for Request {
 			input_format: InputFormat::CountTokens,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
+			original_model: None,
 			provider,
 			streaming: false,
 			params: Default::default(),

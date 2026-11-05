@@ -14,7 +14,6 @@ info:
   "response": {
     "object": "list",
     "model": "gemini-embedding-001",
-    "usage": null,
     "data": [
       {
         "object": "embedding",

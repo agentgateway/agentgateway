@@ -778,9 +778,9 @@ spec:
                                                   credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
                                                   file:
-                                                    description: Paths on the agentgateway
-                                                      pod's local filesystem. Required
-                                                      when `kind` is `File`.
+                                                    description: |-
+                                                      Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                      gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                     properties:
                                                       cert:
                                                         description: Path to the client
@@ -876,6 +876,12 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: caCertificateRefs may not be
+                                              combined with a File mtlsCertificateRef;
+                                              use file.root instead
+                                            rule: '!has(self.caCertificateRefs) ||
+                                              !has(self.mtlsCertificateRef) || !self.mtlsCertificateRef.exists(r,
+                                              has(r.kind) && r.kind == ''File'')'
                                           - message: certificateSource SPIFFE may
                                               not be combined with mtlsCertificateRef,
                                               caCertificateRefs, or insecureSkipVerify
@@ -1293,9 +1299,9 @@ spec:
                                                   credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
                                                   file:
-                                                    description: Paths on the agentgateway
-                                                      pod's local filesystem. Required
-                                                      when `kind` is `File`.
+                                                    description: |-
+                                                      Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                      gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                     properties:
                                                       cert:
                                                         description: Path to the client
@@ -1391,6 +1397,12 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: caCertificateRefs may not be
+                                              combined with a File mtlsCertificateRef;
+                                              use file.root instead
+                                            rule: '!has(self.caCertificateRefs) ||
+                                              !has(self.mtlsCertificateRef) || !self.mtlsCertificateRef.exists(r,
+                                              has(r.kind) && r.kind == ''File'')'
                                           - message: certificateSource SPIFFE may
                                               not be combined with mtlsCertificateRef,
                                               caCertificateRefs, or insecureSkipVerify
@@ -1832,9 +1844,9 @@ spec:
                                                   credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
                                                   file:
-                                                    description: Paths on the agentgateway
-                                                      pod's local filesystem. Required
-                                                      when `kind` is `File`.
+                                                    description: |-
+                                                      Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                      gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                     properties:
                                                       cert:
                                                         description: Path to the client
@@ -1930,6 +1942,12 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: caCertificateRefs may not be
+                                              combined with a File mtlsCertificateRef;
+                                              use file.root instead
+                                            rule: '!has(self.caCertificateRefs) ||
+                                              !has(self.mtlsCertificateRef) || !self.mtlsCertificateRef.exists(r,
+                                              has(r.kind) && r.kind == ''File'')'
                                           - message: certificateSource SPIFFE may
                                               not be combined with mtlsCertificateRef,
                                               caCertificateRefs, or insecureSkipVerify
@@ -2769,9 +2787,9 @@ spec:
                                                   credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
                                                   file:
-                                                    description: Paths on the agentgateway
-                                                      pod's local filesystem. Required
-                                                      when `kind` is `File`.
+                                                    description: |-
+                                                      Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                      gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                     properties:
                                                       cert:
                                                         description: Path to the client
@@ -2867,6 +2885,12 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: caCertificateRefs may not be
+                                              combined with a File mtlsCertificateRef;
+                                              use file.root instead
+                                            rule: '!has(self.caCertificateRefs) ||
+                                              !has(self.mtlsCertificateRef) || !self.mtlsCertificateRef.exists(r,
+                                              has(r.kind) && r.kind == ''File'')'
                                           - message: certificateSource SPIFFE may
                                               not be combined with mtlsCertificateRef,
                                               caCertificateRefs, or insecureSkipVerify
@@ -3284,9 +3308,9 @@ spec:
                                                   credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
                                                   file:
-                                                    description: Paths on the agentgateway
-                                                      pod's local filesystem. Required
-                                                      when `kind` is `File`.
+                                                    description: |-
+                                                      Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                                      gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                                                     properties:
                                                       cert:
                                                         description: Path to the client
@@ -3382,6 +3406,12 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: caCertificateRefs may not be
+                                              combined with a File mtlsCertificateRef;
+                                              use file.root instead
+                                            rule: '!has(self.caCertificateRefs) ||
+                                              !has(self.mtlsCertificateRef) || !self.mtlsCertificateRef.exists(r,
+                                              has(r.kind) && r.kind == ''File'')'
                                           - message: certificateSource SPIFFE may
                                               not be combined with mtlsCertificateRef,
                                               caCertificateRefs, or insecureSkipVerify
@@ -5108,10 +5138,19 @@ spec:
                               maxLength: 16384
                               minLength: 1
                               type: string
-                            description: Extra form params; values are CEL expressions
-                              over the incoming request.
+                            description: |-
+                              Extra form params; values are CEL expressions over the incoming request.
+                              Parameters set by the gateway itself (for example `scope`, `audience`, or `client_id`) may not be overridden.
                             maxProperties: 64
                             type: object
+                            x-kubernetes-validations:
+                            - message: additionalParams may not override a reserved
+                                OAuth parameter
+                              rule: self.all(k, !(k.lowerAscii() in ['grant_type',
+                                'subject_token', 'subject_token_type', 'actor_token',
+                                'actor_token_type', 'assertion', 'audience', 'resource',
+                                'scope', 'requested_token_type', 'client_id', 'client_secret',
+                                'client_assertion', 'client_assertion_type']))
                           audiences:
                             description: Audiences sent to the token endpoint.
                             items:
@@ -6658,8 +6697,9 @@ spec:
                             credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                           properties:
                             file:
-                              description: Paths on the agentgateway pod's local filesystem.
-                                Required when `kind` is `File`.
+                              description: |-
+                                Paths on the agentgateway pod's local filesystem, which must be under a directory in the
+                                gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
                               properties:
                                 cert:
                                   description: Path to the client certificate file.
@@ -6745,6 +6785,11 @@ spec:
                         be set together
                       rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                         : true'
+                    - message: caCertificateRefs may not be combined with a File mtlsCertificateRef;
+                        use file.root instead
+                      rule: '!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef)
+                        || !self.mtlsCertificateRef.exists(r, has(r.kind) && r.kind
+                        == ''File'')'
                     - message: certificateSource SPIFFE may not be combined with mtlsCertificateRef,
                         caCertificateRefs, or insecureSkipVerify
                       rule: '!has(self.certificateSource) || self.certificateSource
@@ -7465,13 +7510,48 @@ spec:
                         x-kubernetes-validations:
                         - message: maxConnectionDuration must be at least 1 second
                           rule: duration(self) >= duration('1s')
+                      normalize:
+                        description: |-
+                          `normalize` defines path normalization rules applied before route matching.
+                          The normalized path is used for routing, policies and the upstream request;
+                          access logs keep the original path. Rules are applied in a fixed order
+                          regardless of how they are listed: percent-decoding, then `MergeSlash`,
+                          then `DotSegment`.
+
+                          Malformed percent-encoding and `%00` are rejected with 400 whenever any rule
+                          other than `MergeSlash` is set.
+
+                          `MergeSlash` collapses repeated slashes into one, treating `\` as `/`.
+                          `DotSegment` resolves `.` and `..` segments, treating `%2E` as `.`, `\` as `/`,
+                          and ignoring parameters on dot segments (`..;x`).
+                          `DecodeUnreserved` decodes percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`).
+                          `RejectEscapedSlash` rejects requests whose path contains `%2F` or `%5C` with 400.
+                          `UnescapeSlash` decodes `%2F` and `%5C` into `/`.
+                        items:
+                          enum:
+                          - DecodeUnreserved
+                          - DotSegment
+                          - MergeSlash
+                          - RejectEscapedSlash
+                          - UnescapeSlash
+                          type: string
+                        maxItems: 5
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-type: set
+                        x-kubernetes-validations:
+                        - message: RejectEscapedSlash and UnescapeSlash are mutually
+                            exclusive
+                          rule: '!(self.exists(x, x == ''RejectEscapedSlash'') &&
+                            self.exists(x, x == ''UnescapeSlash''))'
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
                         http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
                         http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
-                        maxConcurrentRequests maxConnectionDuration] must be set
-                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConcurrentRequests),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                        maxConcurrentRequests maxConnectionDuration normalize] must
+                        be set
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConcurrentRequests),has(self.maxConnectionDuration),has(self.normalize)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
@@ -8520,6 +8600,84 @@ spec:
                               rule: (self >= 1 && self <= 4294967295) || self.size()
                                 > 0
                         type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: at least one of the fields in [request response] must
+                        be set
+                      rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
+                        >= 1'
+                  compression:
+                    description: Compresses responses sent to the client and decompresses
+                      request bodies before forwarding.
+                    properties:
+                      request:
+                        description: Compression applied to requests received from
+                          the client.
+                        properties:
+                          decompress:
+                            description: |-
+                              Decompresses request bodies before route-level body-aware policies (rate limiting,
+                              ext_proc, transformations) run and before forwarding to the backend. Authentication,
+                              authorization and gateway-phase policies run first and observe the encoded body.
+                            properties:
+                              algorithms:
+                                description: |-
+                                  Algorithms decoded from request bodies. Bodies using any other (or more than one) encoding
+                                  are forwarded untouched.
+                                  If unset, defaults to Gzip.
+                                items:
+                                  enum:
+                                  - Brotli
+                                  - Deflate
+                                  - Gzip
+                                  - Zstd
+                                  type: string
+                                maxItems: 4
+                                minItems: 1
+                                type: array
+                                x-kubernetes-list-type: set
+                            type: object
+                        type: object
+                        x-kubernetes-validations:
+                        - message: at least one of the fields in [decompress] must
+                            be set
+                          rule: '[has(self.decompress)].filter(x,x==true).size() >=
+                            1'
+                      response:
+                        description: Compression applied to responses sent to the
+                          client.
+                        properties:
+                          compress:
+                            description: |-
+                              Compresses response bodies when the client advertises support in Accept-Encoding.
+                              Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) with a known
+                              length of at least 32 bytes are compressed, so streamed responses are sent as-is.
+                              Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`
+                              are never compressed.
+                            properties:
+                              algorithms:
+                                description: |-
+                                  Algorithms that may be negotiated with the client's Accept-Encoding header.
+                                  When the client accepts several equally, the first listed wins.
+                                  If unset, defaults to Gzip.
+                                items:
+                                  enum:
+                                  - Brotli
+                                  - Deflate
+                                  - Gzip
+                                  - Zstd
+                                  type: string
+                                maxItems: 4
+                                minItems: 1
+                                type: array
+                                x-kubernetes-list-type: set
+                            type: object
+                        type: object
+                        x-kubernetes-validations:
+                        - message: at least one of the fields in [compress] must be
+                            set
+                          rule: '[has(self.compress)].filter(x,x==true).size() >=
+                            1'
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [request response] must
@@ -11504,7 +11662,7 @@ spec:
                 - message: phase PreRouting only supports extAuth, authorization,
                     transformation, extProc, jwtAuthentication, basicAuthentication,
                     apiKeyAuthentication and cors
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.buffer),has(self.csrf),has(self.delay),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.buffer),has(self.compression),has(self.csrf),has(self.delay),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:

@@ -26,6 +26,7 @@ use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
 use crate::http::substrate::{self, ActorIdentity, EgressTlsMode};
+use crate::management::metrics_server::MetricsService;
 use crate::proxy::{ProxyError, WaypointService, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::{AdmissionLabels, TCPLabels};
@@ -40,6 +41,10 @@ use crate::types::agent::{
 use crate::types::discovery::Service;
 use crate::types::frontend;
 use crate::{ProxyInputs, Stores, client};
+
+// Every in-flight request holds this future until it completes, so its size is paid per
+// concurrent request. A larger future usually means some value is now held across an await.
+const PROXY_REQUEST_FUTURE_SIZE: usize = 18 * 1024;
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
@@ -790,12 +795,7 @@ impl Gateway {
 							.await
 						{
 							Ok(identity) => Some(identity),
-							Err(error) => {
-								return Ok(match error {
-									crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
-									crate::proxy::ProxyResponse::DirectResponse(response) => *response,
-								});
-							},
+							Err(error) => return Ok(error.into_response_with_grpc(false)),
 						}
 					} else {
 						None
@@ -1006,7 +1006,7 @@ impl Gateway {
 						dtrace::DebugTracer::maybe_scope(req, |req| async move {
 							proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
 						})
-						.assert_size::<{ 18 * 1024 }>(),
+						.assert_size::<{ PROXY_REQUEST_FUTURE_SIZE }>(),
 					)
 					.await?;
 					close_if_draining(
@@ -1680,6 +1680,9 @@ impl Gateway {
 		// HBONE re-entry bypasses the listening socket, so it must not expose binds
 		// scoped to a concrete address (for example, a loopback-only listener).
 		let Some(bind) = pi.stores.read_binds().find_bind_by_port(socket_addr.port()) else {
+			if let Some(stats) = Self::stats_for_port(&pi, socket_addr.port()) {
+				return Self::serve_stats(stats, req).await;
+			}
 			warn!("no bind for {hbone_addr}");
 			let Ok(_) = req
 				.send_response(build_response(StatusCode::NOT_FOUND))
@@ -1708,6 +1711,29 @@ impl Gateway {
 			drain,
 		)
 		.await
+	}
+
+	fn stats_for_port(pi: &ProxyInputs, port: u16) -> Option<MetricsService> {
+		pi.stats
+			.clone()
+			.filter(|_| pi.cfg.stats_addr.wildcard_port() == Some(port))
+	}
+
+	/// Serves the metrics endpoint over an HBONE tunnel addressed to the stats port, as ztunnel
+	/// exposes a captured pod's own ports to the mesh. No bind, so no routes or policies apply.
+	async fn serve_stats(stats: MetricsService, req: H2Request) {
+		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
+			warn!("failed to send response");
+			return;
+		};
+		let con = agent_hbone::RWStream {
+			stream: resp,
+			buf: Bytes::new(),
+			drain_tx: None,
+		};
+		if let Err(e) = stats.serve_connection(con).await {
+			debug!("hbone stats connection closed: {e}");
+		}
 	}
 }
 
@@ -1783,6 +1809,7 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		http2_keepalive_timeout,
 		max_connection_duration: _, // Not handled here
 		max_concurrent_requests: _, // Not handled here
+		normalize: _,               // Not handled here
 	} = c.unwrap_or(&def);
 
 	if let Some(m) = http1_max_headers {

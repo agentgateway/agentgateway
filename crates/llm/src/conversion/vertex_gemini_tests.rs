@@ -1966,6 +1966,7 @@ mod passthrough {
 				input_format: InputFormat::Gemini,
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: "gemini-2.5-flash".into(),
+				original_model: None,
 				provider: "gcp.vertex_ai".into(),
 				streaming: true,
 				params: Default::default(),

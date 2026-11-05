@@ -20,6 +20,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.name`|string|Human-readable display name.|
 |`config.modelCatalog[].inline.providers.*.models.*.status`|string|Lifecycle stage (alpha, beta, deprecated); absent means generally available.|
 |`config.modelCatalog[].inline.providers.*.models.*.released`|string|Release date, as YYYY-MM-DD or YYYY-MM.|
+|`config.modelCatalog[].inline.providers.*.models.*.endpoints`|[]string|Client endpoints the model serves; absent means a chat model.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates`|object|Base pricing rates for this model.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.output`|string|Cost per 1M output (completion) tokens.|
@@ -33,7 +34,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.rates.perAudioMinute`|string|Cost per minute of input audio, for models billed by duration (such as `whisper-1`).|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers`|[]object|Pricing rules ordered by increasing context threshold within each service tier.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].contextOver`|integer|Context-token threshold above which this rule applies. Defaults to zero.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers[].serviceTier`|enum|Normalized served service tier; absent matches any service tier.<br>Possible values: `standard`, `flex`, `priority`, `reserved`.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].serviceTier`|enum|Normalized served service tier; absent matches any service tier.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `ultrafast`.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates`|object|Pricing rates for this tier, overlaid on the base model rates.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.output`|string|Cost per 1M output (completion) tokens.|
@@ -647,6 +648,13 @@
 |`binds[].listeners[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`binds[].listeners[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`binds[].listeners[].routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`binds[].listeners[].routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`binds[].listeners[].routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`binds[].listeners[].routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`binds[].listeners[].routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`binds[].listeners[].routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`binds[].listeners[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -1596,6 +1604,7 @@
 |`frontendPolicies.http.http2KeepaliveTimeout`|string|Time to wait for an HTTP/2 keepalive ping response.|
 |`frontendPolicies.http.maxConnectionDuration`|string|Maximum time a connection may stay open. After this duration, the connection is gracefully<br>closed after the current in-flight request completes. Useful for even traffic distribution<br>behind load balancers during scaling events.|
 |`frontendPolicies.http.maxConcurrentRequests`|integer|Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests<br>and HTTP/2 streams. Requests over the limit are rejected immediately.|
+|`frontendPolicies.http.normalize`|[]enum|Path normalization rules applied before route matching. The normalized path is used for<br>routing, policies and the upstream request. Access logs keep the original path.<br>Possible values: `mergeSlash`, `dotSegment`, `decodeUnreserved`, `rejectEscapedSlash`, `unescapeSlash`.|
 |`frontendPolicies.tls`|object|Settings for handling incoming TLS connections.|
 |`frontendPolicies.tls.handshakeTimeout`|string|Maximum time allowed to complete the downstream TLS handshake.|
 |`frontendPolicies.tls.alpn`|array|ALPN protocols advertised to downstream clients.|
@@ -2206,6 +2215,13 @@
 |`policies[].policy.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`policies[].policy.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`policies[].policy.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.compression`|object|Compress responses and decompress request bodies.|
+|`policies[].policy.compression.response`|object|Compression applied to responses sent to the client.|
+|`policies[].policy.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`policies[].policy.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`policies[].policy.compression.request`|object|Compression applied to requests received from the client.|
+|`policies[].policy.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`policies[].policy.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`policies[].policy.timeout`|object|Set request timeout limits.|
 |`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -3342,6 +3358,13 @@
 |`routeGroups[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routeGroups[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`routeGroups[].routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`routeGroups[].routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`routeGroups[].routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`routeGroups[].routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`routeGroups[].routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`routeGroups[].routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`routeGroups[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -4969,6 +4992,13 @@
 |`routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`routes[].policies.timeout`|object|Set request timeout limits.|
 |`routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -6685,6 +6715,13 @@
 |`mcp.policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`mcp.policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`mcp.policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.compression`|object|Compress responses and decompress request bodies.|
+|`mcp.policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`mcp.policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`mcp.policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`mcp.policies.compression.request`|object|Compression applied to requests received from the client.|
+|`mcp.policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`mcp.policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`mcp.policies.timeout`|object|Set request timeout limits.|
 |`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -6861,6 +6898,7 @@
 |`ui.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`ui.policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`ui.policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`ui.basePath`|string|basePath is the prefix a reverse proxy in front of the gateway strips before forwarding (e.g. `/agentgateway`).<br>It is added to UI links, assets and login redirects.|
 
 ## Shared types
 

@@ -18,12 +18,15 @@ use super::hyper_helpers;
 use crate::Address;
 
 pub struct Server {
-	s: hyper_helpers::Server<Registry>,
+	s: hyper_helpers::Server<MetricsService>,
 }
 
 impl Server {
 	pub async fn new(addr: Address, drain_rx: DrainWatcher, registry: Registry) -> Result<Self> {
-		hyper_helpers::Server::<Registry>::bind("stats", addr, drain_rx, registry)
+		let service = MetricsService {
+			registry: Arc::new(registry),
+		};
+		hyper_helpers::Server::<MetricsService>::bind("stats", addr, drain_rx, service)
 			.await
 			.map(|s| Server { s })
 	}
@@ -32,13 +35,52 @@ impl Server {
 		self.s.address()
 	}
 
+	pub fn service(&self) -> MetricsService {
+		self.s.state().clone()
+	}
+
 	pub fn spawn(self) {
-		self.s.spawn(|registry, req| async move {
-			match req.uri().path() {
-				"/metrics" | "/stats/prometheus" => handle_metrics(registry, req).await,
-				_ => Ok(hyper_helpers::empty_response(hyper::StatusCode::NOT_FOUND)),
-			}
-		})
+		self
+			.s
+			.spawn(|service, req| async move { service.handle(req).await })
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct MetricsService {
+	registry: Arc<Registry>,
+}
+
+impl MetricsService {
+	pub async fn handle(&self, req: Request<Incoming>) -> Result<Response> {
+		match req.uri().path() {
+			"/metrics" | "/stats/prometheus" => handle_metrics(self.registry.clone(), req).await,
+			_ => Ok(hyper_helpers::empty_response(hyper::StatusCode::NOT_FOUND)),
+		}
+	}
+
+	/// Serves HTTP/1 on an already established connection, such as an HBONE tunnel.
+	pub async fn serve_connection<IO>(self, io: IO) -> Result<()>
+	where
+		IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+	{
+		hyper_helpers::http1_server()
+			.half_close(true)
+			.header_read_timeout(std::time::Duration::from_secs(2))
+			.max_buf_size(8 * 1024)
+			.serve_connection(
+				hyper_util::rt::TokioIo::new(io),
+				hyper::service::service_fn(move |req| {
+					let service = self.clone();
+					async move {
+						Ok::<_, std::convert::Infallible>(service.handle(req).await.unwrap_or_else(|err| {
+							hyper_helpers::plaintext_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+						}))
+					}
+				}),
+			)
+			.await?;
+		Ok(())
 	}
 }
 

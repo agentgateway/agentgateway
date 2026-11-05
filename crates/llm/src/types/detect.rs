@@ -103,6 +103,7 @@ impl RequestType for Request {
 				_ => self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			}
 			.unwrap_or_default(),
+			original_model: None,
 			provider,
 			streaming: self
 				.lookup(lookups::STREAM, |v| v.as_bool())
@@ -213,6 +214,7 @@ mod tests {
 			input_format: crate::InputFormat::Detect(None),
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new("unknown"),
+			original_model: None,
 			provider: strng::new("aws.bedrock"),
 			streaming: false,
 			params: Default::default(),
@@ -553,7 +555,7 @@ mod lookups {
 		// Gemini
 		&["generationConfig", "thinkingConfig", "thinkingLevel"],
 	];
-	pub const USAGE_INPUT_TOKENS: [&[&str]; 8] = [
+	pub const USAGE_INPUT_TOKENS: [&[&str]; 9] = [
 		&["usage", "input_tokens"],
 		&["message", "usage", "input_tokens"],
 		// Responses streaming
@@ -563,13 +565,15 @@ mod lookups {
 		&["usage", "inputTokens"],
 		// Bedrock invoke
 		&["metadata", "usage", "inputTokens"],
+		// Bedrock invoke stream, any model format
+		&["amazon-bedrock-invocationMetrics", "inputTokenCount"],
 		// Gemini generateContent
 		&["usageMetadata", "promptTokenCount"],
 		// Gemini generateContent via Cloud Code, which wraps the payload in a
 		// `response` envelope
 		&["response", "usageMetadata", "promptTokenCount"],
 	];
-	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 7] = [
+	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 8] = [
 		&["usage", "output_tokens"],
 		// Responses streaming
 		&["response", "usage", "output_tokens"],
@@ -578,6 +582,8 @@ mod lookups {
 		&["usage", "outputTokens"],
 		// Bedrock invoke
 		&["metadata", "usage", "outputTokens"],
+		// Bedrock invoke stream, any model format
+		&["amazon-bedrock-invocationMetrics", "outputTokenCount"],
 		// Gemini generateContent
 		&["usageMetadata", "candidatesTokenCount"],
 		// Gemini generateContent via Cloud Code
@@ -630,7 +636,7 @@ mod lookups {
 		// Completions
 		&["usage", "completion_tokens_details", "reasoning_tokens"],
 	];
-	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 7] = [
+	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 8] = [
 		// Responses
 		&["usage", "input_tokens_details", "cache_write_tokens"],
 		// Responses streaming
@@ -648,6 +654,10 @@ mod lookups {
 		&["usage", "cacheWriteInputTokens"],
 		// Bedrock invoke
 		&["metadata", "usage", "cacheWriteInputTokensCount"],
+		&[
+			"amazon-bedrock-invocationMetrics",
+			"cacheWriteInputTokenCount",
+		],
 	];
 	pub const CACHE_CREATION_12H_INPUT_TOKENS: [&[&str]; 2] = [
 		// Responses
@@ -666,7 +676,7 @@ mod lookups {
 			"ttl_12h_tokens",
 		],
 	];
-	pub const CACHED_INPUT_TOKENS: [&[&str]; 7] = [
+	pub const CACHED_INPUT_TOKENS: [&[&str]; 8] = [
 		// Message
 		&["usage", "cache_read_input_tokens"],
 		&["message", "usage", "cache_read_input_tokens"],
@@ -679,6 +689,10 @@ mod lookups {
 		&["usage", "cacheReadInputTokens"],
 		// Bedrock invoke
 		&["metadata", "usage", "cacheReadInputTokenCount"],
+		&[
+			"amazon-bedrock-invocationMetrics",
+			"cacheReadInputTokenCount",
+		],
 	];
 	pub const SERVICE_TIER: [&[&str]; 3] = [
 		// Completions

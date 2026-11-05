@@ -10,3 +10,23 @@ providers:
         tags: [adaptive_thinking]
       "*sonnet-4.6*":
         tags: [adaptive_thinking]
+  # TODO: drop once https://github.com/anomalyco/models.dev/pull/10060 lands and models.dev maps typesafe.
+  typesafe:
+    models:
+      jev-1.13.0:
+        rates: &jev-rates
+          input: "0.042"
+          output: "0"
+        capabilities: &jev-capabilities
+          structuredOutput: true
+      jev-1.14.0:
+        rates: *jev-rates
+        capabilities: *jev-capabilities
+      jev-latest:
+        name: Jev Latest
+        rates: *jev-rates
+        capabilities: *jev-capabilities
+      jev-preview:
+        name: Jev Preview
+        rates: *jev-rates
+        capabilities: *jev-capabilities

@@ -428,7 +428,7 @@ pub struct RawHBONE {
 	/// Maximum concurrent streams per pooled connection. Defaults to 100.
 	pool_max_streams_per_conn: Option<u16>,
 	/// Duration after which unused pooled connections are released.
-	#[serde(with = "serde_dur_option")]
+	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pool_unused_release_timeout: Option<Duration>,
 }
@@ -920,6 +920,7 @@ pub struct ProxyInputs {
 	pub model_catalog: Arc<llm::catalog::ModelCatalog>,
 
 	pub admin: Option<management::admin::AdminService>,
+	pub stats: Option<management::metrics_server::MetricsService>,
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
 	pub spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
@@ -950,6 +951,7 @@ impl ProxyInputs {
 			metrics,
 			model_catalog: Arc::new(model_catalog.unwrap_or_default()),
 			admin: None,
+			stats: None,
 			mcp_state,
 			ca,
 			spiffe,
@@ -1030,6 +1032,14 @@ impl Address {
 			Address::Off | Address::UnixSocket(_) => 0,
 			Address::Localhost(_, port) => *port,
 			Address::SocketAddr(s) => s.port(),
+		}
+	}
+
+	/// The port when bound on all interfaces, which is what a meshed caller could reach.
+	pub fn wildcard_port(&self) -> Option<u16> {
+		match self {
+			Address::SocketAddr(s) if s.ip().is_unspecified() => Some(s.port()),
+			_ => None,
 		}
 	}
 

@@ -13,6 +13,7 @@ use protos::envoy::service::ext_proc::v3::ProtocolConfiguration;
 use serde_json::Value as JsonValue;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 
 use crate::cel::{Executor, Expression, RequestSnapshot};
 use crate::client::ResolvedDestination;
@@ -20,10 +21,10 @@ use crate::http::ext_proc::proto::{
 	HttpBody, HttpHeaders, HttpTrailers, Metadata, ProcessingRequest, ProcessingResponse,
 	processing_response,
 };
-use crate::http::{HeaderName, PolicyResponse, envoy_proto_common};
-use crate::proxy::ProxyError;
+use crate::http::{HeaderName, envoy_proto_common};
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::proxy::{ProxyError, ProxyResponseReason};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target};
 use crate::{http, *};
@@ -193,7 +194,6 @@ pub struct InferencePoolRouter {
 pub struct InferenceRequestResult {
 	pub destination: Option<Target>,
 	pub destination_mode: InferenceRoutingDestinationMode,
-	pub policy_response: PolicyResponse,
 	pub failed_open: bool,
 }
 
@@ -250,6 +250,12 @@ impl InferencePoolRouter {
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		let failed_open = ext_proc.skipped;
 		*req = new_req;
+		if let Some(resp) = pr {
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtProc,
+				resp,
+			));
+		}
 		let dest = req
 			.headers_mut()
 			.remove(&INFERENCE_DESTINATION_HEADER)
@@ -259,23 +265,25 @@ impl InferencePoolRouter {
 		Ok(InferenceRequestResult {
 			destination: dest,
 			destination_mode: self.destination_mode,
-			policy_response: pr.unwrap_or_default(),
 			failed_open,
 		})
 	}
 
-	pub async fn mutate_response(
-		&mut self,
-		resp: &mut http::Response,
-	) -> Result<PolicyResponse, ProxyError> {
+	pub async fn mutate_response(&mut self, resp: &mut http::Response) -> Result<(), ProxyError> {
 		let rd = resp.extensions().get::<ResolvedDestination>().map(|d| d.0);
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok(Default::default());
+			return Ok(());
 		};
 		let r = std::mem::take(resp);
 		let (new_resp, pr) = ext_proc.mutate_response(r, None, rd).await?;
 		*resp = new_resp;
-		Ok(pr.unwrap_or_default())
+		if let Some(resp) = pr {
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtProc,
+				resp,
+			));
+		}
+		Ok(())
 	}
 }
 
@@ -351,45 +359,56 @@ pub struct ExtProcRequest {
 }
 
 impl ExtProcRequest {
-	pub async fn mutate_request(
-		&mut self,
-		req: &mut http::Request,
-	) -> Result<PolicyResponse, ProxyError> {
+	pub async fn mutate_request(&mut self, req: &mut http::Request) -> Result<(), ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok(PolicyResponse::default());
+			return Ok(());
 		};
 		let r = std::mem::take(req);
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		*req = new_req;
-		let pr = pr.unwrap_or_default();
 		pol_result!(
 			dtrace::Info,
 			Apply,
 			"ext_proc request ({})",
-			dtrace::policy_response_details(&pr)
+			pr.as_ref()
+				.map(|r| format!("returned direct response with status {}", r.status()))
+				.unwrap_or_default()
 		);
-		Ok(pr)
+		if let Some(resp) = pr {
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtProc,
+				resp,
+			));
+		}
+		Ok(())
 	}
 
 	pub async fn mutate_response(
 		&mut self,
 		resp: &mut http::Response,
 		request: Option<&RequestSnapshot>,
-	) -> Result<PolicyResponse, ProxyError> {
+	) -> Result<(), ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok(PolicyResponse::default());
+			return Ok(());
 		};
 		let r = std::mem::take(resp);
 		let (new_resp, pr) = ext_proc.mutate_response(r, request, None).await?;
 		*resp = new_resp;
-		let pr = pr.unwrap_or_default();
 		pol_result!(
 			dtrace::Info,
 			Apply,
 			"ext_proc response ({})",
-			dtrace::policy_response_details(&pr)
+			pr.as_ref()
+				.map(|r| format!("returned direct response with status {}", r.status()))
+				.unwrap_or_default()
 		);
-		Ok(pr)
+		if let Some(resp) = pr {
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::ExtProc,
+				resp,
+			));
+		}
+		Ok(())
 	}
 
 	pub fn take_body_immediate_response(&self) -> Option<http::Response> {
@@ -420,6 +439,9 @@ struct ExtProcInstance {
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
 	cleanly_closed: Arc<AtomicBool>,
+	// Cancelled when the downstream drops while a request or response phase is awaiting the
+	// processor, resetting the gRPC stream so the processor can release any state (e.g. EPP queue slot).
+	cancel: CancellationToken,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 	req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
@@ -457,6 +479,7 @@ impl ExtProcInstance {
 			rx_resp_for_request: None,
 			rx_resp_for_response: None,
 			cleanly_closed: Arc::new(AtomicBool::new(false)),
+			cancel: CancellationToken::new(),
 			metadata_context,
 			req_attributes,
 			resp_attributes,
@@ -478,6 +501,7 @@ impl ExtProcInstance {
 		let cleanly_closed = self.cleanly_closed.clone();
 		let span_client = self.span_client.clone();
 		let span_target = self.span_target.clone();
+		let cancel = self.cancel.clone();
 		let (tx_req, mut rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
 		// Enqueueing a ProcessingRequest does not mean we connected to the processor.
@@ -491,7 +515,7 @@ impl ExtProcInstance {
 			}
 			rx_req.poll_recv(cx)
 		});
-		dtrace::spawn(async move {
+		let process = async move {
 			let mut request = tonic::Request::new(req_stream);
 			*request.metadata_mut() = grpc_initial_metadata;
 			let mut span = span_client.start_grpc_span(
@@ -534,6 +558,12 @@ impl ExtProcInstance {
 						return;
 					},
 				}
+			}
+		};
+		dtrace::spawn(async move {
+			tokio::select! {
+				_ = process => {},
+				_ = cancel.cancelled() => trace!("downstream dropped, resetting ext_proc stream"),
 			}
 		});
 
@@ -925,31 +955,42 @@ impl ExtProcInstance {
 	pub async fn mutate_request(
 		&mut self,
 		req: http::Request,
-	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
-		let rebuffer = req.body().needs_inspection();
-		let (mut req, response) = self.mutate_request_inner(req).await?;
-		if rebuffer && self.mode_state.request_body_mode != BodySendMode::None {
-			let _ = http::inspect_body(&mut req)
-				.await
-				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+	) -> Result<(http::Request, Option<http::Response>), Error> {
+		let cancel_on_drop = self.cancel.clone().drop_guard();
+		let result: Result<_, Error> = async {
+			let rebuffer = req.body().needs_inspection();
+			let (mut req, response) = self.mutate_request_inner(req).await?;
+			if rebuffer && self.mode_state.request_body_mode != BodySendMode::None {
+				let _ = http::inspect_body(&mut req)
+					.await
+					.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+			}
+			Ok((req, response))
 		}
-		Ok((req, response))
+		.await;
+		cancel_on_drop.disarm();
+		result
 	}
 
 	async fn mutate_request_inner(
 		&mut self,
 		mut req: http::Request,
-	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
+	) -> Result<(http::Request, Option<http::Response>), Error> {
 		let headers = req_to_header_map(&req);
 
-		let exec = cel::Executor::new_request(&req);
-		self.ensure_stream_started(&exec)?;
-		// request_attributes should only be sent on first ProcessingRequest
-		// this will need to be modified if we configure which Requests to send
-		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let metadata_context = build_processing_metadata_context(&exec, self.metadata_context.as_ref())
-			.map(|filter_metadata| Arc::new(Metadata { filter_metadata }));
-		let attributes = build_request_attributes(&exec, self.req_attributes.as_ref());
+		// Drop the executor before the first await so the request future does not store it.
+		let (metadata_context, attributes) = {
+			let exec = cel::Executor::new_request(&req);
+			self.ensure_stream_started(&exec)?;
+			// request_attributes should only be sent on first ProcessingRequest
+			// this will need to be modified if we configure which Requests to send
+			// Wrap metadata_context in Arc for cheap cloning across body chunks
+			let metadata_context =
+				build_processing_metadata_context(&exec, self.metadata_context.as_ref())
+					.map(|filter_metadata| Arc::new(Metadata { filter_metadata }));
+			let attributes = build_request_attributes(&exec, self.req_attributes.as_ref());
+			(metadata_context, attributes)
+		};
 
 		let failure_mode = self.failure_mode;
 		let request_trailers = Arc::new(Mutex::new(None));
@@ -1291,7 +1332,7 @@ impl ExtProcInstance {
 							};
 							if let Some(resp) = to_immediate_response(&presp) {
 								trace!("got immediate response during request body streaming");
-								*immediate_response.lock().unwrap() = resp.direct_response;
+								*immediate_response.lock().unwrap() = Some(resp);
 								return;
 							}
 							let response = handle_response_for_request_mutation(
@@ -1479,17 +1520,23 @@ impl ExtProcInstance {
 		response: http::Response,
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
-	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
-		let rebuffer = response.body().needs_inspection();
-		let (mut response, policy_response) = self
-			.mutate_response_inner(response, request, resolved_destination_metadata)
-			.await?;
-		if rebuffer && self.mode_state.response_body_mode != BodySendMode::None {
-			let _ = http::inspect_response_body(&mut response)
-				.await
-				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+	) -> Result<(http::Response, Option<http::Response>), Error> {
+		let cancel_on_drop = self.cancel.clone().drop_guard();
+		let result: Result<_, Error> = async {
+			let rebuffer = response.body().needs_inspection();
+			let (mut response, policy_response) = self
+				.mutate_response_inner(response, request, resolved_destination_metadata)
+				.await?;
+			if rebuffer && self.mode_state.response_body_mode != BodySendMode::None {
+				let _ = http::inspect_response_body(&mut response)
+					.await
+					.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+			}
+			Ok((response, policy_response))
 		}
-		Ok((response, policy_response))
+		.await;
+		cancel_on_drop.disarm();
+		result
 	}
 
 	async fn mutate_response_inner(
@@ -1497,7 +1544,7 @@ impl ExtProcInstance {
 		response: http::Response,
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
-	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
+	) -> Result<(http::Response, Option<http::Response>), Error> {
 		if self.skipped {
 			return Ok((response, None));
 		}
@@ -1508,36 +1555,41 @@ impl ExtProcInstance {
 		let response_trailers = Arc::new(Mutex::new(None));
 		let headers = resp_to_header_map(&response);
 		let send_response_headers = self.mode_state.response_header_mode == HeaderSendMode::Send;
-
-		let exec = cel::Executor::new_response(request, &response);
-		self.ensure_stream_started(&exec)?;
-		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let metadata_context = if self.metadata_context.is_none()
-			&& let Some(rd) = resolved_destination_metadata
-		{
-			Some(Arc::new(Metadata {
-				filter_metadata: HashMap::from([(
-					// This is gross, but the GIE project unfairly favors Envoy, so we have to adapt to its limitations.
-					"envoy.lb".to_string(),
-					serde_json::from_value(serde_json::json!({"x-gateway-destination-endpoint-served": rd}))
+		// Drop the executor before the first await so the response future does not store it.
+		let (metadata_context, attributes) = {
+			let exec = cel::Executor::new_response(request, &response);
+			self.ensure_stream_started(&exec)?;
+			// Wrap metadata_context in Arc for cheap cloning across body chunks
+			let metadata_context = if self.metadata_context.is_none()
+				&& let Some(rd) = resolved_destination_metadata
+			{
+				Some(Arc::new(Metadata {
+					filter_metadata: HashMap::from([(
+						// This is gross, but the GIE project unfairly favors Envoy, so we have to adapt to its limitations.
+						"envoy.lb".to_string(),
+						serde_json::from_value(
+							serde_json::json!({"x-gateway-destination-endpoint-served": rd}),
+						)
 						.unwrap(),
-				)]),
-			}))
-		} else {
-			build_processing_metadata_context(&exec, self.metadata_context.as_ref())
-				.map(|filter_metadata| Arc::new(Metadata { filter_metadata }))
+					)]),
+				}))
+			} else {
+				build_processing_metadata_context(&exec, self.metadata_context.as_ref())
+					.map(|filter_metadata| Arc::new(Metadata { filter_metadata }))
+			};
+			// response_attributes should only be sent on first ProcessingRequest
+			// this will need to be modified if we configure which Requests to send
+			let attributes = self
+				.resp_attributes
+				.as_ref()
+				.and_then(|attrs| {
+					eval_to_struct(&exec, attrs)
+						.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
+						.ok()
+				})
+				.unwrap_or_default();
+			(metadata_context, attributes)
 		};
-		// response_attributes should only be sent on first ProcessingRequest
-		// this will need to be modified if we configure which Requests to send
-		let attributes = self
-			.resp_attributes
-			.as_ref()
-			.and_then(|attrs| {
-				eval_to_struct(&exec, attrs)
-					.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
-					.ok()
-			})
-			.unwrap_or_default();
 		let max_response_bytes = http::response_buffer_limit(&response);
 		let (parts, body) = response.into_parts();
 		let end_of_stream = body.is_end_stream();

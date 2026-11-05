@@ -754,6 +754,14 @@ message FrontendPolicySpec {
       LOWERCASE = 0;
       PRESERVE = 1;
     }
+    enum Normalize {
+      NORMALIZE_UNSPECIFIED = 0;
+      MERGE_SLASH = 1;
+      DOT_SEGMENT = 2;
+      DECODE_UNRESERVED = 3;
+      REJECT_ESCAPED_SLASH = 4;
+      UNESCAPE_SLASH = 5;
+    }
 
     optional uint32 max_buffer_size = 1;
     optional uint32 http1_max_headers = 2;
@@ -770,6 +778,8 @@ message FrontendPolicySpec {
     // Maximum number of in-flight HTTP requests across this bind. This includes
     // HTTP/1 requests and HTTP/2 streams. Unset means unlimited.
     optional uint32 max_concurrent_requests = 12;
+    // Path normalization rules applied before route matching and forwarding.
+    repeated Normalize normalize = 13;
   }
   message TLS {
     // TLS handshake timeout
@@ -980,6 +990,7 @@ message JWTValidationOptions {
 }
 
 message TrafficPolicySpec {
+  reserved 25;
   message RemoteRateLimit {
     string domain = 1;
     repeated Descriptor descriptors = 2;
@@ -1273,6 +1284,34 @@ message TrafficPolicySpec {
     optional BufferBody response = 2;
   }
 
+  message Compression {
+    enum Algorithm {
+      GZIP = 0;
+      BROTLI = 1;
+      DEFLATE = 2;
+      ZSTD = 3;
+    }
+
+    message ResponseCompression {
+      repeated Algorithm algorithms = 1;
+    }
+
+    message RequestDecompression {
+      repeated Algorithm algorithms = 1;
+    }
+
+    message Response {
+      optional ResponseCompression compress = 1;
+    }
+
+    message Request {
+      optional RequestDecompression decompress = 1;
+    }
+
+    optional Response response = 1;
+    optional Request request = 2;
+  }
+
   oneof kind {
     Timeout timeout = 2;
     Retry retry = 3;
@@ -1296,6 +1335,7 @@ message TrafficPolicySpec {
     HostRewrite host_rewrite = 21;
     Buffer buffer = 22;
     Delay delay = 23;
+    Compression compression = 24;
   }
 }
 
@@ -2003,6 +2043,7 @@ message AIBackend {
     PROVIDER_PRESET_META = 14;
     PROVIDER_PRESET_PERPLEXITY = 15;
     PROVIDER_PRESET_TYPESAFE = 16;
+    PROVIDER_PRESET_NEBIUS = 17;
   }
 
   message Provider {
@@ -2406,6 +2447,8 @@ message ModelRoute {
     repeated BackendPolicySpec backend_policies = 3;
     // Catalog provider identity, used to expand wildcards and look up model metadata.
     optional string discovery_provider = 4;
+    // The backend's provider, used to advertise the client endpoints the model serves.
+    AIBackend.Provider discovery_provider_config = 5;
   }
   // Unique resource key for this model route. This is used for xDS resource
   // identity/update/delete, not for virtual model target selection.

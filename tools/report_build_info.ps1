@@ -25,7 +25,8 @@ $BUILD_OS = if ($env:OS -eq "Windows_NT") { "windows" } else { "" }
 $BUILD_ARCH = if ($env:PROCESSOR_ARCHITECTURE -eq "AMD64") { "amd64fre" } else { "" }
 
 # Output version information used by common/scripts/gobuild.sh
-Write-Output "agentgateway.dev.buildVersion=$($env:VERSION -or $BUILD_GIT_REVISION)"
+$BUILD_VERSION = if ($env:VERSION) { $env:VERSION } else { $BUILD_GIT_REVISION }
+Write-Output "agentgateway.dev.buildVersion=$BUILD_VERSION"
 Write-Output "agentgateway.dev.buildGitRevision=$BUILD_GIT_REVISION"
 Write-Output "agentgateway.dev.buildStatus=$tree_status"
 Write-Output "agentgateway.dev.buildTag=$GIT_DESCRIBE_TAG"

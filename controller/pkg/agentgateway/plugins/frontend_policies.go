@@ -609,6 +609,22 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.MaxConcurrentRequests; v != nil {
 		spec.MaxConcurrentRequests = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 	}
+	for _, normalize := range http.Normalize {
+		switch normalize {
+		case agentgateway.FrontendHTTPNormalizeMergeSlash:
+			spec.Normalize = append(spec.Normalize, api.FrontendPolicySpec_HTTP_MERGE_SLASH)
+		case agentgateway.FrontendHTTPNormalizeDotSegment:
+			spec.Normalize = append(spec.Normalize, api.FrontendPolicySpec_HTTP_DOT_SEGMENT)
+		case agentgateway.FrontendHTTPNormalizeDecodeUnreserved:
+			spec.Normalize = append(spec.Normalize, api.FrontendPolicySpec_HTTP_DECODE_UNRESERVED)
+		case agentgateway.FrontendHTTPNormalizeRejectEscapedSlash:
+			spec.Normalize = append(spec.Normalize, api.FrontendPolicySpec_HTTP_REJECT_ESCAPED_SLASH)
+		case agentgateway.FrontendHTTPNormalizeUnescapeSlash:
+			spec.Normalize = append(spec.Normalize, api.FrontendPolicySpec_HTTP_UNESCAPE_SLASH)
+		default:
+			logger.Warn("unknown http normalization rule", "normalize", normalize)
+		}
+	}
 
 	httpPolicy := &api.Policy{
 		Key:  name + frontendHttpPolicySuffix,

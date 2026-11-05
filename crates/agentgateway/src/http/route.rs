@@ -204,7 +204,7 @@ pub fn select_best_route(
 			));
 			(def, Cow::Owned(svc.hostname.to_string()))
 		} else {
-			(None, Cow::Borrowed(host))
+			(None, lowercase_host(host))
 		};
 	let listener_routes = {
 		let binds = stores.read_binds();
@@ -243,8 +243,8 @@ pub fn select_best_route_group(
 	rg: &RouteSet,
 	request: &Request,
 ) -> Option<(Arc<Route>, PathMatch)> {
-	let host = http::get_host(request).ok()?;
-	for hnm in agent::HostnameMatch::all_matches(host) {
+	let host = lowercase_host(http::get_host(request).ok()?);
+	for hnm in agent::HostnameMatch::all_matches(&host) {
 		let mut candidates = rg.get_hostname(&hnm);
 		let best_match = candidates.find(|(_, m)| matches_request(m, request));
 		if let Some((route, matcher)) = best_match {
@@ -252,6 +252,16 @@ pub fn select_best_route_group(
 		}
 	}
 	None
+}
+
+// Hostnames are case-insensitive (RFC 9110 4.2.3) and route hostnames are indexed lowercase.
+// Only the lookup key is lowercased; the request's Host is forwarded unmodified.
+fn lowercase_host(host: &str) -> Cow<'_, str> {
+	if host.bytes().any(|b| b.is_ascii_uppercase()) {
+		Cow::Owned(host.to_ascii_lowercase())
+	} else {
+		Cow::Borrowed(host)
+	}
 }
 
 pub fn best_match_for_route(route: &Route, request: &Request) -> Option<PathMatch> {

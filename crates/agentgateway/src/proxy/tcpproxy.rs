@@ -1055,6 +1055,7 @@ mod tests {
 			)),
 			model_catalog: ModelCatalog::empty(),
 			admin: None,
+			stats: None,
 			upstream: client,
 			ca: None,
 			spiffe: None,

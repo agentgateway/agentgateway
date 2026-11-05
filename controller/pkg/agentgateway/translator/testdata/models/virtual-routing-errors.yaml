@@ -208,6 +208,8 @@ output:
         backend:
           backend: default/wildcard-model/backend.llm
         discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
         modelVisibility: INTERNAL
       key: default/wildcard-model.llm
       listenerKey: default/virtual-model-errors.llm

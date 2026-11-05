@@ -572,17 +572,12 @@ fn render_bedrock_converse(
 			"gemini to bedrock converse"
 		))),
 	}?;
-	let provider_state = if bedrock.tool_name_map.is_empty() && bedrock.namespaces.is_empty() {
-		None
-	} else {
-		Some(ProviderState::Bedrock {
-			tool_names: Arc::new(bedrock.tool_name_map),
-			namespaces: Arc::new(bedrock.namespaces),
-		})
-	};
 	Ok(RenderedChatRequest {
 		body: bedrock.body,
-		provider_state,
+		provider_state: Some(ProviderState::Bedrock {
+			tool_names: Arc::new(bedrock.tool_name_map),
+			namespaces: Arc::new(bedrock.namespaces),
+		}),
 	})
 }
 
@@ -950,6 +945,8 @@ pub enum RequestResult {
 		llm_request: LLMRequest,
 		upstream_route_type: RouteType,
 	},
+	/// A response computed locally instead of calling the provider.
+	DirectResponse(Response),
 	Rejected(Response),
 	GuardrailRejected {
 		response: Response,
@@ -1053,7 +1050,7 @@ impl AIProvider {
 				if copilot::Provider::is_anthropic_model(request_model) {
 					vec![Messages]
 				} else {
-					vec![Completions, Responses, Rerank, Embeddings]
+					vec![Completions, Embeddings, Rerank, Responses, SystemOne]
 				}
 			},
 			AIProvider::Azure(p) => {
@@ -1063,6 +1060,8 @@ impl AIProvider {
 					if p.is_anthropic_model(request_model) {
 						formats.extend([AnthropicTokenCount, Messages]);
 					}
+				} else {
+					formats.push(Decisions);
 				}
 				formats
 			},
@@ -1403,7 +1402,7 @@ impl AIProvider {
 		// type mirrors the input format.
 		let translated = llm_request.is_some_and(|l| {
 			if let (AIProvider::Bedrock(p), Some(endpoint)) = (self, bedrock_endpoint)
-				&& !p.native_chat(endpoint)
+				&& !bedrock_native_chat(p, endpoint, Some(l))
 			{
 				return true;
 			}
@@ -1527,6 +1526,7 @@ impl AIProvider {
 							l.streaming,
 							l.request_model.as_str(),
 							endpoint,
+							bedrock_native_chat(provider, endpoint, Some(l)),
 						);
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
@@ -1749,7 +1749,9 @@ impl AIProvider {
 				}
 				// Native chat serves Messages via the Anthropic-native API; Mantle also serves count-tokens.
 				let anthropic_native = match (route_type, bedrock_endpoint) {
-					(RouteType::Messages, Some(endpoint)) => provider.native_chat(endpoint),
+					(RouteType::Messages, Some(endpoint)) => {
+						bedrock_native_chat(provider, endpoint, llm_request)
+					},
 					(RouteType::AnthropicTokenCount, endpoint) => {
 						endpoint == Some(bedrock::BedrockEndpoint::Mantle)
 					},
@@ -1764,7 +1766,7 @@ impl AIProvider {
 					route_type,
 					RouteType::Messages | RouteType::Responses | RouteType::Completions
 				) && bedrock_endpoint == Some(bedrock::BedrockEndpoint::Runtime)
-					&& provider.native_chat(bedrock::BedrockEndpoint::Runtime)
+					&& bedrock_native_chat(provider, bedrock::BedrockEndpoint::Runtime, llm_request)
 					&& let (Some(identifier), Some(version)) =
 						(&provider.guardrail_identifier, &provider.guardrail_version)
 				{
@@ -2138,7 +2140,7 @@ impl AIProvider {
 				.header(::http::header::CONTENT_TYPE, "application/json")
 				.body(Body::from(body))
 				.expect("failed to build count_tokens response");
-			return Ok(RequestResult::Rejected(resp));
+			return Ok(RequestResult::DirectResponse(resp));
 		}
 
 		self
@@ -2216,6 +2218,7 @@ impl AIProvider {
 		if model == original.as_str() {
 			return Ok(true);
 		}
+		model_router::OriginalModel::record(&mut parts.extensions, original.to_string());
 		if !agent_llm::model_path::is_safe_resource_name(model) {
 			return Err(AIError::UnsupportedModel);
 		}
@@ -2254,15 +2257,30 @@ impl AIProvider {
 		let path_model = Self::mutate_path_model(policies, &mut parts, log)?;
 
 		let mut req = if is_json {
+			// Body mutations may rewrite the model, so record the client's first. A path model takes
+			// precedence over the body's and was recorded by mutate_path_model.
+			let mut record_body_model = |value: &serde_json::Value| {
+				if !path_model && let Some(model) = value.get("model").and_then(serde_json::Value::as_str) {
+					model_router::OriginalModel::record(&mut parts.extensions, model.to_string());
+				}
+			};
 			if let Some(json::ParsedJson(value)) = cached {
 				match policies {
-					Some(p) => p.unmarshal_request_value(value, log),
+					Some(p) => {
+						record_body_model(&value);
+						p.unmarshal_request_value(value, log)
+					},
 					None => Ok(types::detect::Request::Json(value)),
 				}
 			} else if let Some(p) = policies
 				&& p.has_request_body_mutations()
 			{
-				p.unmarshal_request(&bytes, log)
+				serde_json::from_slice::<serde_json::Value>(bytes.as_ref())
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(None), err))
+					.and_then(|value| {
+						record_body_model(&value);
+						p.unmarshal_request_value(value, log)
+					})
 			} else {
 				serde_json::from_slice(bytes.as_ref())
 					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(None), err))
@@ -2281,6 +2299,9 @@ impl AIProvider {
 				&& p.has_request_body_mutations()
 				&& let Some(original) = &model
 			{
+				if !path_model {
+					model_router::OriginalModel::record(&mut parts.extensions, original.clone());
+				}
 				let mutated =
 					p.apply_request_body_mutations(serde_json::json!({ "model": original }), log)?;
 				// Rewrite only the `model` form field, leaving the rest (such as the uploaded file)
@@ -2288,7 +2309,7 @@ impl AIProvider {
 				// with malformed JSON.
 				if let Some(target) = mutated.get("model").and_then(serde_json::Value::as_str)
 					&& target != original
-					&& let Ok(Some(rewritten)) =
+					&& let Ok(Some((rewritten, _))) =
 						model_router::rewrite_multipart_body_model(&body, &boundary, target).await
 				{
 					body = rewritten;
@@ -2397,10 +2418,10 @@ impl AIProvider {
 		match self {
 			AIProvider::Custom(_)
 			| AIProvider::OpenAI(_)
-			| AIProvider::Copilot(_)
 			| AIProvider::Azure(_)
 			| AIProvider::Gemini(_)
 			| AIProvider::Anthropic(_) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+			AIProvider::Copilot(_) => conversion::copilot::from_embeddings::translate(req),
 			AIProvider::Vertex(p) => conversion::vertex::from_embeddings::translate(req, p),
 			AIProvider::Bedrock(_) => conversion::bedrock::from_embeddings::translate(req),
 		}
@@ -2476,6 +2497,16 @@ impl AIProvider {
 
 		let mut llm_info =
 			req.to_llm_request(self.provider(), tokenize && guardrail_rejection.is_none())?;
+		llm_info.original_model = parts
+			.extensions
+			.get::<model_router::OriginalModel>()
+			.map(|m| strng::new(&m.0))
+			.filter(|m| *m != llm_info.request_model);
+		if let Some(log) = log
+			&& log.original_model.is_none()
+		{
+			log.original_model = llm_info.original_model.as_ref().map(|m| m.to_string());
+		}
 		if matches!(original_format, InputFormat::Detect(_)) {
 			llm_info.input_format = original_format;
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
@@ -3114,19 +3145,11 @@ impl AIProvider {
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Copilot(_) => {
-				let mut resp: serde_json::Map<String, serde_json::Value> =
-					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
-				resp
-					.entry("object".to_string())
-					.or_insert_with(|| serde_json::Value::String("list".to_string()));
-				resp
-					.entry("model".to_string())
-					.or_insert_with(|| serde_json::Value::String(req.request_model.to_string()));
-				let normalized = serde_json::to_vec(&resp).map_err(AIError::ResponseParsing)?;
-				let resp: types::embeddings::Response =
-					serde_json::from_slice(&normalized).map_err(logged_response_parsing(&normalized))?;
-				let llm_resp = resp.to_llm_response(LogContentFields::default());
-				Ok((llm_resp, Bytes::from(normalized)))
+				let translated =
+					conversion::copilot::from_embeddings::translate_response(&bytes, &req.request_model)?;
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
+				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
+				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Vertex(p) if !p.is_anthropic_model(&req.request_model) => {
 				let translated =
@@ -3272,11 +3295,15 @@ impl AIProvider {
 		{
 			llmresp.response.service_tier = Some(strng::new(tier));
 		}
-		log.store(Some(llmresp));
 		let buffer = http::response_buffer_limit(&resp);
 
 		// Decompress before the SSE parser, which expects plaintext chunks.
 		let (mut parts, body) = resp.into_parts();
+		// Request-side context for response CEL; response fields are not known yet.
+		parts
+			.extensions
+			.insert(crate::cel::LLMContext::from_llm_info(llmresp.clone(), None));
+		log.store(Some(llmresp));
 		let body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer);
 		let ce = parts.headers.typed_get::<ContentEncoding>();
 		let (body, decompressed_encoding) = http::compression::decompress_body(body, ce.as_ref())
@@ -3454,10 +3481,10 @@ impl AIProvider {
 				None => serde_json::from_slice(&bytes),
 			}
 			.map_err(|err| AIError::RequestParsing(T::input_format(), err))?;
-			let model = req.model();
-			if model.as_deref().is_none() {
+			let Some(model) = req.model() else {
 				return Err(AIError::MissingField("model not specified".into()));
-			}
+			};
+			model_router::OriginalModel::record(&mut parts.extensions, model.clone());
 			return Ok((parts, managed_body, req));
 		}
 
@@ -3466,7 +3493,7 @@ impl AIProvider {
 			None => serde_json::from_slice(&bytes)
 				.map_err(|err| AIError::RequestParsing(T::input_format(), err))?,
 		};
-		self.set_provider_request_model(&parts, &mut request, path_model_wins)?;
+		self.set_provider_request_model(&mut parts, &mut request, path_model_wins)?;
 		let mut request = if let Some(p) = policies {
 			p.apply_request_body_mutations(request, log)?
 		} else {
@@ -3481,21 +3508,28 @@ impl AIProvider {
 
 	fn set_provider_request_model(
 		&self,
-		parts: &Parts,
+		parts: &mut Parts,
 		req: &mut serde_json::Value,
 		path_model_wins: bool,
 	) -> Result<(), AIError> {
 		let Some(obj) = req.as_object_mut() else {
 			return Err(AIError::MissingField("request must be an object".into()));
 		};
+		let body_model = obj.get("model").and_then(serde_json::Value::as_str);
+		let path_model = if path_model_wins || body_model.is_none() {
+			types::detect::extract_model_from_path(parts.uri.path())
+		} else {
+			None
+		};
+		if let Some(client_model) = path_model.as_deref().or(body_model) {
+			model_router::OriginalModel::record(&mut parts.extensions, client_model.to_string());
+		}
 		if let Some(provider_model) = &self.override_model() {
 			obj.insert(
 				"model".to_string(),
 				serde_json::Value::String(provider_model.to_string()),
 			);
-		} else if (path_model_wins || !matches!(obj.get("model"), Some(serde_json::Value::String(_))))
-			&& let Some(path_model) = types::detect::extract_model_from_path(parts.uri.path())
-		{
+		} else if let Some(path_model) = path_model {
 			obj.insert(
 				"model".to_string(),
 				serde_json::Value::String(path_model.to_string()),
@@ -3610,6 +3644,17 @@ fn google_invalid_argument(message: &str) -> ::http::Response<Body> {
 fn strip_alt_query(req: &mut Request) {
 	// Removing a parameter from an already-valid URI cannot fail.
 	let _ = http::modify_query_parameters(req.uri_mut(), std::iter::empty::<(&str, &str)>(), ["alt"]);
+}
+
+/// Whether a Bedrock chat request uses the native APIs on `endpoint`, rather than Converse. Runtime
+/// falls back to Converse for translations the native APIs lack.
+fn bedrock_native_chat(
+	provider: &bedrock::Provider,
+	endpoint: bedrock::BedrockEndpoint,
+	llm_request: Option<&LLMRequest>,
+) -> bool {
+	provider.native_chat(endpoint)
+		&& !llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::Bedrock { .. })))
 }
 
 fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::BedrockToolNameMap> {

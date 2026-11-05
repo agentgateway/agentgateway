@@ -34,6 +34,7 @@ pub enum PricingTier {
 	Flex,
 	Priority,
 	Reserved,
+	Ultrafast,
 }
 
 impl PricingTier {
@@ -58,18 +59,23 @@ impl PricingTier {
 			},
 			// https://developers.openai.com/api/docs/guides/fast-mode
 			// https://developers.openai.com/api/docs/guides/flex-processing
+			// https://developers.openai.com/api/docs/guides/ultrafast-mode
 			// https://openai.com/api-scale-tier/
-			(provider, tier)
-				if provider == openai::Provider::NAME.as_str()
-					|| provider == azure::Provider::NAME.as_str() =>
-			{
-				match tier {
-					"default" => Self::Standard,
-					"flex" => Self::Flex,
-					"fast" | "priority" => Self::Priority,
-					"scale" => Self::Reserved,
-					_ => return None,
-				}
+			(provider, tier) if provider == openai::Provider::NAME.as_str() => match tier {
+				"default" => Self::Standard,
+				"flex" => Self::Flex,
+				"fast" | "priority" => Self::Priority,
+				"scale" => Self::Reserved,
+				"ultrafast" => Self::Ultrafast,
+				_ => return None,
+			},
+			// Azure does not offer the ultrafast tier.
+			(provider, tier) if provider == azure::Provider::NAME.as_str() => match tier {
+				"default" => Self::Standard,
+				"flex" => Self::Flex,
+				"fast" | "priority" => Self::Priority,
+				"scale" => Self::Reserved,
+				_ => return None,
 			},
 			// https://platform.claude.com/docs/en/api/service-tiers
 			(provider, tier) if provider == anthropic::Provider::NAME.as_str() => match tier {
@@ -79,11 +85,14 @@ impl PricingTier {
 			},
 			// https://docs.aws.amazon.com/bedrock/latest/userguide/service-tiers-inference.html
 			// Anthropic models on Bedrock may report Anthropic service tiers.
+			// OpenAI models on Bedrock may be served at the ultrafast tier:
+			// https://aws.amazon.com/about-aws/whats-new/2026/09/openai-gpt-6-astra-ultrafast-on-amazon-bedrock/
 			(provider, tier) if provider == bedrock::Provider::NAME.as_str() => match tier {
 				"default" | "standard" => Self::Standard,
 				"flex" => Self::Flex,
 				"priority" => Self::Priority,
 				"reserved" => Self::Reserved,
+				"ultrafast" => Self::Ultrafast,
 				_ => return None,
 			},
 			_ => return None,
@@ -237,12 +246,21 @@ impl ModelCatalog {
 					return projection;
 				}
 			}
-			snapshot.project(
+			let original_model = info.request.original_model.as_ref();
+			let projection = snapshot.project_with_missing_trace(
 				provider,
 				info.request.request_model.as_str(),
 				resp,
 				convention,
-			)
+				original_model.is_none(),
+			);
+			// Last resort: the model the client asked for, before any virtual model or alias rewrite.
+			match original_model {
+				Some(original_model) if projection.status == CostLookupStatus::Missing => {
+					snapshot.project(provider, original_model.as_str(), resp, convention)
+				},
+				_ => projection,
+			}
 		};
 		if info.response.usage_lines.is_empty() {
 			return primary(&info.response);
@@ -309,6 +327,15 @@ impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
 	}
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.state.load().snapshot.get_model_tags(model_id)
+	}
+}
+
+impl agent_llm::model_catalog::ModelCatalogHandle for CatalogSnapshot {
+	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
+		self.model_has_tag(model_id, tag)
+	}
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
+		self.get_model_tags(model_id)
 	}
 }
 
@@ -1092,6 +1119,72 @@ mod tests {
 		assert_eq!(price(100_000, None), Some(0.1));
 	}
 
+	#[test]
+	fn detect_maps_ultrafast_service_tier() {
+		// OpenAI offers an ultrafast tier:
+		// https://developers.openai.com/api/docs/guides/ultrafast-mode
+		assert_eq!(
+			PricingTier::detect(openai::Provider::NAME.as_str(), "ultrafast"),
+			Some(PricingTier::Ultrafast)
+		);
+		// Bedrock offers it for OpenAI models:
+		// https://aws.amazon.com/about-aws/whats-new/2026/10/openai-gpt-sol-ultrafast-amazon/
+		assert_eq!(
+			PricingTier::detect(bedrock::Provider::NAME.as_str(), "ultrafast"),
+			Some(PricingTier::Ultrafast)
+		);
+		// Azure does not offer ultrafast.
+		assert_eq!(
+			PricingTier::detect(azure::Provider::NAME.as_str(), "ultrafast"),
+			None
+		);
+		// Existing mappings are unchanged.
+		assert_eq!(
+			PricingTier::detect(openai::Provider::NAME.as_str(), "fast"),
+			Some(PricingTier::Priority)
+		);
+		assert_eq!(
+			PricingTier::detect(azure::Provider::NAME.as_str(), "priority"),
+			Some(PricingTier::Priority)
+		);
+		assert_eq!(
+			PricingTier::detect(openai::Provider::NAME.as_str(), "default"),
+			Some(PricingTier::Standard)
+		);
+	}
+
+	#[test]
+	fn ultrafast_tier_rates_are_applied() {
+		let catalog = CatalogSnapshot::parse(
+			r#"{"providers":{"openai":{"models":{"m":{
+				"rates":{"input":"1"},
+				"tiers":[
+					{"serviceTier":"ultrafast","rates":{"input":"6"}}
+				]
+			}}}}}"#,
+		)
+		.unwrap();
+		let price = |tokens: u64, served_tier: Option<&str>| {
+			catalog
+				.price(
+					openai::Provider::NAME.as_str(),
+					"m",
+					&LLMResponse {
+						input_tokens: Some(tokens),
+						service_tier: served_tier.map(Into::into),
+						..Default::default()
+					},
+					CacheTokenConvention::InputIncludesCache,
+				)
+				.0
+		};
+		// Served at ultrafast: the ultrafast tier rate applies.
+		assert_eq!(price(100_000, Some("ultrafast")), Some(0.6));
+		// Served at default: base rates apply.
+		assert_eq!(price(100_000, Some("default")), Some(0.1));
+		assert_eq!(price(100_000, None), Some(0.1));
+	}
+
 	fn test_catalog(input_rate: &str) -> String {
 		format!(
 			r#"{{"providers":{{"openai":{{"models":{{"my-model":{{"rates":{{"input":"{input_rate}","output":"2"}}}}}}}}}}}}"#
@@ -1140,6 +1233,7 @@ mod tests {
 				input_format: crate::llm::InputFormat::Completions,
 				cache_convention: CacheTokenConvention::InputIncludesCache,
 				request_model: request_model.into(),
+				original_model: None,
 				provider: "openai".into(),
 				streaming: false,
 				params: Default::default(),
@@ -1582,6 +1676,17 @@ mod tests {
 			Some(2.0),
 			"request model should price when provider model is absent from catalog"
 		);
+	}
+
+	#[test]
+	fn project_falls_back_to_original_model_when_rewritten_model_is_missing() {
+		let catalog = model_catalog(&test_catalog("1"));
+		let mut info = test_llm_info("arn:aws:bedrock:profile", Some("arn:aws:bedrock:profile"));
+		info.request.original_model = Some("my-model".into());
+		let projection = catalog.project(&info);
+
+		assert_eq!(projection.status, CostLookupStatus::Exact);
+		assert_eq!(projection.cost.and_then(|c| c.total().to_f64()), Some(2.0));
 	}
 
 	#[test]

@@ -51,6 +51,16 @@ var modelsDevProviderIDs = map[string]string{
 	"fireworks-ai":     "fireworks",
 	"meta":             "meta",
 	"perplexity-agent": "perplexity",
+	"nebius":           "nebius",
+}
+
+// modelsDevTypeEndpoints maps a models.dev model type to the client endpoints serving it.
+var modelsDevTypeEndpoints = map[string][]string{
+	"embedding":     {"/embeddings"},
+	"reranking":     {"/rerank"},
+	"image":         {"/images/generations", "/images/edits"},
+	"speech":        {"/audio/speech"},
+	"transcription": {"/audio/transcriptions"},
 }
 
 type modelsDevProvider struct {
@@ -63,6 +73,7 @@ type modelsDevModel struct {
 	ID               string                     `json:"id"`
 	Name             string                     `json:"name"`
 	Family           string                     `json:"family"`
+	Type             string                     `json:"type"`
 	Status           string                     `json:"status"`
 	ReleaseDate      string                     `json:"release_date"`
 	Cost             *modelsDevCost             `json:"cost"`
@@ -241,6 +252,13 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(for
 		},
 		Modalities: m.Modalities,
 	}
+	if m.Type != "" && m.Type != "chat" {
+		// Types without a served endpoint, such as video, list none.
+		entry.Endpoints = modelsDevTypeEndpoints[m.Type]
+		if entry.Endpoints == nil {
+			entry.Endpoints = []string{}
+		}
+	}
 	for _, option := range m.ReasoningOptions {
 		switch option.Type {
 		case "toggle":
@@ -301,7 +319,7 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(for
 	for _, name := range slices.Sorted(maps.Keys(m.Experimental.Modes)) {
 		mode := m.Experimental.Modes[name]
 		serviceTier := mode.Provider.Body.ServiceTier
-		if mode.Cost == nil || (serviceTier != "priority" && serviceTier != "flex") {
+		if mode.Cost == nil || (serviceTier != "priority" && serviceTier != "flex" && serviceTier != "ultrafast") {
 			continue
 		}
 		rates, err := modelsDevBuildRates(mode.Cost, label+" "+name+" mode")

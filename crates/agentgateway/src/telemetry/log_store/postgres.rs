@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::time::Instant;
 
 use anyhow::Context;
+use serde::Serialize;
 use serde_json::Value;
 use sqlx::types::Json;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Row};
@@ -321,7 +322,7 @@ fn push_request_log_copy_row(buf: &mut String, record: &StoredRequestLog) -> any
 	push_copy_text_column(buf, &mut first, record.agentgateway_group.as_deref());
 	push_copy_text_column(buf, &mut first, record.user_agent_name.as_deref());
 	push_copy_display_column(buf, &mut first, Some(record.has_payload));
-	push_copy_text_column(buf, &mut first, Some(record.attributes_json.as_ref()));
+	push_copy_serialized_json_column(buf, &mut first, &record.attributes_json)?;
 	buf.push('\n');
 	Ok(())
 }
@@ -356,6 +357,20 @@ fn push_copy_display_column<T: Display>(buf: &mut String, first: &mut bool, valu
 	}
 }
 
+fn push_copy_serialized_json_column(
+	buf: &mut String,
+	first: &mut bool,
+	value: &str,
+) -> anyhow::Result<()> {
+	if value.contains(r"\u0000") {
+		let value: Value = serde_json::from_str(value)?;
+		push_copy_json_column(buf, first, Some(&value))?;
+	} else {
+		push_copy_text_column(buf, first, Some(value));
+	}
+	Ok(())
+}
+
 fn push_copy_json_column(
 	buf: &mut String,
 	first: &mut bool,
@@ -366,8 +381,30 @@ fn push_copy_json_column(
 		buf.push_str(r"\N");
 		return Ok(());
 	};
-	push_copy_escaped(buf, &serde_json::to_string(value)?);
+	let mut json = Vec::new();
+	value.serialize(&mut serde_json::Serializer::with_formatter(
+		&mut json,
+		NulReplacingFormatter,
+	))?;
+	push_copy_escaped(buf, std::str::from_utf8(&json)?);
 	Ok(())
+}
+
+// JSONB cannot store U+0000, and a single such value fails the whole COPY.
+// Write it as U+FFFD instead, wherever it appears in a string or key.
+struct NulReplacingFormatter;
+
+impl serde_json::ser::Formatter for NulReplacingFormatter {
+	fn write_char_escape<W: ?Sized + std::io::Write>(
+		&mut self,
+		writer: &mut W,
+		char_escape: serde_json::ser::CharEscape,
+	) -> std::io::Result<()> {
+		match char_escape {
+			serde_json::ser::CharEscape::AsciiControl(0) => writer.write_all(br"\ufffd"),
+			other => serde_json::ser::CompactFormatter.write_char_escape(writer, other),
+		}
+	}
 }
 
 fn push_copy_column_separator(buf: &mut String, first: &mut bool) {
@@ -378,9 +415,11 @@ fn push_copy_column_separator(buf: &mut String, first: &mut bool) {
 	}
 }
 
+// Postgres TEXT cannot store U+0000; replace it with U+FFFD rather than failing the COPY.
 fn push_copy_escaped(buf: &mut String, value: &str) {
 	for ch in value.chars() {
 		match ch {
+			'\0' => buf.push(char::REPLACEMENT_CHARACTER),
 			'\\' => buf.push_str(r"\\"),
 			'\n' => buf.push_str(r"\n"),
 			'\r' => buf.push_str(r"\r"),
@@ -645,3 +684,49 @@ FROM request_logs
 LEFT JOIN request_log_payloads ON request_logs.id = request_log_payloads.log_id
 WHERE request_logs.id = $1
 "#;
+
+#[cfg(test)]
+mod tests {
+	use serde_json::json;
+
+	use super::*;
+
+	fn copy_json(value: &Value) -> String {
+		let mut buf = String::new();
+		push_copy_json_column(&mut buf, &mut true, Some(value)).unwrap();
+		buf
+	}
+
+	#[test]
+	fn copy_json_replaces_nul() {
+		assert_eq!(
+			copy_json(&json!({"role": "user", "content": "a\u{0}b"})),
+			r#"{"role":"user","content":"a\\ufffdb"}"#
+		);
+		assert_eq!(copy_json(&json!({"k\u{0}": 1})), r#"{"k\\ufffd":1}"#);
+		// A literal backslash followed by "u0000" is not a NUL.
+		assert_eq!(copy_json(&json!("\\u0000")), r#""\\\\u0000""#);
+		assert_eq!(copy_json(&json!("\\\u{0}")), r#""\\\\\\ufffd""#);
+		assert_eq!(copy_json(&json!("tab\there")), r#""tab\\there""#);
+	}
+
+	#[test]
+	fn copy_attributes_replaces_nul() {
+		for (attributes, expected) in [
+			(r#"{"k\u0000":"a\u0000b"}"#, r#"{"k\\ufffd":"a\\ufffdb"}"#),
+			(r#"{"literal":"\\u0000"}"#, r#"{"literal":"\\\\u0000"}"#),
+			(r#"{"value":"ordinary"}"#, r#"{"value":"ordinary"}"#),
+		] {
+			let mut buf = String::new();
+			push_copy_serialized_json_column(&mut buf, &mut true, attributes).unwrap();
+			assert_eq!(buf, expected);
+		}
+	}
+
+	#[test]
+	fn copy_text_replaces_nul() {
+		let mut buf = String::new();
+		push_copy_text_column(&mut buf, &mut true, Some("a\0b\tc"));
+		assert_eq!(buf, "a\u{fffd}b\\tc");
+	}
+}

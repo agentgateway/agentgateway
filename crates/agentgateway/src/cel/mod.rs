@@ -183,6 +183,10 @@ impl ContextBuilder {
 		self.any_has(Attributes::LlmToolCalls)
 	}
 
+	pub fn needs_upstream_calls(&self) -> bool {
+		self.any_has(Attributes::UpstreamCalls)
+	}
+
 	pub fn needs_mcp(&self) -> bool {
 		self.before_log_has(Attributes::Mcp)
 	}

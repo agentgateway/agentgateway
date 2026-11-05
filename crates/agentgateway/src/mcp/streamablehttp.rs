@@ -19,6 +19,10 @@ use crate::mcp::{REMOVED_METHODS_2026_07_28, is_modern_version};
 use crate::proxy::ProxyError;
 use crate::*;
 
+// Every streamable HTTP POST boxes this future and holds it until the response is ready.
+// A larger future usually means some value is now held across an await.
+const HANDLE_POST_FUTURE_SIZE: usize = 4 * 1024;
+
 #[derive(Debug, Clone)]
 pub struct StreamableHttpServerConfig {
 	/// If true, the server will create a session for each request and keep it alive.
@@ -89,7 +93,7 @@ impl StreamableHttpService {
 				Box::pin(
 					self
 						.handle_post(request, inputs)
-						.assert_size::<{ 4 * 1024 }>(),
+						.assert_size::<{ HANDLE_POST_FUTURE_SIZE }>(),
 				)
 				.await
 			},

@@ -337,6 +337,41 @@ spec:
     http:
       http1IdleTimeout: 10minutes
 ---
+_err: 'normalize[0]'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-normalize-invalid
+spec:
+  frontend:
+    http:
+      normalize:
+      - DecodeReserved
+---
+_err: 'normalize[1]: Duplicate value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-normalize-invalid
+spec:
+  frontend:
+    http:
+      normalize:
+      - MergeSlash
+      - MergeSlash
+---
+_err: 'RejectEscapedSlash and UnescapeSlash are mutually exclusive'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-normalize-conflicting-slashes
+spec:
+  frontend:
+    http:
+      normalize:
+      - RejectEscapedSlash
+      - UnescapeSlash
+---
 _err: 'http.http2WindowSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -1643,6 +1678,19 @@ spec:
       oauthTokenExchange:
         url: https://oauth.example.com/token
         path: /token
+---
+_err: 'additionalParams may not override a reserved OAuth parameter'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-reserved-additional-param
+spec:
+  backend:
+    auth:
+      oauthTokenExchange:
+        url: https://oauth.example.com/token
+        additionalParams:
+          Scope: '"read"'
 ---
 _err: 'url path is only valid with protocol HTTP'
 apiVersion: agentgateway.dev/v1alpha1

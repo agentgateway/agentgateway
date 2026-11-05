@@ -49,6 +49,7 @@ impl RequestType for Request {
 			input_format: InputFormat::SystemOne,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new(self.model.as_deref().unwrap_or_default()),
+			original_model: None,
 			provider,
 			streaming: false,
 			params: LLMRequestParams::default(),

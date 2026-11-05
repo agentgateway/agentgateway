@@ -81,6 +81,8 @@ pub struct Executor<'a> {
 
 	pub guardrails: Option<&'a Vec<GuardrailInfo>>,
 
+	pub upstream_calls: Option<&'a Vec<crate::telemetry::upstream::UpstreamCall>>,
+
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
@@ -1530,11 +1532,14 @@ impl GuardrailInfo {
 	}
 }
 
-/// The incoming request model, exposed as `llm.requestModel` before LLM processing.
+/// The incoming request model, exposed as `llm.requestModel` and `llm.originalModel` before LLM
+/// processing.
 #[derive(Clone, Debug, cel::DynamicType)]
 pub struct RequestModel {
 	#[dynamic(rename = "requestModel")]
 	pub request_model: Strng,
+	#[dynamic(rename = "originalModel")]
+	pub original_model: Strng,
 }
 
 #[derive(Debug, Default)]
@@ -1586,6 +1591,10 @@ pub struct LLMContext {
 	/// the incoming URL or body, before provider overrides. This may differ from the actual model used.
 	#[dynamic(rename = "requestModel")]
 	pub request_model: Strng,
+	/// The model the client asked for, before any virtual model, alias, provider override, or
+	/// request body rewrite. Equal to `requestModel` when the model was not rewritten.
+	#[dynamic(rename = "originalModel")]
+	pub original_model: Strng,
 	/// The model that actually served the LLM response.
 	#[dynamic(rename = "responseModel")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -1822,6 +1831,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			input_format: _, // Expose this?
 			cache_convention: _,
 			request_model,
+			original_model,
 			provider,
 			streaming,
 			params,
@@ -1830,6 +1840,7 @@ impl From<llm::LLMRequest> for LLMContext {
 		} = info;
 		LLMContext {
 			streaming,
+			original_model: original_model.unwrap_or_else(|| request_model.clone()),
 			request_model,
 			provider,
 			input_tokens,
@@ -1917,6 +1928,7 @@ fn service_tier_to_value(c: &Option<llm::catalog::PricingTier>) -> Value<'_> {
 		Some(llm::catalog::PricingTier::Flex) => Value::String("flex".into()),
 		Some(llm::catalog::PricingTier::Priority) => Value::String("priority".into()),
 		Some(llm::catalog::PricingTier::Reserved) => Value::String("reserved".into()),
+		Some(llm::catalog::PricingTier::Ultrafast) => Value::String("ultrafast".into()),
 	}
 }
 
@@ -2338,6 +2350,12 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub guardrails: Option<Vec<GuardrailInfo>>,
 
+	/// `upstreamCalls` lists the outbound calls made for this request, such as MCP target and policy calls.
+	/// It's only filled in for access log expressions that reference it.
+	/// Its request headers are the ones sent to the backend. `request.headers` still has the client's headers.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub upstream_calls: Option<Vec<crate::telemetry::upstream::UpstreamCall>>,
+
 	/// `metadata` contains values set by transformation metadata expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<TransformationMetadata>,
@@ -2443,6 +2461,7 @@ impl ExecutorSerde {
 		exec.extproc = ExtensionOrDirect::Direct(self.extproc.as_ref());
 		exec.mcp_guardrails = ExtensionOrDirect::Direct(self.mcp_guardrails.as_ref());
 		exec.guardrails = self.guardrails.as_ref();
+		exec.upstream_calls = self.upstream_calls.as_ref();
 		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
 		exec.mcp = self.mcp.as_ref().map(MCPView::new);
 
@@ -2565,6 +2584,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		llm: Some(LLMContext {
 			streaming: false,
 			request_model: "gpt-4".into(),
+			original_model: "gpt-4".into(),
 			response_model: Some("gpt-4-turbo".into()),
 			provider: "fake-ai".into(),
 			input_tokens: Some(100),
@@ -2646,6 +2666,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		extauthz: Some(ExtAuthzDynamicMetadata::default()),
 		extproc: Some(ExtProcDynamicMetadata::default()),
+		upstream_calls: None,
 		mcp_guardrails: Some(McpGuardrailsDynamicMetadata::default()),
 		guardrails: Some(vec![GuardrailInfo {
 			phase: "request".into(),

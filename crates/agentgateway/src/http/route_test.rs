@@ -102,6 +102,11 @@ fn test_hostname_matching() {
 			vec!["foo.example.com", "*.bar.example.com"],
 			basic_match.clone(),
 		),
+		(
+			"mixed-case-hostname",
+			vec!["Mixed.Example.org"],
+			basic_match.clone(),
+		),
 	];
 
 	struct TestCase {
@@ -116,6 +121,16 @@ fn test_hostname_matching() {
 			name: "exact hostname match",
 			host: "test.example.com",
 			expected_route: Some("exact-hostname"),
+		},
+		TestCase {
+			name: "exact hostname match is case-insensitive",
+			host: "TEST.Example.com",
+			expected_route: Some("exact-hostname"),
+		},
+		TestCase {
+			name: "configured hostname is case-insensitive",
+			host: "mixed.example.org",
+			expected_route: Some("mixed-case-hostname"),
 		},
 		// Test wildcard hostname matching
 		TestCase {

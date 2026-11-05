@@ -118,6 +118,7 @@ fn build_test_request() -> crate::http::Request {
 	let llm = LLMContext {
 		streaming: false,
 		request_model: "gpt-4".into(),
+		original_model: "gpt-4".into(),
 		response_model: Some("gpt-4-turbo".into()),
 		provider: "openai".into(),
 		input_tokens: Some(100),
@@ -165,6 +166,7 @@ fn llm_context_with_usage(
 		input_format: llm::InputFormat::Completions,
 		cache_convention,
 		request_model: "model".into(),
+		original_model: None,
 		provider: "provider".into(),
 		streaming: false,
 		params: llm::LLMRequestParams::default(),

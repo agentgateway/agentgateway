@@ -79,6 +79,62 @@ async fn llm_copilot_explicit_auth(#[case] credential: &str) {
 }
 
 #[tokio::test]
+async fn llm_streaming_response_transformation_sees_llm_context() {
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(wiremock::ResponseTemplate::new(200).set_body_raw(
+			llm_body!("response/completions/stream-content_filter.json").to_vec(),
+			"text/event-stream",
+		))
+		.mount(&mock)
+		.await;
+	let (_mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation: None,
+		}),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"transformations": {
+				"response": {
+					"set": {
+						"x-llm-provider": "llm.provider",
+						"x-llm-request-model": "llm.requestModel",
+						"x-llm-streaming": "string(llm.streaming)"
+					}
+				}
+			}
+		}))
+		.await;
+
+	let mut body: Value =
+		serde_json::from_slice(llm_body!("requests/completions/basic.json")).unwrap();
+	body["stream"] = json!(true);
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&body).unwrap()))
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let header = |name: &str| {
+		res
+			.headers()
+			.get(name)
+			.map(|v| v.to_str().unwrap().to_string())
+	};
+	assert_eq!(header("x-llm-provider").as_deref(), Some("openai"));
+	assert_eq!(header("x-llm-request-model").as_deref(), Some("replaceme"));
+	assert_eq!(header("x-llm-streaming").as_deref(), Some("true"));
+	let text = String::from_utf8(read_body_raw(res.into_body()).await.to_vec()).unwrap();
+	assert!(text.contains("data: "), "expected SSE body, got: {text}");
+}
+
+#[tokio::test]
 async fn llm_openai_tokenize() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
 	let (_mock, _bind, io) = setup_llm_mock(
@@ -731,6 +787,125 @@ llm:
 }
 
 #[tokio::test]
+async fn llm_model_list_preferred_endpoints() {
+	let config = r#"
+llm:
+  port: 0
+  models:
+  - name: gpt-5.5
+    provider: openAI
+  - name: text-embedding-3-small
+    provider: openAI
+  - name: gpt-image-2
+    provider: openAI
+  - name: claude-sonnet-4-5
+    provider: anthropic
+  - name: gemini-2.5-flash
+    provider: gemini
+  - name: gemini-2.5-flash-image
+    provider: gemini
+  - name: vertex/claude-sonnet-4-5
+    provider: vertex
+    params:
+      model: claude-sonnet-4-5
+      vertexProject: p
+  - name: vertex/gemini-embedding-001
+    provider: vertex
+    params:
+      model: gemini-embedding-001
+      vertexProject: p
+  - name: bedrock/claude-sonnet-4-5
+    provider: bedrock
+    params:
+      model: anthropic.claude-sonnet-4-5
+      awsRegion: us-east-1
+  - name: bedrock/llama3
+    provider: bedrock
+    params:
+      model: meta.llama3-70b-instruct-v1:0
+      awsRegion: us-east-1
+  - name: bedrock/titan-embed
+    provider: bedrock
+    params:
+      model: amazon.titan-embed-text-v2:0
+      awsRegion: us-east-1
+  - name: azure/gpt-5.5
+    provider: azure
+    params:
+      model: gpt-5.5
+      azureResourceName: r
+      azureResourceType: openAI
+  - name: foundry/claude-sonnet-4-5
+    provider: azure
+    params:
+      model: claude-sonnet-4-5
+      azureResourceName: r
+      azureResourceType: foundry
+      azureProjectName: p
+  - name: FLUX.1-schnell
+    provider: togetherai
+  - name: custom-embedder
+    provider:
+      custom:
+        formats:
+        - type: embeddings
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: custom-everything
+    provider:
+      custom:
+        formats:
+        - type: completions
+        - type: generateContent
+        - type: anthropicTokenCount
+        - type: geminiCountTokens
+        - type: rerank
+        - type: decisions
+        - type: systemOne
+        - type: realtime
+    params:
+      baseUrl: http://localhost:9999/v1
+  virtualModels:
+  - name: openai-and-azure
+    routing:
+      weighted:
+        targets:
+        - model: gpt-5.5
+          weight: 1
+        - model: azure/gpt-5.5
+          weight: 1
+"#;
+	let mut t = setup_local_llm_config(config).await;
+	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
+		agentgateway::ModelCatalogSource::Inline {
+			inline: r#"{"metadata":{"generatedAt":"2099-01-01T00:00:00Z"},"providers":{
+				"openai":{"models":{"gpt-5.5":{},"text-embedding-3-small":{"endpoints":["/embeddings"]},"gpt-image-2":{"endpoints":["/images/generations","/images/edits"]}}},
+				"gcp.gemini":{"models":{"gemini-2.5-flash":{},"gemini-2.5-flash-image":{"endpoints":["/images/generations","/images/edits"]}}},
+				"gcp.vertex_ai":{"models":{"gemini-embedding-001":{"endpoints":["/embeddings"]}}},
+				"aws.bedrock":{"models":{"anthropic.claude-sonnet-4-5":{"modalities":{"input":["text"],"output":["text"]}},"meta.llama3-70b-instruct-v1:0":{"modalities":{"input":["text"],"output":["text"]}},"amazon.titan-embed-text-v2:0":{}}},
+				"togetherai":{"models":{"FLUX.1-schnell":{"endpoints":["/images/generations","/images/edits"]}}}
+			}}"#.to_string(),
+		},
+	]).await.unwrap();
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	let endpoints = models["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| {
+			(
+				m["id"].as_str().unwrap().to_string(),
+				m["preferred_endpoints"].clone(),
+			)
+		})
+		.collect::<std::collections::BTreeMap<_, _>>();
+	insta::assert_json_snapshot!(endpoints);
+}
+
+#[tokio::test]
 async fn llm_local_router_handles_models_virtual_model_and_missing_model() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
 	let config = format!(
@@ -1009,6 +1184,82 @@ llm:
 			.expect("upstream requests")
 			.len(),
 		0
+	);
+}
+
+#[tokio::test]
+async fn llm_nested_virtual_models() {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: fast
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{0}/v1
+    transformation:
+      max_tokens: "256"
+  - name: other
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{0}/v1
+  virtualModels:
+  - name: entry
+    routing:
+      conditional:
+        targets:
+        - model: pool
+          when: request.headers["x-route"] == "pool"
+        - model: other
+  - name: pool
+    routing:
+      weighted:
+        targets:
+        - model: fast
+          weight: 1
+  # Shadows the concrete model of the same name.
+  - name: fast
+    routing:
+      weighted:
+        targets:
+        - model: fast
+          weight: 1
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+
+	for (model, headers) in [
+		("entry", &[("x-route", "pool")][..]),
+		("entry", &[][..]),
+		("fast", &[][..]),
+	] {
+		let res = send_completions_with_model(io.clone(), model, headers).await;
+		assert_eq!(res.status(), StatusCode::OK);
+	}
+
+	let got = mock
+		.received_requests()
+		.await
+		.expect("upstream requests")
+		.iter()
+		.map(|request| {
+			let body: Value = serde_json::from_slice(&request.body).expect("upstream request JSON");
+			(body["model"].clone(), body["max_tokens"].clone())
+		})
+		.collect::<Vec<_>>();
+	assert_eq!(
+		got,
+		vec![
+			(json!("fast"), json!(256)),
+			(json!("other"), Value::Null),
+			(json!("fast"), json!(256)),
+		]
 	);
 }
 

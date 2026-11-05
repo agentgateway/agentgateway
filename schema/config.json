@@ -636,6 +636,16 @@
             "null"
           ]
         },
+        "endpoints": {
+          "description": "Client endpoints the model serves; absent means a chat model.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "rates": {
           "description": "Base pricing rates for this model.",
           "$ref": "#/$defs/Rates"
@@ -825,7 +835,8 @@
         "standard",
         "flex",
         "priority",
-        "reserved"
+        "reserved",
+        "ultrafast"
       ]
     },
     "Limits": {
@@ -1493,7 +1504,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -2374,6 +2386,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Buffer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "compression": {
+          "description": "Compress responses and decompress request bodies.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Compression"
             },
             {
               "type": "null"
@@ -8622,6 +8646,112 @@
         "failOpen"
       ]
     },
+    "Compression": {
+      "type": "object",
+      "properties": {
+        "response": {
+          "description": "Compression applied to responses sent to the client.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompressionResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request": {
+          "description": "Compression applied to requests received from the client.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompressionRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CompressionResponse": {
+      "type": "object",
+      "properties": {
+        "compress": {
+          "description": "Compress response bodies sent to the client. Only textual content types with a known\nlength of at least 32 bytes are compressed, so streamed responses are sent as-is.\nResponses that are already encoded, partial (`Content-Range`), or marked `no-transform`\nare never compressed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResponseCompression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResponseCompression": {
+      "type": "object",
+      "properties": {
+        "algorithms": {
+          "description": "Algorithms that may be negotiated with the client's Accept-Encoding header. When the client\naccepts several equally, the first listed wins. Defaults to gzip.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompressionAlgorithm"
+          },
+          "minItems": 1,
+          "default": [
+            "gzip"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CompressionAlgorithm": {
+      "description": "An HTTP content coding supported by the compression policy.",
+      "type": "string",
+      "enum": [
+        "gzip",
+        "brotli",
+        "deflate",
+        "zstd"
+      ]
+    },
+    "CompressionRequest": {
+      "type": "object",
+      "properties": {
+        "decompress": {
+          "description": "Decompress request bodies after authorization, before route-level body-aware policies run\nand before forwarding. Gateway-phase policies observe the encoded body.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestDecompression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RequestDecompression": {
+      "type": "object",
+      "properties": {
+        "algorithms": {
+          "description": "Algorithms decoded from request bodies. Bodies using any other (or more than one)\nencoding are forwarded untouched. Defaults to gzip.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompressionAlgorithm"
+          },
+          "minItems": 1,
+          "default": [
+            "gzip"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "TimeoutPolicy": {
       "type": "object",
       "properties": {
@@ -10839,6 +10969,13 @@
           ],
           "format": "uint32",
           "minimum": 1
+        },
+        "normalize": {
+          "description": "Path normalization rules applied before route matching. The normalized path is used for\nrouting, policies and the upstream request. Access logs keep the original path.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PathNormalization"
+          }
         }
       },
       "additionalProperties": false
@@ -10854,6 +10991,36 @@
           "description": "Preserve original HTTP/1 request header casing when encoding responses on the same connection.",
           "type": "string",
           "const": "preserve"
+        }
+      ]
+    },
+    "PathNormalization": {
+      "description": "A request path normalization rule. Rules are applied in a fixed order regardless of how they are\nlisted: `DecodeUnreserved`, `RejectEscapedSlash`, `UnescapeSlash`, `MergeSlash`, `DotSegment`.\nWhenever percent-encoding is inspected, malformed escapes and `%00` are rejected.",
+      "oneOf": [
+        {
+          "description": "Collapse repeated slashes into one. `\\` is treated as `/`",
+          "type": "string",
+          "const": "mergeSlash"
+        },
+        {
+          "description": "Resolve `.` and `..` segments (RFC 3986 section 5.2.4). `%2E` is treated as `.`, `\\` as `/`,\nand parameters on dot segments (`..;x`) are ignored",
+          "type": "string",
+          "const": "dotSegment"
+        },
+        {
+          "description": "Decode percent-encoded unreserved characters (`A-Z a-z 0-9 - . _ ~`)",
+          "type": "string",
+          "const": "decodeUnreserved"
+        },
+        {
+          "description": "Reject requests whose path contains `%2F` or `%5C`",
+          "type": "string",
+          "const": "rejectEscapedSlash"
+        },
+        {
+          "description": "Decode `%2F` and `%5C` into `/`. Mutually exclusive with `RejectEscapedSlash`",
+          "type": "string",
+          "const": "unescapeSlash"
         }
       ]
     },
@@ -12697,7 +12864,8 @@
         "fireworks",
         "meta",
         "perplexity",
-        "typesafe"
+        "typesafe",
+        "nebius"
       ]
     },
     "LocalLLMProviderDefaults": {
@@ -13688,6 +13856,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "basePath": {
+          "description": "basePath is the prefix a reverse proxy in front of the gateway strips before forwarding (e.g. `/agentgateway`).\nIt is added to UI links, assets and login redirects.",
+          "type": [
+            "string",
+            "null"
           ]
         }
       },

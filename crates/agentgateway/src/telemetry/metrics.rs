@@ -229,8 +229,18 @@ pub struct SubstrateRouteLabels {
 }
 
 #[derive(
-	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue, Default,
+	Copy,
+	Clone,
+	Hash,
+	Debug,
+	PartialEq,
+	Eq,
+	prometheus_client::encoding::EncodeLabelValue,
+	Default,
+	serde::Serialize,
+	serde::Deserialize,
 )]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum OutboundCallKind {
 	/// The primary backend call
 	#[default]

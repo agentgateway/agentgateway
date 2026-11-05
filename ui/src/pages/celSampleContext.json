@@ -67,6 +67,7 @@
 	"llm": {
 		"streaming": false,
 		"requestModel": "gpt-4",
+		"originalModel": "gpt-4",
 		"responseModel": "gpt-4-turbo",
 		"provider": "fake-ai",
 		"inputTokens": 100,

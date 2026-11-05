@@ -763,12 +763,21 @@ impl Client {
 			..
 		} = call;
 		async move {
+			let mut upstream_call = crate::telemetry::upstream::PendingCall::from_request(&req, &target);
 			let dest = connector
 				.resolve_target(connection.transport.skip_dns_resolution(), &target)
-				.await?;
-			if deny_loopback {
-				check_not_loopback(dest)?;
-			}
+				.await
+				.and_then(|dest| {
+					if deny_loopback {
+						check_not_loopback(dest)?;
+					}
+					Ok(dest)
+				})
+				.inspect_err(|error| {
+					if let Some(call) = upstream_call.as_mut() {
+						call.set_error(error.to_string());
+					}
+				})?;
 			http::modify_req_uri(&mut req, |uri| {
 				let scheme = connection.transport.scheme();
 				// Strip the port from the hostname if its the default already
@@ -790,6 +799,9 @@ impl Client {
 			}
 			let version = req.version();
 			let transport_name = connection.transport.name();
+			if let Some(call) = upstream_call.as_mut() {
+				call.set_headers(req.headers());
+			}
 			// We are going to do a HTTP absolute form tunnel request. For CONNECT this is handled
 			// in the connect layer, but here we need to merge it into the request
 			if let Transport::Tunnel(app, tc) = &connection.transport
@@ -854,6 +866,12 @@ impl Client {
 			} else {
 				call.await.map_err(map_error)
 			};
+			if let Some(call) = upstream_call.as_mut() {
+				match &resp {
+					Ok(response) => call.set_response(response),
+					Err(error) => call.set_error(error.to_string()),
+				}
+			}
 			let dur = format!("{}ms", start.elapsed().as_millis());
 			// If version changed due to ALPN negotiation, make sure we get the real version
 			let version = resp.as_ref().map(|resp| resp.version()).unwrap_or(version);
@@ -888,10 +906,14 @@ impl Client {
 				.extensions_mut()
 				.insert(transport::BufferLimit::new(buffer_limit));
 			resp.extensions_mut().insert(ResolvedDestination(dest));
+			let trailer_observer = upstream_call.as_ref().map(|call| call.trailer_observer());
 			Ok(resp.map(|body| {
 				let mut body = http::Body::new(body).with_drop_guard(active);
 				if let Some(deadline) = deadline {
 					body.set_deadline(deadline);
+				}
+				if let Some(observer) = trailer_observer {
+					body = body.with_observer(observer);
 				}
 				body
 			}))

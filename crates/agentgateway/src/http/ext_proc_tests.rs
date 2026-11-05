@@ -2640,16 +2640,54 @@ fn configure_standalone_service_with_app_protocol(t: &TestBind, app_protocol: Op
 		.unwrap();
 }
 
+/// Selects `target` like a normal EPP, then replaces the upstream response with an ImmediateResponse.
+struct ImmediateResponseInferenceRouter(StandaloneInferenceRouter);
+
+#[async_trait::async_trait]
+impl Handler for ImmediateResponseInferenceRouter {
+	async fn handle_request_headers(
+		&mut self,
+		headers: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		self.0.handle_request_headers(headers, sender).await
+	}
+
+	async fn handle_response_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender
+			.send(immediate_response(proto::ImmediateResponse {
+				status: Some(proto::HttpStatus { code: 503 }),
+				body: "epp immediate".to_string(),
+				headers: None,
+				grpc_status: None,
+				details: "".to_string(),
+			}))
+			.await;
+		Ok(())
+	}
+}
+
 async fn setup_inference_routing_mock(
 	target: Option<String>,
 	request_headers_seen: Arc<AtomicUsize>,
 	destination_mode: Option<&'static str>,
 ) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
-	let ext_proc = ExtProcMock::new(move || {
-		StandaloneInferenceRouter::new(target.clone(), request_headers_seen.clone())
-	})
-	.spawn()
-	.await;
+	setup_inference_routing_with(
+		move || StandaloneInferenceRouter::new(target.clone(), request_headers_seen.clone()),
+		destination_mode,
+	)
+	.await
+}
+
+async fn setup_inference_routing_with<T: Handler + Send + Sync + 'static>(
+	handler: impl Fn() -> T + Send + Sync + 'static,
+	destination_mode: Option<&'static str>,
+) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
+	let ext_proc = ExtProcMock::new(handler).spawn().await;
 
 	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
 	configure_standalone_service(&t);
@@ -2760,6 +2798,36 @@ mod standalone_inference_routing {
 				.len(),
 			1,
 			"EPP-selected endpoint should receive traffic",
+		);
+	}
+
+	#[tokio::test]
+	async fn standalone_inference_routing_response_immediate_response_replaces_upstream() {
+		let backend = named_backend("backend").await;
+		let target = backend.address().to_string();
+		let (_ext_proc, _bind, io) = setup_inference_routing_with(
+			move || {
+				ImmediateResponseInferenceRouter(StandaloneInferenceRouter::new(
+					Some(target.clone()),
+					Arc::new(AtomicUsize::new(0)),
+				))
+			},
+			Some("passthrough"),
+		)
+		.await;
+
+		let res = send_request(io, Method::GET, "http://lo").await;
+		assert_eq!(res.status(), 503);
+		let body = read_body_raw(res.into_body()).await;
+		assert_eq!(body.as_ref(), b"epp immediate");
+		assert_eq!(
+			backend
+				.received_requests()
+				.await
+				.expect("recording should be enabled")
+				.len(),
+			1,
+			"the upstream is called before the EPP replaces its response",
 		);
 	}
 
@@ -5267,14 +5335,14 @@ mod body_streaming_and_trailers {
 				.insert(http::header::CONTENT_LENGTH, bytes.len().into());
 			req.body_mut().record(1024);
 			let request_recording = req.body().recorded().unwrap().clone();
-			let _ = ext_proc.mutate_request(&mut req).await.unwrap();
+			ext_proc.mutate_request(&mut req).await.unwrap();
 			let mut resp = http::Response::new(Body::from(bytes));
 			resp
 				.headers_mut()
 				.insert(http::header::CONTENT_LENGTH, bytes.len().into());
 			resp.body_mut().record(1024);
 			let response_recording = resp.body().recorded().unwrap().clone();
-			let _ = ext_proc.mutate_response(&mut resp, None).await.unwrap();
+			ext_proc.mutate_response(&mut resp, None).await.unwrap();
 
 			// Exercise real Content-Length framing, where Hyper may stop without
 			// polling EOF. Recording must retain the bytes without requiring completion.
@@ -5478,7 +5546,7 @@ mod body_streaming_and_trailers {
 			.body(Body::new(http_body_util::StreamBody::new(frames)))
 			.build()
 			.unwrap();
-		let _ = ext_proc_request.mutate_request(&mut req).await.unwrap();
+		ext_proc_request.mutate_request(&mut req).await.unwrap();
 		let collected = req.into_body().collect().await.unwrap();
 		let trailers = collected
 			.trailers()
@@ -5547,7 +5615,7 @@ mod body_streaming_and_trailers {
 		let _ = req.body_mut().inspect(1024).await.unwrap();
 		req.body_mut().record(1024);
 		let recorded = req.body().recorded().unwrap().clone();
-		let _ = ext_proc_request.mutate_request(&mut req).await.unwrap();
+		ext_proc_request.mutate_request(&mut req).await.unwrap();
 
 		assert!(
 			req.body().recorded().is_some(),
@@ -5594,7 +5662,7 @@ mod body_streaming_and_trailers {
 		let _ = resp.body_mut().inspect(1024).await.unwrap();
 		resp.body_mut().record(1024);
 		let recorded = resp.body().recorded().unwrap().clone();
-		let _ = ext_proc_request
+		ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
@@ -5674,7 +5742,7 @@ mod body_streaming_and_trailers {
 			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers)),
 		]);
 		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(frames)));
-		let _ = ext_proc_request
+		ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
@@ -5721,7 +5789,7 @@ mod body_streaming_and_trailers {
 		let _ = resp.body_mut().inspect(1024).await.unwrap();
 		resp.body_mut().record(1024);
 		let recorded = resp.body().recorded().unwrap().clone();
-		let _ = ext_proc_request
+		ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
@@ -5771,7 +5839,7 @@ mod body_streaming_and_trailers {
 		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(
 			tokio_stream::wrappers::ReceiverStream::new(upstream_rx),
 		)));
-		let _ = ext_proc_request
+		ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
@@ -5783,6 +5851,48 @@ mod body_streaming_and_trailers {
 		tokio::time::timeout(Duration::from_secs(5), upstream_tx.closed())
 			.await
 			.expect("upstream body should be dropped once the downstream body is dropped");
+	}
+
+	#[tokio::test]
+	async fn request_phase_resets_stream_when_downstream_is_dropped() {
+		// Never answers request headers, like an EPP holding the request in its queue.
+		#[derive(Clone)]
+		struct Queued(mpsc::UnboundedSender<Sender<Result<ProcessingResponse, Status>>>);
+
+		#[async_trait::async_trait]
+		impl Handler for Queued {
+			async fn handle_request_headers(
+				&mut self,
+				_headers: &HttpHeaders,
+				sender: &Sender<Result<ProcessingResponse, Status>>,
+			) -> Result<(), Status> {
+				let _ = self.0.send(sender.clone());
+				Ok(())
+			}
+		}
+
+		let (queued_tx, mut queued_rx) = mpsc::unbounded_channel();
+		let ext_proc = ExtProcMock::new(move || Queued(queued_tx.clone()))
+			.spawn()
+			.await;
+		let processing_options = ext_proc::ProcessingOptions {
+			request_header_mode: ext_proc::HeaderSendMode::Send,
+			request_body_mode: ext_proc::BodySendMode::None,
+			..Default::default()
+		};
+		let mut ext_proc_request =
+			build_ext_proc_request_for_test(ext_proc.address, processing_options);
+		let mut req = http::Request::new(Body::empty());
+
+		let processor_tx = tokio::select! {
+			_ = ext_proc_request.mutate_request(&mut req) => panic!("request should stay queued"),
+			tx = queued_rx.recv() => tx.unwrap(),
+		};
+		drop(ext_proc_request);
+		// A half-close keeps the processor's response stream open; only a reset closes it.
+		tokio::time::timeout(Duration::from_secs(5), processor_tx.closed())
+			.await
+			.expect("ext_proc stream should be reset once the downstream request is dropped");
 	}
 }
 

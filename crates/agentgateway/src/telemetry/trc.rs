@@ -1033,6 +1033,7 @@ mod tests {
 			input_format: crate::llm::InputFormat::Responses,
 			cache_convention: Default::default(),
 			request_model: "test-model".into(),
+			original_model: None,
 			provider: "test-provider".into(),
 			streaming: false,
 			params: Default::default(),

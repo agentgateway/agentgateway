@@ -166,6 +166,11 @@ output:
         backend:
           backend: default/azure-foundry/backend.llm
         discoveryProvider: azure
+        discoveryProviderConfig:
+          azure:
+            projectName: test-project
+            resourceName: example
+            resourceType: FOUNDRY
       key: default/azure-foundry.llm
       listenerKey: default/llm-only.llm
       match:
@@ -179,6 +184,9 @@ output:
         backend:
           backend: default/bedrock/backend.llm
         discoveryProvider: aws.bedrock
+        discoveryProviderConfig:
+          bedrock:
+            region: us-east-1
       key: default/bedrock.llm
       listenerKey: default/llm-only.llm
       match:
@@ -192,6 +200,8 @@ output:
         backend:
           backend: default/copilot/backend.llm
         discoveryProvider: copilot
+        discoveryProviderConfig:
+          copilot: {}
       key: default/copilot.llm
       listenerKey: default/llm-only.llm
       match:
@@ -205,6 +215,10 @@ output:
         backend:
           backend: default/vertexai/backend.llm
         discoveryProvider: gcp.vertex_ai
+        discoveryProviderConfig:
+          vertex:
+            projectId: test-project
+            region: global
       key: default/vertexai.llm
       listenerKey: default/llm-only.llm
       match:

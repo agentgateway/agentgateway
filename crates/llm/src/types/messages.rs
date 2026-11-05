@@ -522,6 +522,7 @@ impl RequestType for Request {
 			input_format: InputFormat::Messages,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
+			original_model: None,
 			provider,
 			streaming: self.stream.unwrap_or_default(),
 			params: LLMRequestParams {
@@ -1457,6 +1458,8 @@ pub mod typed {
 		},
 		MessageDelta {
 			delta: MessageDelta,
+			// Absent on Bedrock's guardrail responses.
+			#[serde(default)]
 			usage: MessageDeltaUsage,
 		},
 		MessageStop,

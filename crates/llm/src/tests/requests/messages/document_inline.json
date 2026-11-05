@@ -1,0 +1,36 @@
+{
+  "model": "claude-sonnet-5",
+  "max_tokens": 64,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "document",
+          "source": {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": "JVBERi0xLjQK"
+          },
+          "title": "report.pdf",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
+          "type": "document",
+          "source": {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": "JVBERi0xLjQK"
+          },
+          "title": "report.pdf"
+        },
+        {
+          "type": "text",
+          "text": "What is this document about?"
+        }
+      ]
+    }
+  ]
+}

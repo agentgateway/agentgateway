@@ -455,9 +455,20 @@ where
 			// Currently we do not allow exceeding the expected capacity (though it can be less than)
 			let expected = self.pool.settings.expected_http2_capacity;
 			let cur_max = std::cmp::min(conn.current_max_send_streams(), expected);
+			// The peer's SETTINGS arrive asynchronously and may change at any time, so the limit is
+			// read from the connection whenever the pool reserves or releases a stream.
+			let conn = Arc::new(parking_lot::Mutex::new(conn));
+			let peer_conn = Arc::downgrade(&conn);
+			let load = H2Load::new(cur_max, move || {
+				let conn = peer_conn.upgrade()?;
+				// This is called with the pool lock held, while polling the connection can acquire the
+				// pool lock (by dropping a stream). Do not block; fall back to the last known value.
+				let conn = conn.try_lock()?;
+				Some(std::cmp::min(conn.current_max_send_streams(), expected))
+			});
 			trace!("http2 handshake complete, spawning background dispatcher task");
 			executor.execute(
-				conn
+				poll_fn(move |cx| Pin::new(&mut *conn.lock()).poll(cx))
 					.map_err(|e| debug!("client connection error: {}", e))
 					.map(|_| ()),
 			);
@@ -470,7 +481,7 @@ where
 				tx,
 				// Important: we do NOT reserve the stream slot here yet; we are only establishing a connection
 				// not attaching any requests to it yet.
-				load: Arc::new(H2Load::new(cur_max)),
+				load: Arc::new(load),
 			})
 		} else {
 			// Perform the HTTP/1.1 handshake on the provided I/O stream.
