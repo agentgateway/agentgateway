@@ -5028,6 +5028,12 @@ async fn convert_llm_config(
 						target: BackendReference::Backend(strng::format!("/{backend_key}")).into(),
 						inline_policies: vec![],
 					},
+					targets: failover
+						.targets
+						.iter()
+						.sorted_by_key(|target| target.priority)
+						.map(|target| strng::new(&target.model))
+						.collect(),
 				}
 			},
 		};
