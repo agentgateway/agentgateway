@@ -770,6 +770,50 @@ async fn test_apply_to_response_uses_prefix_rewrite_context() {
 	);
 }
 
+#[tokio::test]
+async fn test_apply_to_response_keeps_already_public_interface_path() {
+	// Regression test for issue #3500: the backend advertises the public path, which
+	// matches neither the rewrite replacement nor the backend agent path.
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "supervisor",
+				"supportedInterfaces": [
+					{ "protocolBinding": "JSONRPC", "url": "https://tenant.example/a2a/agents/supervisor/rpc" }
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"http://gateway.example/a2a/agents/supervisor/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+			"/firefly/agents/supervisor/.well-known/agent-card.json".to_string(),
+			Some(crate::http::filters::AppliedUrlRewrite {
+				path: Some(crate::types::agent::PathRedirect::Prefix(
+					"/firefly/agents".into(),
+				)),
+				path_match: crate::types::agent::PathMatch::PathPrefix("/a2a/agents".into()),
+			}),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"http://gateway.example/a2a/agents/supervisor/rpc"
+	);
+}
+
 #[test]
 fn test_strip_complete_path_prefix_normalizes_trailing_slashes() {
 	assert_eq!(
