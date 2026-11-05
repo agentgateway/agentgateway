@@ -194,6 +194,11 @@ function TrafficRoutesEditorPage() {
 		writeTrafficRouteSearch(null, 'replace');
 	}
 
+	function cancelEditor() {
+		update.reset();
+		closeEditor();
+	}
+
 	if (!config.isLoading && !config.isError && !hasLegacyBinds) {
 		return <GatewayRoutesEditorPage />;
 	}
@@ -220,7 +225,7 @@ function TrafficRoutesEditorPage() {
 				}
 			/>
 
-			{update.isError ? (
+			{update.isError && !editing ? (
 				<StatusBanner state="bad" title="Save failed">
 					{update.error.message}
 				</StatusBanner>
@@ -346,7 +351,8 @@ function TrafficRoutesEditorPage() {
 					editing={editing}
 					help={help}
 					saving={update.isPending}
-					onCancel={closeEditor}
+					saveError={update.error?.message}
+					onCancel={cancelEditor}
 					onSave={nextEditing =>
 						update.mutate(
 							next => {
@@ -457,6 +463,11 @@ function GatewayRoutesEditorPage() {
 		setEditing(null);
 	}
 
+	function cancelEditor() {
+		upsertResource.reset();
+		closeEditor();
+	}
+
 	function databaseRoute(kind: RouteKind, resourceId: string | undefined) {
 		return Boolean(
 			resourceId &&
@@ -486,7 +497,7 @@ function GatewayRoutesEditorPage() {
 				}
 			/>
 
-			{saveError ? (
+			{saveError && !editing ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
@@ -616,7 +627,8 @@ function GatewayRoutesEditorPage() {
 					editing={editing}
 					help={help}
 					saving={upsertResource.isPending || deleteResource.isPending}
-					onCancel={closeEditor}
+					saveError={upsertResource.error?.message}
+					onCancel={cancelEditor}
 					databaseBacked={
 						traffic.hybrid &&
 						(!editing.resourceId || databaseRoute(editing.kind, editing.resourceId))
@@ -669,6 +681,7 @@ function GatewayRouteEditor(props: {
 	help: SchemaHelp;
 	saving: boolean;
 	databaseBacked?: boolean;
+	saveError?: string;
 	onCancel: () => void;
 	onSave: (editing: {
 		kind: RouteKind;
@@ -720,6 +733,7 @@ function GatewayRouteEditor(props: {
 					: 'Add route'
 			}
 			onClose={props.onCancel}
+			error={props.saveError}
 			raw={{
 				schemaPath: ['$defs', kind === 'http' ? 'LocalAttachedRoute' : 'LocalAttachedTCPRoute'],
 				value: () => merged.value,
@@ -889,6 +903,7 @@ function RouteEditor(props: {
 	};
 	help: SchemaHelp;
 	saving: boolean;
+	saveError?: string;
 	onCancel: () => void;
 	onSave: (editing: {
 		bindIndex: number;
@@ -931,6 +946,7 @@ function RouteEditor(props: {
 		<Drawer
 			title={typeof props.editing.routeIndex === 'number' ? 'Edit route' : 'Add route'}
 			onClose={props.onCancel}
+			error={props.saveError}
 			raw={{
 				schemaPath: ['$defs', effectiveKind === 'http' ? 'LocalRoute' : 'LocalTCPRoute'],
 				value: () => merged.value,

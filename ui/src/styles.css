@@ -773,6 +773,13 @@ td.row-actions > * + * {
 	padding: 20px;
 }
 
+.drawer-save-error {
+	position: sticky;
+	bottom: 0;
+	z-index: 1;
+	margin-top: 12px;
+}
+
 .drawer-footer {
 	justify-content: flex-end;
 	border-top: 1px solid var(--line);

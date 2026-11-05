@@ -109,6 +109,12 @@ export function TrafficGatewaysPage() {
 		setDrawer(null, 'replace');
 	}
 
+	function cancelDrawer() {
+		update.reset();
+		upsertResource.reset();
+		closeDrawer();
+	}
+
 	function saveGateway(draft: GatewayEditorState) {
 		upsertResource.mutate(
 			{
@@ -148,6 +154,7 @@ export function TrafficGatewaysPage() {
 	const saving = update.isPending || upsertResource.isPending || deleteResource.isPending;
 	const saveError =
 		update.error?.message ?? upsertResource.error?.message ?? deleteResource.error?.message ?? null;
+	const drawerError = update.error?.message ?? upsertResource.error?.message;
 	const saved = update.isSuccess || upsertResource.isSuccess || deleteResource.isSuccess;
 
 	return (
@@ -163,7 +170,7 @@ export function TrafficGatewaysPage() {
 				}
 			/>
 
-			{saveError ? (
+			{saveError && !drawer ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
@@ -380,7 +387,8 @@ export function TrafficGatewaysPage() {
 								activeGateway.previousName
 							))
 					}
-					onCancel={closeDrawer}
+					saveError={drawerError}
+					onCancel={cancelDrawer}
 					onSave={saveGateway}
 				/>
 			) : null}
@@ -400,7 +408,8 @@ export function TrafficGatewaysPage() {
 							activeListener.gatewayName
 						)
 					}
-					onCancel={closeDrawer}
+					saveError={drawerError}
+					onCancel={cancelDrawer}
 					onSave={(gatewayName, listener, listenerIndex) =>
 						saveGatewayListeners(gatewayName, gateway => {
 							gateway.listeners ??= [];
@@ -442,6 +451,7 @@ function GatewayEditor(props: {
 	help: SchemaHelp;
 	saving: boolean;
 	databaseBacked?: boolean;
+	saveError?: string;
 	onCancel: () => void;
 	onSave: (draft: GatewayEditorState) => void;
 }) {
@@ -495,6 +505,7 @@ function GatewayEditor(props: {
 		<Drawer
 			title={props.initial.previousName ? 'Edit gateway' : 'Add gateway'}
 			onClose={props.onCancel}
+			error={props.saveError}
 			raw={{
 				schemaPath: ['$defs', 'LocalGateway'],
 				value: () => saved,
@@ -771,6 +782,7 @@ function GatewayListenerEditor(props: {
 	help: SchemaHelp;
 	saving: boolean;
 	databaseBacked?: boolean;
+	saveError?: string;
 	onCancel: () => void;
 	onSave: (gatewayName: string, listener: TrafficGatewayListener, listenerIndex?: number) => void;
 }) {
@@ -812,6 +824,7 @@ function GatewayListenerEditor(props: {
 		<Drawer
 			title={typeof props.editing.listenerIndex === 'number' ? 'Edit listener' : 'Add listener'}
 			onClose={props.onCancel}
+			error={props.saveError}
 			raw={{
 				schemaPath: ['$defs', 'LocalGatewayListener'],
 				value: () => saved,

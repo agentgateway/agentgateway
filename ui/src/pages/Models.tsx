@@ -322,7 +322,7 @@ function ModelsEditorPage() {
 				}
 			/>
 
-			{saveError ? (
+			{saveError && !activeEditing && !activeVirtualEditing ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
