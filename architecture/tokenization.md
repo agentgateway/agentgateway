@@ -16,7 +16,7 @@ This configuration applies only to incoming Chat Completions requests, normally 
 
 The gateway replaces standard email addresses in system messages, conversation text, tool results and tool arguments. It reuses the built-in ASCII email recognizer. Internationalized email addresses are outside this first version. It does not inspect images, audio, attachments, headers, metadata or tool definitions, and it does not decode obfuscated addresses or JSON escapes inside tool argument strings. This is a scoped text transformation, not a complete data loss prevention system
 
-Each request gets a random token namespace and a private in-memory mapping. Repeated, exactly matching addresses receive the same token within that request. Mappings are not shared between requests or replicas and are not stored in a persistent vault. A request with more than 4096 distinct addresses is rejected
+Each request gets a random token namespace and a private in-memory mapping. Tokens use angle brackets, for example `<AGW_EMAIL_4f89279340ab4e28a9b9ce0f57aca0b2_0>`. Repeated, exactly matching addresses receive the same token within that request. Mappings are not shared between requests or replicas and are not stored in a persistent vault. A request with more than 4096 distinct addresses is rejected
 
 Request enrichment and request guards run before replacement. Addresses already masked by a request guard cannot be restored. Response guards inspect the tokenized reply before restoration. Enabling data tokenization does not enable or change streaming response guard behavior. Streaming response guard evaluation remains controlled by the existing `streaming` guardrail setting
 
