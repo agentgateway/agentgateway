@@ -514,9 +514,9 @@ pub struct RawLogging {
 	))
 )]
 pub struct RawLoggingDatabase {
-	/// Store request logs in a database. Defaults to true. When false, no request log store is
-	/// started, even if `config.database` is set. When true without a `url`, `config.database` is
-	/// required.
+	/// Store request logs in a database. When omitted, request logs are stored if either `url` or
+	/// `config.database.url` is set, and otherwise not. When true, one of them is required. When
+	/// false, no request log store is started, even if `config.database` is set.
 	enabled: Option<bool>,
 	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
 	/// Defaults to `config.database`.
