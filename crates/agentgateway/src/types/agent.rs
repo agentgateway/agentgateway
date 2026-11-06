@@ -2991,6 +2991,7 @@ pub enum TrafficPolicy {
 	JwtAuth(RequestPolicy<JwtAuthentication>),
 	Oidc(RequestPolicy<crate::http::oidc::OidcPolicy>),
 	BasicAuth(RequestPolicy<crate::http::basicauth::BasicAuthentication>),
+	#[serde(rename = "apiKey")]
 	APIKey(RequestPolicy<crate::http::apikey::APIKeyAuthentication>),
 	Budget(RequestPolicy<crate::http::budget::BudgetPolicy>),
 	Transformation(RequestPolicy<crate::http::transformation_cel::Transformation>),
@@ -3458,6 +3459,16 @@ pub mod defaults {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn api_key_traffic_policy_serializes_as_camel_case() {
+		let policy = TrafficPolicy::APIKey(RequestPolicy::default());
+
+		assert_eq!(
+			serde_json::to_value(policy).expect("serialize API key traffic policy"),
+			serde_json::json!({ "apiKey": null })
+		);
+	}
 
 	#[cfg(feature = "fips")]
 	fn fips_test_certificate() -> (Vec<u8>, Vec<u8>) {
