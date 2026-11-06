@@ -630,10 +630,20 @@ impl Handler {
 		let method = request.request.method();
 		let id = request.id;
 		let res = match request.request {
-			ClientRequest::InitializeRequest(_) => Messages::from_result(
-				id,
-				ServerConfig::new(ServerCapabilities::builder().enable_tools().build()),
-			),
+			ClientRequest::InitializeRequest(r) => {
+				let requested = r.params.protocol_version;
+				let negotiated =
+					if ProtocolVersion::KNOWN_VERSIONS.contains(&requested) && requested.has_initialize() {
+						requested
+					} else {
+						ProtocolVersion::LATEST_WITH_INITIALIZE
+					};
+				Messages::from_result(
+					id,
+					ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+						.with_protocol_version(negotiated),
+				)
+			},
 			ClientRequest::GetPromptRequest(_) => Messages::from_result(id, GetPromptResult::new(vec![])),
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
 				id,

@@ -2459,3 +2459,55 @@ async fn test_call_tool_with_binary_body() {
 		expected_response
 	);
 }
+
+#[tokio::test]
+async fn initialize_echoes_supported_legacy_protocol_version() {
+	use futures_util::StreamExt;
+	use rmcp::model::*;
+
+	let (_, handler) = setup().await;
+	let request = JsonRpcRequest {
+		jsonrpc: JsonRpcVersion2_0,
+		id: RequestId::Number(1),
+		request: ClientRequest::InitializeRequest(InitializeRequest::new(
+			InitializeRequestParams::new(
+				ClientCapabilities::default(),
+				Implementation::new("repro", "1.0"),
+			)
+			.with_protocol_version(ProtocolVersion::V_2025_11_25),
+		)),
+	};
+	let mut stream = handler
+		.send_message(request, &IncomingRequestContext::empty())
+		.await
+		.unwrap();
+	let first = stream.next().await.unwrap().unwrap();
+	let value = serde_json::to_value(first).unwrap();
+	assert_eq!(value["result"]["protocolVersion"], json!("2025-11-25"));
+}
+
+#[tokio::test]
+async fn initialize_falls_back_when_client_requests_modern_only_version() {
+	use futures_util::StreamExt;
+	use rmcp::model::*;
+
+	let (_, handler) = setup().await;
+	let request = JsonRpcRequest {
+		jsonrpc: JsonRpcVersion2_0,
+		id: RequestId::Number(2),
+		request: ClientRequest::InitializeRequest(InitializeRequest::new(
+			InitializeRequestParams::new(
+				ClientCapabilities::default(),
+				Implementation::new("repro", "1.0"),
+			)
+			.with_protocol_version(ProtocolVersion::V_2026_07_28),
+		)),
+	};
+	let mut stream = handler
+		.send_message(request, &IncomingRequestContext::empty())
+		.await
+		.unwrap();
+	let first = stream.next().await.unwrap().unwrap();
+	let value = serde_json::to_value(first).unwrap();
+	assert_eq!(value["result"]["protocolVersion"], json!("2025-11-25"));
+}
