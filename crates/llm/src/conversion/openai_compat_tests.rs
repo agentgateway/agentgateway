@@ -116,3 +116,50 @@ fn gemini_thought_signature_pairs_with_the_next_call_when_call_ids_repeat() {
 		.collect();
 	assert_eq!(sigs, ["sig1", "sig2"]);
 }
+
+#[test]
+fn responses_user_images_become_chat_image_parts() {
+	let png = "data:image/png;base64,iVBORw0KGgo=";
+	let request: crate::types::responses::Request = serde_json::from_value(json!({
+		"model": "vision-model",
+		"input": [
+			{
+				"role": "user",
+				"content": [
+					{"type": "input_text", "text": "What is in this image?"},
+					{"type": "input_image", "image_url": png, "detail": "low"}
+				]
+			},
+			{
+				"type": "message",
+				"role": "user",
+				"content": [
+					{"type": "input_image", "image_url": "https://example.com/cat.png"},
+					{"type": "input_image", "file_id": "file-abc123"},
+					{"type": "input_text", "text": "And this one?"}
+				]
+			}
+		],
+		"store": false
+	}))
+	.unwrap();
+
+	let translated = super::from_responses::translate_request(&request).unwrap();
+	let body: Value = serde_json::to_value(&translated.request).unwrap();
+
+	assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+	assert_eq!(
+		body["messages"][0]["content"],
+		json!([
+			{"type": "text", "text": "What is in this image?"},
+			{"type": "image_url", "image_url": {"url": png, "detail": "low"}}
+		])
+	);
+	assert_eq!(
+		body["messages"][1]["content"],
+		json!([
+			{"type": "image_url", "image_url": {"url": "https://example.com/cat.png", "detail": "auto"}},
+			{"type": "text", "text": "And this one?"}
+		])
+	);
+}

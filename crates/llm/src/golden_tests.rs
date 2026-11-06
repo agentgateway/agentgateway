@@ -242,7 +242,7 @@ mod requests {
 		("codex-assistant-history", &[BEDROCK, GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
 		("structured-output", &[BEDROCK]),
-		("input-media", &[BEDROCK]),
+		("input-media", &[BEDROCK, GEMINI]),
 		("cache_control", &[BEDROCK, GEMINI]),
 		("cache_control_tool_outputs", &[BEDROCK]),
 	];
