@@ -10,6 +10,16 @@ providers:
         tags: [adaptive_thinking]
       "*sonnet-4.6*":
         tags: [adaptive_thinking]
+      "*fable-5*":
+        tags: [always_on_thinking]
+      "*opus-5-5*":
+        tags: [always_on_thinking]
+      "*opus-5.5*":
+        tags: [always_on_thinking]
+      "*sonnet-5-5*":
+        tags: [between_tools_thinking]
+      "*sonnet-5.5*":
+        tags: [between_tools_thinking]
   # TODO: drop once https://github.com/anomalyco/models.dev/pull/10060 lands and models.dev maps typesafe.
   typesafe:
     models:

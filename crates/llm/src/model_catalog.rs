@@ -31,12 +31,18 @@ pub mod tags {
 	pub const ADAPTIVE_THINKING: &str = "adaptive_thinking";
 	/// Supports Anthropic legacy thinking with an explicit token budget.
 	pub const LEGACY_THINKING: &str = "legacy_thinking";
+	/// Model always thinks and rejects `thinking.type = "disabled"`.
+	pub const ALWAYS_ON_THINKING: &str = "always_on_thinking";
+	/// Model turns thinking off with `thinking.type = "between_tools"` and rejects `disabled`.
+	pub const BETWEEN_TOOLS_THINKING: &str = "between_tools_thinking";
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct AnthropicThinkingCapabilities {
 	pub adaptive: bool,
 	pub legacy: bool,
+	pub always_on: bool,
+	pub between_tools: bool,
 }
 
 pub(crate) fn anthropic_thinking_capabilities(
@@ -51,6 +57,12 @@ pub(crate) fn anthropic_thinking_capabilities(
 		legacy: tags
 			.as_ref()
 			.is_some_and(|tags| tags.contains(tags::LEGACY_THINKING)),
+		always_on: tags
+			.as_ref()
+			.is_some_and(|tags| tags.contains(tags::ALWAYS_ON_THINKING)),
+		between_tools: tags
+			.as_ref()
+			.is_some_and(|tags| tags.contains(tags::BETWEEN_TOOLS_THINKING)),
 	}
 }
 
