@@ -1900,3 +1900,26 @@ test('login loads without protected API requests and preserves the return destin
 	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
 	await expect(page.getByText('OAuth started')).toBeVisible();
 });
+
+test('adds a Fortytwo model with an environment API key', async ({ page }) => {
+	const gateway = await mockGateway(page, populatedConfig());
+	await page.goto('/llm/models');
+	await page.getByRole('button', { name: 'Add model' }).first().click();
+	await page.getByRole('combobox', { name: 'Provider' }).click();
+	await page.getByRole('option', { name: 'Fortytwo', exact: true }).click();
+	await page.getByLabel('Incoming model match').fill('qwen/qwen3.8-27b');
+	await page.getByRole('button', { name: 'Env var', exact: true }).click();
+	await page.getByPlaceholder('ENV_VAR_NAME').fill('FORTYTWO_API_KEY');
+	await page.getByRole('button', { name: 'Explicit', exact: true }).click();
+	await page.getByRole('textbox', { name: 'Explicit outgoing model' }).fill('qwen/qwen3.8-27b');
+	await page.getByRole('button', { name: 'Save model' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const latest = gateway.postedConfigs[0] as {
+		llm?: { models?: Array<{ name: string; provider?: string; params?: unknown }> };
+	};
+	expect(latest.llm?.models?.find(model => model.name === 'qwen/qwen3.8-27b')).toMatchObject({
+		provider: 'fortytwo',
+		params: { model: 'qwen/qwen3.8-27b', apiKey: '$FORTYTWO_API_KEY' }
+	});
+});

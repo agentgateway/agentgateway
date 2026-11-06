@@ -9,6 +9,7 @@ import copilotIcon from '@/assets/providers/copilot.svg';
 import deepinfraIcon from '@/assets/providers/deepinfra.svg';
 import deepseekIcon from '@/assets/providers/deepseek.svg';
 import fireworksIcon from '@/assets/providers/fireworks.svg';
+import fortytwoIcon from '@/assets/providers/fortytwo.svg';
 import geminiIcon from '@/assets/providers/gemini.svg';
 import groqIcon from '@/assets/providers/groq.svg';
 import huggingfaceIcon from '@/assets/providers/huggingface.svg';
@@ -50,6 +51,7 @@ const providerIcons: Record<string, string> = {
 	togetherai: togetheraiIcon,
 	xai: xaiIcon,
 	fireworks: fireworksIcon,
+	fortytwo: fortytwoIcon,
 	meta: metaIcon,
 	perplexity: perplexityIcon,
 	nebius: nebiusIcon,
@@ -66,6 +68,7 @@ const monochromeProviders = new Set<string>([
 	'anthropic',
 	'baseten',
 	'copilot',
+	'fortytwo',
 	'nebius',
 	'ollama',
 	'openrouter',

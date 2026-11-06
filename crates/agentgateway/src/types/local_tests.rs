@@ -3088,3 +3088,37 @@ frontendPolicies:
 		.expect("a rotation of the root certificate is published")
 		.unwrap();
 }
+
+#[tokio::test]
+async fn test_llm_fortytwo_provider_defaults() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: fortytwo
+    provider: fortytwo
+    params:
+      model: qwen/qwen3.8-27b
+      apiKey: test-fortytwo-key
+"#,
+	)
+	.await
+	.expect("Fortytwo provider should normalize");
+
+	let provider = selected_ai_provider(&normalized);
+	assert_hostname_target(
+		provider.host_override.as_ref().expect("expected host"),
+		"api.fortytwo.network",
+		443,
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/v1"));
+	let AIProvider::Custom(custom) = &provider.provider else {
+		panic!("expected custom provider");
+	};
+	assert_eq!(custom.provider_override.as_deref(), Some("fortytwo"));
+	assert_eq!(custom.model_override.as_deref(), Some("qwen/qwen3.8-27b"));
+	assert_eq!(custom.formats.len(), 1);
+	assert!(custom.supports(crate::llm::custom::ProviderFormat::Completions));
+	assert!(!custom.supports(crate::llm::custom::ProviderFormat::Responses));
+	assert!(!custom.supports(crate::llm::custom::ProviderFormat::Embeddings));
+}

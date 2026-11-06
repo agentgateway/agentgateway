@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+llm:
+  port: 4000
+  models:
+  - name: qwen/qwen3.8-27b
+    provider: fortytwo
+    params:
+      apiKey: $FORTYTWO_API_KEY

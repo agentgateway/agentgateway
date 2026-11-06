@@ -65,6 +65,7 @@ pub enum ProviderPreset {
 	#[serde(rename = "xai")]
 	XAI,
 	Fireworks,
+	Fortytwo,
 	Meta,
 	Perplexity,
 	Typesafe,
@@ -87,6 +88,7 @@ impl ProviderPreset {
 			Self::Togetherai => "https://api.together.xyz/v1",
 			Self::XAI => "https://api.x.ai/v1",
 			Self::Fireworks => "https://api.fireworks.ai/inference/v1",
+			Self::Fortytwo => "https://api.fortytwo.network/v1",
 			Self::Meta => "https://api.meta.ai/v1",
 			Self::Perplexity => "https://api.perplexity.ai/v1",
 			Self::Typesafe => "https://api.typesafe.ai/v1",
@@ -186,6 +188,7 @@ impl ProviderPreset {
 					format(Rerank, None),
 				],
 			),
+			Self::Fortytwo => ("fortytwo", vec![format(Completions, None)]),
 			Self::Meta => (
 				"meta",
 				vec![
