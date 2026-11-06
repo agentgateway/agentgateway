@@ -221,6 +221,16 @@
             }
           ]
         },
+        "allowedBackendTlsFileDirs": {
+          "description": "Directories that cert, key and root files referenced by xDS-configured backend TLS must be under.\nIf unset, such files are rejected.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "namespace": {
           "description": "Kubernetes namespace for this gateway instance.",
           "type": [
