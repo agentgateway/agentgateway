@@ -7275,7 +7275,7 @@
               "default": null
             },
             "budgets": {
-              "description": "Independent budgets charged after LLM responses. A request is not charged when its provider\ndoes not report the usage or cost required by the budget unit.",
+              "description": "Independent budgets charged after LLM responses. A request is not charged when its provider\ndoes not report the usage or cost required by the budget unit. Usage is counted per key,\nor per `metadata.budgetScope` when set, so keys rotated within one scope share usage.",
               "type": "array",
               "items": {
                 "$ref": "#/$defs/Budget"
@@ -7309,7 +7309,7 @@
               "default": null
             },
             "budgets": {
-              "description": "Independent budgets charged after LLM responses. A request is not charged when its provider\ndoes not report the usage or cost required by the budget unit.",
+              "description": "Independent budgets charged after LLM responses. A request is not charged when its provider\ndoes not report the usage or cost required by the budget unit. Usage is counted per key,\nor per `metadata.budgetScope` when set, so keys rotated within one scope share usage.",
               "type": "array",
               "items": {
                 "$ref": "#/$defs/Budget"
