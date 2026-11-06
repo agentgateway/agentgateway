@@ -1309,7 +1309,7 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Store request logs in a database. Defaults to true. When false, no request log store is\nstarted, even if `config.database` is set. When true without a `url`, `config.database` is\nrequired.",
+          "description": "Store request logs in a database. When omitted, request logs are stored if either `url` or\n`config.database.url` is set, and otherwise not. When true, one of them is required. When\nfalse, no request log store is started, even if `config.database` is set.",
           "type": [
             "boolean",
             "null"
