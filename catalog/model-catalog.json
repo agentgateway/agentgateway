@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-05T08:25:31Z"
+    "generatedAt": "2026-11-06T08:24:40Z"
   },
   "providers": {
     "anthropic": {
@@ -13453,7 +13453,7 @@
           }
         },
         "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B": {
-          "name": "Nemotron Ultra",
+          "name": "Nemotron 3 Ultra",
           "released": "2026-06-04",
           "rates": {
             "input": "0.6",
