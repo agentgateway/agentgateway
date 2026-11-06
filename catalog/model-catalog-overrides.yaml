@@ -30,3 +30,30 @@ providers:
         name: Jev Preview
         rates: *jev-rates
         capabilities: *jev-capabilities
+  # Pro and codex are Responses-only; gpt-5.4+ need it for tools with reasoning.
+  openai:
+    models:
+      gpt-5-pro:
+        tags: [openai_responses]
+      gpt-5.2-pro:
+        tags: [openai_responses]
+      gpt-5.4-pro:
+        tags: [openai_responses]
+      gpt-5.5-pro:
+        tags: [openai_responses]
+      o1-pro:
+        tags: [openai_responses]
+      o3-pro:
+        tags: [openai_responses]
+      gpt-5.3-codex:
+        tags: [openai_responses]
+      gpt-5.3-codex-spark:
+        tags: [openai_responses]
+      gpt-5.4*:
+        tags: [openai_responses_for_reasoning_tools]
+      gpt-5.5*:
+        tags: [openai_responses_for_reasoning_tools]
+      gpt-5.6*:
+        tags: [openai_responses_for_reasoning_tools]
+      gpt-6*:
+        tags: [openai_responses_for_reasoning_tools]

@@ -687,6 +687,303 @@ fn fixture_path(relative_path: &str) -> PathBuf {
 	test_root().join(relative_path)
 }
 
+#[tokio::test]
+async fn openai_responses_only_models_route_completions_to_responses() {
+	let catalog = crate::llm::catalog::ModelCatalog::new(vec![])
+		.await
+		.expect("built-in catalog");
+	let catalog = Some(catalog.as_handle());
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+	for model in [
+		"gpt-5-pro",
+		"gpt-5.2-pro",
+		"gpt-5.4-pro",
+		"gpt-5.5-pro",
+		"o1-pro",
+		"o3-pro",
+		"gpt-5.3-codex",
+		"gpt-5.3-codex-spark",
+	] {
+		for input in [InputFormat::Completions, InputFormat::Responses] {
+			assert_eq!(
+				provider
+					.chat_translation(input, model, catalog)
+					.unwrap()
+					.output,
+				ChatFormat::OpenAIResponses,
+				"{model} {input:?}"
+			);
+		}
+	}
+	for model in ["gpt-5.5", "gpt-4.1", "unknown-model"] {
+		assert_eq!(
+			provider
+				.chat_translation(InputFormat::Completions, model, catalog)
+				.unwrap()
+				.output,
+			ChatFormat::OpenAICompletions,
+			"{model}"
+		);
+	}
+}
+
+async fn completions_upstream(
+	provider: &AIProvider,
+	body: Value,
+	catalog: agent_llm::model_catalog::Catalog<'_>,
+) -> (RouteType, LLMRequest, Value) {
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&body).unwrap()))
+		.unwrap();
+	let RequestResult::Success {
+		request,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			catalog,
+		)
+		.await
+		.expect("completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+	let body = request.into_body().collect().await.unwrap().to_bytes();
+	let body = serde_json::from_slice(&body).expect("forwarded body should be JSON");
+	(upstream_route_type, llm_request, body)
+}
+
+#[tokio::test]
+async fn openai_tools_with_reasoning_effort_route_to_responses() {
+	let catalog = crate::llm::catalog::ModelCatalog::new(vec![])
+		.await
+		.expect("built-in catalog");
+	let catalog = Some(catalog.as_handle());
+	let openai = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+	let tools = json!([{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}]);
+	let request = |model: &str, tools: Option<&Value>, effort: Option<&str>| {
+		let mut body = json!({
+			"model": model,
+			"messages": [{"role": "user", "content": "weather in Columbus?"}],
+		});
+		if let Some(tools) = tools {
+			body["tools"] = tools.clone();
+		}
+		if let Some(effort) = effort {
+			body["reasoning_effort"] = json!(effort);
+		}
+		body
+	};
+	let cases = [
+		(
+			"gpt-5.5 tools and effort",
+			&openai,
+			request("gpt-5.5", Some(&tools), Some("high")),
+			RouteType::Responses,
+		),
+		(
+			"gpt-5.4-mini tools and effort",
+			&openai,
+			request("gpt-5.4-mini", Some(&tools), Some("low")),
+			RouteType::Responses,
+		),
+		(
+			"gpt-6.1-sol tools and effort",
+			&openai,
+			request("gpt-6.1-sol", Some(&tools), Some("medium")),
+			RouteType::Responses,
+		),
+		(
+			"gpt-5.5-pro",
+			&openai,
+			request("gpt-5.5-pro", None, None),
+			RouteType::Responses,
+		),
+		(
+			"gpt-5.3-codex",
+			&openai,
+			request("gpt-5.3-codex", Some(&tools), None),
+			RouteType::Responses,
+		),
+		(
+			"gpt-5.5 tools only",
+			&openai,
+			request("gpt-5.5", Some(&tools), None),
+			RouteType::Completions,
+		),
+		(
+			"gpt-5.5 effort only",
+			&openai,
+			request("gpt-5.5", None, Some("high")),
+			RouteType::Completions,
+		),
+		(
+			"gpt-5.5 tools and effort none",
+			&openai,
+			request("gpt-5.5", Some(&tools), Some("none")),
+			RouteType::Completions,
+		),
+		(
+			"gpt-5.5 empty tools and effort",
+			&openai,
+			request("gpt-5.5", Some(&json!([])), Some("high")),
+			RouteType::Completions,
+		),
+		(
+			"gpt-4.1 tools and effort",
+			&openai,
+			request("gpt-4.1", Some(&tools), Some("high")),
+			RouteType::Completions,
+		),
+		(
+			"custom gpt-5.5 tools and effort",
+			&custom_provider(custom::ProviderFormat::Completions),
+			request("gpt-5.5", Some(&tools), Some("high")),
+			RouteType::Completions,
+		),
+	];
+	for (name, provider, body, expected) in cases {
+		let (route_type, llm_request, upstream) = completions_upstream(provider, body, catalog).await;
+		assert_eq!(route_type, expected, "{name}");
+		match expected {
+			RouteType::Responses => {
+				assert!(upstream.get("messages").is_none(), "{name}: {upstream}");
+				assert!(upstream.get("input").is_some(), "{name}: {upstream}");
+				assert_eq!(
+					provider
+						.request_chat_translation(&llm_request, catalog)
+						.unwrap()
+						.output,
+					ChatFormat::OpenAIResponses,
+					"{name}"
+				);
+			},
+			_ => {
+				assert!(upstream.get("messages").is_some(), "{name}: {upstream}");
+				assert_eq!(
+					provider
+						.request_chat_translation(&llm_request, catalog)
+						.unwrap()
+						.output,
+					ChatFormat::OpenAICompletions,
+					"{name}"
+				);
+			},
+		}
+	}
+}
+
+#[tokio::test]
+async fn openai_tools_with_reasoning_effort_response_renders_completions() {
+	let catalog = crate::llm::catalog::ModelCatalog::new(vec![])
+		.await
+		.expect("built-in catalog");
+	let catalog = Some(catalog.as_handle());
+	let openai = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+	let (_, llm_request, _) = completions_upstream(
+		&openai,
+		json!({
+			"model": "gpt-5.5",
+			"reasoning_effort": "high",
+			"messages": [{"role": "user", "content": "weather in Columbus?"}],
+			"tools": [{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}]
+		}),
+		catalog,
+	)
+	.await;
+	let upstream = Bytes::from_static(
+		br#"{"id":"resp_1","object":"response","created_at":1,"status":"completed","model":"gpt-5.5","output":[{"type":"function_call","id":"fc_1","call_id":"call_1","name":"get_weather","arguments":"{\"location\":\"Columbus\"}","status":"completed"}],"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":3},"total_tokens":15}}"#,
+	);
+	let response = openai
+		.translate_chat_or_detect_response(&llm_request, &upstream, catalog)
+		.expect("Responses body should render for a completions client");
+	let llm_response = response.to_llm_response(LogContentFields::default());
+	assert_eq!(llm_response.reasoning_tokens, Some(3));
+	assert_eq!(llm_response.total_tokens, Some(15));
+}
+
+#[test]
+fn completions_routing_falls_back_to_responses() {
+	let copilot = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	let providers = [
+		(
+			"Copilot gpt-5",
+			&copilot,
+			"gpt-5",
+			ChatFormat::OpenAIResponses,
+		),
+		(
+			"Copilot gpt-5.4",
+			&copilot,
+			"gpt-5.4",
+			ChatFormat::OpenAICompletions,
+		),
+		(
+			"custom Responses",
+			&custom_provider(custom::ProviderFormat::Responses),
+			"custom-model",
+			ChatFormat::OpenAIResponses,
+		),
+		(
+			"OpenAI gpt-5.5",
+			&AIProvider::OpenAI(openai::Provider {
+				model_override: None,
+				moderation: None,
+			}),
+			"gpt-5.5",
+			ChatFormat::OpenAICompletions,
+		),
+		(
+			"custom Completions and Responses",
+			&AIProvider::Custom(custom::Provider {
+				model_override: None,
+				provider_override: None,
+				formats: vec![
+					custom::ProviderFormatConfig {
+						format: custom::ProviderFormat::Responses,
+						path: None,
+					},
+					custom::ProviderFormatConfig {
+						format: custom::ProviderFormat::Completions,
+						path: None,
+					},
+				],
+			}),
+			"custom-model",
+			ChatFormat::OpenAICompletions,
+		),
+	];
+
+	for (name, provider, model, expected) in providers {
+		assert_eq!(
+			provider
+				.chat_translation(InputFormat::Completions, model, None)
+				.expect("Completions routing should be available")
+				.output,
+			expected,
+			"{name}"
+		);
+	}
+}
+
 #[test]
 fn response_prompt_guard_headers_copies_request_traceparent() {
 	let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
@@ -2719,6 +3016,91 @@ fn custom_messages_error_translates_to_completions_client() {
 
 	assert_eq!(body["error"]["type"], json!("invalid_request_error"));
 	assert_eq!(body["error"]["message"], json!("bad request"));
+}
+
+#[test]
+fn custom_responses_error_passes_through_to_completions_client() {
+	let provider = custom_provider(custom::ProviderFormat::Responses);
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Completions;
+	req.request_model = "gpt-5.5".into();
+
+	let error = Bytes::from_static(
+		br#"{"error":{"message":"bad request","type":"invalid_request_error","param":"tools","code":null}}"#,
+	);
+	let translated = provider
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
+		.expect("Responses error should reach completions client");
+
+	assert_eq!(translated, error);
+}
+
+#[tokio::test]
+async fn custom_responses_provider_receives_completions_as_responses() {
+	let provider = custom_provider(custom::ProviderFormat::Responses);
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5.5",
+				"stream": true,
+				"max_completion_tokens": 256,
+				"reasoning_effort": "low",
+				"messages": [{"role": "user", "content": "weather in Columbus?"}],
+				"tools": [{"type": "function", "function": {"name": "get_weather", "strict": true, "parameters": {"type": "object"}}}]
+			}"#
+			.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
+		.await
+		.expect("completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::Responses);
+	assert_eq!(llm_request.input_format, InputFormat::Completions);
+	assert!(llm_request.streaming);
+
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(forwarded.uri().path(), "/v1/responses");
+
+	let body = forwarded.into_body().collect().await.unwrap().to_bytes();
+	let json: Value = serde_json::from_slice(&body).expect("forwarded body should be JSON");
+	assert!(json.get("messages").is_none(), "{json}");
+	assert_eq!(json["input"][0]["type"], "message", "{json}");
+	assert_eq!(json["max_output_tokens"], 256, "{json}");
+	assert_eq!(json["reasoning"]["effort"], "low", "{json}");
+	assert_eq!(json["stream"], true, "{json}");
+	assert_eq!(json["store"], false, "{json}");
+	assert_eq!(json["tools"][0]["name"], "get_weather", "{json}");
+	assert_eq!(json["tools"][0]["strict"], true, "{json}");
 }
 
 #[test]

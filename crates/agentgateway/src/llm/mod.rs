@@ -392,6 +392,8 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 		// Completions
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
+		// Composed through Messages, so it comes after the direct conversions.
+		chat(InputFormat::Completions, ChatFormat::OpenAIResponses),
 		// Messages
 		chat(InputFormat::Messages, ChatFormat::OpenAIResponses),
 		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
@@ -473,6 +475,13 @@ fn render_openai_responses(
 		},
 		types::ChatRequest::Messages(req) => {
 			let mut translated = conversion::responses::from_messages::translate_request(&req)?;
+			apply_openai_moderation(&mut translated.moderation, ctx)?;
+			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
+		},
+		types::ChatRequest::Completions(req) => {
+			let mut translated =
+				// Moderation works the same as for Messages → Responses.
+				conversion::responses::from_completions::translate_request(&req, ctx.catalog)?;
 			apply_openai_moderation(&mut translated.moderation, ctx)?;
 			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
@@ -662,6 +671,9 @@ impl ChatTranslation {
 			ChatFormat::OpenAIResponses => match self.input {
 				InputFormat::Responses => AIProvider::parse_response::<types::responses::Response>(bytes),
 				InputFormat::Messages => conversion::responses::from_messages::translate_response(bytes),
+				InputFormat::Completions => {
+					conversion::responses::from_completions::translate_response(bytes)
+				},
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -753,6 +765,14 @@ impl ChatTranslation {
 				}),
 				InputFormat::Messages => resp.map(|b| {
 					conversion::responses::from_messages::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
+				InputFormat::Completions => resp.map(|b| {
+					conversion::responses::from_completions::translate_stream(
 						b,
 						ctx.buffer_limit,
 						ctx.logger,
@@ -889,7 +909,8 @@ impl ChatTranslation {
 
 			ChatFormat::OpenAIResponses => match format {
 				ChatErrorFormat::OpenAI => match self.input {
-					InputFormat::Responses => Ok(bytes.clone()),
+					// Responses and Chat Completions share the error body.
+					InputFormat::Responses | InputFormat::Completions => Ok(bytes.clone()),
 					InputFormat::Messages => {
 						conversion::responses::from_messages::translate_error(bytes, status)
 					},
@@ -1097,7 +1118,7 @@ impl AIProvider {
 	) -> Vec<ChatFormat> {
 		match self {
 			AIProvider::OpenAI(_) => {
-				vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
+				openai::Provider::supported_formats_for_model(request_model, catalog)
 			},
 
 			AIProvider::Copilot(_) => {
@@ -1177,6 +1198,41 @@ impl AIProvider {
 					self.provider()
 				))
 			})
+	}
+
+	// Use the requested format only if the provider supports it and a translation exists.
+	fn preferred_chat_translation(
+		&self,
+		input_format: InputFormat,
+		output: ChatFormat,
+		request_model: &str,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
+	) -> Option<&'static ChatTranslation> {
+		if !self
+			.supported_chat_formats(request_model, catalog)
+			.contains(&output)
+		{
+			return None;
+		}
+		CHAT_TRANSLATIONS
+			.iter()
+			.find(|translation| translation.input == input_format && translation.output == output)
+	}
+
+	// Handle the response with the same translation as the request.
+	fn request_chat_translation(
+		&self,
+		req: &LLMRequest,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
+	) -> Result<&'static ChatTranslation, AIError> {
+		if let Some(ProviderState::ChatOutput(output)) = req.provider_state
+			&& let Some(translation) = CHAT_TRANSLATIONS
+				.iter()
+				.find(|translation| translation.input == req.input_format && translation.output == output)
+		{
+			return Ok(translation);
+		}
+		self.chat_translation(req.input_format, &req.request_model, catalog)
 	}
 
 	pub fn supports_format(&self, format: custom::ProviderFormat, request_model: &str) -> bool {
@@ -1845,6 +1901,19 @@ impl AIProvider {
 		) {
 			req.normalize_openai_token_limit();
 		}
+		// Only the built-in openai provider applies the tools + reasoning rule.
+		let preferred_output = match self {
+			AIProvider::OpenAI(_)
+				if openai::Provider::requires_responses(
+					req.model.as_deref().unwrap_or_default(),
+					&req,
+					catalog,
+				) =>
+			{
+				Some(ChatFormat::OpenAIResponses)
+			},
+			_ => None,
+		};
 		self
 			.process_chat_request(
 				backend_info,
@@ -1856,6 +1925,7 @@ impl AIProvider {
 				tokenize,
 				log,
 				catalog,
+				preferred_output,
 				types::ChatRequest::Completions,
 			)
 			.await
@@ -1886,6 +1956,7 @@ impl AIProvider {
 				tokenize,
 				log,
 				catalog,
+				None,
 				types::ChatRequest::Messages,
 			)
 			.await
@@ -1928,6 +1999,7 @@ impl AIProvider {
 				tokenize,
 				log,
 				catalog,
+				None,
 				|req| types::ChatRequest::Gemini(req.inner),
 			)
 			.await
@@ -2094,6 +2166,7 @@ impl AIProvider {
 				tokenize,
 				log,
 				catalog,
+				None,
 				types::ChatRequest::Responses,
 			)
 			.await
@@ -2558,6 +2631,7 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
+		preferred_output: Option<ChatFormat>,
 		chat_request: F,
 	) -> Result<RequestResult, AIError>
 	where
@@ -2568,7 +2642,13 @@ impl AIProvider {
 			.model()
 			.as_deref()
 			.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
-		let chat_translation = self.chat_translation(original_format, request_model, catalog)?;
+		let preferred_translation = preferred_output.and_then(|output| {
+			self.preferred_chat_translation(original_format, output, request_model, catalog)
+		});
+		let chat_translation = match preferred_translation {
+			Some(translation) => translation,
+			None => self.chat_translation(original_format, request_model, catalog)?,
+		};
 		let provider_format = chat_translation.provider_format();
 		let prepared = self
 			.prepare_request(
@@ -2604,7 +2684,10 @@ impl AIProvider {
 				catalog,
 			},
 		)?;
-		llm_info.provider_state = rendered.provider_state;
+		llm_info.provider_state = rendered
+			.provider_state
+			// Store the choice; the model alone would pick Chat Completions again.
+			.or(preferred_translation.map(|translation| ProviderState::ChatOutput(translation.output)));
 		// Couldn't find a better place to apply it, needs to be after rendered. but before generating the request.
 		let body = match policies {
 			Some(p) => p.apply_final_transformations(rendered.body, log)?,
@@ -3245,7 +3328,7 @@ impl AIProvider {
 			));
 		}
 
-		let translation = self.chat_translation(req.input_format, &req.request_model, catalog)?;
+		let translation = self.request_chat_translation(req, catalog)?;
 		translation.render_response(
 			bytes,
 			&ChatResponseContext {
@@ -3277,11 +3360,7 @@ impl AIProvider {
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
 		let namespaces = namespace_tool_map(&req).cloned();
 		let chat_translation = if input_format.is_chat() {
-			Some(self.chat_translation(
-				input_format,
-				&model,
-				model_catalog.as_deref().map(|c| c.as_handle()),
-			)?)
+			Some(self.request_chat_translation(&req, model_catalog.as_deref().map(|c| c.as_handle()))?)
 		} else {
 			None
 		};
@@ -3563,7 +3642,7 @@ impl AIProvider {
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Bytes, AIError> {
 		if req.input_format.is_chat() {
-			let translation = self.chat_translation(req.input_format, &req.request_model, catalog)?;
+			let translation = self.request_chat_translation(req, catalog)?;
 			return translation.error(
 				bytes,
 				status,

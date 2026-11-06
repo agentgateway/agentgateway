@@ -28812,6 +28812,9 @@
             "input": "15",
             "output": "120"
           },
+          "tags": [
+            "openai_responses"
+          ],
           "limits": {
             "context": 400000,
             "input": 272000,
@@ -28956,6 +28959,9 @@
             "input": "21",
             "output": "168"
           },
+          "tags": [
+            "openai_responses"
+          ],
           "limits": {
             "context": 400000,
             "input": 272000,
@@ -29002,6 +29008,9 @@
               }
             }
           ],
+          "tags": [
+            "openai_responses"
+          ],
           "limits": {
             "context": 400000,
             "input": 272000,
@@ -29041,6 +29050,9 @@
             "output": "14",
             "cacheRead": "0.175"
           },
+          "tags": [
+            "openai_responses"
+          ],
           "limits": {
             "context": 128000,
             "input": 100000,
@@ -29097,6 +29109,9 @@
                 "cacheRead": "0.5"
               }
             }
+          ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
           ],
           "limits": {
             "context": 1050000,
@@ -29155,6 +29170,9 @@
               }
             }
           ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
+          ],
           "limits": {
             "context": 400000,
             "input": 272000,
@@ -29203,6 +29221,9 @@
               }
             }
           ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
+          ],
           "limits": {
             "context": 400000,
             "input": 272000,
@@ -29248,6 +29269,10 @@
                 "output": "270"
               }
             }
+          ],
+          "tags": [
+            "openai_responses",
+            "openai_responses_for_reasoning_tools"
           ],
           "limits": {
             "context": 1050000,
@@ -29303,6 +29328,9 @@
               }
             }
           ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
+          ],
           "limits": {
             "context": 1050000,
             "input": 922000,
@@ -29349,6 +29377,10 @@
                 "output": "270"
               }
             }
+          ],
+          "tags": [
+            "openai_responses",
+            "openai_responses_for_reasoning_tools"
           ],
           "limits": {
             "context": 1050000,
@@ -29416,6 +29448,9 @@
                 }
               }
             }
+          ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
           ],
           "limits": {
             "context": 1050000,
@@ -29487,6 +29522,9 @@
               }
             }
           ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
+          ],
           "limits": {
             "context": 1050000,
             "input": 922000,
@@ -29557,6 +29595,9 @@
               }
             }
           ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
+          ],
           "limits": {
             "context": 1050000,
             "input": 922000,
@@ -29626,6 +29667,9 @@
                 }
               }
             }
+          ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
           ],
           "limits": {
             "context": 1050000,
@@ -29709,6 +29753,9 @@
               }
             }
           ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
+          ],
           "limits": {
             "context": 1050000,
             "input": 922000,
@@ -29777,6 +29824,9 @@
                 }
               }
             }
+          ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
           ],
           "limits": {
             "context": 1050000,
@@ -29847,6 +29897,9 @@
                 }
               }
             }
+          ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
           ],
           "limits": {
             "context": 1050000,
@@ -29930,6 +29983,9 @@
               }
             }
           ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
+          ],
           "limits": {
             "context": 1050000,
             "input": 922000,
@@ -29998,6 +30054,9 @@
                 }
               }
             }
+          ],
+          "tags": [
+            "openai_responses_for_reasoning_tools"
           ],
           "limits": {
             "context": 1050000,
@@ -30336,6 +30395,9 @@
             "input": "150",
             "output": "600"
           },
+          "tags": [
+            "openai_responses"
+          ],
           "limits": {
             "context": 200000,
             "output": 100000
@@ -30459,6 +30521,9 @@
             "input": "20",
             "output": "80"
           },
+          "tags": [
+            "openai_responses"
+          ],
           "limits": {
             "context": 200000,
             "output": 100000

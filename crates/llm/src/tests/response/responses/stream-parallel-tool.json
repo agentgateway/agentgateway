@@ -1,0 +1,35 @@
+event: response.created
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"resp_stream_parallel","model":"gpt-5.5","object":"response","output":[],"status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"function_call","arguments":"","call_id":"call_columbus","name":"get_weather","id":"fc_1","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":3,"item_id":"fc_1","output_index":0,"delta":"{\"location\":\"Columbus, OH\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","name":"get_weather","sequence_number":4,"item_id":"fc_1","output_index":0,"arguments":"{\"location\":\"Columbus, OH\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"type":"function_call","arguments":"{\"location\":\"Columbus, OH\"}","call_id":"call_columbus","name":"get_weather","id":"fc_1","status":"completed"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":6,"output_index":1,"item":{"type":"function_call","arguments":"","call_id":"call_new_york","name":"get_weather","id":"fc_2","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":7,"item_id":"fc_2","output_index":1,"delta":"{\"location\":"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":8,"item_id":"fc_2","output_index":1,"delta":"\"New York, NY\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","name":"get_weather","sequence_number":9,"item_id":"fc_2","output_index":1,"arguments":"{\"location\":\"New York, NY\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":10,"output_index":1,"item":{"type":"function_call","arguments":"{\"location\":\"New York, NY\"}","call_id":"call_new_york","name":"get_weather","id":"fc_2","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":11,"response":{"created_at":123,"id":"resp_stream_parallel","model":"gpt-5.5","object":"response","output":[],"status":"completed","usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":64},"output_tokens":40,"output_tokens_details":{"reasoning_tokens":16},"total_tokens":160}}}
+
+data: [DONE]
+

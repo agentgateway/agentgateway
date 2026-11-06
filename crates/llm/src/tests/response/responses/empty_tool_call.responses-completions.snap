@@ -1,0 +1,90 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/empty_tool_call.json
+info:
+  id: resp_terminal
+  object: response
+  created_at: 123
+  model: gpt-5.6-luna
+  status: completed
+  output:
+    - type: function_call
+      id: fc_empty
+      call_id: call_empty
+      name: ping
+      arguments: ""
+      status: completed
+  usage:
+    input_tokens: 100
+    output_tokens: 5
+    total_tokens: 105
+    input_tokens_details:
+      cached_tokens: 20
+      cache_write_tokens: 30
+    output_tokens_details:
+      reasoning_tokens: 3
+---
+{
+  "response": {
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "prompt_tokens": 100,
+      "completion_tokens": 5,
+      "total_tokens": 105,
+      "completion_tokens_details": {
+        "reasoning_tokens": 3
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 20,
+        "cache_write_tokens": 30
+      },
+      "cache_read_input_tokens": 20,
+      "cache_creation_input_tokens": 30
+    },
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "type": "function",
+              "id": "call_empty",
+              "function": {
+                "name": "ping",
+                "arguments": "{}"
+              }
+            }
+          ]
+        },
+        "index": 0,
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "id": "[id]",
+    "created": "[date]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 100,
+    "output_tokens": 5,
+    "total_tokens": 105,
+    "reasoning_tokens": 3,
+    "cache_creation_input_tokens": 30,
+    "cached_input_tokens": 20,
+    "provider_model": "gpt-5.6-luna",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_empty",
+            "name": "ping",
+            "arguments": {}
+          }
+        ],
+        "finish_reason": "tool_calls"
+      }
+    ]
+  }
+}

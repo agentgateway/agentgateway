@@ -1,0 +1,62 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/content_filter.json
+info:
+  id: resp_terminal
+  object: response
+  created_at: 123
+  model: gpt-5.6-luna
+  status: incomplete
+  output: []
+  usage:
+    input_tokens: 100
+    output_tokens: 5
+    total_tokens: 105
+    input_tokens_details:
+      cached_tokens: 20
+      cache_write_tokens: 30
+    output_tokens_details:
+      reasoning_tokens: 3
+  incomplete_details:
+    reason: content_filter
+---
+{
+  "response": {
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "prompt_tokens": 100,
+      "completion_tokens": 5,
+      "total_tokens": 105,
+      "completion_tokens_details": {
+        "reasoning_tokens": 3
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 20,
+        "cache_write_tokens": 30
+      },
+      "cache_read_input_tokens": 20,
+      "cache_creation_input_tokens": 30
+    },
+    "choices": [
+      {
+        "message": {
+          "role": "assistant"
+        },
+        "index": 0,
+        "finish_reason": "content_filter"
+      }
+    ],
+    "id": "[id]",
+    "created": "[date]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 100,
+    "output_tokens": 5,
+    "total_tokens": 105,
+    "reasoning_tokens": 3,
+    "cache_creation_input_tokens": 30,
+    "cached_input_tokens": 20,
+    "provider_model": "gpt-5.6-luna"
+  }
+}

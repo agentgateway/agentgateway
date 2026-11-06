@@ -24,6 +24,8 @@ pub mod tags {
 	pub const OPENAI_RESPONSES: &str = "openai_responses";
 	/// Accepts Google's native Gemini request format.
 	pub const VERTEX_GEMINI: &str = "vertex_gemini";
+	/// Use Responses when a Chat Completions request has tools and reasoning effort.
+	pub const OPENAI_RESPONSES_FOR_REASONING_TOOLS: &str = "openai_responses_for_reasoning_tools";
 
 	// Anthropic thinking capabilities.
 

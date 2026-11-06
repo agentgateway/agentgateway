@@ -536,12 +536,19 @@ pub mod from_completions {
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
-		let model_id = typed.model.clone().unwrap_or_default();
-		let mut xlated = translate_internal(typed, model_id, catalog)?;
+		let mut xlated = translate_typed(typed, catalog)?;
 		if let Some(caching) = prompt_caching {
 			apply_prompt_caching(&mut xlated, caching);
 		}
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub(crate) fn translate_typed(
+		req: completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<messages::Request, AIError> {
+		let model_id = req.model.clone().unwrap_or_default();
+		translate_internal(req, model_id, catalog)
 	}
 
 	fn apply_prompt_caching(req: &mut messages::Request, caching: &crate::PromptCachingConfig) {
@@ -909,7 +916,9 @@ pub mod from_completions {
 		}))
 	}
 
-	fn translate_response_internal(resp: messages::MessagesResponse) -> completions::Response {
+	pub(crate) fn translate_response_internal(
+		resp: messages::MessagesResponse,
+	) -> completions::Response {
 		let accounting = resp.usage.accounting();
 		// Convert Anthropic content blocks to OpenAI message content
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
