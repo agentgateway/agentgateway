@@ -79,6 +79,7 @@ pub fn provider_with_options_validated(
 		// Ask the backend rather than maintaining a parallel table: the linked module
 		// is the authority on what it treats as approved, and a hardcoded list would
 		// drift from it.
+		// The controller checks the same rules in controller/pkg/agentgateway/plugins/tls.go.
 		let bad_suites: Vec<&str> = cipher_suites
 			.iter()
 			.filter(|c| !c.to_supported_cipher_suite().fips())

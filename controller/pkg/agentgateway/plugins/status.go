@@ -33,6 +33,10 @@ type ConfigError struct {
 	Message string
 }
 
+func (e *ConfigError) Error() string {
+	return e.Message
+}
+
 // MergeAncestors merges an existing ancestor with in incoming one. We preserve order, prune stale references set by our controller,
 // and add any new references from our controller.
 func MergeAncestors(controllerName string, existing []gwv1.PolicyAncestorStatus, incoming []gwv1.PolicyAncestorStatus) []gwv1.PolicyAncestorStatus {
