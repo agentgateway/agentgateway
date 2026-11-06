@@ -2008,6 +2008,28 @@ func (this *OAuthClientAuth) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for OAuthClientAuth_ClientAssertion
+func (this *OAuthClientAuth_ClientAssertion) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for OAuthClientAuth_ClientAssertion
+func (this *OAuthClientAuth_ClientAssertion) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for OAuthClientAuth_ClientAssertion_WorkloadIdentity
+func (this *OAuthClientAuth_ClientAssertion_WorkloadIdentity) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for OAuthClientAuth_ClientAssertion_WorkloadIdentity
+func (this *OAuthClientAuth_ClientAssertion_WorkloadIdentity) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for OAuthClientAuth_PrivateKeyJwt
 func (this *OAuthClientAuth_PrivateKeyJwt) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

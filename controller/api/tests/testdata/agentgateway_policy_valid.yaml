@@ -1422,6 +1422,28 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: backend-oauth-client-assertion
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    auth:
+      oauthTokenExchange:
+        url: https://login.example.com/tenant/oauth2/v2.0/token
+        grantType: JwtBearer
+        scopes:
+        - api://downstream/.default
+        clientAuth:
+          clientId: 00000000-0000-0000-0000-000000000000
+          method: ClientAssertion
+          clientAssertion:
+            workloadIdentity: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: backend-cross-app-access-url
 spec:
   targetRefs:

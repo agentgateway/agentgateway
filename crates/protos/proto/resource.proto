@@ -2168,6 +2168,14 @@ message OAuthClientAuth {
       CLIENT_SECRET_BASIC = 1; // id:secret in the Authorization: Basic header
       CLIENT_SECRET_POST  = 2; // client_id/client_secret in the form body
       PRIVATE_KEY_JWT     = 3; // private_key_jwt client assertion (RFC 7523)
+      CLIENT_ASSERTION    = 4; // client_assertion issued to the gateway (RFC 7523)
+  }
+
+  message ClientAssertion {
+    message WorkloadIdentity {}
+    oneof source {
+      WorkloadIdentity workload_identity = 1;
+    }
   }
 
   message PrivateKeyJwt {
@@ -2206,6 +2214,8 @@ message OAuthClientAuth {
   Method method = 3;
   // Required when method is PRIVATE_KEY_JWT.
   PrivateKeyJwt private_key_jwt = 4;
+  // Required when method is CLIENT_ASSERTION.
+  ClientAssertion client_assertion = 5;
 }
 
 // Token exchange for the OAuth family (RFC 8693 / RFC 7523).

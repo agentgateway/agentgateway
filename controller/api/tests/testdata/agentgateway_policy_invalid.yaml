@@ -1679,6 +1679,25 @@ spec:
         url: https://oauth.example.com/token
         path: /token
 ---
+_err: 'clientAssertion settings require method ClientAssertion'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-client-assertion-without-method
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    auth:
+      oauthTokenExchange:
+        url: https://oauth.example.com/token
+        clientAuth:
+          clientId: gateway
+          clientAssertion:
+            workloadIdentity: {}
+---
 _err: 'additionalParams may not override a reserved OAuth parameter'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

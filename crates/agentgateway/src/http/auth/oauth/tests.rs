@@ -9,7 +9,7 @@ use url::form_urlencoded;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::client_auth::{CertificateHeader, RawPrivateKeyJwt};
+use super::client_auth::{CertificateHeader, ClientAssertionSource, RawPrivateKeyJwt};
 use super::cross_app_access::{
 	CrossAppAccessAuthConfig, CrossAppAccessEndpoint, CrossAppAccessSubjectToken,
 };
@@ -1963,6 +1963,29 @@ fn private_key_jwt_client_auth_from_proto() {
 }
 
 #[test]
+fn client_assertion_client_auth_from_proto() {
+	let auth = OAuthClientAuth::try_from(proto::OAuthClientAuth {
+		client_id: "gateway-client".to_string(),
+		method: proto::o_auth_client_auth::Method::ClientAssertion as i32,
+		client_assertion: Some(proto::o_auth_client_auth::ClientAssertion {
+			source: Some(
+				proto::o_auth_client_auth::client_assertion::Source::WorkloadIdentity(Default::default()),
+			),
+		}),
+		..Default::default()
+	})
+	.unwrap();
+
+	assert_eq!(auth.client_id, "gateway-client");
+	assert!(matches!(
+		auth.method,
+		OAuthClientAuthMethod::ClientAssertion {
+			client_assertion: ClientAssertionSource::WorkloadIdentity {}
+		}
+	));
+}
+
+#[test]
 fn private_key_jwt_serialization_omits_unset_optional_headers() {
 	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
@@ -2059,6 +2082,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 				assertion_audience: "https://issuer.example/token".to_string(),
 				..Default::default()
 			}),
+			..Default::default()
 		}),
 		..Default::default()
 	},
@@ -2076,6 +2100,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 				assertion_audience: "https://issuer.example/token".to_string(),
 				..Default::default()
 			}),
+			..Default::default()
 		}),
 		..Default::default()
 	},
@@ -2098,6 +2123,33 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 		..Default::default()
 	},
 	"certificate_header is required when certificate is set"
+)]
+#[case::client_assertion_missing_settings(
+	proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".to_string(),
+			method: proto::o_auth_client_auth::Method::ClientAssertion as i32,
+			..Default::default()
+		}),
+		..Default::default()
+	},
+	"client_assertion settings are required"
+)]
+#[case::client_assertion_settings_with_secret_method(
+	proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".to_string(),
+			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+			client_assertion: Some(proto::o_auth_client_auth::ClientAssertion {
+				source: Some(proto::o_auth_client_auth::client_assertion::Source::WorkloadIdentity(
+					Default::default(),
+				)),
+			}),
+			..Default::default()
+		}),
+		..Default::default()
+	},
+	"requires the CLIENT_ASSERTION method"
 )]
 #[case::jwt_bearer_actor_token(
 	proto::OAuthTokenExchange {
@@ -2698,4 +2750,66 @@ fn rejects_only_expired_jwt_subject_tokens(
 fn allows_opaque_subject_token() {
 	let auth = auth(Arc::new(SimpleBackendReference::Invalid));
 	assert!(auth.build_exchange_request(&incoming_request()).is_ok());
+}
+
+#[tokio::test]
+async fn client_assertion_sends_the_current_workload_identity_token() {
+	let _env = crate::config::lock_env_for_tests_async().await;
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
+	let dir = tempfile::tempdir().unwrap();
+	let file = dir.path().join("azure-identity-token");
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::JwtBearer,
+		client_auth: Some(OAuthClientAuth {
+			client_id: "gateway-client".into(),
+			method: OAuthClientAuthMethod::ClientAssertion {
+				client_assertion: ClientAssertionSource::WorkloadIdentity {},
+			},
+		}),
+		..base_auth(endpoint(&mock))
+	};
+
+	unsafe { std::env::set_var("AZURE_FEDERATED_TOKEN_FILE", &file) };
+	std::fs::write(&file, "first.token.value\n").unwrap();
+	let first = fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("user-a", TOKEN_TYPE_ACCESS),
+	)
+	.await;
+	std::fs::write(&file, "second.token.value\n").unwrap();
+	let second = fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("user-b", TOKEN_TYPE_ACCESS),
+	)
+	.await;
+	unsafe { std::env::remove_var("AZURE_FEDERATED_TOKEN_FILE") };
+	first.unwrap();
+	second.unwrap();
+
+	let requests = mock.received_requests().await.unwrap();
+	assert_eq!(requests.len(), 2);
+	let sent: Vec<HashMap<String, String>> = requests
+		.iter()
+		.map(|r| form_urlencoded::parse(&r.body).into_owned().collect())
+		.collect();
+	assert_eq!(sent[0]["client_id"], "gateway-client");
+	assert_eq!(
+		sent[0]["client_assertion_type"],
+		CLIENT_ASSERTION_TYPE_JWT_BEARER
+	);
+	assert_eq!(sent[0]["client_assertion"], "first.token.value");
+	assert_eq!(sent[1]["client_assertion"], "second.token.value");
+}
+
+#[test]
+fn client_assertion_config_round_trips() {
+	let config = json!({
+		"clientId": "gateway-client",
+		"method": "clientAssertion",
+		"clientAssertion": {"workloadIdentity": {}},
+	});
+	let auth: OAuthClientAuth = serde_json::from_value(config.clone()).unwrap();
+	assert_eq!(serde_json::to_value(&auth).unwrap(), config);
 }

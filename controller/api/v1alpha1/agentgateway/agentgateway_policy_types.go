@@ -2078,12 +2078,14 @@ const (
 	OAuthClientAuthMethodClientSecretBasic OAuthClientAuthMethod = "ClientSecretBasic"
 	OAuthClientAuthMethodClientSecretPost  OAuthClientAuthMethod = "ClientSecretPost"
 	OAuthClientAuthMethodPrivateKeyJWT     OAuthClientAuthMethod = "PrivateKeyJwt"
+	OAuthClientAuthMethodClientAssertion   OAuthClientAuthMethod = "ClientAssertion"
 )
 
 // OAuthClientAuth configures token endpoint client authentication.
 // +kubebuilder:validation:XValidation:rule="has(self.privateKeyJwt) == (has(self.method) && self.method == 'PrivateKeyJwt')",message="privateKeyJwt settings require method PrivateKeyJwt"
-// +kubebuilder:validation:XValidation:rule="!has(self.secretRef) || !has(self.method) || self.method != 'PrivateKeyJwt'",message="secretRef is not valid with method PrivateKeyJwt"
-// +kubebuilder:validation:XValidation:rule="has(self.secretRef) || has(self.privateKeyJwt) || (has(self.method) && self.method == 'ClientSecretPost')",message="clientAuth without secretRef requires method ClientSecretPost or PrivateKeyJwt"
+// +kubebuilder:validation:XValidation:rule="has(self.clientAssertion) == (has(self.method) && self.method == 'ClientAssertion')",message="clientAssertion settings require method ClientAssertion"
+// +kubebuilder:validation:XValidation:rule="!has(self.secretRef) || !has(self.method) || !(self.method in ['PrivateKeyJwt', 'ClientAssertion'])",message="secretRef is not valid with method PrivateKeyJwt or ClientAssertion"
+// +kubebuilder:validation:XValidation:rule="has(self.secretRef) || has(self.privateKeyJwt) || has(self.clientAssertion) || (has(self.method) && self.method == 'ClientSecretPost')",message="clientAuth without secretRef requires method ClientSecretPost, PrivateKeyJwt or ClientAssertion"
 type OAuthClientAuth struct {
 	// Client ID sent to the token endpoint.
 	// +kubebuilder:validation:MinLength=1
@@ -2100,10 +2102,24 @@ type OAuthClientAuth struct {
 	// +optional
 	PrivateKeyJWT *OAuthPrivateKeyJWT `json:"privateKeyJwt,omitempty"`
 
+	// Client assertion settings. Required when method is ClientAssertion.
+	// +optional
+	ClientAssertion *OAuthClientAssertion `json:"clientAssertion,omitempty"`
+
 	// Client authentication method. Defaults to ClientSecretBasic.
 	// +optional
 	Method *OAuthClientAuthMethod `json:"method,omitempty"`
 }
+
+// OAuthClientAssertion sends a JWT issued to the gateway as `client_assertion` (RFC 7523).
+// +kubebuilder:validation:ExactlyOneOf=workloadIdentity
+type OAuthClientAssertion struct {
+	// Sends the Azure Workload Identity token from `AZURE_FEDERATED_TOKEN_FILE`.
+	// +optional
+	WorkloadIdentity *OAuthClientAssertionWorkloadIdentity `json:"workloadIdentity,omitempty"`
+}
+
+type OAuthClientAssertionWorkloadIdentity struct{}
 
 // OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
 // +kubebuilder:validation:XValidation:rule="has(self.certificateRef) == has(self.certificateHeader)",message="certificateRef and certificateHeader must be set together"

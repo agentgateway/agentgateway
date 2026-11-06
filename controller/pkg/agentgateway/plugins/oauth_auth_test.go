@@ -412,7 +412,7 @@ func TestOAuthTokenExchangeClientAuthPublicClientRequiresPost(t *testing.T) {
 			ClientID: "public-client",
 		},
 	}, "default")
-	if err == nil || !strings.Contains(err.Error(), "without secretRef requires method ClientSecretPost or PrivateKeyJwt") {
+	if err == nil || !strings.Contains(err.Error(), "without secretRef requires method ClientSecretPost, PrivateKeyJwt or ClientAssertion") {
 		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want public client method error", err)
 	}
 }
@@ -506,6 +506,36 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	}
 	if privateKeyJWT.GetAssertionAudience() != "https://issuer.example.com/oauth/token" {
 		t.Fatalf("privateKeyJwt assertion audience = %q, want token endpoint URL", privateKeyJWT.GetAssertionAudience())
+	}
+}
+
+func TestOAuthTokenExchangeClientAuthClientAssertion(t *testing.T) {
+	policy, err := buildOAuthTokenExchangePolicy(oauthTestPolicyCtx(t), &agentgateway.OAuthTokenExchange{
+		PolicyBackendEndpoint: oauthTokenEndpoint(),
+		GrantType:             new(agentgateway.OAuthGrantTypeJwtBearer),
+		ClientAuth: &agentgateway.OAuthClientAuth{
+			ClientID: "gateway",
+			Method:   new(agentgateway.OAuthClientAuthMethodClientAssertion),
+			ClientAssertion: &agentgateway.OAuthClientAssertion{
+				WorkloadIdentity: &agentgateway.OAuthClientAssertionWorkloadIdentity{},
+			},
+		},
+	}, "default")
+	if err != nil {
+		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want nil", err)
+	}
+
+	want := &api.OAuthClientAuth{
+		ClientId: "gateway",
+		Method:   api.OAuthClientAuth_CLIENT_ASSERTION,
+		ClientAssertion: &api.OAuthClientAuth_ClientAssertion{
+			Source: &api.OAuthClientAuth_ClientAssertion_WorkloadIdentity_{
+				WorkloadIdentity: &api.OAuthClientAuth_ClientAssertion_WorkloadIdentity{},
+			},
+		},
+	}
+	if got := policy.GetOauthTokenExchange().GetClientAuth(); !proto.Equal(got, want) {
+		t.Fatalf("client auth = %v, want %v", got, want)
 	}
 }
 
@@ -664,6 +694,30 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 				},
 			},
 			want: "certificateRef and certificateHeader must be set together",
+		},
+		{
+			name: "client-assertion-without-method",
+			auth: agentgateway.OAuthTokenExchange{
+				PolicyBackendEndpoint: oauthTokenEndpoint(),
+				ClientAuth: &agentgateway.OAuthClientAuth{
+					ClientID: "gateway",
+					ClientAssertion: &agentgateway.OAuthClientAssertion{
+						WorkloadIdentity: &agentgateway.OAuthClientAssertionWorkloadIdentity{},
+					},
+				},
+			},
+			want: "clientAssertion requires method ClientAssertion",
+		},
+		{
+			name: "client-assertion-method-without-settings",
+			auth: agentgateway.OAuthTokenExchange{
+				PolicyBackendEndpoint: oauthTokenEndpoint(),
+				ClientAuth: &agentgateway.OAuthClientAuth{
+					ClientID: "gateway",
+					Method:   new(agentgateway.OAuthClientAuthMethodClientAssertion),
+				},
+			},
+			want: "method ClientAssertion requires clientAssertion settings",
 		},
 	}
 

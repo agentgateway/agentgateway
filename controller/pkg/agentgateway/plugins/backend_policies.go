@@ -1403,8 +1403,8 @@ func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, nam
 		errs = append(errs, errors.New("oauth clientAuth clientId must not be empty"))
 	}
 
-	if auth.SecretRef != nil && auth.PrivateKeyJWT != nil {
-		errs = append(errs, errors.New("oauth clientAuth secretRef is not valid with privateKeyJwt"))
+	if auth.SecretRef != nil && (auth.PrivateKeyJWT != nil || auth.ClientAssertion != nil) {
+		errs = append(errs, errors.New("oauth clientAuth secretRef is not valid with privateKeyJwt or clientAssertion"))
 	}
 
 	if auth.PrivateKeyJWT != nil {
@@ -1420,7 +1420,20 @@ func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, nam
 		errs = append(errs, errors.New("oauth clientAuth method PrivateKeyJwt requires privateKeyJwt settings"))
 	}
 
-	if auth.SecretRef != nil && auth.PrivateKeyJWT == nil {
+	if auth.ClientAssertion != nil {
+		if auth.Method == nil || *auth.Method != agentgateway.OAuthClientAuthMethodClientAssertion {
+			errs = append(errs, errors.New("oauth clientAuth clientAssertion requires method ClientAssertion"))
+		}
+		res.ClientAssertion = &api.OAuthClientAuth_ClientAssertion{
+			Source: &api.OAuthClientAuth_ClientAssertion_WorkloadIdentity_{
+				WorkloadIdentity: &api.OAuthClientAuth_ClientAssertion_WorkloadIdentity{},
+			},
+		}
+	} else if auth.Method != nil && *auth.Method == agentgateway.OAuthClientAuthMethodClientAssertion {
+		errs = append(errs, errors.New("oauth clientAuth method ClientAssertion requires clientAssertion settings"))
+	}
+
+	if auth.SecretRef != nil && auth.PrivateKeyJWT == nil && auth.ClientAssertion == nil {
 		data, key, err := ctx.ResolveCredentialKeyRef(*auth.SecretRef, namespace, wellknown.ClientSecret)
 		if err != nil {
 			clientSecret := ""
@@ -1433,8 +1446,8 @@ func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, nam
 		} else {
 			res.ClientSecret = &value
 		}
-	} else if auth.PrivateKeyJWT == nil && (auth.Method == nil || *auth.Method != agentgateway.OAuthClientAuthMethodClientSecretPost) {
-		errs = append(errs, errors.New("oauth clientAuth without secretRef requires method ClientSecretPost or PrivateKeyJwt"))
+	} else if auth.PrivateKeyJWT == nil && auth.ClientAssertion == nil && (auth.Method == nil || *auth.Method != agentgateway.OAuthClientAuthMethodClientSecretPost) {
+		errs = append(errs, errors.New("oauth clientAuth without secretRef requires method ClientSecretPost, PrivateKeyJwt or ClientAssertion"))
 	}
 
 	return res, errors.Join(errs...)
@@ -1530,6 +1543,8 @@ func translateOAuthClientAuthMethod(method *agentgateway.OAuthClientAuthMethod) 
 		return api.OAuthClientAuth_CLIENT_SECRET_BASIC
 	case agentgateway.OAuthClientAuthMethodPrivateKeyJWT:
 		return api.OAuthClientAuth_PRIVATE_KEY_JWT
+	case agentgateway.OAuthClientAuthMethodClientAssertion:
+		return api.OAuthClientAuth_CLIENT_ASSERTION
 	default:
 		return api.OAuthClientAuth_UNSPECIFIED
 	}
