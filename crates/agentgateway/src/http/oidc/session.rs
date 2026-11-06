@@ -157,6 +157,35 @@ impl BrowserSession {
 	}
 }
 
+#[async_trait::async_trait]
+pub(super) trait BrowserSessionStore: std::fmt::Debug + Send + Sync {
+	/// Returns the stored session without checking expiry so callers can attempt a refresh.
+	async fn load(&self, value: &str) -> Result<BrowserSession, Error>;
+	async fn save(&self, session: &BrowserSession) -> Result<String, Error>;
+}
+
+#[async_trait::async_trait]
+impl BrowserSessionStore for sessionpersistence::Encoder {
+	async fn load(&self, value: &str) -> Result<BrowserSession, Error> {
+		let decoded = self.decrypt(value).map_err(|_| Error::InvalidSession)?;
+		let decoded = decode_session_payload(decoded)?;
+		let session: BrowserSession =
+			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
+		Ok(session)
+	}
+
+	async fn save(&self, session: &BrowserSession) -> Result<String, Error> {
+		let json = serde_json::to_vec(session).map_err(anyhow::Error::from)?;
+		let encoded = self
+			.encrypt_bytes(&encode_session_payload(&json))
+			.map_err(|_| Error::InvalidSession)?;
+		if encoded.len() > MAX_COOKIE_VALUE_SIZE {
+			return Err(Error::SessionCookieTooLarge);
+		}
+		Ok(encoded)
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionConfig {
@@ -192,40 +221,6 @@ impl SessionConfig {
 			.encoder
 			.encrypt(&json)
 			.map_err(|_| Error::InvalidTransaction)
-	}
-
-	pub fn decode_browser_session(&self, cookie: &str) -> Result<BrowserSession, Error> {
-		let session = self.decode_browser_session_for_refresh(cookie)?;
-		if session.is_expired() {
-			return Err(Error::InvalidSession);
-		}
-		Ok(session)
-	}
-
-	pub(super) fn decode_browser_session_for_refresh(
-		&self,
-		cookie: &str,
-	) -> Result<BrowserSession, Error> {
-		let decoded = self
-			.encoder
-			.decrypt(cookie)
-			.map_err(|_| Error::InvalidSession)?;
-		let decoded = decode_session_payload(decoded)?;
-		let session: BrowserSession =
-			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
-		Ok(session)
-	}
-
-	pub fn encode_browser_session(&self, session: &BrowserSession) -> Result<String, Error> {
-		let json = serde_json::to_vec(session).map_err(anyhow::Error::from)?;
-		let encoded = self
-			.encoder
-			.encrypt_bytes(&encode_session_payload(&json))
-			.map_err(|_| Error::InvalidSession)?;
-		if encoded.len() > MAX_COOKIE_VALUE_SIZE {
-			return Err(Error::SessionCookieTooLarge);
-		}
-		Ok(encoded)
 	}
 
 	pub fn decode_refresh_session(&self, cookie: &str) -> Result<RefreshSession, Error> {
