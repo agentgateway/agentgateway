@@ -21,7 +21,7 @@
 
 .multi-check-trigger {
 	display: inline-grid;
-	grid-template-columns: minmax(0, 1fr) auto auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	gap: 8px;
 	justify-content: space-between;
 	min-height: 40px;
@@ -62,8 +62,44 @@
 	color: var(--primary);
 }
 
+/* contain: the selection never changes the field's width, so the open popover stays put. */
+.multi-check-values {
+	position: relative;
+	display: flex;
+	flex: 1 1 0;
+	min-width: 0;
+	align-items: center;
+	gap: 4px;
+	overflow: hidden;
+	contain: inline-size;
+}
+
+.multi-check-chip {
+	flex: 0 1 auto;
+	min-width: 0;
+	height: 20px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--primary) 12%, transparent);
+	font-size: 12px;
+	line-height: 20px;
+	padding: 0 6px;
+}
+
+.multi-check-measure {
+	position: absolute;
+	display: flex;
+	width: max-content;
+	gap: 4px;
+	visibility: hidden;
+}
+
+.multi-check-measure > * {
+	flex: none;
+}
+
 .multi-check-count {
 	display: inline-flex;
+	flex: none;
 	height: 20px;
 	min-width: 24px;
 	align-items: center;
@@ -83,7 +119,8 @@
 	z-index: 35;
 	display: grid;
 	gap: 4px;
-	width: max(240px, 100%);
+	width: max-content;
+	min-width: max(240px, 100%);
 	max-height: 280px;
 	overflow: auto;
 	border: 1px solid var(--line-strong);
