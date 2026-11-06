@@ -369,6 +369,117 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 	}
 }
 
+fn thinking_fields(
+	model: &str,
+	tags: &[(&str, &[&str])],
+	thinking: messages::typed::ThinkingInput,
+) -> Option<serde_json::Value> {
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	let req = messages::typed::Request {
+		model: model.to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 64,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_k: None,
+		top_p: None,
+		tools: None,
+		tool_choice: None,
+		thinking: Some(thinking),
+		output_config: None,
+		cache_control: None,
+	};
+	let catalog = crate::model_catalog::TestCatalog::new(tags.iter().copied());
+	let (out, _) =
+		super::from_messages::translate_internal(req, &provider, None, Some(&catalog)).unwrap();
+	out.additional_model_request_fields
+}
+
+fn disabled_thinking_fields(model: &str, tags: &[(&str, &[&str])]) -> Option<serde_json::Value> {
+	thinking_fields(model, tags, messages::typed::ThinkingInput::Disabled {})
+}
+
+#[test]
+fn test_disabled_thinking_dropped_for_always_on_model() {
+	use crate::model_catalog::tags;
+	let model = "global.anthropic.claude-opus-5-5";
+	let fields = disabled_thinking_fields(
+		model,
+		&[(
+			model,
+			&[tags::ADAPTIVE_THINKING, tags::ALWAYS_ON_THINKING][..],
+		)],
+	);
+	assert_eq!(fields, None);
+}
+
+#[test]
+fn test_disabled_thinking_becomes_between_tools_for_tagged_model() {
+	use crate::model_catalog::tags;
+	let model = "global.anthropic.claude-sonnet-5-5";
+	let fields = disabled_thinking_fields(
+		model,
+		&[(
+			model,
+			&[tags::ADAPTIVE_THINKING, tags::BETWEEN_TOOLS_THINKING][..],
+		)],
+	);
+	assert_eq!(fields, Some(json!({"thinking": {"type": "between_tools"}})));
+}
+
+#[test]
+fn test_disabled_thinking_kept_for_adaptive_model_without_always_on_tag() {
+	use crate::model_catalog::tags;
+	let model = "global.anthropic.claude-opus-4-7";
+	let fields = disabled_thinking_fields(model, &[(model, &[tags::ADAPTIVE_THINKING][..])]);
+	assert_eq!(fields, Some(json!({"thinking": {"type": "disabled"}})));
+}
+
+#[test]
+fn test_disabled_thinking_kept_for_unknown_model() {
+	let fields = disabled_thinking_fields("anthropic.claude-unknown", &[]);
+	assert_eq!(fields, Some(json!({"thinking": {"type": "disabled"}})));
+}
+
+#[test]
+fn test_between_tools_thinking_is_parsed_and_forwarded() {
+	let body = json!({
+		"model": "anthropic.claude-unknown",
+		"max_tokens": 64,
+		"messages": [{"role": "user", "content": "hi"}],
+		"thinking": {"type": "between_tools"}
+	});
+	let req: messages::typed::Request = serde_json::from_value(body).unwrap();
+	assert_eq!(
+		req.thinking,
+		Some(messages::typed::ThinkingInput::BetweenTools {})
+	);
+	let fields = thinking_fields(
+		"anthropic.claude-unknown",
+		&[],
+		messages::typed::ThinkingInput::BetweenTools {},
+	);
+	assert_eq!(fields, Some(json!({"thinking": {"type": "between_tools"}})));
+}
+
 #[test]
 fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 	let provider = Provider {

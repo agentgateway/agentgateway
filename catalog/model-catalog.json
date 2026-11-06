@@ -18,7 +18,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -63,7 +64,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -626,7 +628,8 @@
             }
           ],
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -849,7 +852,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -1094,7 +1098,8 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -1142,7 +1147,8 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -1645,7 +1651,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -1833,7 +1840,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -2322,7 +2330,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -2510,7 +2519,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -2865,7 +2875,8 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -3260,7 +3271,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -3491,7 +3503,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -3608,7 +3621,8 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -3656,7 +3670,8 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -4097,7 +4112,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -4328,7 +4344,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -5777,7 +5794,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -8126,7 +8144,8 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -8174,7 +8193,8 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -8658,7 +8678,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -8889,7 +8910,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -10095,7 +10117,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -10139,7 +10162,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -10630,7 +10654,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -10810,7 +10835,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -14502,7 +14528,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -14547,7 +14574,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -14904,7 +14932,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -15043,7 +15072,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -17175,7 +17205,8 @@
             "output": "50"
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -21341,7 +21372,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -21445,7 +21477,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -21859,7 +21892,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -22081,7 +22115,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -31268,7 +31303,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -31313,7 +31349,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -31634,7 +31671,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -31812,7 +31850,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "between_tools_thinking"
           ],
           "limits": {
             "context": 1000000,

@@ -1598,6 +1598,15 @@ pub mod from_messages {
 				.effort
 				.get_or_insert(messages::ThinkingEffort::High);
 		}
+		if matches!(req.thinking, Some(messages::ThinkingInput::Disabled {})) {
+			// Always-on models reject `disabled`; omitting `thinking` is the documented remedy.
+			if capabilities.always_on {
+				req.thinking = None;
+			// Between-tools models turn thinking off with `between_tools` instead of `disabled`.
+			} else if capabilities.between_tools {
+				req.thinking = Some(messages::ThinkingInput::BetweenTools {});
+			}
+		}
 		let mut tool_name_map = super::BedrockToolNameMap::default();
 		for tool in req.tools.iter().flatten() {
 			tool_name_map.register(tool.name());
@@ -2093,6 +2102,12 @@ pub mod from_messages {
 						"type": "adaptive"
 					}),
 					*display,
+				),
+				messages::ThinkingInput::BetweenTools {} => (
+					serde_json::json!({
+						"type": "between_tools"
+					}),
+					None,
 				),
 			};
 			if let Some(display) = display {
