@@ -1900,3 +1900,80 @@ test('login loads without protected API requests and preserves the return destin
 	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
 	await expect(page.getByText('OAuth started')).toBeVisible();
 });
+
+test('multiselect shows selected values as chips with an overflow count', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/analytics');
+
+	const field = page.locator('.multi-check', { hasText: 'Group by' });
+	const trigger = field.locator('.multi-check-trigger');
+	const chips = field.locator('.multi-check-values > .multi-check-chip');
+	const count = field.locator('.multi-check-values > .multi-check-count');
+	const widthBefore = (await trigger.boundingBox())?.width;
+
+	await trigger.click();
+	const popover = field.locator('.multi-check-popover');
+	await popover.getByRole('checkbox', { name: 'Model' }).check();
+	await popover.getByRole('checkbox', { name: 'User', exact: true }).check();
+	await expect(chips).toHaveText(['Model', 'User']);
+	await expect(count).toHaveCount(0);
+
+	// Picking everything can't fit: the rest collapse into +n, and hovering still names them all.
+	const labels = ['Model', 'User', 'Group', 'Provider', 'User agent'];
+	for (const label of labels) {
+		await popover.getByRole('checkbox', { name: label, exact: true }).check();
+	}
+	await expect(count).toBeVisible();
+	const shown = await chips.count();
+	expect(shown).toBeGreaterThan(1);
+	await expect(count).toHaveText(`+${labels.length - shown}`);
+	await expect(trigger).toHaveAttribute('title', labels.join(', '));
+
+	// The field keeps its width so the open popover doesn't move while picking.
+	expect((await trigger.boundingBox())?.width).toBe(widthBefore);
+});
+
+test('multiselect popover fits long options inside the filter row', async ({ page }) => {
+	const longModel = 'anthropic/claude-sonnet-4-5-20250929-long-deployment-name';
+	const longProvider = 'azure-openai-eastus2-production-deployment-pool';
+	const tooLong = `${'very-long-model-name-'.repeat(20)}end`;
+	await mockGateway(page);
+	await page.route('**/api/logs/analytics/summary', route =>
+		route.fulfill({
+			json: {
+				timeRange: { from: '2025-01-01T00:00:00Z', to: '2025-01-01T01:00:00Z' },
+				bucketSeconds: 900,
+				buckets: [],
+				groups: [],
+				filterOptions: {
+					requestModel: ['gpt-4o', longModel, tooLong],
+					provider: ['openai', longProvider]
+				}
+			}
+		})
+	);
+	await page.goto('/llm/analytics');
+	const row = page.locator('.analytics-controls-left');
+	await expect(row.locator('.multi-check')).toHaveCount(6);
+	const rowBox = await row.boundingBox();
+	if (!rowBox) throw new Error('filter row is not visible');
+
+	// A long provider reads in full, even from a field near the row's right edge.
+	const providers = row.locator('.multi-check', { hasText: 'Providers' });
+	await providers.locator('.multi-check-trigger').click();
+	const label = providers.locator('.multi-check-option span', { hasText: longProvider });
+	await expect(label).toBeVisible();
+	expect(await label.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+	const popover = await providers.locator('.multi-check-popover').boundingBox();
+	if (!popover) throw new Error('popover is not visible');
+	expect(popover.x + popover.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+	await page.keyboard.press('Escape');
+	await page.mouse.click(5, 5);
+
+	// A name wider than the row is capped at the row, and the tooltip still gives it in full.
+	const models = row.locator('.multi-check', { hasText: 'Models' });
+	await models.locator('.multi-check-trigger').click();
+	const capped = await models.locator('.multi-check-popover').boundingBox();
+	expect(capped?.width).toBeLessThanOrEqual(rowBox.width + 1);
+	await expect(models.locator(`.multi-check-option span[title="${tooLong}"]`)).toBeVisible();
+});
