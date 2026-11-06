@@ -122,7 +122,7 @@
 |`config.logging.database`|object|Request log database. When omitted (or null), request logs are stored in `config.database`<br>if it is set. Set `enabled: false` to turn off request log storage.|
 |`config.logging.database.enabled`|boolean|Store request logs in a database. Defaults to true. When false, no request log store is<br>started, even if `config.database` is set. When true without a `url`, `config.database` is<br>required.|
 |`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.<br>Defaults to `config.database`.|
-|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>Requires `url`; without one, the `config.database` pool is shared. With a `url`, the pool is<br>shared only when both `url` and `maxConnections` match `config.database`.|
+|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>Can only be set together with `url`. Without a `url`, the `config.database` pool and its limit<br>are used. With a `url`, the pool is shared only when both `url` and `maxConnections` match<br>`config.database`.|
 |`config.metrics`|object|Metrics configuration, including metric removal and custom fields.|
 |`config.metrics.remove`|[]string|Metric names to exclude from collection.|
 |`config.metrics.fields`|object|Custom fields to add to all metrics.|

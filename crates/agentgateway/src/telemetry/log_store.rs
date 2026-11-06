@@ -80,9 +80,9 @@ pub fn enabled() -> bool {
 	REQUEST_LOG_STORE.get().is_some()
 }
 
-/// Returned when no request log store is running, either because `config.logging.database.enabled`
-/// is false or because no database is configured.
-pub const STORE_DISABLED: &str = "request log storage is disabled: config.logging.database.enabled is false, or neither config.logging.database.url nor config.database.url is set";
+/// Returned when no request log store is running.
+pub const STORE_DISABLED: &str =
+	"request log storage is not running (disabled, or no database configured)";
 
 pub async fn search(request: SearchRequest) -> anyhow::Result<SearchResponse> {
 	let store = REQUEST_LOG_STORE

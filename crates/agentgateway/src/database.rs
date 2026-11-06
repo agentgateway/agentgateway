@@ -13,6 +13,7 @@ use crate::{apply, schema};
 pub struct DatabaseConfig {
 	/// Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
 	#[serde(serialize_with = "crate::serdes::ser_redact")]
+	#[cfg_attr(feature = "schema", schemars(pattern(r"\S")))]
 	pub url: String,
 	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
 	/// When the request log and config stores have matching database settings, they share one pool

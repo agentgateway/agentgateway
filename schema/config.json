@@ -985,7 +985,8 @@
       "properties": {
         "url": {
           "description": "Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "maxConnections": {
           "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nWhen the request log and config stores have matching database settings, they share one pool\nwith this limit.",
@@ -1322,7 +1323,7 @@
           ]
         },
         "maxConnections": {
-          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nRequires `url`; without one, the `config.database` pool is shared. With a `url`, the pool is\nshared only when both `url` and `maxConnections` match `config.database`.",
+          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nCan only be set together with `url`. Without a `url`, the `config.database` pool and its limit\nare used. With a `url`, the pool is shared only when both `url` and `maxConnections` match\n`config.database`.",
           "type": [
             "integer",
             "null"
@@ -1344,6 +1345,9 @@
       },
       "else": {
         "properties": {
+          "url": {
+            "pattern": "\\S"
+          },
           "maxConnections": {
             "minimum": 1
           }
