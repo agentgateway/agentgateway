@@ -5,6 +5,29 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{PgPool, SqlitePool};
 
+use crate::{apply, schema};
+
+/// Connection settings for a database.
+#[apply(schema!)]
+#[derive(Eq, PartialEq)]
+pub struct DatabaseConfig {
+	/// Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
+	#[serde(serialize_with = "crate::serdes::ser_redact")]
+	#[cfg_attr(feature = "schema", schemars(pattern(r"\S")))]
+	pub url: String,
+	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
+	/// When the request log and config stores have matching database settings, they share one pool
+	/// with this limit.
+	#[serde(default)]
+	#[cfg_attr(feature = "schema", schemars(range(min = 1)))]
+	pub max_connections: Option<u32>,
+}
+
+/// Whether `url` selects the Postgres backend; any other url is treated as SQLite.
+pub fn is_postgres_url(url: &str) -> bool {
+	url.starts_with("postgres://") || url.starts_with("postgresql://")
+}
+
 #[derive(Clone, Debug)]
 pub enum DatabasePool {
 	Sqlite(SqlitePool),
@@ -28,7 +51,7 @@ impl DatabasePool {
 			max_connections > 0,
 			"database maxConnections must be greater than zero"
 		);
-		if url.starts_with("postgres://") || url.starts_with("postgresql://") {
+		if is_postgres_url(url) {
 			let pool = PgPoolOptions::new()
 				.max_connections(max_connections)
 				.connect(url)

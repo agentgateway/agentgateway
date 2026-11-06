@@ -1040,6 +1040,7 @@ mod tests {
 			&client::Config {
 				resolver_cfg: ResolverConfig::default(),
 				resolver_opts: ResolverOpts::default(),
+				max_ttl: None,
 			},
 			None,
 			BackendConfig::default(),

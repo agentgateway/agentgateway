@@ -7,6 +7,7 @@ import type { PolicyResourceKind } from '@/api/configResourcesApi';
 import { PageHeader, Panel, StatusBanner, YamlBlock } from '@/components/Primitives';
 import { ensureLlm, ensureMcp } from '@/config';
 import {
+	resetFinishedSaves,
 	useDeleteConfigResource,
 	useEffectiveGatewayConfig,
 	useRawGatewayConfig,
@@ -205,8 +206,7 @@ export function PolicyCatalogPage(props: {
 
 	useEffect(() => {
 		function syncSelectedFromUrl() {
-			upsertPolicy.reset();
-			deleteResource.reset();
+			resetFinishedSaves(upsertPolicy, deleteResource);
 			setSelected(policyKeyFromHash());
 		}
 		window.addEventListener('hashchange', syncSelectedFromUrl);
@@ -226,15 +226,13 @@ export function PolicyCatalogPage(props: {
 	}, [selected]);
 
 	function openPolicy(policyKey: PolicyKey) {
-		upsertPolicy.reset();
-		deleteResource.reset();
+		resetFinishedSaves(upsertPolicy, deleteResource);
 		setSelected(policyKey);
 		setPolicyHash(policyKey, 'push');
 	}
 
 	function closePolicy() {
-		upsertPolicy.reset();
-		deleteResource.reset();
+		resetFinishedSaves(upsertPolicy, deleteResource);
 		pendingScrollRestore.current = { x: window.scrollX, y: window.scrollY };
 		setSelected(null);
 		setPolicyHash(null, 'replace');

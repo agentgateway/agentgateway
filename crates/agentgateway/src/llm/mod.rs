@@ -1838,7 +1838,10 @@ impl AIProvider {
 		}
 		if matches!(
 			self,
-			AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_)
+			AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Azure(_)
+				| AIProvider::Bedrock(_)
 		) {
 			req.normalize_openai_token_limit();
 		}

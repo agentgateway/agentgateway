@@ -203,6 +203,41 @@ expression: models
         "/chat/completions",
         "/responses"
       ]
+    },
+    {
+      "id": "resilient",
+      "object": "model",
+      "created": 0,
+      "owned_by": "virtual",
+      "context_window": 400000,
+      "context_length": 400000,
+      "max_input_tokens": 400000,
+      "max_tokens": 64000,
+      "architecture": {
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "reasoning": true,
+        "tools": true,
+        "temperature": false
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "tool_choice",
+        "tools"
+      ],
+      "preferred_endpoints": [
+        "/chat/completions",
+        "/responses"
+      ]
     }
   ]
 }

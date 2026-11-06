@@ -1787,11 +1787,10 @@ type BackendAuth struct {
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
 
-	// Credentials is a list of additional credentials to inject on the
-	// backend request. Each entry resolves a Secret key and writes its value
-	// to the entry's location. `credentials` is independent of the primary
-	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
-	// alongside it.
+	// Credentials is a list of additional credentials to inject on the backend
+	// request. Each entry writes its value to the entry's location.
+	// `credentials` is independent of the primary `key`/`secretRef`/`passthrough`
+	// mechanism and may be set on its own or alongside it.
 	//
 	// +optional
 	// +kubebuilder:validation:MinItems=1
@@ -1802,6 +1801,7 @@ type BackendAuth struct {
 
 // BackendAuthCredential specifies one additional credential to inject on the
 // backend request.
+// +kubebuilder:validation:ExactlyOneOf=secretRef;gcp
 type BackendAuthCredential struct {
 	// Where the credential is inserted on the backend request.
 	// +required
@@ -1810,8 +1810,12 @@ type BackendAuthCredential struct {
 	// SecretRef references a Kubernetes Secret holding the credential value, and
 	// optionally overrides the key read from it. Defaults to `Authorization`,
 	// matching the key convention used by the top-level `secretRef`.
-	// +required
-	SecretRef LocalSecretKeyRef `json:"secretRef"`
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Fetches a Google Cloud access or ID token and writes it to `location`.
+	// +optional
+	GCP *GcpAuth `json:"gcp,omitempty"`
 }
 
 // OpenAIModerationAuth configures credentials for OpenAI Moderation requests.

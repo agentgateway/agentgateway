@@ -51,7 +51,7 @@ var AllCRDs = []schema.GroupVersionResource{
 }
 
 const (
-	AgwCRDPath = "install/helm/agentgateway-crds/templates"
+	AgwCRDPath = "install/helm/agentgateway-crds/files/crds"
 )
 
 // GetStructuralSchemasForAgentgatewayCRDChart returns a map of GroupVersionKind to Structural schemas

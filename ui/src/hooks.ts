@@ -60,6 +60,13 @@ export function useHybridFileWriteOverrideKeys() {
 	return active;
 }
 
+/** Skips in-flight saves: a reset stops observing them, so a failure would never be shown. */
+export function resetFinishedSaves(...saves: { isPending: boolean; reset: () => void }[]) {
+	for (const save of saves) {
+		if (!save.isPending) save.reset();
+	}
+}
+
 export function useRawGatewayConfig(options?: { enabled?: boolean }) {
 	return useQuery({
 		queryKey: ['config'],

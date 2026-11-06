@@ -11,7 +11,6 @@ use tokio::sync::watch;
 use tracing::{error, info, warn};
 
 use crate::database::DatabasePool;
-use crate::telemetry::log_store;
 
 #[derive(Clone, Debug)]
 pub struct ConfigResourceStore {
@@ -229,7 +228,7 @@ pub fn generate_session_key() -> anyhow::Result<String> {
 	Ok(hex::encode(crate::crypto::rand::bytes(32)?))
 }
 
-pub async fn setup(cfg: &log_store::Config) -> anyhow::Result<ConfigResourceStore> {
+pub async fn setup(cfg: &crate::database::DatabaseConfig) -> anyhow::Result<ConfigResourceStore> {
 	ConfigResourceStore::connect(&cfg.url, cfg.max_connections).await
 }
 

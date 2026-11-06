@@ -340,7 +340,7 @@ clean-gen:
 	rm -rf api/applyconfiguration
 	rm -rf pkg/generated/openapi
 	rm -rf pkg/client
-	rm -f install/helm/agentgateway-crds/templates/agentgateway.dev_*.yaml
+	rm -f install/helm/agentgateway-crds/files/crds/agentgateway.dev_*.yaml
 
 # Clean all stamp files to force regeneration
 .PHONY: clean-stamps

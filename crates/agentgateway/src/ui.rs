@@ -189,7 +189,7 @@ async fn authorize_route(
 	next: axum::middleware::Next,
 ) -> Result<Response, ErrorResponse> {
 	let request = request.map(crate::http::Body::new);
-	let attributes = app.state.logging.database_fields.load();
+	let attributes = app.state.logging.standard_attributes.load();
 	let executor = cel::Executor::new_request(&request);
 	let user = attributes
 		.add
@@ -343,7 +343,7 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 	let req = req.map(crate::http::Body::new);
 	// Use the same compiled, reloadable mapping as request logs, even when log
 	// storage is disabled. This is display metadata, not an authentication check.
-	let attributes = app.state.logging.database_fields.load();
+	let attributes = app.state.logging.standard_attributes.load();
 	let executor = cel::Executor::new_request(&req);
 	let session = req
 		.extensions()
@@ -1259,7 +1259,7 @@ async fn tail_logs(
 ) -> Result<Sse<ReceiverStream<Result<Event, std::convert::Infallible>>>, ErrorResponse> {
 	if !crate::telemetry::log_store::enabled() {
 		return Err(ErrorResponse::String(
-			"request log database is not configured".to_string(),
+			crate::telemetry::log_store::STORE_DISABLED.to_string(),
 		));
 	}
 	let mut cursor = request
@@ -1404,6 +1404,7 @@ mod tests {
 			&client::Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+				max_ttl: None,
 			},
 			None,
 			crate::BackendConfig::default(),
@@ -1428,7 +1429,7 @@ mod tests {
 		state.storage.mode = ConfigStoreMode::Hybrid;
 		state.xds.local_config = Some(ConfigSource::File(path));
 		app.config_resource_store = Some(
-			crate::config_store::setup(&crate::telemetry::log_store::Config {
+			crate::config_store::setup(&crate::database::DatabaseConfig {
 				url: format!("sqlite://{}", dir.path().join("config.db").display()),
 				max_connections: None,
 			})
@@ -1506,7 +1507,7 @@ mod tests {
 		let state = Arc::get_mut(&mut app.state).unwrap();
 		state.storage.mode = ConfigStoreMode::Hybrid;
 		state.xds.local_config = Some(ConfigSource::File(path.clone()));
-		let store = crate::config_store::setup(&crate::telemetry::log_store::Config {
+		let store = crate::config_store::setup(&crate::database::DatabaseConfig {
 			url: format!("sqlite://{}", dir.path().join("config.db").display()),
 			max_connections: None,
 		})
@@ -1770,7 +1771,7 @@ mod tests {
 			(Some("request.headers['missing']"), true, None, false),
 		] {
 			// Reuse the app to verify updates replace the mapping used by the handler.
-			app.state.logging.database_fields.store(Arc::new(
+			app.state.logging.standard_attributes.store(Arc::new(
 				crate::config::standard_attributes(Some(&crate::RawStandardAttributes {
 					user: expression.map(str::to_owned),
 					group: None,
