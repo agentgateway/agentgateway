@@ -80,10 +80,14 @@ pub fn enabled() -> bool {
 	REQUEST_LOG_STORE.get().is_some()
 }
 
+/// Returned when no request log store is running, either because `config.logging.database.enabled`
+/// is false or because no database is configured.
+pub const STORE_DISABLED: &str = "request log storage is disabled: config.logging.database.enabled is false, or neither config.logging.database.url nor config.database.url is set";
+
 pub async fn search(request: SearchRequest) -> anyhow::Result<SearchResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
-		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+		.ok_or_else(|| anyhow::anyhow!(STORE_DISABLED))?;
 	store
 		.request(|tx| LogStoreMsg::Search { request, tx })
 		.await
@@ -92,7 +96,7 @@ pub async fn search(request: SearchRequest) -> anyhow::Result<SearchResponse> {
 pub async fn get(request: GetRequest) -> anyhow::Result<GetResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
-		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+		.ok_or_else(|| anyhow::anyhow!(STORE_DISABLED))?;
 	store.request(|tx| LogStoreMsg::Get { request, tx }).await
 }
 
@@ -101,7 +105,7 @@ pub async fn analytics_summary(
 ) -> anyhow::Result<AnalyticsSummaryResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
-		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+		.ok_or_else(|| anyhow::anyhow!(STORE_DISABLED))?;
 	store
 		.request(|tx| LogStoreMsg::AnalyticsSummary { request, tx })
 		.await
@@ -110,7 +114,7 @@ pub async fn analytics_summary(
 pub async fn tail(request: TailRequest) -> anyhow::Result<TailResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
-		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+		.ok_or_else(|| anyhow::anyhow!(STORE_DISABLED))?;
 	store.request(|tx| LogStoreMsg::Tail { request, tx }).await
 }
 

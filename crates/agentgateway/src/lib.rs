@@ -173,7 +173,8 @@ pub struct RawConfig {
 
 	/// Model cost catalog sources; entries are merged in order, with later entries taking precedence.
 	model_catalog: Option<Vec<ModelCatalogSource>>,
-	/// Primary database used by local runtime features.
+	/// Primary database used by local runtime features. Request logs are also stored here unless
+	/// `config.logging.database` sets its own `url` or `enabled: false`.
 	database: Option<database::DatabaseConfig>,
 	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
 	storage: Option<RawStorageConfig>,
@@ -491,19 +492,44 @@ pub struct RawLogging {
 	level: Option<RawLoggingLevel>,
 	/// Log output format: `text` or `json`.
 	format: Option<LoggingFormat>,
-	/// Log-store database configuration; enables request logging to a database backend.
+	/// Request log database. When omitted (or null), request logs are stored in `config.database`
+	/// if it is set. Set `enabled: false` to turn off request log storage.
 	database: Option<RawLoggingDatabase>,
 }
 
+/// Request log database. Without a `url`, request logs are stored in `config.database`.
 #[apply(schema_de!)]
+#[cfg_attr(
+	feature = "schema",
+	// maxConnections requires url, except when the store is disabled (its settings are then ignored).
+	schemars(extend(
+		"if" = {"properties": {"enabled": {"const": false}}, "required": ["enabled"]},
+		"else" = {"dependentRequired": {"maxConnections": ["url"]}}
+	))
+)]
 pub struct RawLoggingDatabase {
 	/// Store request logs in a database. Defaults to true. When false, no request log store is
-	/// started, even if `config.database` is set, and `url` may be omitted.
-	#[serde(default = "crate::types::agent::defaults::always_true")]
-	enabled: bool,
-	/// Connection settings for the request log database. `url` is required unless `enabled` is false.
-	#[serde(flatten)]
-	database: Option<database::DatabaseConfig>,
+	/// started, even if `config.database` is set. When true without a `url`, `config.database` is
+	/// required.
+	enabled: Option<bool>,
+	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
+	/// Defaults to `config.database`.
+	url: Option<String>,
+	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
+	/// Requires `url`; without one, the `config.database` pool is shared. With a `url`, the pool is
+	/// shared only when both `url` and `maxConnections` match `config.database`.
+	#[cfg_attr(feature = "schema", schemars(range(min = 1)))]
+	max_connections: Option<u32>,
+}
+
+impl RawLoggingDatabase {
+	/// The explicitly configured connection, if `url` is set.
+	fn connection(&self) -> Option<database::DatabaseConfig> {
+		self.url.as_ref().map(|url| database::DatabaseConfig {
+			url: url.clone(),
+			max_connections: self.max_connections,
+		})
+	}
 }
 
 #[apply(schema_de!)]

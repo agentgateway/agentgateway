@@ -1259,7 +1259,7 @@ async fn tail_logs(
 ) -> Result<Sse<ReceiverStream<Result<Event, std::convert::Infallible>>>, ErrorResponse> {
 	if !crate::telemetry::log_store::enabled() {
 		return Err(ErrorResponse::String(
-			"request log database is not configured".to_string(),
+			crate::telemetry::log_store::STORE_DISABLED.to_string(),
 		));
 	}
 	let mut cursor = request

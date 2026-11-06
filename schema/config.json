@@ -161,7 +161,7 @@
           }
         },
         "database": {
-          "description": "Primary database used by local runtime features.",
+          "description": "Primary database used by local runtime features. Request logs are also stored here unless\n`config.logging.database` sets its own `url` or `enabled: false`.",
           "anyOf": [
             {
               "$ref": "#/$defs/DatabaseConfig"
@@ -1270,7 +1270,7 @@
           ]
         },
         "database": {
-          "description": "Log-store database configuration; enables request logging to a database backend.",
+          "description": "Request log database. When omitted (or null), request logs are stored in `config.database`\nif it is set. Set `enabled: false` to turn off request log storage.",
           "anyOf": [
             {
               "$ref": "#/$defs/RawLoggingDatabase"
@@ -1304,30 +1304,51 @@
       ]
     },
     "RawLoggingDatabase": {
-      "description": "Connection settings for a database.",
+      "description": "Request log database. Without a `url`, request logs are stored in `config.database`.",
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Store request logs in a database. Defaults to true. When false, no request log store is\nstarted, even if `config.database` is set, and `url` may be omitted.",
-          "type": "boolean",
-          "default": true
+          "description": "Store request logs in a database. Defaults to true. When false, no request log store is\nstarted, even if `config.database` is set. When true without a `url`, `config.database` is\nrequired.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "url": {
-          "description": "Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
-          "type": "string"
+          "description": "Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.\nDefaults to `config.database`.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "maxConnections": {
-          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nWhen the request log and config stores have matching database settings, they share one pool\nwith this limit.",
+          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nRequires `url`; without one, the `config.database` pool is shared. With a `url`, the pool is\nshared only when both `url` and `maxConnections` match `config.database`.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint32",
-          "minimum": 1,
-          "default": null
+          "minimum": 1
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": false
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "else": {
+        "dependentRequired": {
+          "maxConnections": [
+            "url"
+          ]
+        }
+      }
     },
     "RawMetrics": {
       "type": "object",

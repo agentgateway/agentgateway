@@ -22,6 +22,11 @@ pub struct DatabaseConfig {
 	pub max_connections: Option<u32>,
 }
 
+/// Whether `url` selects the Postgres backend; any other url is treated as SQLite.
+pub fn is_postgres_url(url: &str) -> bool {
+	url.starts_with("postgres://") || url.starts_with("postgresql://")
+}
+
 #[derive(Clone, Debug)]
 pub enum DatabasePool {
 	Sqlite(SqlitePool),
@@ -45,7 +50,7 @@ impl DatabasePool {
 			max_connections > 0,
 			"database maxConnections must be greater than zero"
 		);
-		if url.starts_with("postgres://") || url.starts_with("postgresql://") {
+		if is_postgres_url(url) {
 			let pool = PgPoolOptions::new()
 				.max_connections(max_connections)
 				.connect(url)
