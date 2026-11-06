@@ -1669,274 +1669,156 @@ config:
 		);
 	}
 
-	#[test]
-	fn logging_database_enabled_resolution() {
+	const PRIMARY: &str = "postgres://config.example/database";
+	const LOGS: &str = "postgres://logs.example/database";
+
+	/// How `config.logging.database` resolves; `config` is the `config:` section in YAML flow style.
+	/// `expected` is the resulting request log database (url, maxConnections), or None for no store.
+	#[rstest::rstest]
+	// enabled: false turns the store off, ignoring (and not validating) its other settings.
+	#[case::disabled_with_url(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {enabled: false, url: "postgres://logs.example/database", maxConnections: 3}}}"#,
+		None
+	)]
+	#[case::disabled_without_url(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {enabled: false}}}"#,
+		None
+	)]
+	#[case::disabled_ignores_invalid_settings(
+		r#"{logging: {database: {enabled: false, url: "", maxConnections: 0}}}"#,
+		None
+	)]
+	// An explicit url is used as is, whether enabled is unset or true.
+	#[case::explicit_url(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {url: "postgres://logs.example/database", maxConnections: 3}}}"#,
+		Some((LOGS, Some(3)))
+	)]
+	#[case::explicit_url_enabled(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {enabled: true, url: "postgres://logs.example/database", maxConnections: 3}}}"#,
+		Some((LOGS, Some(3)))
+	)]
+	#[case::explicit_url_without_primary(
+		r#"{logging: {database: {url: "sqlite::memory:"}}}"#,
+		Some(("sqlite::memory:", None))
+	)]
+	// Without a url, the store falls back to the primary database, however the block is written.
+	#[case::fallback_missing(
+		r#"{database: {url: "postgres://config.example/database"}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_bare_key(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: }}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_null(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: null}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_empty(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {}}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_enabled(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {enabled: true}}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_null_max_connections(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {maxConnections: null}}}"#,
+		Some((PRIMARY, None))
+	)]
+	// With nothing to fall back to, an unset enabled means no store.
+	#[case::no_database_bare_key(r#"{logging: {database: }}"#, None)]
+	#[case::no_database_empty(r#"{logging: {database: {}}}"#, None)]
+	// Surrounding whitespace is trimmed: a leading space must not defeat postgres:// detection, and
+	// a trailing newline (common in file-backed Secrets) keeps working.
+	#[case::trims_primary_url(
+		r#"{database: {url: " postgres://config.example/database"}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::trims_logging_url(
+		r#"{logging: {database: {url: "postgres://logs.example/database\n"}}}"#,
+		Some((LOGS, None))
+	)]
+	fn logging_database_resolves(
+		#[case] config: &str,
+		#[case] expected: Option<(&str, Option<u32>)>,
+	) {
 		let _env_lock = lock_env();
-		let parse = |yaml: &str| parse_config(yaml.to_string(), None).expect("config should parse");
-		let logging_url = |config: &crate::Config| {
-			config
-				.logging
-				.database
-				.as_ref()
-				.map(|db| (db.url.clone(), db.max_connections))
-		};
-
-		// enabled: false disables the log store, even with a url and a primary database.
-		let config = parse(
-			r#"
-config:
-  database:
-    url: "postgres://config.example/database"
-  logging:
-    database:
-      enabled: false
-      url: "postgres://logs.example/database"
-      maxConnections: 3
-"#,
-		);
-		assert!(config.database.is_some());
-		assert_eq!(logging_url(&config), None);
-
-		// enabled: false without a url does not fall back to the primary database.
-		let config = parse(
-			r#"
-config:
-  database:
-    url: "postgres://config.example/database"
-  logging:
-    database:
-      enabled: false
-"#,
-		);
-		assert!(config.database.is_some());
-		assert_eq!(logging_url(&config), None);
-
-		// enabled: true (or unset) with a url uses that database.
-		for enabled in ["enabled: true", ""] {
-			let config = parse(&format!(
-				r#"
-config:
-  database:
-    url: "postgres://config.example/database"
-  logging:
-    database:
-      {enabled}
-      url: "postgres://logs.example/database"
-      maxConnections: 3
-"#
-			));
-			assert_eq!(
-				logging_url(&config),
-				Some(("postgres://logs.example/database".to_string(), Some(3)))
-			);
+		let config = parse_config(format!("config: {config}"), None).expect("config should parse");
+		let resolved = config
+			.logging
+			.database
+			.as_ref()
+			.map(|db| (db.url.as_str(), db.max_connections));
+		assert_eq!(resolved, expected);
+		// Falling back reuses the primary settings exactly, so run.rs shares its pool.
+		if expected.is_some_and(|(url, _)| url == PRIMARY) {
+			assert_eq!(config.logging.database, config.database);
 		}
+	}
 
-		// Without a url, the log store falls back to the primary database: a missing key, a null
-		// value, an empty object, and an explicit enabled: true all behave the same.
-		for logging in [
-			"",
-			"\n  logging:\n    database:",
-			"\n  logging:\n    database: null",
-			"\n  logging:\n    database: {}",
-			"\n  logging:\n    database:\n      enabled: true",
-		] {
-			let config = parse(&format!(
-				"config:\n  database:\n    url: \"postgres://config.example/database\"{logging}\n"
-			));
-			assert_eq!(
-				logging_url(&config),
-				Some(("postgres://config.example/database".to_string(), None)),
-				"{logging:?}"
-			);
-		}
-
-		// Without a url or a primary database, an unset enabled means no log store, but an explicit
-		// enabled: true is an error.
-		for logging in ["database:", "database: {}"] {
-			let config = parse(&format!("config:\n  logging:\n    {logging}\n"));
-			assert_eq!(logging_url(&config), None, "{logging:?}");
-		}
-		let err = parse_config(
-			"config:\n  logging:\n    database:\n      enabled: true\n".to_string(),
-			None,
-		)
-		.expect_err("enabled: true without any database should fail");
-		assert!(
-			err.to_string().contains(
-				"config.logging.database.enabled=true requires config.logging.database.url or config.database.url"
-			),
-			"{err}"
-		);
-
-		// maxConnections without a url is ambiguous (it would open a second pool to the primary
-		// database), so it is rejected.
-		let err = parse_config(
-			r#"
-config:
-  database:
-    url: "postgres://config.example/database"
-  logging:
-    database:
-      maxConnections: 3
-"#
-			.to_string(),
-			None,
-		)
-		.expect_err("maxConnections without a url should fail");
-		assert!(
-			err
-				.to_string()
-				.contains("config.logging.database.maxConnections requires config.logging.database.url"),
-			"{err}"
-		);
-
-		// A malformed value is reported as that field's type error, in any key order and even when
-		// the store is disabled.
-		for block in [
-			"url: \"postgres://logs.example/database\"\n      maxConnections: many",
-			"maxConnections: many\n      url: \"postgres://logs.example/database\"",
-			"enabled: false\n      maxConnections: many",
-		] {
-			let err = parse_config(
-				format!("config:\n  logging:\n    database:\n      {block}\n"),
-				None,
-			)
-			.expect_err("malformed maxConnections should fail");
-			let err = format!("{err:#}");
-			assert!(
-				err.contains("maxConnections") && err.contains("invalid type"),
-				"{block}: {err}"
-			);
-		}
-
-		// A disabled store is not validated for pool size; nothing uses it.
-		let config = parse(
-			r#"
-config:
-  logging:
-    database:
-      enabled: false
-      maxConnections: 0
-"#,
-		);
-		assert_eq!(logging_url(&config), None);
-
-		// The logging database url is still redacted when the config is serialized.
-		let config = parse(
-			r#"
-config:
-  logging:
-    database:
-      url: "postgres://user:secret@logs.example/database"
-"#,
-		);
-		let dumped = serde_json::to_string(&config.logging).expect("logging config serializes");
-		assert!(
-			!dumped.contains("secret"),
-			"url should be redacted: {dumped}"
-		);
+	/// Database settings that fail to parse; `config` is the `config:` section in YAML flow style.
+	#[rstest::rstest]
+	#[case::blank_primary_url(r#"{database: {url: "  "}}"#, "config.database.url must not be empty")]
+	#[case::blank_logging_url(
+		r#"{logging: {database: {url: ""}}}"#,
+		"config.logging.database.url must not be empty"
+	)]
+	#[case::zero_primary_pool(
+		r#"{database: {url: "sqlite::memory:", maxConnections: 0}}"#,
+		"config.database.maxConnections must be greater than zero"
+	)]
+	#[case::zero_logging_pool(
+		r#"{logging: {database: {url: "sqlite::memory:", maxConnections: 0}}}"#,
+		"config.logging.database.maxConnections must be greater than zero"
+	)]
+	#[case::postgres_hybrid_pool_too_small(
+		r#"{database: {url: "postgres://database.example/database", maxConnections: 1}, storage: {mode: hybrid}}"#,
+		"maxConnections must be at least 2 for PostgreSQL hybrid storage"
+	)]
+	// maxConnections without a url would open a second pool to the primary database.
+	#[case::max_connections_without_url(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {maxConnections: 3}}}"#,
+		"config.logging.database.maxConnections requires config.logging.database.url"
+	)]
+	#[case::enabled_without_any_database(
+		r#"{logging: {database: {enabled: true}}}"#,
+		"config.logging.database.enabled=true requires config.logging.database.url or config.database.url"
+	)]
+	// A malformed value is reported as that field's type error, in any key order and even when the
+	// store is disabled.
+	#[case::malformed_max_connections(
+		r#"{logging: {database: {url: "postgres://logs.example/database", maxConnections: many}}}"#,
+		"maxConnections: invalid type"
+	)]
+	#[case::malformed_max_connections_first(
+		r#"{logging: {database: {maxConnections: many, url: "postgres://logs.example/database"}}}"#,
+		"maxConnections: invalid type"
+	)]
+	#[case::malformed_max_connections_disabled(
+		r#"{logging: {database: {enabled: false, maxConnections: many}}}"#,
+		"maxConnections: invalid type"
+	)]
+	fn database_config_rejected(#[case] config: &str, #[case] expected_err: &str) {
+		let _env_lock = lock_env();
+		let err = parse_config(format!("config: {config}"), None).expect_err("config should fail");
+		let err = format!("{err:#}");
+		assert!(err.contains(expected_err), "{err}");
 	}
 
 	#[test]
-	fn logging_database_pool_size_must_be_usable() {
+	fn logging_database_url_is_redacted() {
 		let _env_lock = lock_env();
-		let err = parse_config(
-			r#"
-config:
-  logging:
-    database:
-      url: "sqlite::memory:"
-      maxConnections: 0
-"#
-			.to_string(),
-			None,
-		)
-		.expect_err("zero-sized logging pool should fail");
-		assert!(
-			err
-				.to_string()
-				.contains("config.logging.database.maxConnections must be greater than zero")
-		);
-	}
-
-	#[test]
-	fn database_url_validation() {
-		let _env_lock = lock_env();
-		let parse_err = |yaml: &str| {
-			parse_config(yaml.to_string(), None)
-				.expect_err("config should fail")
-				.to_string()
-		};
-
-		// A blank url is rejected rather than treated as a SQLite path.
-		for (yaml, field) in [
-			(
-				"config:\n  database:\n    url: \"  \"\n",
-				"config.database.url",
-			),
-			(
-				"config:\n  logging:\n    database:\n      url: \"\"\n",
-				"config.logging.database.url",
-			),
-		] {
-			let err = parse_err(yaml);
-			assert!(err.contains(&format!("{field} must not be empty")), "{err}");
-		}
-
-		// Surrounding whitespace is trimmed, so a leading space cannot defeat postgres:// detection.
-		// Trimmed urls still share a pool.
 		let config = parse_config(
-			"config:\n  database:\n    url: \" postgres://db/x\"\n  logging:\n    database:\n      url: \"postgres://db/x\\n\"\n"
+			r#"config: {logging: {database: {url: "postgres://user:secret@logs.example/database"}}}"#
 				.to_string(),
 			None,
 		)
 		.expect("config should parse");
-		let url = |db: &Option<crate::database::DatabaseConfig>| db.as_ref().map(|db| db.url.clone());
-		assert_eq!(url(&config.database).as_deref(), Some("postgres://db/x"));
-		assert_eq!(
-			url(&config.logging.database).as_deref(),
-			Some("postgres://db/x")
-		);
-		assert_eq!(config.logging.database, config.database);
-	}
-
-	#[test]
-	fn database_pool_sizes_must_be_usable() {
-		let _env_lock = lock_env();
-		let err = parse_config(
-			r#"
-config:
-  database:
-    url: "sqlite::memory:"
-    maxConnections: 0
-"#
-			.to_string(),
-			None,
-		)
-		.expect_err("zero-sized pool should fail");
+		let dumped = serde_json::to_string(&config.logging).expect("logging config serializes");
 		assert!(
-			err
-				.to_string()
-				.contains("config.database.maxConnections must be greater than zero")
-		);
-
-		let err = parse_config(
-			r#"
-config:
-  database:
-    url: "postgres://database.example/database"
-    maxConnections: 1
-  storage:
-    mode: hybrid
-"#
-			.to_string(),
-			None,
-		)
-		.expect_err("PostgreSQL hybrid pool needs a slot besides its listener");
-		assert!(
-			err
-				.to_string()
-				.contains("maxConnections must be at least 2 for PostgreSQL hybrid storage")
+			!dumped.contains("secret"),
+			"url should be redacted: {dumped}"
 		);
 	}
 
