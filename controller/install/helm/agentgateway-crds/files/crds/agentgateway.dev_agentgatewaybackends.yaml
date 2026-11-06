@@ -6669,9 +6669,10 @@ spec:
                                           least one allow rule matches.
                                         properties:
                                           matchExpressions:
-                                            description: CEL expressions that must
-                                              all evaluate to true for the rule to
-                                              match.
+                                            description: |-
+                                              CEL expressions, each evaluated independently with this rule's
+                                              `action`. For `Allow` and `Deny`, any single matching expression
+                                              applies the action; for `Require`, every expression must match.
                                             items:
                                               description: A Common Expression Language
                                                 (CEL) expression.
@@ -15934,8 +15935,10 @@ spec:
                           least one allow rule matches.
                         properties:
                           matchExpressions:
-                            description: CEL expressions that must all evaluate to
-                              true for the rule to match.
+                            description: |-
+                              CEL expressions, each evaluated independently with this rule's
+                              `action`. For `Allow` and `Deny`, any single matching expression
+                              applies the action; for `Require`, every expression must match.
                             items:
                               description: A Common Expression Language (CEL) expression.
                               maxLength: 16384
@@ -16558,8 +16561,10 @@ spec:
                               least one allow rule matches.
                             properties:
                               matchExpressions:
-                                description: CEL expressions that must all evaluate
-                                  to true for the rule to match.
+                                description: |-
+                                  CEL expressions, each evaluated independently with this rule's
+                                  `action`. For `Allow` and `Deny`, any single matching expression
+                                  applies the action; for `Require`, every expression must match.
                                 items:
                                   description: A Common Expression Language (CEL)
                                     expression.
