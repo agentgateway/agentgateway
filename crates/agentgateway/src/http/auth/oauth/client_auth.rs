@@ -135,6 +135,14 @@ enum RawOAuthClientAuth {
 		kid: Option<String>,
 		assertion_audience: String,
 	},
+	/// Client assertion issued to the gateway (RFC 7523).
+	#[serde(rename_all = "camelCase")]
+	ClientAssertion {
+		/// `client_id` parameter identifying the gateway at the authorization server.
+		client_id: String,
+		/// Where the gateway reads the assertion from.
+		client_assertion: ClientAssertionSource,
+	},
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -197,6 +205,13 @@ impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
 					OAuthClientAuthMethod::PrivateKeyJwt(private_key_jwt),
 				)
 			},
+			RawOAuthClientAuthConfig::Tagged(RawOAuthClientAuth::ClientAssertion {
+				client_id,
+				client_assertion,
+			}) => (
+				client_id,
+				OAuthClientAuthMethod::ClientAssertion { client_assertion },
+			),
 		};
 		Ok(Self { client_id, method })
 	}
@@ -222,6 +237,27 @@ pub enum OAuthClientAuthMethod {
 	/// `privateKeyJwt` client assertion (RFC 7523).
 	#[serde(rename_all = "camelCase")]
 	PrivateKeyJwt(PrivateKeyJwt),
+	/// Client assertion issued to the gateway (RFC 7523).
+	#[serde(rename_all = "camelCase")]
+	ClientAssertion {
+		client_assertion: ClientAssertionSource,
+	},
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum ClientAssertionSource {
+	/// Azure Workload Identity token from `AZURE_FEDERATED_TOKEN_FILE`.
+	WorkloadIdentity {},
+}
+
+impl ClientAssertionSource {
+	pub(super) fn read(&self) -> anyhow::Result<String> {
+		let Self::WorkloadIdentity {} = self;
+		let path = std::env::var("AZURE_FEDERATED_TOKEN_FILE").context("AZURE_FEDERATED_TOKEN_FILE")?;
+		Ok(fs_err::read_to_string(path)?.trim().to_owned())
+	}
 }
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
@@ -431,6 +467,7 @@ impl OAuthClientAuth {
 					return Err("oauth private_key_jwt assertion_audience must not be empty".into());
 				}
 			},
+			OAuthClientAuthMethod::ClientAssertion { .. } => {},
 		}
 		Ok(())
 	}
@@ -442,6 +479,11 @@ impl TryFrom<proto::OAuthClientAuth> for OAuthClientAuth {
 	fn try_from(c: proto::OAuthClientAuth) -> Result<Self, Self::Error> {
 		use proto::o_auth_client_auth::Method;
 
+		if c.client_assertion.is_some() && c.method != Method::ClientAssertion as i32 {
+			return Err(ProtoError::Generic(
+				"oauth client_assertion requires the CLIENT_ASSERTION method".into(),
+			));
+		}
 		let method = match Method::try_from(c.method) {
 			Ok(Method::Unspecified | Method::ClientSecretBasic) => {
 				if c.private_key_jwt.is_some() {
@@ -480,6 +522,24 @@ impl TryFrom<proto::OAuthClientAuth> for OAuthClientAuth {
 						.try_into()?,
 				)
 			},
+			Ok(Method::ClientAssertion) => {
+				if c.client_secret.is_some() {
+					return Err(ProtoError::Generic(
+						"oauth client_assertion must not set client_secret".into(),
+					));
+				}
+				OAuthClientAuthMethod::ClientAssertion {
+					client_assertion: c
+						.client_assertion
+						.ok_or_else(|| {
+							ProtoError::Generic(
+								"oauth client_assertion settings are required with the CLIENT_ASSERTION method"
+									.into(),
+							)
+						})?
+						.try_into()?,
+				}
+			},
 			Err(_) => {
 				return Err(ProtoError::EnumParse(
 					"unknown oauth client auth method".into(),
@@ -512,6 +572,23 @@ impl TryFrom<proto::o_auth_client_auth::PrivateKeyJwt> for PrivateKeyJwt {
 			assertion_audience: private_key_jwt.assertion_audience,
 		})
 		.map_err(ProtoError::Generic)
+	}
+}
+
+impl TryFrom<proto::o_auth_client_auth::ClientAssertion> for ClientAssertionSource {
+	type Error = ProtoError;
+
+	fn try_from(
+		client_assertion: proto::o_auth_client_auth::ClientAssertion,
+	) -> Result<Self, Self::Error> {
+		use proto::o_auth_client_auth::client_assertion::Source;
+
+		match client_assertion.source {
+			Some(Source::WorkloadIdentity(_)) => Ok(Self::WorkloadIdentity {}),
+			None => Err(ProtoError::Generic(
+				"oauth client_assertion source is required".into(),
+			)),
+		}
 	}
 }
 

@@ -7621,6 +7621,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -7659,6 +7662,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -7683,6 +7689,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -7927,6 +7936,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.oauthTokenExchange.clientAuth.kid`|string||
 |`<BackendAuth>.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<BackendAuth>.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<BackendAuth>.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<BackendAuth>.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<BackendAuth>.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<BackendAuth>.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<BackendAuth>.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<BackendAuth>.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -8016,6 +8028,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<BackendAuth>.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<BackendAuth>.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<BackendAuth>.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<BackendAuth>.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<BackendAuth>.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<BackendAuth>.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -8091,6 +8106,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<BackendAuth>.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<BackendAuth>.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -8310,6 +8328,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -8348,6 +8369,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -8372,6 +8396,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -8604,6 +8631,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -8642,6 +8672,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -8666,6 +8699,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -8892,6 +8928,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -8930,6 +8969,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -8954,6 +8996,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -9180,6 +9225,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -9218,6 +9266,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -9242,6 +9293,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -9466,6 +9520,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -9504,6 +9561,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -9528,6 +9588,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -9776,6 +9839,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -9814,6 +9880,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -9838,6 +9907,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -10072,6 +10144,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -10110,6 +10185,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -10134,6 +10212,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -10360,6 +10441,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -10398,6 +10482,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -10422,6 +10509,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
@@ -10646,6 +10736,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -10684,6 +10777,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -10708,6 +10804,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion`|object|Where the gateway reads the assertion from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientAssertion.workloadIdentity`|object||
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientAssertion`.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|

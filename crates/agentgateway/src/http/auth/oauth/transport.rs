@@ -398,6 +398,12 @@ fn build_token_request_form(
 				ser.append_pair("client_assertion_type", CLIENT_ASSERTION_TYPE_JWT_BEARER);
 				ser.append_pair("client_assertion", &assertion);
 			},
+			OAuthClientAuthMethod::ClientAssertion { client_assertion } => {
+				let assertion = client_assertion.read().map_err(BackendAuthError::local)?;
+				ser.append_pair("client_id", &client_auth.client_id);
+				ser.append_pair("client_assertion_type", CLIENT_ASSERTION_TYPE_JWT_BEARER);
+				ser.append_pair("client_assertion", &assertion);
+			},
 		}
 	}
 

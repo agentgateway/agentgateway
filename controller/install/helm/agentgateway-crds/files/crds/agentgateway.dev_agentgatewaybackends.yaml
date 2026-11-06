@@ -7526,6 +7526,23 @@ spec:
                                                 description: Client authentication
                                                   for the token endpoint.
                                                 properties:
+                                                  clientAssertion:
+                                                    description: Client assertion
+                                                      settings. Required when method
+                                                      is ClientAssertion.
+                                                    properties:
+                                                      workloadIdentity:
+                                                        description: Sends the Azure
+                                                          Workload Identity token
+                                                          from `AZURE_FEDERATED_TOKEN_FILE`.
+                                                        type: object
+                                                    type: object
+                                                    x-kubernetes-validations:
+                                                    - message: exactly one of the
+                                                        fields in [workloadIdentity]
+                                                        must be set
+                                                      rule: (has(self.workloadIdentity)?1:0)
+                                                        == 1
                                                   clientId:
                                                     description: Client ID sent to
                                                       the token endpoint.
@@ -7535,6 +7552,7 @@ spec:
                                                     description: Client authentication
                                                       method. Defaults to ClientSecretBasic.
                                                     enum:
+                                                    - ClientAssertion
                                                     - ClientSecretBasic
                                                     - ClientSecretPost
                                                     - PrivateKeyJwt
@@ -7727,15 +7745,22 @@ spec:
                                                   rule: has(self.privateKeyJwt) ==
                                                     (has(self.method) && self.method
                                                     == 'PrivateKeyJwt')
+                                                - message: clientAssertion settings
+                                                    require method ClientAssertion
+                                                  rule: has(self.clientAssertion)
+                                                    == (has(self.method) && self.method
+                                                    == 'ClientAssertion')
                                                 - message: secretRef is not valid
-                                                    with method PrivateKeyJwt
+                                                    with method PrivateKeyJwt or ClientAssertion
                                                   rule: '!has(self.secretRef) || !has(self.method)
-                                                    || self.method != ''PrivateKeyJwt'''
+                                                    || !(self.method in [''PrivateKeyJwt'',
+                                                    ''ClientAssertion''])'
                                                 - message: clientAuth without secretRef
-                                                    requires method ClientSecretPost
-                                                    or PrivateKeyJwt
+                                                    requires method ClientSecretPost,
+                                                    PrivateKeyJwt or ClientAssertion
                                                   rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                                    || (has(self.method) && self.method
+                                                    || has(self.clientAssertion) ||
+                                                    (has(self.method) && self.method
                                                     == 'ClientSecretPost')
                                               path:
                                                 description: Token endpoint path;
@@ -7829,6 +7854,23 @@ spec:
                                                 description: Client authentication
                                                   for the token endpoint.
                                                 properties:
+                                                  clientAssertion:
+                                                    description: Client assertion
+                                                      settings. Required when method
+                                                      is ClientAssertion.
+                                                    properties:
+                                                      workloadIdentity:
+                                                        description: Sends the Azure
+                                                          Workload Identity token
+                                                          from `AZURE_FEDERATED_TOKEN_FILE`.
+                                                        type: object
+                                                    type: object
+                                                    x-kubernetes-validations:
+                                                    - message: exactly one of the
+                                                        fields in [workloadIdentity]
+                                                        must be set
+                                                      rule: (has(self.workloadIdentity)?1:0)
+                                                        == 1
                                                   clientId:
                                                     description: Client ID sent to
                                                       the token endpoint.
@@ -7838,6 +7880,7 @@ spec:
                                                     description: Client authentication
                                                       method. Defaults to ClientSecretBasic.
                                                     enum:
+                                                    - ClientAssertion
                                                     - ClientSecretBasic
                                                     - ClientSecretPost
                                                     - PrivateKeyJwt
@@ -8030,15 +8073,22 @@ spec:
                                                   rule: has(self.privateKeyJwt) ==
                                                     (has(self.method) && self.method
                                                     == 'PrivateKeyJwt')
+                                                - message: clientAssertion settings
+                                                    require method ClientAssertion
+                                                  rule: has(self.clientAssertion)
+                                                    == (has(self.method) && self.method
+                                                    == 'ClientAssertion')
                                                 - message: secretRef is not valid
-                                                    with method PrivateKeyJwt
+                                                    with method PrivateKeyJwt or ClientAssertion
                                                   rule: '!has(self.secretRef) || !has(self.method)
-                                                    || self.method != ''PrivateKeyJwt'''
+                                                    || !(self.method in [''PrivateKeyJwt'',
+                                                    ''ClientAssertion''])'
                                                 - message: clientAuth without secretRef
-                                                    requires method ClientSecretPost
-                                                    or PrivateKeyJwt
+                                                    requires method ClientSecretPost,
+                                                    PrivateKeyJwt or ClientAssertion
                                                   rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                                    || (has(self.method) && self.method
+                                                    || has(self.clientAssertion) ||
+                                                    (has(self.method) && self.method
                                                     == 'ClientSecretPost')
                                               path:
                                                 description: Token endpoint path;
@@ -8604,6 +8654,21 @@ spec:
                                               the token endpoint. When unset, none
                                               is sent.
                                             properties:
+                                              clientAssertion:
+                                                description: Client assertion settings.
+                                                  Required when method is ClientAssertion.
+                                                properties:
+                                                  workloadIdentity:
+                                                    description: Sends the Azure Workload
+                                                      Identity token from `AZURE_FEDERATED_TOKEN_FILE`.
+                                                    type: object
+                                                type: object
+                                                x-kubernetes-validations:
+                                                - message: exactly one of the fields
+                                                    in [workloadIdentity] must be
+                                                    set
+                                                  rule: (has(self.workloadIdentity)?1:0)
+                                                    == 1
                                               clientId:
                                                 description: Client ID sent to the
                                                   token endpoint.
@@ -8613,6 +8678,7 @@ spec:
                                                 description: Client authentication
                                                   method. Defaults to ClientSecretBasic.
                                                 enum:
+                                                - ClientAssertion
                                                 - ClientSecretBasic
                                                 - ClientSecretPost
                                                 - PrivateKeyJwt
@@ -8794,16 +8860,21 @@ spec:
                                                 method PrivateKeyJwt
                                               rule: has(self.privateKeyJwt) == (has(self.method)
                                                 && self.method == 'PrivateKeyJwt')
+                                            - message: clientAssertion settings require
+                                                method ClientAssertion
+                                              rule: has(self.clientAssertion) == (has(self.method)
+                                                && self.method == 'ClientAssertion')
                                             - message: secretRef is not valid with
-                                                method PrivateKeyJwt
+                                                method PrivateKeyJwt or ClientAssertion
                                               rule: '!has(self.secretRef) || !has(self.method)
-                                                || self.method != ''PrivateKeyJwt'''
+                                                || !(self.method in [''PrivateKeyJwt'',
+                                                ''ClientAssertion''])'
                                             - message: clientAuth without secretRef
-                                                requires method ClientSecretPost or
-                                                PrivateKeyJwt
+                                                requires method ClientSecretPost,
+                                                PrivateKeyJwt or ClientAssertion
                                               rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                                || (has(self.method) && self.method
-                                                == 'ClientSecretPost')
+                                                || has(self.clientAssertion) || (has(self.method)
+                                                && self.method == 'ClientSecretPost')
                                           grantType:
                                             description: RFC followed by the request.
                                               Defaults to TokenExchange (RFC 8693).
@@ -11073,6 +11144,22 @@ spec:
                                               description: Client authentication for
                                                 the token endpoint.
                                               properties:
+                                                clientAssertion:
+                                                  description: Client assertion settings.
+                                                    Required when method is ClientAssertion.
+                                                  properties:
+                                                    workloadIdentity:
+                                                      description: Sends the Azure
+                                                        Workload Identity token from
+                                                        `AZURE_FEDERATED_TOKEN_FILE`.
+                                                      type: object
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: exactly one of the fields
+                                                      in [workloadIdentity] must be
+                                                      set
+                                                    rule: (has(self.workloadIdentity)?1:0)
+                                                      == 1
                                                 clientId:
                                                   description: Client ID sent to the
                                                     token endpoint.
@@ -11082,6 +11169,7 @@ spec:
                                                   description: Client authentication
                                                     method. Defaults to ClientSecretBasic.
                                                   enum:
+                                                  - ClientAssertion
                                                   - ClientSecretBasic
                                                   - ClientSecretPost
                                                   - PrivateKeyJwt
@@ -11267,15 +11355,22 @@ spec:
                                                   method PrivateKeyJwt
                                                 rule: has(self.privateKeyJwt) == (has(self.method)
                                                   && self.method == 'PrivateKeyJwt')
+                                              - message: clientAssertion settings
+                                                  require method ClientAssertion
+                                                rule: has(self.clientAssertion) ==
+                                                  (has(self.method) && self.method
+                                                  == 'ClientAssertion')
                                               - message: secretRef is not valid with
-                                                  method PrivateKeyJwt
+                                                  method PrivateKeyJwt or ClientAssertion
                                                 rule: '!has(self.secretRef) || !has(self.method)
-                                                  || self.method != ''PrivateKeyJwt'''
+                                                  || !(self.method in [''PrivateKeyJwt'',
+                                                  ''ClientAssertion''])'
                                               - message: clientAuth without secretRef
-                                                  requires method ClientSecretPost
-                                                  or PrivateKeyJwt
+                                                  requires method ClientSecretPost,
+                                                  PrivateKeyJwt or ClientAssertion
                                                 rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                                  || (has(self.method) && self.method
+                                                  || has(self.clientAssertion) ||
+                                                  (has(self.method) && self.method
                                                   == 'ClientSecretPost')
                                             path:
                                               description: Token endpoint path; defaults
@@ -11368,6 +11463,22 @@ spec:
                                               description: Client authentication for
                                                 the token endpoint.
                                               properties:
+                                                clientAssertion:
+                                                  description: Client assertion settings.
+                                                    Required when method is ClientAssertion.
+                                                  properties:
+                                                    workloadIdentity:
+                                                      description: Sends the Azure
+                                                        Workload Identity token from
+                                                        `AZURE_FEDERATED_TOKEN_FILE`.
+                                                      type: object
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: exactly one of the fields
+                                                      in [workloadIdentity] must be
+                                                      set
+                                                    rule: (has(self.workloadIdentity)?1:0)
+                                                      == 1
                                                 clientId:
                                                   description: Client ID sent to the
                                                     token endpoint.
@@ -11377,6 +11488,7 @@ spec:
                                                   description: Client authentication
                                                     method. Defaults to ClientSecretBasic.
                                                   enum:
+                                                  - ClientAssertion
                                                   - ClientSecretBasic
                                                   - ClientSecretPost
                                                   - PrivateKeyJwt
@@ -11562,15 +11674,22 @@ spec:
                                                   method PrivateKeyJwt
                                                 rule: has(self.privateKeyJwt) == (has(self.method)
                                                   && self.method == 'PrivateKeyJwt')
+                                              - message: clientAssertion settings
+                                                  require method ClientAssertion
+                                                rule: has(self.clientAssertion) ==
+                                                  (has(self.method) && self.method
+                                                  == 'ClientAssertion')
                                               - message: secretRef is not valid with
-                                                  method PrivateKeyJwt
+                                                  method PrivateKeyJwt or ClientAssertion
                                                 rule: '!has(self.secretRef) || !has(self.method)
-                                                  || self.method != ''PrivateKeyJwt'''
+                                                  || !(self.method in [''PrivateKeyJwt'',
+                                                  ''ClientAssertion''])'
                                               - message: clientAuth without secretRef
-                                                  requires method ClientSecretPost
-                                                  or PrivateKeyJwt
+                                                  requires method ClientSecretPost,
+                                                  PrivateKeyJwt or ClientAssertion
                                                 rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                                  || (has(self.method) && self.method
+                                                  || has(self.clientAssertion) ||
+                                                  (has(self.method) && self.method
                                                   == 'ClientSecretPost')
                                             path:
                                               description: Token endpoint path; defaults
@@ -12126,6 +12245,20 @@ spec:
                                           description: Client authentication for the
                                             token endpoint. When unset, none is sent.
                                           properties:
+                                            clientAssertion:
+                                              description: Client assertion settings.
+                                                Required when method is ClientAssertion.
+                                              properties:
+                                                workloadIdentity:
+                                                  description: Sends the Azure Workload
+                                                    Identity token from `AZURE_FEDERATED_TOKEN_FILE`.
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [workloadIdentity] must be set
+                                                rule: (has(self.workloadIdentity)?1:0)
+                                                  == 1
                                             clientId:
                                               description: Client ID sent to the token
                                                 endpoint.
@@ -12135,6 +12268,7 @@ spec:
                                               description: Client authentication method.
                                                 Defaults to ClientSecretBasic.
                                               enum:
+                                              - ClientAssertion
                                               - ClientSecretBasic
                                               - ClientSecretPost
                                               - PrivateKeyJwt
@@ -12312,16 +12446,21 @@ spec:
                                               method PrivateKeyJwt
                                             rule: has(self.privateKeyJwt) == (has(self.method)
                                               && self.method == 'PrivateKeyJwt')
+                                          - message: clientAssertion settings require
+                                              method ClientAssertion
+                                            rule: has(self.clientAssertion) == (has(self.method)
+                                              && self.method == 'ClientAssertion')
                                           - message: secretRef is not valid with method
-                                              PrivateKeyJwt
+                                              PrivateKeyJwt or ClientAssertion
                                             rule: '!has(self.secretRef) || !has(self.method)
-                                              || self.method != ''PrivateKeyJwt'''
+                                              || !(self.method in [''PrivateKeyJwt'',
+                                              ''ClientAssertion''])'
                                           - message: clientAuth without secretRef
-                                              requires method ClientSecretPost or
-                                              PrivateKeyJwt
+                                              requires method ClientSecretPost, PrivateKeyJwt
+                                              or ClientAssertion
                                             rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                              || (has(self.method) && self.method
-                                              == 'ClientSecretPost')
+                                              || has(self.clientAssertion) || (has(self.method)
+                                              && self.method == 'ClientSecretPost')
                                         grantType:
                                           description: RFC followed by the request.
                                             Defaults to TokenExchange (RFC 8693).
@@ -19105,6 +19244,19 @@ spec:
                               clientAuth:
                                 description: Client authentication for the token endpoint.
                                 properties:
+                                  clientAssertion:
+                                    description: Client assertion settings. Required
+                                      when method is ClientAssertion.
+                                    properties:
+                                      workloadIdentity:
+                                        description: Sends the Azure Workload Identity
+                                          token from `AZURE_FEDERATED_TOKEN_FILE`.
+                                        type: object
+                                    type: object
+                                    x-kubernetes-validations:
+                                    - message: exactly one of the fields in [workloadIdentity]
+                                        must be set
+                                      rule: (has(self.workloadIdentity)?1:0) == 1
                                   clientId:
                                     description: Client ID sent to the token endpoint.
                                     minLength: 1
@@ -19113,6 +19265,7 @@ spec:
                                     description: Client authentication method. Defaults
                                       to ClientSecretBasic.
                                     enum:
+                                    - ClientAssertion
                                     - ClientSecretBasic
                                     - ClientSecretPost
                                     - PrivateKeyJwt
@@ -19274,13 +19427,19 @@ spec:
                                 - message: privateKeyJwt settings require method PrivateKeyJwt
                                   rule: has(self.privateKeyJwt) == (has(self.method)
                                     && self.method == 'PrivateKeyJwt')
+                                - message: clientAssertion settings require method
+                                    ClientAssertion
+                                  rule: has(self.clientAssertion) == (has(self.method)
+                                    && self.method == 'ClientAssertion')
                                 - message: secretRef is not valid with method PrivateKeyJwt
+                                    or ClientAssertion
                                   rule: '!has(self.secretRef) || !has(self.method)
-                                    || self.method != ''PrivateKeyJwt'''
+                                    || !(self.method in [''PrivateKeyJwt'', ''ClientAssertion''])'
                                 - message: clientAuth without secretRef requires method
-                                    ClientSecretPost or PrivateKeyJwt
+                                    ClientSecretPost, PrivateKeyJwt or ClientAssertion
                                   rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                    || (has(self.method) && self.method == 'ClientSecretPost')
+                                    || has(self.clientAssertion) || (has(self.method)
+                                    && self.method == 'ClientSecretPost')
                               path:
                                 description: Token endpoint path; defaults to "/".
                                   Must start with "/".
@@ -19362,6 +19521,19 @@ spec:
                               clientAuth:
                                 description: Client authentication for the token endpoint.
                                 properties:
+                                  clientAssertion:
+                                    description: Client assertion settings. Required
+                                      when method is ClientAssertion.
+                                    properties:
+                                      workloadIdentity:
+                                        description: Sends the Azure Workload Identity
+                                          token from `AZURE_FEDERATED_TOKEN_FILE`.
+                                        type: object
+                                    type: object
+                                    x-kubernetes-validations:
+                                    - message: exactly one of the fields in [workloadIdentity]
+                                        must be set
+                                      rule: (has(self.workloadIdentity)?1:0) == 1
                                   clientId:
                                     description: Client ID sent to the token endpoint.
                                     minLength: 1
@@ -19370,6 +19542,7 @@ spec:
                                     description: Client authentication method. Defaults
                                       to ClientSecretBasic.
                                     enum:
+                                    - ClientAssertion
                                     - ClientSecretBasic
                                     - ClientSecretPost
                                     - PrivateKeyJwt
@@ -19531,13 +19704,19 @@ spec:
                                 - message: privateKeyJwt settings require method PrivateKeyJwt
                                   rule: has(self.privateKeyJwt) == (has(self.method)
                                     && self.method == 'PrivateKeyJwt')
+                                - message: clientAssertion settings require method
+                                    ClientAssertion
+                                  rule: has(self.clientAssertion) == (has(self.method)
+                                    && self.method == 'ClientAssertion')
                                 - message: secretRef is not valid with method PrivateKeyJwt
+                                    or ClientAssertion
                                   rule: '!has(self.secretRef) || !has(self.method)
-                                    || self.method != ''PrivateKeyJwt'''
+                                    || !(self.method in [''PrivateKeyJwt'', ''ClientAssertion''])'
                                 - message: clientAuth without secretRef requires method
-                                    ClientSecretPost or PrivateKeyJwt
+                                    ClientSecretPost, PrivateKeyJwt or ClientAssertion
                                   rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                    || (has(self.method) && self.method == 'ClientSecretPost')
+                                    || has(self.clientAssertion) || (has(self.method)
+                                    && self.method == 'ClientSecretPost')
                               path:
                                 description: Token endpoint path; defaults to "/".
                                   Must start with "/".
@@ -20055,6 +20234,19 @@ spec:
                             description: Client authentication for the token endpoint.
                               When unset, none is sent.
                             properties:
+                              clientAssertion:
+                                description: Client assertion settings. Required when
+                                  method is ClientAssertion.
+                                properties:
+                                  workloadIdentity:
+                                    description: Sends the Azure Workload Identity
+                                      token from `AZURE_FEDERATED_TOKEN_FILE`.
+                                    type: object
+                                type: object
+                                x-kubernetes-validations:
+                                - message: exactly one of the fields in [workloadIdentity]
+                                    must be set
+                                  rule: (has(self.workloadIdentity)?1:0) == 1
                               clientId:
                                 description: Client ID sent to the token endpoint.
                                 minLength: 1
@@ -20063,6 +20255,7 @@ spec:
                                 description: Client authentication method. Defaults
                                   to ClientSecretBasic.
                                 enum:
+                                - ClientAssertion
                                 - ClientSecretBasic
                                 - ClientSecretPost
                                 - PrivateKeyJwt
@@ -20221,13 +20414,18 @@ spec:
                             - message: privateKeyJwt settings require method PrivateKeyJwt
                               rule: has(self.privateKeyJwt) == (has(self.method) &&
                                 self.method == 'PrivateKeyJwt')
+                            - message: clientAssertion settings require method ClientAssertion
+                              rule: has(self.clientAssertion) == (has(self.method)
+                                && self.method == 'ClientAssertion')
                             - message: secretRef is not valid with method PrivateKeyJwt
+                                or ClientAssertion
                               rule: '!has(self.secretRef) || !has(self.method) ||
-                                self.method != ''PrivateKeyJwt'''
+                                !(self.method in [''PrivateKeyJwt'', ''ClientAssertion''])'
                             - message: clientAuth without secretRef requires method
-                                ClientSecretPost or PrivateKeyJwt
+                                ClientSecretPost, PrivateKeyJwt or ClientAssertion
                               rule: has(self.secretRef) || has(self.privateKeyJwt)
-                                || (has(self.method) && self.method == 'ClientSecretPost')
+                                || has(self.clientAssertion) || (has(self.method)
+                                && self.method == 'ClientSecretPost')
                           grantType:
                             description: RFC followed by the request. Defaults to
                               TokenExchange (RFC 8693).
