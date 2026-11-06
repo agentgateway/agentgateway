@@ -58,6 +58,39 @@ fn consecutive_same_role_messages_merge() {
 }
 
 #[test]
+fn mid_conversation_system_message_stays_in_place_as_user_reminder() {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [
+			{ "role": "system", "content": "You are a coding agent." },
+			{ "role": "user", "content": "Clone the repo." },
+			{ "role": "assistant", "content": "Done." },
+			{ "role": "system", "content": "New skills: createSkill" },
+			{ "role": "user", "content": "Which skills do you have?" }
+		]
+	}));
+	assert_eq!(
+		g["systemInstruction"]["parts"][0]["text"],
+		"You are a coding agent."
+	);
+	let contents = g["contents"].as_array().unwrap();
+	assert_eq!(contents.len(), 3);
+	assert_eq!(contents[0]["role"], "user");
+	assert_eq!(contents[0]["parts"][0]["text"], "Clone the repo.");
+	assert_eq!(contents[1]["role"], "model");
+	assert_eq!(contents[1]["parts"][0]["text"], "Done.");
+	assert_eq!(contents[2]["role"], "user");
+	assert_eq!(
+		contents[2]["parts"][0]["text"],
+		"<system-reminder>\nNew skills: createSkill\n</system-reminder>"
+	);
+	assert_eq!(
+		contents[2]["parts"][1]["text"],
+		"Which skills do you have?"
+	);
+}
+
+#[test]
 fn empty_messages_get_synthetic_user_entry() {
 	let g = to_gemini(json!({ "model": "gemini-2.5-flash", "messages": [] }));
 	assert_eq!(g["contents"][0]["role"], "user");
