@@ -649,7 +649,7 @@
           "$ref": "#/$defs/Rates"
         },
         "tiers": {
-          "description": "Pricing rules ordered by increasing context threshold within each service tier.",
+          "description": "Ordered by context threshold within each service tier and region.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Tier"
@@ -815,6 +815,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "region": {
+          "description": "Region this tier prices (global, us, eu…); unset means every region.",
+          "type": [
+            "string",
+            "null"
           ]
         },
         "rates": {

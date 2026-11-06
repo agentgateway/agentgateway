@@ -1042,6 +1042,7 @@ mod tests {
 			request_model: "test-model".into(),
 			original_model: None,
 			provider: "test-provider".into(),
+			region: None,
 			streaming: false,
 			params: Default::default(),
 			prompt: None,

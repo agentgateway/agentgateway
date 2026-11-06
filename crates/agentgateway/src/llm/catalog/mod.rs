@@ -230,6 +230,7 @@ impl ModelCatalog {
 
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
 		let provider = info.request.provider.as_str();
+		let region = info.request.region.as_deref();
 		let convention = info.request.cache_convention;
 		let state = self.state.load();
 		let snapshot = &state.snapshot;
@@ -237,6 +238,7 @@ impl ModelCatalog {
 			if let Some(provider_model) = &info.response.provider_model {
 				let projection = snapshot.project_with_missing_trace(
 					provider,
+					region,
 					provider_model.as_str(),
 					resp,
 					convention,
@@ -249,6 +251,7 @@ impl ModelCatalog {
 			let original_model = info.request.original_model.as_ref();
 			let projection = snapshot.project_with_missing_trace(
 				provider,
+				region,
 				info.request.request_model.as_str(),
 				resp,
 				convention,
@@ -257,7 +260,7 @@ impl ModelCatalog {
 			// Last resort: the model the client asked for, before any virtual model or alias rewrite.
 			match original_model {
 				Some(original_model) if projection.status == CostLookupStatus::Missing => {
-					snapshot.project(provider, original_model.as_str(), resp, convention)
+					snapshot.project(provider, region, original_model.as_str(), resp, convention)
 				},
 				_ => projection,
 			}
@@ -282,7 +285,9 @@ impl ModelCatalog {
 			let projection = line
 				.model
 				.as_deref()
-				.map(|model| snapshot.project_with_missing_trace(provider, model, &resp, convention, false))
+				.map(|model| {
+					snapshot.project_with_missing_trace(provider, region, model, &resp, convention, false)
+				})
 				.filter(|p| p.status == CostLookupStatus::Exact)
 				.unwrap_or_else(|| primary(&resp));
 			let Some(total) = total.as_mut() else {
@@ -460,16 +465,18 @@ impl CatalogSnapshot {
 	fn project(
 		&self,
 		provider: &str,
+		region: Option<&str>,
 		model: &str,
 		resp: &LLMResponse,
 		convention: CacheTokenConvention,
 	) -> CostProjection {
-		self.project_with_missing_trace(provider, model, resp, convention, true)
+		self.project_with_missing_trace(provider, region, model, resp, convention, true)
 	}
 
 	fn project_with_missing_trace(
 		&self,
 		provider: &str,
+		region: Option<&str>,
 		model: &str,
 		resp: &LLMResponse,
 		convention: CacheTokenConvention,
@@ -519,7 +526,7 @@ impl CatalogSnapshot {
 		// Tier selection must be invariant to cache repricing below: cache tokens
 		// may move between input and their cache buckets, but their sum is stable.
 		let context_tokens = provisional_usage.context_tokens();
-		let rates = entry.effective_rates(context_tokens, pricing_tier);
+		let rates = entry.effective_rates(context_tokens, pricing_tier, region);
 		if rates.is_empty() {
 			crate::proxy::dtrace::pol_event!(
 				TRACE_POLICY_KIND,
@@ -558,6 +565,7 @@ impl CatalogSnapshot {
 				"model": model,
 				"status": status_name(CostLookupStatus::Exact),
 				"pricingTier": format!("{pricing_tier:?}"),
+				"region": region,
 				"cacheTokenConvention": cache_convention_name(convention),
 				"contextTokens": context_tokens,
 				"pricesCacheRead": prices_cache_read,
@@ -1120,6 +1128,24 @@ mod tests {
 	}
 
 	#[test]
+	fn request_region_selects_region_tier() {
+		let catalog = model_catalog(
+			r#"{"providers":{"openai":{"models":{"my-model":{
+				"rates":{"input":"1","output":"2"},
+				"tiers":[{"region":"us","rates":{"input":"1.1","output":"2.2"}}]
+			}}}}}"#,
+		);
+		let cost = |region: Option<&str>| {
+			let mut info = test_llm_info("my-model", None);
+			info.request.region = region.map(Into::into);
+			catalog.project(&info).cost.unwrap().total().to_f64()
+		};
+		assert_eq!(cost(None), Some(2.0));
+		assert_eq!(cost(Some("global")), Some(2.0));
+		assert_eq!(cost(Some("us")), Some(2.2));
+	}
+
+	#[test]
 	fn detect_maps_ultrafast_service_tier() {
 		// OpenAI offers an ultrafast tier:
 		// https://developers.openai.com/api/docs/guides/ultrafast-mode
@@ -1235,6 +1261,7 @@ mod tests {
 				request_model: request_model.into(),
 				original_model: None,
 				provider: "openai".into(),
+				region: None,
 				streaming: false,
 				params: Default::default(),
 				prompt: None,
@@ -1267,7 +1294,7 @@ mod tests {
 			resp: &LLMResponse,
 			convention: CacheTokenConvention,
 		) -> (Option<f64>, CostLookupStatus) {
-			let p = self.project(provider, model, resp, convention);
+			let p = self.project(provider, None, model, resp, convention);
 			(p.cost.and_then(|c| c.total().to_f64()), p.status)
 		}
 	}
@@ -1391,6 +1418,7 @@ mod tests {
 				.to_llm_response(agent_llm::LogContentFields::default());
 			let projection = snap.project(
 				"openai",
+				None,
 				"gpt-5.6",
 				&resp,
 				CacheTokenConvention::InputIncludesCache,
@@ -1462,6 +1490,7 @@ mod tests {
 			let cost = snap
 				.project(
 					"anthropic",
+					None,
 					"claude-opus-5",
 					&resp,
 					CacheTokenConvention::InputExcludesCache,
@@ -1488,6 +1517,7 @@ mod tests {
 
 		let projection = snap.project(
 			"openai",
+			None,
 			"gpt-5.6",
 			&resp,
 			CacheTokenConvention::InputIncludesCache,
@@ -1940,6 +1970,7 @@ mod tests {
 		};
 		let p = snap.project(
 			"openai",
+			None,
 			"m",
 			&resp,
 			CacheTokenConvention::InputIncludesCache,

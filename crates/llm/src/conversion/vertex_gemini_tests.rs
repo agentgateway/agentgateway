@@ -1968,6 +1968,7 @@ mod passthrough {
 				request_model: "gemini-2.5-flash".into(),
 				original_model: None,
 				provider: "gcp.vertex_ai".into(),
+				region: None,
 				streaming: true,
 				params: Default::default(),
 				prompt: None,

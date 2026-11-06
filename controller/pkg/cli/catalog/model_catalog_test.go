@@ -80,6 +80,28 @@ func TestOverlayWithReplacesTiersWhenOverlayHasThem(t *testing.T) {
 	}
 }
 
+func TestOverlayWithReplacesTiersPerRegion(t *testing.T) {
+	base := &ModelCatalog{Providers: map[string]Provider{
+		"p": {Models: map[string]Model{"m": {Tiers: []Tier{
+			{ContextOver: 1000, Rates: Rates{Input: "2"}},
+			{Region: "us", Rates: Rates{Input: "1.1"}},
+			{Region: "eu", Rates: Rates{Input: "1.2"}},
+		}}}},
+	}}
+	base.overlayWith(&ModelCatalog{Providers: map[string]Provider{
+		"p": {Models: map[string]Model{"m": {Tiers: []Tier{{Region: "us", Rates: Rates{Input: "1.3"}}}}}},
+	}})
+	tiers := base.Providers["p"].Models["m"].Tiers
+	want := []Tier{
+		{ContextOver: 1000, Rates: Rates{Input: "2"}},
+		{Region: "eu", Rates: Rates{Input: "1.2"}},
+		{Region: "us", Rates: Rates{Input: "1.3"}},
+	}
+	if !reflect.DeepEqual(tiers, want) {
+		t.Errorf("tiers = %+v, want %+v", tiers, want)
+	}
+}
+
 func TestTierOrderValidation(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -90,6 +112,8 @@ func TestTierOrderValidation(t *testing.T) {
 		{"legacy descending", []Tier{{ContextOver: 200}, {ContextOver: 100}}, false},
 		{"ordered flex", []Tier{{ServiceTier: "flex"}, {ServiceTier: "flex", ContextOver: 200}}, true},
 		{"descending flex", []Tier{{ServiceTier: "flex", ContextOver: 200}, {ServiceTier: "flex"}}, false},
+		{"separate regions", []Tier{{ContextOver: 200}, {Region: "us"}, {Region: "eu"}}, true},
+		{"descending region", []Tier{{Region: "us", ContextOver: 200}, {Region: "us"}}, false},
 		{"ultrafast accepted", []Tier{{ServiceTier: "ultrafast"}}, true},
 		{"ordered ultrafast", []Tier{{ServiceTier: "ultrafast"}, {ServiceTier: "ultrafast", ContextOver: 200}}, true},
 		{"unknown service tier", []Tier{{ServiceTier: "turbo"}}, false},

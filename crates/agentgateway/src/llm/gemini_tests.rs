@@ -39,6 +39,7 @@ fn native_chat_request(model: &str, streaming: bool) -> LLMRequest {
 		request_model: model.into(),
 		original_model: None,
 		provider: Default::default(),
+		region: None,
 		streaming,
 		params: Default::default(),
 		prompt: None,

@@ -59,6 +59,7 @@
 |`llm.originalModel`|string|The model the client asked for, before any virtual model, alias, provider override, or<br>request body rewrite. Equal to `requestModel` when the model was not rewritten.|
 |`llm.responseModel`|string|The model that actually served the LLM response.|
 |`llm.provider`|string|The provider of the LLM.|
+|`llm.region`|string|Backend pricing region (us, eu…), if the provider has one.|
 |`llm.inputTokens`|integer|The total number of tokens in the input/prompt, including tokens read from or written to<br>cache. This has consistent semantics across providers.|
 |`llm.providerInputTokens`|integer|The provider-reported number of tokens in the input/prompt. This is inconsistent across<br>providers: some include cached tokens while others exclude them.|
 |`llm.inputImageTokens`|integer|The number of image tokens in the input/prompt.|
