@@ -504,7 +504,7 @@ pub(crate) const MCP_SETTINGS_FIELDS: [&str; 8] = [
 ];
 
 const API_KEY_METADATA_PREFIX: &str = "agentgateway.dev/";
-const API_KEY_ID_METADATA: &str = "agentgateway.dev/id";
+pub(crate) const API_KEY_ID_METADATA: &str = "agentgateway.dev/id";
 const API_KEY_CREATED_AT_METADATA: &str = "agentgateway.dev/createdAt";
 const API_KEY_HINT_METADATA: &str = "agentgateway.dev/keyHint";
 
