@@ -1080,6 +1080,68 @@ pub mod to_responses {
 
 		let stop_reason = pending_stop_reason.take();
 		let usage = pending_usage.take();
+		if let Some(ref u) = usage {
+			log.update(|r| {
+				r.response.input_tokens = Some(u.prompt_tokens as u64);
+				r.response.output_tokens = Some(u.output_tokens() as u64);
+				r.response.total_tokens = Some(u.total_tokens as u64);
+				r.response.cached_input_tokens = u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens);
+				r.response.cache_creation_input_tokens = u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens);
+				r.response.reasoning_tokens = u
+					.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens);
+			});
+		}
+		let usage_obj = usage.map(|u| ResponseUsage {
+			input_tokens: u.prompt_tokens,
+			output_tokens: u.output_tokens(),
+			total_tokens: u.total_tokens,
+			input_tokens_details: InputTokenDetails {
+				cached_tokens: u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens)
+					.unwrap_or(0) as u32,
+				cache_write_tokens: u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens)
+					.map(|tokens| tokens as i64),
+				cache_write_tokens_details: None,
+			},
+			output_tokens_details: OutputTokenDetails {
+				reasoning_tokens: u
+					.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens)
+					.unwrap_or(0) as u32,
+			},
+		});
+		if stop_reason.is_none() && text.is_empty() && reasoning.is_none() && tool_calls.is_empty() {
+			*sequence_number += 1;
+			events.push((
+				"event",
+				response_builder.failed_event(
+					*sequence_number,
+					usage_obj,
+					ResponseError {
+						code: responses::ResponseErrorCode::ServerError,
+						message: "upstream response ended without content or a finish reason".to_string(),
+						misalignment: None,
+					},
+				),
+			));
+			return;
+		}
 		let response_status = match stop_reason.as_ref() {
 			Some(completions::FinishReason::Stop)
 			| Some(completions::FinishReason::ToolCalls)
@@ -1248,54 +1310,6 @@ pub mod to_responses {
 		output.push((message_output_index, message));
 		output.sort_by_key(|(output_index, _)| *output_index);
 		let output: Vec<OutputItem> = output.into_iter().map(|(_, item)| item).collect();
-
-		if let Some(ref u) = usage {
-			log.update(|r| {
-				r.response.input_tokens = Some(u.prompt_tokens as u64);
-				r.response.output_tokens = Some(u.output_tokens() as u64);
-				r.response.total_tokens = Some(u.total_tokens as u64);
-				r.response.cached_input_tokens = u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens);
-				r.response.cache_creation_input_tokens = u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens);
-				r.response.reasoning_tokens = u
-					.completion_tokens_details
-					.as_ref()
-					.and_then(|d| d.reasoning_tokens);
-			});
-		}
-
-		let usage_obj = usage.map(|u| ResponseUsage {
-			input_tokens: u.prompt_tokens,
-			output_tokens: u.output_tokens(),
-			total_tokens: u.total_tokens,
-			input_tokens_details: InputTokenDetails {
-				cached_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens)
-					.unwrap_or(0) as u32,
-				cache_write_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as i64),
-				cache_write_tokens_details: None,
-			},
-			output_tokens_details: OutputTokenDetails {
-				reasoning_tokens: u
-					.completion_tokens_details
-					.as_ref()
-					.and_then(|d| d.reasoning_tokens)
-					.unwrap_or(0) as u32,
-			},
-		});
 
 		*sequence_number += 1;
 		let mut done_event = match stop_reason {
