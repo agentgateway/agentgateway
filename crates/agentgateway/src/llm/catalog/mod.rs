@@ -1452,7 +1452,7 @@ mod tests {
 		for resp in [
 			Box::new(passthrough) as Box<dyn ResponseType>,
 			Box::new(typed),
-			messages::from_completions::translate_response(&body).unwrap(),
+			messages::from_completions::translate_response(&body, false).unwrap(),
 			br::from_completions::translate_response(&bedrock, "claude-opus-5", None).unwrap(),
 			br::from_messages::translate_response(&bedrock, "claude-opus-5", None).unwrap(),
 			br::from_responses::translate_response(&bedrock, "claude-opus-5", None, None).unwrap(),

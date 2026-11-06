@@ -4580,3 +4580,50 @@ fn query_requests_sse_matches_alt_query_parameter() {
 		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?halt=sse"
 	)));
 }
+
+#[tokio::test]
+async fn completions_json_object_to_messages_is_remembered_for_the_response() {
+	let provider = custom_provider(custom::ProviderFormat::Messages);
+	for (body, want) in [
+		(
+			r#"{"model": "claude-opus-4-5", "messages": [{"role": "user", "content": "hi"}], "response_format": {"type": "json_object"}}"#,
+			true,
+		),
+		(
+			r#"{"model": "claude-opus-4-5", "messages": [{"role": "user", "content": "hi"}]}"#,
+			false,
+		),
+		(
+			r#"{"model": "claude-opus-4-5", "messages": [{"role": "user", "content": "hi"}], "response_format": {"type": "json_object"}, "tools": [{"type": "function", "function": {"name": "f", "parameters": {"type": "object"}}}]}"#,
+			false,
+		),
+	] {
+		let req = ::http::Request::builder()
+			.uri("/v1/chat/completions")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(body.as_bytes().to_vec()))
+			.unwrap();
+		let RequestResult::Success { llm_request, .. } = provider
+			.process_completions_request(
+				&openai_test_backend_info(),
+				None,
+				req,
+				false,
+				&mut None,
+				None,
+			)
+			.await
+			.expect("completions request should process")
+		else {
+			panic!("expected forwarded request");
+		};
+		assert_eq!(
+			matches!(
+				llm_request.provider_state,
+				Some(ProviderState::MessagesJsonObject)
+			),
+			want,
+			"{body}"
+		);
+	}
+}
