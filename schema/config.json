@@ -1328,7 +1328,7 @@
             "null"
           ],
           "format": "uint32",
-          "minimum": 1
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -1343,8 +1343,28 @@
         ]
       },
       "else": {
-        "dependentRequired": {
-          "maxConnections": [
+        "properties": {
+          "maxConnections": {
+            "minimum": 1
+          }
+        },
+        "if": {
+          "properties": {
+            "maxConnections": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "maxConnections"
+          ]
+        },
+        "then": {
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
             "url"
           ]
         }

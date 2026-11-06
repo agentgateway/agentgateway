@@ -501,10 +501,15 @@ pub struct RawLogging {
 #[apply(schema_de!)]
 #[cfg_attr(
 	feature = "schema",
-	// maxConnections requires url, except when the store is disabled (its settings are then ignored).
+	// A disabled store's settings are ignored, so these rules apply only when enabled is not false:
+	// a pool size must be positive, and a non-null pool size requires a non-null url.
 	schemars(extend(
 		"if" = {"properties": {"enabled": {"const": false}}, "required": ["enabled"]},
-		"else" = {"dependentRequired": {"maxConnections": ["url"]}}
+		"else" = {
+			"properties": {"maxConnections": {"minimum": 1}},
+			"if": {"properties": {"maxConnections": {"type": "integer"}}, "required": ["maxConnections"]},
+			"then": {"properties": {"url": {"type": "string"}}, "required": ["url"]}
+		}
 	))
 )]
 pub struct RawLoggingDatabase {
@@ -518,7 +523,6 @@ pub struct RawLoggingDatabase {
 	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
 	/// Requires `url`; without one, the `config.database` pool is shared. With a `url`, the pool is
 	/// shared only when both `url` and `maxConnections` match `config.database`.
-	#[cfg_attr(feature = "schema", schemars(range(min = 1)))]
 	max_connections: Option<u32>,
 }
 
