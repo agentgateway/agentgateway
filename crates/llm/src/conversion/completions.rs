@@ -867,7 +867,9 @@ pub mod from_messages {
 				}
 			});
 		let reasoning_requested = match thinking {
-			Some(messages::ThinkingInput::Disabled {}) => false,
+			Some(messages::ThinkingInput::Disabled {} | messages::ThinkingInput::BetweenTools {}) => {
+				false
+			},
 			Some(messages::ThinkingInput::Adaptive { .. }) => true,
 			_ => output_effort.is_some(),
 		};

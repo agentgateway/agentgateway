@@ -347,7 +347,7 @@ pub mod from_messages {
 			}
 		});
 		match thinking {
-			Some(messages::ThinkingInput::Disabled {}) => None,
+			Some(messages::ThinkingInput::Disabled {} | messages::ThinkingInput::BetweenTools {}) => None,
 			None if effort.is_none() => None,
 			_ => Some(responses::Reasoning {
 				context: None,

@@ -1288,6 +1288,79 @@ mod tests {
 		assert!(snapshot.get_model_tags("unknown.model").is_none());
 	}
 
+	/// Every Opus 5.5, Fable 5 and Sonnet 5.5 id in the built-in catalog, across all providers and
+	/// regional Bedrock profiles, must carry the tag that makes `thinking: disabled` translatable.
+	#[test]
+	fn builtin_catalog_tags_every_disabled_thinking_incompatible_model() {
+		let catalog: serde_json::Value = serde_json::from_str(BUILTIN_CATALOG_JSON).unwrap();
+		let mut checked = 0;
+		for (provider, entry) in catalog["providers"].as_object().unwrap() {
+			for (id, model) in entry["models"].as_object().unwrap() {
+				let required =
+					if id.contains("fable-5") || id.contains("opus-5-5") || id.contains("opus-5.5") {
+						"always_on_thinking"
+					} else if id.contains("sonnet-5-5") || id.contains("sonnet-5.5") {
+						"between_tools_thinking"
+					} else {
+						continue;
+					};
+				checked += 1;
+				let has_tag = model["tags"]
+					.as_array()
+					.is_some_and(|tags| tags.iter().any(|tag| tag == required));
+				assert!(has_tag, "{provider} {id} is missing the {required} tag");
+			}
+		}
+		assert!(checked > 0);
+	}
+
+	#[test]
+	fn bedrock_messages_disabled_thinking_follows_the_builtin_catalog() {
+		let catalog = CatalogSnapshot::parse(BUILTIN_CATALOG_JSON).unwrap();
+		let provider = agent_llm::bedrock::Provider {
+			model_override: None,
+			region: agent_core::strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			endpoint_preference: Default::default(),
+		};
+		let thinking_for = |model: &str| {
+			let req: agent_llm::types::messages::Request = serde_json::from_value(serde_json::json!({
+				"model": model,
+				"max_tokens": 64,
+				"thinking": {"type": "disabled"},
+				"messages": [{"role": "user", "content": "Reply with the word ok"}],
+			}))
+			.unwrap();
+			let out = agent_llm::conversion::bedrock::from_messages::translate(
+				&req,
+				&provider,
+				None,
+				None,
+				Some(&catalog),
+			)
+			.unwrap();
+			let body: serde_json::Value = serde_json::from_slice(&out.body).unwrap();
+			body["additionalModelRequestFields"]["thinking"].clone()
+		};
+		assert_eq!(
+			thinking_for("au.anthropic.claude-sonnet-5-5"),
+			serde_json::json!({"type": "between_tools"})
+		);
+		assert_eq!(
+			thinking_for("global.anthropic.claude-sonnet-5-5"),
+			serde_json::json!({"type": "between_tools"})
+		);
+		assert_eq!(
+			thinking_for("global.anthropic.claude-opus-5-5"),
+			serde_json::Value::Null
+		);
+		assert_eq!(
+			thinking_for("global.anthropic.claude-fable-5-1"),
+			serde_json::Value::Null
+		);
+	}
+
 	#[test]
 	fn openai_family_splits_cached_out_of_input_when_priced() {
 		let resp = LLMResponse {

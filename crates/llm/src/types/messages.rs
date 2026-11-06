@@ -1336,6 +1336,7 @@ pub mod typed {
 			#[serde(default, skip_serializing_if = "Option::is_none")]
 			display: Option<ThinkingDisplay>,
 		},
+		BetweenTools {},
 	}
 
 	#[derive(Clone, Copy, Serialize, Deserialize, Debug, Eq, PartialEq)]
