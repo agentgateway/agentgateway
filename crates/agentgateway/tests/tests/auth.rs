@@ -771,6 +771,12 @@ async fn local_ratelimit(#[case] direct_response: bool) {
 	assert_eq!(res.hdr("x-ratelimit-limit"), "1");
 	assert_eq!(res.hdr("x-ratelimit-remaining"), "0");
 	assert_eq!(res.hdr("retry-after"), "1");
+	// The denial body is a JSON error.
+	assert_eq!(res.hdr("content-type"), "application/json");
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		br#"{"error":{"message":"Rate limit exceeded","type":"rate_limit_error","code":"rate_limit_exceeded"}}"#
+	);
 }
 
 #[tokio::test]
