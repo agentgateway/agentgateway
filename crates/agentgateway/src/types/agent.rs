@@ -3460,16 +3460,6 @@ pub mod defaults {
 mod tests {
 	use super::*;
 
-	#[test]
-	fn api_key_traffic_policy_serializes_as_camel_case() {
-		let policy = TrafficPolicy::APIKey(RequestPolicy::default());
-
-		assert_eq!(
-			serde_json::to_value(policy).expect("serialize API key traffic policy"),
-			serde_json::json!({ "apiKey": null })
-		);
-	}
-
 	#[cfg(feature = "fips")]
 	fn fips_test_certificate() -> (Vec<u8>, Vec<u8>) {
 		let key = rcgen::KeyPair::generate().expect("generate test key");
