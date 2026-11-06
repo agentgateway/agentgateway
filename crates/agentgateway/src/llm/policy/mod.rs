@@ -2380,7 +2380,8 @@ pub struct AzureContentSafety {
 	/// Defaults to `reject` (enforce).
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub action: RejectAuditAction,
-	/// Backend policies for Azure authentication (optional, defaults to implicit Azure auth)
+	/// Backend policies for Azure authentication (optional, defaults to implicit Azure auth).
+	/// Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.
 	#[serde(
 		default,
 		deserialize_with = "crate::types::local::de_from_local_backend_policy",
