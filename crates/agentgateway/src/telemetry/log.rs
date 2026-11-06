@@ -396,7 +396,7 @@ pub struct Config {
 	pub fields: LoggingFields,
 	/// Compiled standard attributes, replaced on config reload and snapshotted per request.
 	#[serde(skip)]
-	pub database_fields: Arc<arc_swap::ArcSwap<LoggingFields>>,
+	pub standard_attributes: Arc<arc_swap::ArcSwap<LoggingFields>>,
 	/// Compiled `standardAttributes.session`, replaced on config reload.
 	#[serde(skip)]
 	pub session: Arc<arc_swap::ArcSwapOption<cel::Expression>>,
@@ -572,6 +572,7 @@ pub struct CelLogging {
 	pub fields: LoggingFields,
 	pub otlp_filter: Option<Arc<cel::Expression>>,
 	pub otlp_fields: LoggingFields,
+	pub standard_attributes: LoggingFields,
 	pub database_fields: LoggingFields,
 	pub metric_fields: MetricFields,
 }
@@ -582,6 +583,7 @@ pub struct CelLoggingExecutor<'a> {
 	pub fields: &'a LoggingFields,
 	pub otlp_filter: &'a Option<Arc<cel::Expression>>,
 	pub otlp_fields: &'a LoggingFields,
+	pub standard_attributes: &'a LoggingFields,
 	pub database_fields: &'a LoggingFields,
 	pub metric_fields: &'a MetricFields,
 }
@@ -705,6 +707,10 @@ impl<'a> CelLoggingExecutor<'a> {
 		self.eval(&self.otlp_fields.add)
 	}
 
+	fn eval_standard_attributes(&self) -> Vec<(Cow<str>, Option<Value>)> {
+		self.eval(&self.standard_attributes.add)
+	}
+
 	fn eval_database_additions(&self) -> Vec<(Cow<str>, Option<Value>)> {
 		self.eval(&self.database_fields.add)
 	}
@@ -712,11 +718,7 @@ impl<'a> CelLoggingExecutor<'a> {
 
 impl CelLogging {
 	pub fn new(cfg: Config, metrics: MetricsConfig) -> Self {
-		let database_fields = if cfg.database.is_some() {
-			cfg.database_fields.load().as_ref().clone()
-		} else {
-			LoggingFields::default()
-		};
+		let standard_attributes = cfg.standard_attributes.load().as_ref().clone();
 		let mut cel_context = cel::ContextBuilder::new();
 		if let Some(f) = &cfg.filter {
 			cel_context.register_log_expression(f.as_ref());
@@ -724,7 +726,7 @@ impl CelLogging {
 		for v in cfg.fields.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
-		for v in database_fields.add.values_unordered() {
+		for v in standard_attributes.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
 		for v in metrics.metric_fields.add.values_unordered() {
@@ -740,7 +742,8 @@ impl CelLogging {
 			fields: cfg.fields,
 			otlp_filter: None,
 			otlp_fields: LoggingFields::default(),
-			database_fields,
+			standard_attributes,
+			database_fields: LoggingFields::default(),
 			metric_fields: metrics.metric_fields,
 		}
 	}
@@ -762,6 +765,7 @@ impl CelLogging {
 			fields,
 			otlp_filter,
 			otlp_fields,
+			standard_attributes,
 			database_fields,
 			metric_fields,
 		} = self;
@@ -790,6 +794,7 @@ impl CelLogging {
 			fields,
 			otlp_filter,
 			otlp_fields,
+			standard_attributes,
 			database_fields,
 			metric_fields,
 		}
@@ -1778,6 +1783,7 @@ impl Drop for DropOnLog {
 				.as_ref()
 				.map(|g| serde_json::Value::Array(g.iter().map(cel::GuardrailInfo::minimal).collect()));
 
+			let standard_raws = cel_exec.eval_standard_attributes();
 			let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
 			let mut kv = vec![
 				(
@@ -2090,11 +2096,17 @@ impl Drop for DropOnLog {
 				("duration", Some(dur.as_str().into())),
 			];
 
-			let mut extra_kv_capacity = trace_cost_fields.as_ref().map_or(0, |fields| fields.len());
+			let mut extra_kv_capacity =
+				standard_raws.len() + trace_cost_fields.as_ref().map_or(0, |fields| fields.len());
 			if maybe_enable_log || log_store_enabled {
 				extra_kv_capacity += fields.add.len();
 			}
 			kv.reserve_exact(extra_kv_capacity);
+			kv.extend(
+				standard_raws
+					.iter()
+					.map(|(k, v)| (k.as_ref(), v.as_ref().map(json_value_to_value_bag))),
+			);
 			let protocol_span_name = mcp
 				.as_ref()
 				.and_then(|mcp| mcp.method_name.clone())
@@ -2230,6 +2242,11 @@ impl Drop for DropOnLog {
 
 				if log_store_enabled {
 					let mut db_kv = kv.clone();
+					for (k, v) in &mut db_kv {
+						if cel_exec.database_fields.has(k) {
+							*v = None;
+						}
+					}
 					let db_raws = cel_exec.eval_database_additions();
 					let default_db_raws = [
 						(
@@ -3036,6 +3053,7 @@ mod tests {
 			otlp_filter: None,
 			otlp_fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
+			standard_attributes: LoggingFields::default(),
 			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();

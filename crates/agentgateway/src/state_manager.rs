@@ -262,7 +262,7 @@ impl LocalClient {
 		self
 			.config
 			.logging
-			.database_fields
+			.standard_attributes
 			.store(config.standard_attributes);
 		self.config.logging.session.store(config.session_attribute);
 		info!("loaded config from {:?}", self.cfg);
@@ -639,7 +639,7 @@ frontendPolicies:
 		local_client.clone().run().await.unwrap();
 		wait_for_access_log_remove(&config, &stores, "first").await;
 		wait_for_catalog_model(&model_catalog, "first").await;
-		let first_attributes = config.logging.database_fields.load_full();
+		let first_attributes = config.logging.standard_attributes.load_full();
 
 		fs_err::tokio::write(&path, local_config("ready"))
 			.await
@@ -660,7 +660,7 @@ frontendPolicies:
 		replace_config(&path, "third").await;
 		wait_for_access_log_remove(&config, &stores, "third").await;
 		wait_for_catalog_model(&model_catalog, "third").await;
-		let current_attributes = config.logging.database_fields.load_full();
+		let current_attributes = config.logging.standard_attributes.load_full();
 		let request = crate::http::Request::new(crate::http::Body::empty());
 		let exec = crate::cel::Executor::new_request(&request);
 		for (snapshot, expected) in [(&first_attributes, "first"), (&current_attributes, "third")] {
@@ -685,7 +685,7 @@ frontendPolicies:
 				.await
 				.is_err()
 		);
-		let retained = config.logging.database_fields.load_full();
+		let retained = config.logging.standard_attributes.load_full();
 		let expression = retained
 			.add
 			.iter()

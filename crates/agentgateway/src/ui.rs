@@ -189,7 +189,7 @@ async fn authorize_route(
 	next: axum::middleware::Next,
 ) -> Result<Response, ErrorResponse> {
 	let request = request.map(crate::http::Body::new);
-	let attributes = app.state.logging.database_fields.load();
+	let attributes = app.state.logging.standard_attributes.load();
 	let executor = cel::Executor::new_request(&request);
 	let user = attributes
 		.add
@@ -343,7 +343,7 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 	let req = req.map(crate::http::Body::new);
 	// Use the same compiled, reloadable mapping as request logs, even when log
 	// storage is disabled. This is display metadata, not an authentication check.
-	let attributes = app.state.logging.database_fields.load();
+	let attributes = app.state.logging.standard_attributes.load();
 	let executor = cel::Executor::new_request(&req);
 	let session = req
 		.extensions()
@@ -1771,7 +1771,7 @@ mod tests {
 			(Some("request.headers['missing']"), true, None, false),
 		] {
 			// Reuse the app to verify updates replace the mapping used by the handler.
-			app.state.logging.database_fields.store(Arc::new(
+			app.state.logging.standard_attributes.store(Arc::new(
 				crate::config::standard_attributes(Some(&crate::RawStandardAttributes {
 					user: expression.map(str::to_owned),
 					group: None,
