@@ -1699,6 +1699,115 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 	assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), body);
 }
 
+const BEDROCK_COUNT_TOKENS_BODY: &[u8] = br#"{
+	"model": "global.anthropic.claude-opus-5-5",
+	"system": "You are terse.",
+	"messages": [{"role": "user", "content": "Count the tokens in this sentence, please."}]
+}"#;
+
+async fn bedrock_count_tokens_upstream_error(
+	error_type: &'static str,
+	body: &'static [u8],
+) -> (::http::StatusCode, Value, Option<u64>) {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model_override: None,
+		region: strng::new("ap-northeast-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	});
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.ap-northeast-1.amazonaws.com", 443)),
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages/count_tokens")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(bytes::Bytes::from_static(
+			BEDROCK_COUNT_TOKENS_BODY,
+		)))
+		.unwrap();
+	let RequestResult::Success { llm_request, .. } = provider
+		.process_count_tokens_request(&backend_info, req, None, &mut None, None)
+		.await
+		.expect("count_tokens request should process")
+	else {
+		panic!("expected the request to go upstream");
+	};
+
+	let mut parts = ::http::Response::new(()).into_parts().0;
+	parts.status = ::http::StatusCode::BAD_REQUEST;
+	parts.headers.insert(
+		"x-amzn-errortype",
+		::http::HeaderValue::from_static(error_type),
+	);
+	let buffered = BufferedResponse {
+		managed_body: Body::empty(),
+		parts,
+		bytes: bytes::Bytes::from_static(body),
+	};
+	let log = AsyncLog::<llm::LLMInfo>::default();
+	let resp = provider
+		.process_count_tokens_response(llm_request, buffered, None, &log)
+		.expect("count_tokens response should process");
+	let status = resp.status();
+	let json = serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes())
+		.expect("response should be JSON");
+	(
+		status,
+		json,
+		log.take().and_then(|info| info.response.count_tokens),
+	)
+}
+
+#[tokio::test]
+async fn bedrock_count_tokens_falls_back_to_local_count_for_unsupported_model() {
+	let (status, json, logged) = bedrock_count_tokens_upstream_error(
+		"ValidationException:http://internal.amazon.com/coral/com.amazon.bedrock/",
+		br#"{"message":"The provided model doesn't support counting tokens."}"#,
+	)
+	.await;
+
+	assert_eq!(status, ::http::StatusCode::OK);
+	let count = json["input_tokens"].as_u64().expect("input_tokens");
+	let req: types::count_tokens::Request =
+		serde_json::from_slice(BEDROCK_COUNT_TOKENS_BODY).expect("count_tokens body");
+	assert_eq!(count, local_token_count(&req));
+	assert_eq!(logged, Some(count));
+}
+
+#[tokio::test]
+async fn bedrock_count_tokens_keeps_other_validation_errors() {
+	let body: &'static [u8] =
+		br#"{"message":"Malformed input request: extraneous key [foo] is not permitted"}"#;
+	let (status, json, logged) = bedrock_count_tokens_upstream_error(
+		"ValidationException:http://internal.amazon.com/coral/com.amazon.bedrock/",
+		body,
+	)
+	.await;
+
+	assert_eq!(status, ::http::StatusCode::BAD_REQUEST);
+	assert_eq!(json, serde_json::from_slice::<Value>(body).unwrap());
+	assert_eq!(logged, None);
+}
+
+#[tokio::test]
+async fn bedrock_count_tokens_keeps_unsupported_message_from_other_error_types() {
+	let (status, _, logged) = bedrock_count_tokens_upstream_error(
+		"AccessDeniedException:http://internal.amazon.com/coral/com.amazon.coral.service/",
+		br#"{"message":"The provided model doesn't support counting tokens."}"#,
+	)
+	.await;
+
+	assert_eq!(status, ::http::StatusCode::BAD_REQUEST);
+	assert_eq!(logged, None);
+}
+
 #[tokio::test]
 async fn vertex_anthropic_messages_prepares_vertex_body() {
 	use crate::http::auth::BackendInfo;
