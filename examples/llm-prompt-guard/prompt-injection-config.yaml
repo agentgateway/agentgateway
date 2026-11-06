@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            # Heuristic prompt injection detection — runs locally, no external API.
+            - promptInjection:
+                threshold: 0.33
+                action: reject
+              rejection:
+                status: 400
+                headers:
+                  set:
+                    content-type: "application/json"
+                body: |
+                  {
+                    "error": {
+                      "message": "Request rejected: Prompt injection attempt detected",
+                      "type": "invalid_request_error",
+                      "code": "prompt_injection_detected"
+                    }
+                  }
+            # Combine with PII regex guard for defense in depth.
+            - regex:
+                action: mask
+                rules:
+                - builtin: email
+                - builtin: ssn
+                - builtin: creditCard
