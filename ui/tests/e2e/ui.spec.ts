@@ -647,6 +647,76 @@ test('XDS mode shows an empty model inventory', async ({ page }) => {
 	await expect(page.locator('.dump-models-table')).toHaveCount(0);
 });
 
+test('XDS mode counts targetRef policies on dump routes', async ({ page }) => {
+	const route = (name: string, ruleName: string | null, path: string) => ({
+		key: `demo-ns/${name}.${ruleName ?? 'default'}.demo-listener`,
+		name,
+		namespace: 'demo-ns',
+		ruleName,
+		kind: 'HTTPRoute',
+		matches: [{ path: { pathPrefix: path } }],
+		backends: []
+	});
+	const routes = [
+		route('demo-route', 'rule-a', '/a'),
+		route('demo-route', 'rule-b', '/b'),
+		route('other-route', null, '/other')
+	];
+	const dump = xdsDump([]);
+	dump.binds = [
+		{
+			key: '8080/demo-ns/demo-gw',
+			address: '[::]:8080',
+			protocol: 'http',
+			tunnelProtocol: 'direct',
+			mode: 'standard',
+			listeners: {
+				'demo-ns/demo-gw.demo-listener': {
+					key: 'demo-ns/demo-gw.demo-listener',
+					gatewayName: 'demo-gw',
+					gatewayNamespace: 'demo-ns',
+					listenerName: 'demo-listener',
+					hostname: '',
+					protocol: 'HTTP',
+					routes: Object.fromEntries(routes.map(r => [r.key, r]))
+				}
+			}
+		}
+	];
+	dump.policies = [
+		{
+			key: 'traffic/demo-ns/demo-route-authz',
+			target: { route: { name: 'demo-route', namespace: 'demo-ns', kind: 'HTTPRoute' } }
+		},
+		{
+			key: 'traffic/demo-ns/demo-rule-a-timeout',
+			target: {
+				route: { name: 'demo-route', namespace: 'demo-ns', ruleName: 'rule-a', kind: 'HTTPRoute' }
+			}
+		}
+	];
+	await mockXdsGateway(page, dump);
+	await page.goto('/traffic/routes');
+
+	const policyCount = (name: string) =>
+		page
+			.getByRole('row')
+			.filter({ has: page.getByText(name, { exact: true }) })
+			.getByRole('cell')
+			.nth(5);
+	await expect(policyCount('rule-a')).toHaveText('2');
+	await expect(policyCount('rule-b')).toHaveText('1');
+	await expect(policyCount('other-route')).toHaveText('0');
+
+	await page.getByRole('button', { name: 'View rule-a' }).click();
+	await expect(
+		page
+			.getByRole('dialog', { name: 'rule-a' })
+			.locator('.drawer-summary-list > div', { hasText: 'Policies' })
+			.locator('strong')
+	).toHaveText('2');
+});
+
 test('XDS mode offers Client Setup with models from the config dump', async ({ page }) => {
 	const gateway = await mockXdsGateway(page);
 	await page.goto('/llm/client-setup');
