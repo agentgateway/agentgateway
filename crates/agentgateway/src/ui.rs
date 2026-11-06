@@ -1259,7 +1259,7 @@ async fn tail_logs(
 ) -> Result<Sse<ReceiverStream<Result<Event, std::convert::Infallible>>>, ErrorResponse> {
 	if !crate::telemetry::log_store::enabled() {
 		return Err(ErrorResponse::String(
-			"request log database is not configured".to_string(),
+			crate::telemetry::log_store::STORE_DISABLED.to_string(),
 		));
 	}
 	let mut cursor = request
@@ -1429,7 +1429,7 @@ mod tests {
 		state.storage.mode = ConfigStoreMode::Hybrid;
 		state.xds.local_config = Some(ConfigSource::File(path));
 		app.config_resource_store = Some(
-			crate::config_store::setup(&crate::telemetry::log_store::Config {
+			crate::config_store::setup(&crate::database::DatabaseConfig {
 				url: format!("sqlite://{}", dir.path().join("config.db").display()),
 				max_connections: None,
 			})
@@ -1507,7 +1507,7 @@ mod tests {
 		let state = Arc::get_mut(&mut app.state).unwrap();
 		state.storage.mode = ConfigStoreMode::Hybrid;
 		state.xds.local_config = Some(ConfigSource::File(path.clone()));
-		let store = crate::config_store::setup(&crate::telemetry::log_store::Config {
+		let store = crate::config_store::setup(&crate::database::DatabaseConfig {
 			url: format!("sqlite://{}", dir.path().join("config.db").display()),
 			max_connections: None,
 		})

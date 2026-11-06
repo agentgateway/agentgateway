@@ -161,10 +161,10 @@
           }
         },
         "database": {
-          "description": "Primary database used by local runtime features.",
+          "description": "Primary database used by local runtime features. Request logs are also stored here unless\n`config.logging.database` sets its own `url` or `enabled: false`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Config"
+              "$ref": "#/$defs/DatabaseConfig"
             },
             {
               "type": "null"
@@ -979,12 +979,14 @@
       },
       "additionalProperties": false
     },
-    "Config": {
+    "DatabaseConfig": {
+      "description": "Connection settings for a database.",
       "type": "object",
       "properties": {
         "url": {
-          "description": "Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
-          "type": "string"
+          "description": "Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
+          "type": "string",
+          "pattern": "\\S"
         },
         "maxConnections": {
           "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nWhen the request log and config stores have matching database settings, they share one pool\nwith this limit.",
@@ -1269,10 +1271,10 @@
           ]
         },
         "database": {
-          "description": "Log-store database configuration; enables request logging to a database backend.",
+          "description": "Request log database. When omitted (or null), request logs are stored in `config.database`\nif it is set. Set `enabled: false` to turn off request log storage.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Config"
+              "$ref": "#/$defs/RawLoggingDatabase"
             },
             {
               "type": "null"
@@ -1301,6 +1303,76 @@
         "text",
         "json"
       ]
+    },
+    "RawLoggingDatabase": {
+      "description": "Request log database. Without a `url`, request logs are stored in `config.database`.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Store request logs in a database. Defaults to true. When false, no request log store is\nstarted, even if `config.database` is set. When true without a `url`, `config.database` is\nrequired.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.\nDefaults to `config.database`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maxConnections": {
+          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nCan only be set together with `url`. Without a `url`, the `config.database` pool and its limit\nare used. With a `url`, the pool is shared only when both `url` and `maxConnections` match\n`config.database`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": false
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "else": {
+        "properties": {
+          "url": {
+            "pattern": "\\S"
+          },
+          "maxConnections": {
+            "minimum": 1
+          }
+        },
+        "if": {
+          "properties": {
+            "maxConnections": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "maxConnections"
+          ]
+        },
+        "then": {
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      }
     },
     "RawMetrics": {
       "type": "object",
