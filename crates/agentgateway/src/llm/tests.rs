@@ -119,18 +119,19 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	}
 
 	let runtime = bedrock(bedrock::BedrockEndpointPreference::RuntimeOnly);
-	for input in [
-		InputFormat::Completions,
-		InputFormat::Messages,
-		InputFormat::Responses,
+	// Runtime serves Claude natively, falling back to Converse for Responses.
+	for (input, output) in [
+		(InputFormat::Completions, ChatFormat::AnthropicMessages),
+		(InputFormat::Messages, ChatFormat::AnthropicMessages),
+		(InputFormat::Responses, ChatFormat::BedrockConverse),
 	] {
 		assert_eq!(
 			runtime
 				.chat_translation(input, "anthropic.claude-3-5-sonnet-20241022-v2:0", None)
 				.unwrap()
 				.output,
-			ChatFormat::BedrockConverse,
-			"{input:?} must render Converse on the Runtime endpoint"
+			output,
+			"{input:?} on the Runtime endpoint"
 		);
 	}
 
@@ -2008,9 +2009,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::bedrock(bedrock::Provider {
-		model_override: Some(strng::new(
-			"bedrock-runtime/us/anthropic.claude-3-5-sonnet-20241022-v2:0",
-		)),
+		model_override: Some(strng::new("bedrock-runtime/us/amazon.nova-pro-v1:0")),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
@@ -2038,7 +2037,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		),
 		..Default::default()
 	};
-	let expected_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+	let expected_model = "amazon.nova-pro-v1:0";
 
 	let req = ::http::Request::builder()
 		.uri("https://gateway.example.com/v1/chat/completions")
@@ -2090,7 +2089,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let configured_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+	let configured_model = "amazon.nova-pro-v1:0";
 	let provider = AIProvider::bedrock(bedrock::Provider {
 		model_override: Some(strng::new(configured_model)),
 		region: strng::new("us-east-1"),
@@ -3414,8 +3413,8 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			endpoint_preference: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
-		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
-		None,
+		"/proxy/anthropic/v1/messages",
+		Some("trace=repro"),
 	);
 }
 
