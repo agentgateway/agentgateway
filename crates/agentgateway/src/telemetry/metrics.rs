@@ -5,7 +5,7 @@ use agent_core::metrics::{
 	CustomField, DefaultedUnknown, EncodeArc, EncodeDebug, EncodeDisplay, MetricRegistry,
 	OptionallyEncode,
 };
-use agent_core::strng::RichStrng;
+use agent_core::strng::{self, RichStrng, Strng};
 use agent_core::version;
 use frozen_collections::FzHashSet;
 use prometheus_client::encoding::EncodeLabelSet;
@@ -15,7 +15,7 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{Histogram as PromHistogram, NativeHistogramConfig};
 use prometheus_client::metrics::info::Info;
 use prometheus_client::registry::{Metric, Unit};
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::HistogramMode;
 use crate::http::substrate::ateattr::{ResumeDisposition, RouteOutcome};
@@ -337,6 +337,107 @@ pub struct Metrics {
 
 	// Number of requests currently waiting for a Substrate actor to become routable.
 	pub substrate_request_parking_active: Gauge,
+
+	pub label_limits: LabelLimits,
+}
+
+/// Label values that come from requests, each bounded by a [LabelValueLimit].
+#[derive(Debug)]
+pub struct LabelLimits {
+	pub gen_ai_request_model: LabelValueLimit,
+	pub gen_ai_response_model: LabelValueLimit,
+	pub mcp_resource: LabelValueLimit,
+}
+
+pub const DEFAULT_LABEL_VALUE_LIMIT: usize = 1000;
+
+impl LabelLimits {
+	fn new(max: usize) -> Self {
+		Self {
+			gen_ai_request_model: LabelValueLimit::new("gen_ai_request_model", max),
+			gen_ai_response_model: LabelValueLimit::new("gen_ai_response_model", max),
+			mcp_resource: LabelValueLimit::new("resource", max),
+		}
+	}
+}
+
+/// Bounds the distinct values recorded for a label. A new value is only admitted when vouched for
+/// (for example, the upstream accepted it); once admitted it is always recorded. Anything else is
+/// recorded as `other`.
+#[derive(Debug)]
+pub struct LabelValueLimit {
+	name: &'static str,
+	max: usize,
+	seen: arc_swap::ArcSwap<std::collections::HashSet<Strng>>,
+	warned: std::sync::atomic::AtomicBool,
+}
+
+impl LabelValueLimit {
+	fn new(name: &'static str, max: usize) -> Self {
+		Self {
+			name,
+			max,
+			seen: Default::default(),
+			warned: Default::default(),
+		}
+	}
+
+	pub fn limit(&self, value: Option<Strng>, admit: bool) -> Option<Strng> {
+		let value = value?;
+		{
+			let seen = self.seen.load();
+			if seen.contains(&value) {
+				return Some(value);
+			}
+			if !admit {
+				return Some(strng::literal!("other"));
+			}
+			if seen.len() >= self.max {
+				if !self.warned.swap(true, std::sync::atomic::Ordering::Relaxed) {
+					warn!(
+						"metric label {} reached its limit of {} distinct values; new values are recorded as \"other\" (set METRICS_LABEL_VALUE_LIMIT to raise it)",
+						self.name, self.max
+					);
+				}
+				return Some(strng::literal!("other"));
+			}
+		}
+		// Admissions are bounded by the limit, so copying the set on each one is cheap overall and
+		// keeps the lookup path lock-free.
+		let mut admitted = false;
+		self.seen.rcu(|seen| {
+			admitted = seen.len() < self.max || seen.contains(&value);
+			let mut seen = std::collections::HashSet::clone(seen);
+			if admitted {
+				seen.insert(value.clone());
+			}
+			seen
+		});
+		Some(if admitted {
+			value
+		} else {
+			strng::literal!("other")
+		})
+	}
+}
+
+/// Collapses extension methods to `_OTHER`, following the OpenTelemetry `http.request.method` rules.
+pub fn http_method_label(method: &http::Method) -> http::Method {
+	static OTHER: std::sync::LazyLock<http::Method> =
+		std::sync::LazyLock::new(|| http::Method::from_bytes(b"_OTHER").expect("valid method"));
+	match *method {
+		http::Method::GET
+		| http::Method::HEAD
+		| http::Method::POST
+		| http::Method::PUT
+		| http::Method::DELETE
+		| http::Method::CONNECT
+		| http::Method::OPTIONS
+		| http::Method::TRACE
+		| http::Method::PATCH => method.clone(),
+		_ if method.as_str() == "QUERY" => method.clone(),
+		_ => OTHER.clone(),
+	}
 }
 
 // FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
@@ -407,6 +508,11 @@ impl<R: MetricRegistry> FilteredRegistry<'_, R> {
 }
 
 impl Metrics {
+	pub fn with_label_value_limit(mut self, limit: usize) -> Self {
+		self.label_limits = LabelLimits::new(limit);
+		self
+	}
+
 	pub fn new<R: MetricRegistry>(
 		registry: &mut R,
 		removes: FzHashSet<String>,
@@ -465,6 +571,7 @@ impl Metrics {
 		);
 
 		Metrics {
+			label_limits: LabelLimits::new(DEFAULT_LABEL_VALUE_LIMIT),
 			substrate_request_parking_active: {
 				let m = Gauge::default();
 				registry.register(

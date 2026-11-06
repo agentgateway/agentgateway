@@ -94,11 +94,14 @@ pub async fn run_with_ui_assets(
 		.map(|ca| agent_hbone::pool::WorkloadHBONEPool::new(config.hbone.clone(), ca));
 	// Build metrics and then the upstream client with metrics wired in
 	let sub_registry = metrics::sub_registry(&mut registry);
-	let metrics_handle = Arc::new(crate::metrics::Metrics::new(
-		sub_registry,
-		config.metrics.excluded_metrics.clone(),
-		config.histograms,
-	));
+	let metrics_handle = Arc::new(
+		crate::metrics::Metrics::new(
+			sub_registry,
+			config.metrics.excluded_metrics.clone(),
+			config.histograms,
+		)
+		.with_label_value_limit(config.metrics.label_value_limit),
+	);
 	let client = client::Client::new_with_h2_config(
 		&config.dns,
 		pool,
