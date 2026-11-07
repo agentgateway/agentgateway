@@ -1,0 +1,374 @@
+# Two models with the same match.model on one listener are ambiguous.
+# The oldest model is programmed. The newer model is not, and a second listener
+# it also attaches to is left alone. Wildcard patterns are not part of this check.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+  - name: extra
+    port: 81
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: a
+  namespace: default
+  creationTimestamp: "2024-01-01T00:00:00Z"
+spec:
+  parentRefs:
+  - name: gw
+    sectionName: llm
+  match:
+    model: gpt
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: b
+  namespace: default
+  creationTimestamp: "2024-01-02T00:00:00Z"
+spec:
+  parentRefs:
+  - name: gw
+    sectionName: llm
+  - name: gw
+    sectionName: extra
+  match:
+    model: gpt
+  provider: Anthropic
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: wild
+  namespace: default
+  creationTimestamp: "2024-01-03T00:00:00Z"
+spec:
+  parentRefs:
+  - name: gw
+    sectionName: llm
+  match:
+    model: gpt-*
+  provider: OpenAI
+
+---
+# Output
+output:
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/a/backend.llm
+      name:
+        name: a
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - anthropic: {}
+            name: backend
+      key: default/b/backend.extra
+      name:
+        name: b
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/wild/backend.llm
+      name:
+        name: wild
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/gw
+      port: 80
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    bind:
+      key: 81/default/gw
+      port: 81
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 81/default/gw
+      key: default/gw.extra
+      name:
+        gatewayName: gw
+        gatewayNamespace: default
+        listenerName: extra
+      protocol: HTTP
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/gw
+      key: default/gw.llm
+      name:
+        gatewayName: gw
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/a/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1704067200"
+      key: default/a.llm
+      listenerKey: default/gw.llm
+      match:
+        model: gpt
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/b/backend.extra
+        discoveryProvider: anthropic
+        discoveryProviderConfig:
+          anthropic: {}
+      created: "1704153600"
+      key: default/b.extra
+      listenerKey: default/gw.extra
+      match:
+        model: gpt
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/wild/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1704240000"
+      key: default/wild.llm
+      listenerKey: default/gw.llm
+      match:
+        model: gpt-*
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: a
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: b
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: extra
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "gpt" conflicts with default/a on listener default/gw.llm
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: wild
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: gw
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 3
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: extra
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
