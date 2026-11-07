@@ -577,6 +577,71 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 	});
 });
 
+test('dropdown menu fits its longest option', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/client-setup');
+	// A compact dropdown whose trigger only fits a short selected label.
+	await page.addStyleTag({ content: '.client-recipe-select { width: 64px; }' });
+
+	await page.getByRole('combobox', { name: 'Integration' }).click();
+	const menu = page.locator('.custom-select-menu');
+	const box = await menu.boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect(box?.width).toBeLessThanOrEqual(420);
+	const truncated = await menu
+		.locator('.custom-select-copy > span')
+		.evaluateAll(labels => labels.filter(label => label.scrollWidth > label.clientWidth).length);
+	expect(truncated).toBe(0);
+
+	// Searching down to one short option keeps the menu steady.
+	await page.getByRole('combobox', { name: 'Search Integration' }).fill('OpenAI JavaScript');
+	await expect(page.getByRole('option')).toHaveCount(1);
+	expect((await menu.boundingBox())?.width).toBe(box?.width);
+});
+
+test('dropdown menu stays on screen at the right edge', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/client-setup');
+	await page.addStyleTag({
+		content: '.client-recipe-select { position: fixed; top: 80px; right: 8px; width: 64px; }'
+	});
+
+	await page.getByRole('combobox', { name: 'Integration' }).click();
+	const box = await page.locator('.custom-select-menu').boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+	expect(box?.x).toBeGreaterThanOrEqual(0);
+});
+
+test('dropdown menu in a drawer', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/models');
+	await page.getByRole('button', { name: 'Add model' }).first().click();
+	const provider = page.getByRole('combobox', { name: 'Provider', exact: true });
+	const menu = page.locator('.custom-select-menu');
+	const drawerBody = page.locator('.drawer-body');
+
+	// A full-width form dropdown keeps a menu matching its trigger.
+	await provider.click();
+	expect((await menu.boundingBox())?.width).toBe((await provider.boundingBox())?.width);
+	await provider.click();
+
+	// A compact one at the drawer's right edge stays inside without adding a horizontal scrollbar.
+	await page.addStyleTag({
+		content:
+			'.drawer-body .custom-select:has(.custom-select-trigger[aria-label="Provider"]) { width: 64px; margin-left: auto; }'
+	});
+	await provider.click();
+	const box = await menu.boundingBox();
+	const bodyBox = await drawerBody.boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+		(bodyBox?.x ?? 0) + (bodyBox?.width ?? 0)
+	);
+	const scrolls = await drawerBody.evaluate(body => body.scrollWidth > body.clientWidth);
+	expect(scrolls).toBe(false);
+});
+
 test('trims whitespace from a new model name and explicit model', async ({ page }) => {
 	const gateway = await mockGateway(page, populatedConfig());
 	await page.goto('/llm/models');
