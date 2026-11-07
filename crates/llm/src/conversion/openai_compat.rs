@@ -527,7 +527,7 @@ pub mod to_responses {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		let mut typed = translate_response_internal(resp, model);
+		let mut typed = translate_response_internal(resp, model)?;
 		if let Some(namespaces) = namespaces {
 			namespaces.restore_response(&mut typed);
 		}
@@ -536,7 +536,10 @@ pub mod to_responses {
 		Ok(Box::new(passthrough))
 	}
 
-	fn translate_response_internal(resp: completions::Response, model: &str) -> responses::Response {
+	fn translate_response_internal(
+		resp: completions::Response,
+		model: &str,
+	) -> Result<responses::Response, AIError> {
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder = types::responses::ResponseBuilder::new(response_id, model.to_string());
 
@@ -616,24 +619,30 @@ pub mod to_responses {
 		outputs.extend(tool_calls);
 
 		let finish_reason = choice.as_ref().and_then(|c| c.finish_reason.as_ref());
+		// No finish_reason means the generation did not finish. Do not report status completed.
+		let Some(finish_reason) = finish_reason else {
+			return Err(AIError::MissingFinishReason(
+				crate::conversion::completions::reported_usage(resp.usage.as_ref()),
+			));
+		};
 
 		let status = match finish_reason {
-			Some(completions::FinishReason::Stop) | None => responses::Status::Completed,
-			Some(completions::FinishReason::Length) => responses::Status::Incomplete,
-			Some(completions::FinishReason::ToolCalls)
-			| Some(completions::FinishReason::FunctionCall) => responses::Status::Completed,
-			Some(completions::FinishReason::ContentFilter) => responses::Status::Failed,
+			completions::FinishReason::Stop
+			| completions::FinishReason::ToolCalls
+			| completions::FinishReason::FunctionCall => responses::Status::Completed,
+			completions::FinishReason::Length => responses::Status::Incomplete,
+			completions::FinishReason::ContentFilter => responses::Status::Failed,
 		};
 
 		let incomplete_details = match finish_reason {
-			Some(completions::FinishReason::Length) => Some(responses::IncompleteDetails {
+			completions::FinishReason::Length => Some(responses::IncompleteDetails {
 				reason: "max_tokens".to_string(),
 			}),
 			_ => None,
 		};
 
 		let error = match finish_reason {
-			Some(completions::FinishReason::ContentFilter) => Some(responses::ResponseError {
+			completions::FinishReason::ContentFilter => Some(responses::ResponseError {
 				code: responses::ResponseErrorCode::Other("content_filter".to_string()),
 				message: "Content filtered".to_string(),
 				misalignment: None,
@@ -670,7 +679,7 @@ pub mod to_responses {
 
 		let mut response = response_builder.response(status, usage, error, incomplete_details);
 		response.output = outputs;
-		response
+		Ok(response)
 	}
 
 	pub fn translate_stream(
@@ -1080,13 +1089,77 @@ pub mod to_responses {
 
 		let stop_reason = pending_stop_reason.take();
 		let usage = pending_usage.take();
+		// Record usage before any terminal event so a missing finish_reason still charges tokens.
+		if let Some(ref u) = usage {
+			log.update(|r| {
+				r.response.input_tokens = Some(u.prompt_tokens as u64);
+				r.response.output_tokens = Some(u.output_tokens() as u64);
+				r.response.total_tokens = Some(u.total_tokens as u64);
+				r.response.cached_input_tokens = u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens);
+				r.response.cache_creation_input_tokens = u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens);
+				r.response.reasoning_tokens = u
+					.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens);
+			});
+		}
+		let usage_obj = usage.map(|u| ResponseUsage {
+			input_tokens: u.prompt_tokens,
+			output_tokens: u.output_tokens(),
+			total_tokens: u.total_tokens,
+			input_tokens_details: InputTokenDetails {
+				cached_tokens: u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens)
+					.unwrap_or(0) as u32,
+				cache_write_tokens: u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens)
+					.map(|tokens| tokens as i64),
+				cache_write_tokens_details: None,
+			},
+			output_tokens_details: OutputTokenDetails {
+				reasoning_tokens: u
+					.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens)
+					.unwrap_or(0) as u32,
+			},
+		});
+		// Nothing was generated and the upstream never named a stop. Fail in place instead of
+		// opening an empty completed message.
+		if stop_reason.is_none() && text.is_empty() && reasoning.is_none() && tool_calls.is_empty() {
+			*sequence_number += 1;
+			events.push((
+				"event",
+				response_builder.failed_event(
+					*sequence_number,
+					usage_obj,
+					ResponseError {
+						code: responses::ResponseErrorCode::ServerError,
+						message: crate::MISSING_FINISH_REASON_MESSAGE.to_string(),
+						misalignment: None,
+					},
+				),
+			));
+			return;
+		}
 		let response_status = match stop_reason.as_ref() {
 			Some(completions::FinishReason::Stop)
 			| Some(completions::FinishReason::ToolCalls)
-			| Some(completions::FinishReason::FunctionCall)
-			| None => responses::Status::Completed,
+			| Some(completions::FinishReason::FunctionCall) => responses::Status::Completed,
 			Some(completions::FinishReason::Length) => responses::Status::Incomplete,
-			Some(completions::FinishReason::ContentFilter) => responses::Status::Failed,
+			Some(completions::FinishReason::ContentFilter) | None => responses::Status::Failed,
 		};
 		let finish_reason = crate::types::serialize_str(&response_status);
 		let tool_parts = logged_tool_calls.as_mut().and_then(|logged_tool_calls| {
@@ -1249,60 +1322,13 @@ pub mod to_responses {
 		output.sort_by_key(|(output_index, _)| *output_index);
 		let output: Vec<OutputItem> = output.into_iter().map(|(_, item)| item).collect();
 
-		if let Some(ref u) = usage {
-			log.update(|r| {
-				r.response.input_tokens = Some(u.prompt_tokens as u64);
-				r.response.output_tokens = Some(u.output_tokens() as u64);
-				r.response.total_tokens = Some(u.total_tokens as u64);
-				r.response.cached_input_tokens = u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens);
-				r.response.cache_creation_input_tokens = u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens);
-				r.response.reasoning_tokens = u
-					.completion_tokens_details
-					.as_ref()
-					.and_then(|d| d.reasoning_tokens);
-			});
-		}
-
-		let usage_obj = usage.map(|u| ResponseUsage {
-			input_tokens: u.prompt_tokens,
-			output_tokens: u.output_tokens(),
-			total_tokens: u.total_tokens,
-			input_tokens_details: InputTokenDetails {
-				cached_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens)
-					.unwrap_or(0) as u32,
-				cache_write_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as i64),
-				cache_write_tokens_details: None,
-			},
-			output_tokens_details: OutputTokenDetails {
-				reasoning_tokens: u
-					.completion_tokens_details
-					.as_ref()
-					.and_then(|d| d.reasoning_tokens)
-					.unwrap_or(0) as u32,
-			},
-		});
-
 		*sequence_number += 1;
 		let mut done_event = match stop_reason {
 			Some(completions::FinishReason::Stop)
 			| Some(completions::FinishReason::ToolCalls)
-			| Some(completions::FinishReason::FunctionCall)
-			| None => response_builder.completed_event(*sequence_number, usage_obj),
+			| Some(completions::FinishReason::FunctionCall) => {
+				response_builder.completed_event(*sequence_number, usage_obj)
+			},
 			Some(completions::FinishReason::Length) => response_builder.incomplete_event(
 				*sequence_number,
 				usage_obj,
@@ -1316,6 +1342,15 @@ pub mod to_responses {
 				ResponseError {
 					code: responses::ResponseErrorCode::Other("content_filter".to_string()),
 					message: "Content filtered".to_string(),
+					misalignment: None,
+				},
+			),
+			None => response_builder.failed_event(
+				*sequence_number,
+				usage_obj,
+				ResponseError {
+					code: responses::ResponseErrorCode::ServerError,
+					message: crate::MISSING_FINISH_REASON_MESSAGE.to_string(),
 					misalignment: None,
 				},
 			),

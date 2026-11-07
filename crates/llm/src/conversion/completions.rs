@@ -205,7 +205,13 @@ pub mod from_messages {
 			Some(completions::FinishReason::ToolCalls) => (messages::StopReason::ToolUse, false),
 			Some(completions::FinishReason::ContentFilter) => (messages::StopReason::Refusal, false),
 			Some(completions::FinishReason::FunctionCall) => (messages::StopReason::ToolUse, false),
-			None => (messages::StopReason::EndTurn, false),
+			// A buffered choice with no finish_reason is unfinished. Mapping it to end_turn makes
+			// clients treat an aborted generation as a completed turn.
+			None => {
+				return Err(AIError::MissingFinishReason(super::reported_usage(
+					usage.as_ref(),
+				)));
+			},
 		};
 		// When the engine names the stop sequence that ended generation, the
 		// Messages contract is `stop_reason: "stop_sequence"` plus the matched
@@ -493,20 +499,22 @@ pub mod from_messages {
 			if state.sent_message_stop {
 				return;
 			}
+			// Intermediate chunks leave finish_reason null. Only the terminal flush ([DONE])
+			// decides, and a missing reason is an api_error rather than a synthesized end_turn.
 			let stop_reason = match state.pending_stop_reason.take() {
-				Some(stop_reason) => stop_reason,
-				None if force => messages::StopReason::EndTurn,
+				Some(stop_reason) => Some(stop_reason),
+				None if force => None,
 				None => return,
 			};
 			let usage = match state.pending_usage.take() {
 				Some(usage) => Some(usage),
 				None if force => None,
 				None => {
-					state.pending_stop_reason = Some(stop_reason);
+					state.pending_stop_reason = stop_reason;
 					return;
 				},
 			};
-			let finish_reason = crate::types::serialize_str(&stop_reason);
+			let finish_reason = stop_reason.as_ref().and_then(crate::types::serialize_str);
 
 			close_thinking_block(state, events);
 			close_text_block(state, events);
@@ -538,23 +546,35 @@ pub mod from_messages {
 				})
 				.unwrap_or((0, 0));
 
-			push_event(
-				events,
-				messages::MessagesStreamEvent::MessageDelta {
-					delta: messages::MessageDelta {
-						stop_reason: Some(stop_reason),
-						stop_sequence: state.pending_stop_sequence.take(),
+			if let Some(stop_reason) = stop_reason {
+				push_event(
+					events,
+					messages::MessagesStreamEvent::MessageDelta {
+						delta: messages::MessageDelta {
+							stop_reason: Some(stop_reason),
+							stop_sequence: state.pending_stop_sequence.take(),
+						},
+						usage: messages::MessageDeltaUsage {
+							input_tokens: Some(input_tokens),
+							output_tokens: Some(output_tokens),
+							cache_creation_input_tokens,
+							cache_read_input_tokens,
+							..Default::default()
+						},
 					},
-					usage: messages::MessageDeltaUsage {
-						input_tokens: Some(input_tokens),
-						output_tokens: Some(output_tokens),
-						cache_creation_input_tokens,
-						cache_read_input_tokens,
-						..Default::default()
+				);
+				push_event(events, messages::MessagesStreamEvent::MessageStop);
+			} else {
+				push_event(
+					events,
+					messages::MessagesStreamEvent::Error {
+						error: messages::MessagesError {
+							r#type: "api_error".to_string(),
+							message: crate::MISSING_FINISH_REASON_MESSAGE.to_string(),
+						},
 					},
-				},
-			);
-			push_event(events, messages::MessagesStreamEvent::MessageStop);
+				);
+			}
 			state.sent_message_stop = true;
 
 			if let Some(usage) = usage {
@@ -1308,6 +1328,31 @@ pub mod from_messages {
 			web_search_options: None,
 		}
 	}
+}
+
+/// Provider token counts to keep when a translated completion is rejected for a missing finish reason.
+pub(crate) fn reported_usage(
+	usage: Option<&types::completions::typed::Usage>,
+) -> Option<crate::ReportedUsage> {
+	let usage = usage?;
+	Some(crate::ReportedUsage {
+		input_tokens: usage.prompt_tokens as u64,
+		output_tokens: usage.output_tokens() as u64,
+		total_tokens: usage.total_tokens as u64,
+		reasoning_tokens: usage
+			.completion_tokens_details
+			.as_ref()
+			.and_then(|details| details.reasoning_tokens),
+		cached_input_tokens: usage
+			.prompt_tokens_details
+			.as_ref()
+			.and_then(|details| details.cached_tokens),
+		cache_creation_input_tokens: usage
+			.prompt_tokens_details
+			.as_ref()
+			.and_then(|details| details.cache_write_tokens)
+			.or(usage.cache_creation_input_tokens),
+	})
 }
 
 /// Build the observability tool-call content parts from accumulated streaming deltas,

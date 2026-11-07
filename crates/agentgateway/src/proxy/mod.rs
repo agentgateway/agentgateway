@@ -367,6 +367,7 @@ fn classify_ai_request(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::ResponseParsing(_)
 		| llm::AIError::IncompleteResponse
 		| llm::AIError::InvalidResponse(_)
+		| llm::AIError::MissingFinishReason(_)
 		| llm::AIError::ResponseMarshal(_)
 		| llm::AIError::ResponseTooLarge
 		| llm::AIError::PromptWebhookError
@@ -384,6 +385,7 @@ fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
 		llm::AIError::ResponseParsing(_)
 		| llm::AIError::IncompleteResponse
 		| llm::AIError::InvalidResponse(_)
+		| llm::AIError::MissingFinishReason(_)
 		| llm::AIError::ResponseTooLarge
 		| llm::AIError::UnsupportedEncoding(_)
 		| llm::AIError::UnsupportedConversion(_)
