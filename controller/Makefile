@@ -131,6 +131,7 @@ lint: analyze
 
 .PHONY: analyze
 analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options with ANALYZE_ARGS.
+	$(if $(findstring --fix,$(ANALYZE_ARGS)),$(CUSTOM_GOLANGCI_LINT_FMT) ./...)
 	$(CUSTOM_GOLANGCI_LINT_RUN) $(ANALYZE_ARGS) ./...
 
 .PHONY: ensure-custom-golangci-lint
@@ -339,7 +340,7 @@ clean-gen:
 	rm -rf api/applyconfiguration
 	rm -rf pkg/generated/openapi
 	rm -rf pkg/client
-	rm -f install/helm/agentgateway-crds/templates/agentgateway.dev_*.yaml
+	rm -f install/helm/agentgateway-crds/files/crds/agentgateway.dev_*.yaml
 
 # Clean all stamp files to force regeneration
 .PHONY: clean-stamps

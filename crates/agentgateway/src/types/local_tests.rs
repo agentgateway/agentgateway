@@ -92,6 +92,7 @@ fn test_client() -> client::Client {
 		&client::Config {
 			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			max_ttl: None,
 		},
 		None,
 		BackendConfig::default(),
@@ -1378,6 +1379,62 @@ ui:
 	assert!(normalized.backends.iter().any(|backend| {
 		matches!(&backend.backend, Backend::Internal(name, _) if name.name.as_str() == "ui")
 	}));
+}
+
+#[tokio::test]
+async fn test_ui_oidc_under_base_path() {
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+gateways:
+  default:
+    port: 3000
+ui:
+  basePath: /team/agw
+  policies:
+    oidc:
+      issuer: https://issuer.example.com
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      jwks: '{TEST_OIDC_JWKS}'
+      clientId: client-id
+      clientSecret: client-secret
+      redirectURI: https://tools.example.com/team/agw/oauth/callback
+"#
+	))
+	.await
+	.expect("UI under a base path should normalize");
+
+	let ui_route = normalized
+		.listener_routes
+		.iter()
+		.flat_map(|(_, routes)| routes)
+		.find(|route| route.key.as_str() == "gateway/default/ui")
+		.expect("UI route");
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == "/oauth/callback")
+	));
+	assert!(normalized.backends.iter().any(|backend| matches!(
+		&backend.backend,
+		Backend::Internal(_, crate::types::local::InternalBackend::Ui { base_path }) if base_path == "/team/agw"
+	)));
+	let oidc = ui_route
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			TrafficPolicy::Oidc(oidc) => Some(oidc.clone().into_policy_inners()),
+			_ => None,
+		})
+		.expect("UI OIDC policy");
+	let oidc = &oidc[0].pol;
+	assert_eq!(oidc.redirect_uri.callback_path.path(), "/oauth/callback");
+	assert_eq!(
+		oidc.login.as_ref().and_then(|v| v.redirect.as_deref()),
+		Some("/team/agw/ui/login")
+	);
+	assert_eq!(
+		oidc.logout.as_ref().and_then(|v| v.redirect.as_deref()),
+		Some("/team/agw/ui/login")
+	);
 }
 
 #[tokio::test]

@@ -7,6 +7,7 @@
 |`config.dns`|object|DNS resolver settings.|
 |`config.dns.lookupFamily`|enum|Controls which IP address families the DNS resolver will query for<br>upstream connections.<br>Accepted values: All, Auto, V4Preferred, V4Only, V6Only.<br>Defaults to Auto (IPv4-only when enableIpv6 is false, both when true).|
 |`config.dns.edns0`|boolean|Whether to enable EDNS0 (Extension Mechanisms for DNS) in the resolver.<br>When `None`, the system-provided resolver setting is preserved.<br>Can also be set via the `DNS_EDNS0` environment variable.|
+|`config.dns.maxTtl`|string|Maximum interval between DNS refreshes, regardless of the TTL returned by the server.<br>Useful when upstream IPs change faster than their advertised TTL. Zero disables caching.|
 |`config.localXdsPath`|string|Local XDS path. If not specified, the current configuration file will be used.|
 |`config.modelCatalog`|[]object|Model cost catalog sources; entries are merged in order, with later entries taking precedence.|
 |`config.modelCatalog[].file`|string|Path to a file on disk containing the model cost catalog.|
@@ -20,6 +21,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.name`|string|Human-readable display name.|
 |`config.modelCatalog[].inline.providers.*.models.*.status`|string|Lifecycle stage (alpha, beta, deprecated); absent means generally available.|
 |`config.modelCatalog[].inline.providers.*.models.*.released`|string|Release date, as YYYY-MM-DD or YYYY-MM.|
+|`config.modelCatalog[].inline.providers.*.models.*.endpoints`|[]string|Client endpoints the model serves; absent means a chat model.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates`|object|Base pricing rates for this model.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.output`|string|Cost per 1M output (completion) tokens.|
@@ -64,8 +66,8 @@
 |`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens`|object|Accepted reasoning token budget range.|
 |`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens.min`|integer|Minimum reasoning token budget.|
 |`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens.max`|integer|Maximum reasoning token budget.|
-|`config.database`|object|Primary database used by local runtime features.|
-|`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
+|`config.database`|object|Primary database used by local runtime features. Request logs are also stored here unless<br>`config.logging.database` sets its own `url` or `enabled: false`.|
+|`config.database.url`|string|Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
 |`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`, `readOnly`.|
@@ -117,9 +119,10 @@
 |`config.logging.fields.add`|object|Map of field name to a CEL expression that computes the value to add to logs.|
 |`config.logging.level`|string|Log level: a single level (e.g. `info`), a comma-separated string of per-module levels (e.g. `info,agent_core=trace`), or a list of per-module levels (e.g. `[info, agent_core=trace]`).|
 |`config.logging.format`|enum|Log output format: `text` or `json`.<br>Possible values: `text`, `json`.|
-|`config.logging.database`|object|Log-store database configuration; enables request logging to a database backend.|
-|`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
-|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
+|`config.logging.database`|object|Request log database. When omitted (or null), request logs are stored in `config.database`<br>if it is set. Set `enabled: false` to turn off request log storage.|
+|`config.logging.database.enabled`|boolean|Store request logs in a database. When omitted, request logs are stored if either `url` or<br>`config.database.url` is set, and otherwise not. When true, one of them is required. When<br>false, no request log store is started, even if `config.database` is set.|
+|`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.<br>Defaults to `config.database`.|
+|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>Can only be set together with `url`. Without a `url`, the `config.database` pool and its limit<br>are used. With a `url`, the pool is shared only when both `url` and `maxConnections` match<br>`config.database`.|
 |`config.metrics`|object|Metrics configuration, including metric removal and custom fields.|
 |`config.metrics.remove`|[]string|Metric names to exclude from collection.|
 |`config.metrics.fields`|object|Custom fields to add to all metrics.|
@@ -646,6 +649,13 @@
 |`binds[].listeners[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`binds[].listeners[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`binds[].listeners[].routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`binds[].listeners[].routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`binds[].listeners[].routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`binds[].listeners[].routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`binds[].listeners[].routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`binds[].listeners[].routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`binds[].listeners[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -2206,6 +2216,13 @@
 |`policies[].policy.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`policies[].policy.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`policies[].policy.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.compression`|object|Compress responses and decompress request bodies.|
+|`policies[].policy.compression.response`|object|Compression applied to responses sent to the client.|
+|`policies[].policy.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`policies[].policy.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`policies[].policy.compression.request`|object|Compression applied to requests received from the client.|
+|`policies[].policy.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`policies[].policy.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`policies[].policy.timeout`|object|Set request timeout limits.|
 |`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -3342,6 +3359,13 @@
 |`routeGroups[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routeGroups[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`routeGroups[].routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`routeGroups[].routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`routeGroups[].routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`routeGroups[].routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`routeGroups[].routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`routeGroups[].routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`routeGroups[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -4969,6 +4993,13 @@
 |`routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`routes[].policies.timeout`|object|Set request timeout limits.|
 |`routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -6685,6 +6716,13 @@
 |`mcp.policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`mcp.policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`mcp.policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.compression`|object|Compress responses and decompress request bodies.|
+|`mcp.policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`mcp.policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`mcp.policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`mcp.policies.compression.request`|object|Compression applied to requests received from the client.|
+|`mcp.policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`mcp.policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`mcp.policies.timeout`|object|Set request timeout limits.|
 |`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -6861,6 +6899,7 @@
 |`ui.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`ui.policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`ui.policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`ui.basePath`|string|basePath is the prefix a reverse proxy in front of the gateway strips before forwarding (e.g. `/agentgateway`).<br>It is added to UI links, assets and login redirects.|
 
 ## Shared types
 
@@ -7122,9 +7161,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendPolicies>.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendPolicies>.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<BackendPolicies>.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<BackendPolicies>.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<BackendPolicies>.http`|object|HTTP protocol settings for this backend.|
 |`<BackendPolicies>.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<BackendPolicies>.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7524,9 +7569,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendAuth>.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendAuth>.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<BackendAuth>.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<BackendAuth>.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<BackendAuth>.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<BackendAuth>.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<BackendAuth>.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<BackendAuth>.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 
 ### `<Guardrails>`
 
@@ -7801,9 +7852,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8089,9 +8146,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8371,9 +8434,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8653,9 +8722,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8933,9 +9008,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9237,9 +9318,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9527,9 +9614,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9809,9 +9902,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10089,9 +10188,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|

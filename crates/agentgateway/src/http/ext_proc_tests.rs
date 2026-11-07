@@ -5852,6 +5852,48 @@ mod body_streaming_and_trailers {
 			.await
 			.expect("upstream body should be dropped once the downstream body is dropped");
 	}
+
+	#[tokio::test]
+	async fn request_phase_resets_stream_when_downstream_is_dropped() {
+		// Never answers request headers, like an EPP holding the request in its queue.
+		#[derive(Clone)]
+		struct Queued(mpsc::UnboundedSender<Sender<Result<ProcessingResponse, Status>>>);
+
+		#[async_trait::async_trait]
+		impl Handler for Queued {
+			async fn handle_request_headers(
+				&mut self,
+				_headers: &HttpHeaders,
+				sender: &Sender<Result<ProcessingResponse, Status>>,
+			) -> Result<(), Status> {
+				let _ = self.0.send(sender.clone());
+				Ok(())
+			}
+		}
+
+		let (queued_tx, mut queued_rx) = mpsc::unbounded_channel();
+		let ext_proc = ExtProcMock::new(move || Queued(queued_tx.clone()))
+			.spawn()
+			.await;
+		let processing_options = ext_proc::ProcessingOptions {
+			request_header_mode: ext_proc::HeaderSendMode::Send,
+			request_body_mode: ext_proc::BodySendMode::None,
+			..Default::default()
+		};
+		let mut ext_proc_request =
+			build_ext_proc_request_for_test(ext_proc.address, processing_options);
+		let mut req = http::Request::new(Body::empty());
+
+		let processor_tx = tokio::select! {
+			_ = ext_proc_request.mutate_request(&mut req) => panic!("request should stay queued"),
+			tx = queued_rx.recv() => tx.unwrap(),
+		};
+		drop(ext_proc_request);
+		// A half-close keeps the processor's response stream open; only a reset closes it.
+		tokio::time::timeout(Duration::from_secs(5), processor_tx.closed())
+			.await
+			.expect("ext_proc stream should be reset once the downstream request is dropped");
+	}
 }
 
 // CEL metadata_context and ext_proc request/response attribute evaluation.

@@ -37,6 +37,51 @@ pub const DEFAULT_EXPECTED_HTTP2_CAPACITY: usize = 100;
 const SHARD_COUNT: usize = 16;
 
 type HostMap<K> = HashMap<K, HostPool<K>>;
+type Waiter<K> = oneshot::Sender<Result<Pooled<K>, ClientConnectError>>;
+
+/// Connections handed to waiters, to be sent with `deliver` once the host lock is released.
+/// This must not happen under the lock: if a waiter is dropped concurrently, the `Pooled` can be
+/// dropped by the sender, and returning it to the pool takes the lock.
+#[must_use]
+struct Deliveries<K: Key>(Vec<(Waiter<K>, Pooled<K>)>);
+
+impl<K: Key> Deliveries<K> {
+	fn none() -> Self {
+		Self(Vec::new())
+	}
+	/// In debug builds, take the host lock once, so a caller still holding it deadlocks in tests every
+	/// time, rather than only when a waiter is dropped concurrently.
+	fn check_host_unlocked(&self) {
+		if cfg!(debug_assertions)
+			&& let Some((_, pooled)) = self.0.first()
+			&& let (Some(pool), Some((key, _))) = (pooled.pool.upgrade(), pooled.value.as_ref())
+		{
+			drop(Pool::lock_hosts(&pool, key));
+		}
+	}
+	fn deliver(self) {
+		self.check_host_unlocked();
+		for (mut tx, mut pooled) in self.0 {
+			loop {
+				let Err(Ok(returned)) = tx.send(Ok(pooled)) else {
+					break;
+				};
+				pooled = returned;
+				// The waiter is gone; hand its reservation to the next waiter.
+				let next = pooled.pool.upgrade().and_then(|pool| {
+					let (key, _) = pooled.value.as_ref()?;
+					let mut host = Pool::lock_hosts(&pool, key);
+					std::iter::from_fn(|| host.waiters.pop_front()).find(|tx| !tx.is_canceled())
+				});
+				let Some(next) = next else {
+					// Nobody wants it; dropping it (outside the lock) returns it to the pool.
+					break;
+				};
+				tx = next;
+			}
+		}
+	}
+}
 
 /// Shard the host map to avoid one mega-mutex contention.
 /// While under extremely high concurrency, this shows ~20% improvement in throughput and is pretty low cost.
@@ -289,43 +334,35 @@ impl H2Pool {
 		}
 	}
 	fn reserve(&mut self, now: Instant) -> Option<ReservedHttp2Connection> {
-		while let Some(h) = self.0.front() {
+		// The peer can lower its limit at any time, so a full connection may be in front of one with
+		// capacity. Check each connection at most once.
+		for _ in 0..self.0.len() {
+			let h = self.0.pop_front()?;
 			if !h.tx.is_ready() {
 				// Connection is dead... remove it.
-				let _ = self.0.pop_front();
 				debug!("removing dead http2 connection");
 				continue;
 			}
 			if h.info.past_deadline(now) {
 				// expired, do not attach new streams.
-				let _ = self.0.pop_front();
 				debug!("removing past-deadline http2 connection");
 				continue;
 			}
 			match h.load.try_reserve_stream_slot() {
 				CapacityReservationResult::NoCapacity => {
-					// We know the front is the one that was most recently returned, thus must be available
-					return None;
+					self.0.push_back(h);
 				},
 				CapacityReservationResult::ReservedAndFilled => {
-					let ret = Some(ReservedHttp2Connection {
-						info: h.info.clone(),
-						tx: h.tx.clone(),
-						load: h.load.clone(),
-					});
+					let ret = h.clone_without_load_incremented();
 					// Move the connection to the back of the queue.
-					if let Some(v) = self.0.pop_front() {
-						self.0.push_back(v);
-					}
-					return ret;
+					self.0.push_back(h);
+					return Some(ret);
 				},
 				CapacityReservationResult::ReservedButNotFilled => {
+					let ret = h.clone_without_load_incremented();
 					// Keep the connection at the front.
-					return Some(ReservedHttp2Connection {
-						info: h.info.clone(),
-						tx: h.tx.clone(),
-						load: h.load.clone(),
-					});
+					self.0.push_front(h);
+					return Some(ret);
 				},
 			}
 		}
@@ -425,10 +462,21 @@ impl ReservedHttp2Connection {
 	}
 }
 
-#[derive(Debug)]
 pub(crate) struct H2Load {
 	active_streams: AtomicUsize,
+	// Last known max streams.
 	max_streams: AtomicUsize,
+	// Reads the current max streams from the connection, if available.
+	peer_max_streams: Box<dyn Fn() -> Option<usize> + Send + Sync>,
+}
+
+impl Debug for H2Load {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("H2Load")
+			.field("active_streams", &self.active_streams)
+			.field("max_streams", &self.max_streams)
+			.finish_non_exhaustive()
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -439,18 +487,35 @@ enum CapacityReservationResult {
 }
 
 impl H2Load {
-	pub(crate) fn new(max_streams: usize) -> Self {
+	pub(crate) fn new(
+		max_streams: usize,
+		peer_max_streams: impl Fn() -> Option<usize> + Send + Sync + 'static,
+	) -> Self {
 		Self {
 			active_streams: AtomicUsize::new(0),
 			max_streams: AtomicUsize::new(max_streams.max(1)),
+			peer_max_streams: Box::new(peer_max_streams),
+		}
+	}
+
+	fn max_streams(&self) -> usize {
+		match (self.peer_max_streams)() {
+			Some(max) => {
+				let max = max.max(1);
+				self.max_streams.store(max, Ordering::Release);
+				max
+			},
+			None => self.max_streams.load(Ordering::Acquire),
 		}
 	}
 
 	fn remaining_capacity(&self) -> usize {
-		self.max_streams.load(Ordering::Acquire) - self.active_streams.load(Ordering::Acquire)
+		self
+			.max_streams()
+			.saturating_sub(self.active_streams.load(Ordering::Acquire))
 	}
 	fn try_reserve_stream_slot(&self) -> CapacityReservationResult {
-		let max = self.max_streams.load(Ordering::Acquire);
+		let max = self.max_streams();
 		let prev = self
 			.active_streams
 			.try_update(Ordering::AcqRel, Ordering::Acquire, |active| {
@@ -471,7 +536,7 @@ impl H2Load {
 
 	fn release_stream_slot(&self) -> (usize, bool) {
 		let prev = self.active_streams.fetch_sub(1, Ordering::AcqRel);
-		let max = self.max_streams.load(Ordering::Acquire);
+		let max = self.max_streams();
 		debug_assert!(prev > 0, "active_streams must be > 0 before release");
 		(prev - 1, prev == max)
 	}
@@ -503,7 +568,7 @@ struct HostPool<K: Key> {
 	// this list is checked for any parked Checkouts, and tries to notify
 	// them that the Conn could be used instead of waiting for a brand new
 	// connection.
-	waiters: VecDeque<oneshot::Sender<Result<Pooled<K>, ClientConnectError>>>,
+	waiters: VecDeque<Waiter<K>>,
 }
 
 impl<K: Key> HostPool<K> {
@@ -523,12 +588,12 @@ impl<K: Key> HostPool<K> {
 		pool: Arc<HostShards<K>>,
 		k: K,
 		load: Arc<H2Load>,
-	) {
+	) -> Deliveries<K> {
 		let (remaining, was_at_max) = load.release_stream_slot();
 		if remaining == 0 {
 			if let Some(v) = self.active_h2.remove_by_load(&load) {
 				if v.tx.is_ready() {
-					self.return_idle(settings, pool, k, HttpConnection::Http2(v))
+					return self.return_idle(settings, pool, k, HttpConnection::Http2(v));
 				} else {
 					trace!("skip moving h2 connection to idle; not open")
 				}
@@ -536,18 +601,7 @@ impl<K: Key> HostPool<K> {
 		} else if was_at_max {
 			self.active_h2.mark_active_by_load(&load);
 		}
-	}
-	fn release_h2_stream_without_returning_to_idle(&mut self, s: &HttpConnection) {
-		let HttpConnection::Http2(h2) = s else {
-			return;
-		};
-		let (remaining, was_at_max) = h2.load.release_stream_slot();
-		if remaining == 0 {
-			// Do NOT remove it here; this is the caller responsibility
-			// This ensures we don't end up dropping it if we need to rollback.
-		} else if was_at_max {
-			self.active_h2.mark_active_by_load(&h2.load);
-		}
+		Deliveries::none()
 	}
 	fn return_connection(
 		&mut self,
@@ -555,17 +609,18 @@ impl<K: Key> HostPool<K> {
 		pool: Arc<HostShards<K>>,
 		k: K,
 		value: HttpConnection,
-	) {
+	) -> Deliveries<K> {
 		match value {
 			HttpConnection::Http1(h) => self.return_idle(settings, pool, k, HttpConnection::Http1(h)),
 			HttpConnection::Http2(h) => {
 				let (remaining, was_at_max) = h.load.release_stream_slot();
 				if remaining == 0 {
 					self.active_h2.remove(&h);
-					self.return_idle(settings, pool, k, HttpConnection::Http2(h))
+					return self.return_idle(settings, pool, k, HttpConnection::Http2(h));
 				} else if was_at_max {
 					self.active_h2.mark_active(h);
 				}
+				Deliveries::none()
 			},
 		}
 	}
@@ -646,17 +701,17 @@ impl<K: Key> HostPool<K> {
 		pool: Arc<HostShards<K>>,
 		key: K,
 		conn: HttpConnection,
-	) {
+	) -> Deliveries<K> {
 		// do not put expired conns back into the idle pool handing them
 		// to a request waiting for a connection
 		if conn.past_deadline(settings.timer.now()) {
 			debug!("dropping past-deadline connection for {:?}", key);
-			return;
+			return Deliveries::none();
 		}
 		trace!(waiters=%self.waiters.len(), "return idle");
 		// we are returning, so there should only ever been 1 additional spot free
 		let capacity = 1;
-		Pool::send_connection("idle", key, capacity, self, &pool, &settings, conn);
+		Pool::send_connection("idle", key, capacity, self, &pool, &settings, conn)
 	}
 
 	fn push_idle_with_cap(
@@ -817,15 +872,15 @@ impl<K: Key> Pool<K> {
 		// Do not drop again as we explicitly inserted
 		let capacity = conn.capacity();
 		host.connecting -= 1;
-		// Min of capacity and expected to handle the over-capacity case.
-		// For under capacity, we handle it below in forget_pending_connection
-		host.expected_connecting_capacity -= std::cmp::min(capacity, expected_capacity);
-		trace!(?key, ?host.connecting, %host.expected_connecting_capacity, "inserting new connection");
+		let h2_load = match &conn {
+			HttpConnection::Http2(h2) => Some(h2.load.clone()),
+			HttpConnection::Http1(_) => None,
+		};
 
 		let conn = host.active_h2.maybe_insert_new(conn, false);
 		trace!(waiters=%host.waiters.len(), "insert new");
 		// First, send to any waiters...
-		Pool::send_connection(
+		let deliveries = Pool::send_connection(
 			"new",
 			key.clone(),
 			capacity,
@@ -835,6 +890,20 @@ impl<K: Key> Pool<K> {
 			conn,
 		);
 
+		// The peer's SETTINGS may have lowered the capacity while we were sending.
+		let peer_capacity =
+			h2_load.map_or(capacity, |load| std::cmp::min(capacity, load.max_streams()));
+		// If waiters are left, it only fit the ones it was sent to, even if the limit has since gone back up.
+		let capacity = if host.waiters.is_empty() {
+			peer_capacity
+		} else {
+			std::cmp::min(peer_capacity, deliveries.0.len())
+		};
+		// Min of capacity and expected to handle the over-capacity case.
+		// For under capacity, we handle it below in forget_pending_connection
+		host.expected_connecting_capacity -= std::cmp::min(capacity, expected_capacity);
+		trace!(?key, ?host.connecting, %host.expected_connecting_capacity, "inserted new connection");
+
 		// If we had expected this to have more capacity, we need to notify any waiters that its not going to
 		// arrive...
 		if capacity < expected_capacity {
@@ -843,9 +912,11 @@ impl<K: Key> Pool<K> {
 				expected_capacity, capacity
 			);
 			let excess = expected_capacity - capacity;
-			host.per_connection_capacity_cache = CapacityCache::Cached(capacity);
+			host.per_connection_capacity_cache = CapacityCache::Cached(peer_capacity);
 			host.forget_pending_connection(key, excess, None, true);
 		}
+		drop(host);
+		deliveries.deliver();
 	}
 
 	fn ensure_idle_interval(pool: &Arc<HostShards<K>>, settings: &Arc<PoolSettings>) {
@@ -877,8 +948,9 @@ impl<K: Key> Pool<K> {
 		pool: &Arc<HostShards<K>>,
 		settings: &Arc<PoolSettings>,
 		original_con: HttpConnection,
-	) {
+	) -> Deliveries<K> {
 		let mut next_conn = Some(original_con);
+		let mut deliveries = Deliveries::none();
 		let mut sent = 0;
 		while capacity > 0 {
 			let Some(tx) = host.waiters.pop_front() else {
@@ -896,6 +968,8 @@ impl<K: Key> Pool<K> {
 
 			if let Some(CapacityReservationResult::NoCapacity) = host.active_h2.increment_load(&this_conn)
 			{
+				// The peer lowered its limit; keep the waiter queued.
+				host.waiters.push_front(tx);
 				break;
 			}
 			let pooled = Pooled {
@@ -906,26 +980,12 @@ impl<K: Key> Pool<K> {
 			};
 			#[cfg(test)]
 			Self::run_send_connection_test_hook();
-			match tx.send(Ok(pooled)) {
-				Ok(()) => {
-					capacity -= 1;
-					sent += 1;
-					if let Some(HttpConnection::Http2(h2)) = &next_conn {
-						// We need to make sure its actively tracked; if we hit this from the idle flow it may have been removed.
-						host.active_h2.ensure_tracked(h2);
-					}
-				},
-				Err(Ok(mut e)) => {
-					trace!("send failed");
-					// Recover the connection without dropping the pooled wrapper
-					// We verify its Ok() explicitly above
-					next_conn = e.value.take().map(|(_, c)| c);
-					if let Some(next_conn) = &next_conn {
-						// We reserved it above, now drop it back to avoid double counting
-						host.release_h2_stream_without_returning_to_idle(next_conn);
-					}
-				},
-				Err(_) => unreachable!("Ok() always above"),
+			deliveries.0.push((tx, pooled));
+			capacity -= 1;
+			sent += 1;
+			if let Some(HttpConnection::Http2(h2)) = &next_conn {
+				// We need to make sure its actively tracked; if we hit this from the idle flow it may have been removed.
+				host.active_h2.ensure_tracked(h2);
 			}
 		}
 		trace!(fulfilled=%sent, "sent {reason} connection");
@@ -941,6 +1001,7 @@ impl<K: Key> Pool<K> {
 			let now = settings.timer.now();
 			host.push_idle_with_cap(settings.max_idle_per_host, key, c, now);
 		}
+		deliveries
 	}
 
 	pub(crate) fn checkout_or_register_waker(&self, key: K) -> CheckoutResult<K> {
@@ -1130,16 +1191,20 @@ impl<K: Key> Drop for Pooled<K> {
 			trace!("pool dropped, dropping pooled ({:?})", k);
 			return;
 		};
-		let mut hosts = Pool::lock_hosts(pool.as_ref(), &k);
-		if value.is_open() {
-			trace!(key=?k, "returning connection to pool");
-			hosts.return_connection(self.settings.clone(), pool.clone(), k, value);
-		} else {
-			trace!("connection already closed; skip idle pool insertion");
-			// If we *already* know the connection is done here,
-			// it shouldn't be re-inserted back into the pool.
-			hosts.return_dead_connection(value)
-		}
+		let deliveries = {
+			let mut hosts = Pool::lock_hosts(pool.as_ref(), &k);
+			if value.is_open() {
+				trace!(key=?k, "returning connection to pool");
+				hosts.return_connection(self.settings.clone(), pool.clone(), k, value)
+			} else {
+				trace!("connection already closed; skip idle pool insertion");
+				// If we *already* know the connection is done here,
+				// it shouldn't be re-inserted back into the pool.
+				hosts.return_dead_connection(value);
+				Deliveries::none()
+			}
+		};
+		deliveries.deliver();
 	}
 }
 
@@ -1153,8 +1218,11 @@ impl<K: Key> Drop for H2CapacityGuard<K> {
 			trace!("pool dropped, dropping pooled ({:?})", k);
 			return;
 		};
-		let mut hosts = Pool::lock_hosts(pool.as_ref(), &k);
-		hosts.return_h2_stream(self.settings.clone(), pool.clone(), k, value);
+		let deliveries = {
+			let mut hosts = Pool::lock_hosts(pool.as_ref(), &k);
+			hosts.return_h2_stream(self.settings.clone(), pool.clone(), k, value)
+		};
+		deliveries.deliver();
 	}
 }
 
@@ -1647,7 +1715,7 @@ mod tests {
 			HttpConnection::Http2(ReservedHttp2Connection {
 				info: Connected::new(),
 				tx,
-				load: Arc::new(H2Load::new(max_streams)),
+				load: Arc::new(H2Load::new(max_streams, || None)),
 			}),
 			MockHttp2Control {
 				server_task,
@@ -2376,6 +2444,125 @@ mod tests {
 			&key,
 			"single canceled waiter send race should not leave h2 in idle and active",
 		);
+	}
+
+	#[tokio::test]
+	async fn test_h2_peer_lowers_max_streams_while_sending_new_connection() {
+		let _guard = lock_send_connection_test_hook().await;
+		let pool = pool_with_expected_h2_capacity(100);
+		let key = host_key_h2("foo");
+		let (sc, first) = must_want_new_connection(&pool, key.clone());
+		let mut waiters = vec![first];
+		for _ in 1..10 {
+			waiters.push(must_wait_for_existing_connection(&pool, key.clone()));
+		}
+
+		let peer_max = Arc::new(AtomicUsize::new(100));
+		let HttpConnection::Http2(mut h2) = mock_http2_connection(100).await else {
+			unreachable!("mock is http2")
+		};
+		h2.load = Arc::new(H2Load::new(100, {
+			let peer_max = peer_max.clone();
+			move || Some(peer_max.load(Ordering::Acquire))
+		}));
+		// The peer's SETTINGS lower the limit while the connection is being handed to waiters.
+		install_send_connection_test_hook(move || {
+			peer_max.store(5, Ordering::Release);
+			false
+		});
+		pool.insert_new_connection(sc, HttpConnection::Http2(h2));
+
+		for (i, mut waiter) in waiters.into_iter().enumerate() {
+			match waiter.try_recv() {
+				Ok(Some(Ok(_))) => assert!(i < 5, "waiter {i} exceeded the peer limit"),
+				Ok(Some(Err(ClientConnectError::CheckoutIsClosed(pool::Error::ConnectionLowCapacity)))) => {
+					assert!(i >= 5, "waiter {i} should have been sent the connection")
+				},
+				res => panic!("waiter {i} was lost: {res:?}"),
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn test_h2_peer_limit_dips_and_recovers_while_sending_new_connection() {
+		let _guard = lock_send_connection_test_hook().await;
+		let pool = pool_with_expected_h2_capacity(3);
+		let key = host_key_h2("foo");
+		let (sc, first) = must_want_new_connection(&pool, key.clone());
+		let waiters = [
+			first,
+			must_wait_for_existing_connection(&pool, key.clone()),
+			must_wait_for_existing_connection(&pool, key.clone()),
+		];
+
+		let peer_max = Arc::new(AtomicUsize::new(3));
+		let HttpConnection::Http2(mut h2) = mock_http2_connection(3).await else {
+			unreachable!("mock is http2")
+		};
+		h2.load = Arc::new(H2Load::new(3, {
+			let peer_max = peer_max.clone();
+			// A lowered limit is seen once, then the peer raises it again.
+			move || Some(peer_max.swap(3, Ordering::AcqRel))
+		}));
+		install_send_connection_test_hook(move || {
+			peer_max.store(1, Ordering::Release);
+			false
+		});
+		pool.insert_new_connection(sc, HttpConnection::Http2(h2));
+
+		// Only the first waiter fit; the rest must be told to retry rather than left waiting.
+		// Check every waiter before dropping any connection, which could hand it to a waiter still left.
+		let results: Vec<_> = waiters.into_iter().map(|mut w| w.try_recv()).collect();
+		for (i, res) in results.into_iter().enumerate() {
+			match res {
+				Ok(Some(Ok(_))) => assert_eq!(i, 0, "waiter {i} exceeded the peer limit"),
+				Ok(Some(Err(ClientConnectError::CheckoutIsClosed(pool::Error::ConnectionLowCapacity)))) => {
+					assert!(i > 0, "waiter {i} should have been sent the connection")
+				},
+				res => panic!("waiter {i} was lost: {res:?}"),
+			}
+		}
+		// The limit recovered, so future connections should still be expected to fit 3.
+		let hosts = pool.hosts.lock_shard(&key);
+		let host = hosts.get(&key).expect("host entry");
+		assert_eq!(host.per_connection_capacity_cache.expected_capacity(3), 3);
+	}
+
+	#[tokio::test]
+	async fn test_h2_peer_lowers_max_streams_on_front_connection() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+
+		// Connection A, whose peer will lower its limit.
+		let peer_max = Arc::new(AtomicUsize::new(2));
+		let HttpConnection::Http2(mut a) = mock_http2_connection(2).await else {
+			unreachable!("mock is http2")
+		};
+		a.load = Arc::new(H2Load::new(2, {
+			let peer_max = peer_max.clone();
+			move || Some(peer_max.load(Ordering::Acquire))
+		}));
+		let a_load = a.load.clone();
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+		pool.insert_new_connection(sc, HttpConnection::Http2(a));
+		let a1 = w.await.unwrap().unwrap();
+		let _a2 = must_checkout(&pool, key.clone());
+
+		// A is full, so connection B is created.
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+		pool.insert_new_connection(sc, mock_http2_connection(2).await);
+		let _b1 = w.await.unwrap().unwrap();
+
+		// Releasing a stream moves A in front of B; then the peer lowers A's limit.
+		drop(a1);
+		peer_max.store(1, Ordering::Release);
+
+		// B still has capacity and must be used.
+		let p = must_checkout(&pool, key);
+		let HttpConnection::Http2(h2) = p.as_ref() else {
+			unreachable!("mock is http2")
+		};
+		assert!(!Arc::ptr_eq(&h2.load, &a_load));
 	}
 
 	#[tokio::test]

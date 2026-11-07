@@ -4,9 +4,12 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 )
 
 type agentgatewaySyncerConfig struct {
@@ -17,6 +20,7 @@ type agentgatewaySyncerConfig struct {
 	BuildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 	ExtraListenerSets           ExtraListenerSetsBuilderFunc
 	AllowedListenersResolver    AllowedListenersResolver
+	ModelCollections            ModelCollectionsBuilderFunc
 }
 
 type AgentgatewaySyncerOption func(*agentgatewaySyncerConfig)
@@ -108,6 +112,33 @@ func WithAllowedListenersResolver(f AllowedListenersResolver) AgentgatewaySyncer
 	return func(o *agentgatewaySyncerConfig) {
 		if f != nil {
 			o.AllowedListenersResolver = f
+		}
+	}
+}
+
+// ModelCollectionsConfig is passed to a ModelCollectionsBuilderFunc.
+type ModelCollectionsConfig struct {
+	Inputs            translator.RouteContextInputs
+	StatusCollections *status.StatusCollections
+	KrtOpts           krtutil.KrtOptions
+}
+
+// ModelCollections are the outputs of models translated outside the syncer.
+type ModelCollections struct {
+	Resources   krt.Collection[agwir.AgwResource]
+	Attachments krt.Collection[*plugins.RouteAttachment]
+	Ancestors   krt.Collection[*utils.AncestorBackend]
+}
+
+// ModelCollectionsBuilderFunc translates the models of other model APIs, registered
+// as plugins.ModelSource, typically with translator.TranslateModel, and registers
+// their status.
+type ModelCollectionsBuilderFunc func(cfg ModelCollectionsConfig) ModelCollections
+
+func WithModelCollections(f ModelCollectionsBuilderFunc) AgentgatewaySyncerOption {
+	return func(o *agentgatewaySyncerConfig) {
+		if f != nil {
+			o.ModelCollections = f
 		}
 	}
 }

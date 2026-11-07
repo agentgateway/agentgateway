@@ -2,6 +2,7 @@ mod admission;
 mod auth;
 mod auto_protocol;
 mod basic;
+mod compression;
 mod config_store;
 mod connect;
 mod cors;

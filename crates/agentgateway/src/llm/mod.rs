@@ -572,17 +572,12 @@ fn render_bedrock_converse(
 			"gemini to bedrock converse"
 		))),
 	}?;
-	let provider_state = if bedrock.tool_name_map.is_empty() && bedrock.namespaces.is_empty() {
-		None
-	} else {
-		Some(ProviderState::Bedrock {
-			tool_names: Arc::new(bedrock.tool_name_map),
-			namespaces: Arc::new(bedrock.namespaces),
-		})
-	};
 	Ok(RenderedChatRequest {
 		body: bedrock.body,
-		provider_state,
+		provider_state: Some(ProviderState::Bedrock {
+			tool_names: Arc::new(bedrock.tool_name_map),
+			namespaces: Arc::new(bedrock.namespaces),
+		}),
 	})
 }
 
@@ -1065,6 +1060,8 @@ impl AIProvider {
 					if p.is_anthropic_model(request_model) {
 						formats.extend([AnthropicTokenCount, Messages]);
 					}
+				} else {
+					formats.push(Decisions);
 				}
 				formats
 			},
@@ -1405,7 +1402,7 @@ impl AIProvider {
 		// type mirrors the input format.
 		let translated = llm_request.is_some_and(|l| {
 			if let (AIProvider::Bedrock(p), Some(endpoint)) = (self, bedrock_endpoint)
-				&& !p.native_chat(endpoint)
+				&& !bedrock_native_chat(p, endpoint, Some(l))
 			{
 				return true;
 			}
@@ -1529,6 +1526,7 @@ impl AIProvider {
 							l.streaming,
 							l.request_model.as_str(),
 							endpoint,
+							bedrock_native_chat(provider, endpoint, Some(l)),
 						);
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
@@ -1751,7 +1749,9 @@ impl AIProvider {
 				}
 				// Native chat serves Messages via the Anthropic-native API; Mantle also serves count-tokens.
 				let anthropic_native = match (route_type, bedrock_endpoint) {
-					(RouteType::Messages, Some(endpoint)) => provider.native_chat(endpoint),
+					(RouteType::Messages, Some(endpoint)) => {
+						bedrock_native_chat(provider, endpoint, llm_request)
+					},
 					(RouteType::AnthropicTokenCount, endpoint) => {
 						endpoint == Some(bedrock::BedrockEndpoint::Mantle)
 					},
@@ -1766,7 +1766,7 @@ impl AIProvider {
 					route_type,
 					RouteType::Messages | RouteType::Responses | RouteType::Completions
 				) && bedrock_endpoint == Some(bedrock::BedrockEndpoint::Runtime)
-					&& provider.native_chat(bedrock::BedrockEndpoint::Runtime)
+					&& bedrock_native_chat(provider, bedrock::BedrockEndpoint::Runtime, llm_request)
 					&& let (Some(identifier), Some(version)) =
 						(&provider.guardrail_identifier, &provider.guardrail_version)
 				{
@@ -1838,7 +1838,10 @@ impl AIProvider {
 		}
 		if matches!(
 			self,
-			AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_)
+			AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Azure(_)
+				| AIProvider::Bedrock(_)
 		) {
 			req.normalize_openai_token_limit();
 		}
@@ -3662,6 +3665,17 @@ fn google_invalid_argument(message: &str) -> ::http::Response<Body> {
 fn strip_alt_query(req: &mut Request) {
 	// Removing a parameter from an already-valid URI cannot fail.
 	let _ = http::modify_query_parameters(req.uri_mut(), std::iter::empty::<(&str, &str)>(), ["alt"]);
+}
+
+/// Whether a Bedrock chat request uses the native APIs on `endpoint`, rather than Converse. Runtime
+/// falls back to Converse for translations the native APIs lack.
+fn bedrock_native_chat(
+	provider: &bedrock::Provider,
+	endpoint: bedrock::BedrockEndpoint,
+	llm_request: Option<&LLMRequest>,
+) -> bool {
+	provider.native_chat(endpoint)
+		&& !llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::Bedrock { .. })))
 }
 
 fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::BedrockToolNameMap> {

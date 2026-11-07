@@ -20,13 +20,6 @@ static RT: Lazy<Runtime> = Lazy::new(|| {
 		.expect("fuzz runtime should build")
 });
 
-fn trim_line_end(mut data: &[u8]) -> &[u8] {
-	while matches!(data.last(), Some(b'\r' | b'\n')) {
-		data = &data[..data.len() - 1];
-	}
-	data
-}
-
 fuzz_target!(|data: &[u8]| {
 	RT.block_on(async {
 		// Exercise arbitrary, possibly truncated wire bytes.
@@ -37,7 +30,7 @@ fuzz_target!(|data: &[u8]| {
 
 		// Keep mutations inside a well-formed v1 envelope so the parser reaches
 		// address and command handling instead of mostly rejecting the prefix.
-		let line = trim_line_end(data);
+		let line = data.split(|b| matches!(b, b'\r' | b'\n')).next().unwrap();
 		if line.len() <= V1_MAX_BODY_LEN {
 			let mut v1 = Vec::with_capacity(V1_PREFIX.len() + line.len() + 2);
 			v1.extend_from_slice(V1_PREFIX);

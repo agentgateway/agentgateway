@@ -21,18 +21,17 @@ import (
 
 // Status message constants
 const (
-	GatewayAcceptedMessage           = "Successfully accepted Gateway"
-	GatewayProgrammedMessage         = "Successfully programmed Gateway"
-	GatewayReasonDeploymentFailed    = gwv1.GatewayConditionReason("DeploymentFailed")
-	ListenerSetAcceptedMessage       = "Successfully accepted ListenerSet"
-	ListenerSetProgrammedMessage     = "Successfully programmed ListenerSet"
-	ListenerAcceptedMessage          = "Successfully accepted Listener"
-	ListenerNoConflictsMessage       = "Successfully verified that Listener has no conflicts"
-	ValidRefsMessage                 = "Successfully resolved all references"
-	ListenerProgrammedMessage        = "Successfully programmed Listener"
-	RouteAcceptedMessage             = "Successfully accepted Route"
-	AgentgatewayModelAcceptedMessage = "Successfully accepted AgentgatewayModel"
-	GatewayClassAcceptedMessage      = "GatewayClass accepted by agentgateway controller"
+	GatewayAcceptedMessage        = "Successfully accepted Gateway"
+	GatewayProgrammedMessage      = "Successfully programmed Gateway"
+	GatewayReasonDeploymentFailed = gwv1.GatewayConditionReason("DeploymentFailed")
+	ListenerSetAcceptedMessage    = "Successfully accepted ListenerSet"
+	ListenerSetProgrammedMessage  = "Successfully programmed ListenerSet"
+	ListenerAcceptedMessage       = "Successfully accepted Listener"
+	ListenerNoConflictsMessage    = "Successfully verified that Listener has no conflicts"
+	ValidRefsMessage              = "Successfully resolved all references"
+	ListenerProgrammedMessage     = "Successfully programmed Listener"
+	RouteAcceptedMessage          = "Successfully accepted Route"
+	GatewayClassAcceptedMessage   = "GatewayClass accepted by agentgateway controller"
 )
 
 // TODO: refactor this struct + methods to better reflect the usage now in proxy_syncer
@@ -186,9 +185,14 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 		}
 		meta.SetStatusCondition(&finalConditions, gwCondition)
 	}
-	// If there are conditions on the Gateway that are not owned by our reporter, include
-	// them in the final list of conditions to preseve conditions we do not own
+	// Preserve existing conditions that were set externally.
 	for _, condition := range gw.Status.Conditions {
+		if condition.Type == string(gwv1.GatewayConditionInsecureFrontendValidationMode) {
+			// We own this condition and recompute it above. Gateway API requires its
+			// removal when insecure fallback is disabled, so only the current report
+			// may contribute it to finalConditions.
+			continue
+		}
 		if meta.FindStatusCondition(finalConditions, condition.Type) == nil {
 			finalConditions = append(finalConditions, condition)
 		}

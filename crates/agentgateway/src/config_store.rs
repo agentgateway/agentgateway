@@ -11,7 +11,6 @@ use tokio::sync::watch;
 use tracing::{error, info, warn};
 
 use crate::database::DatabasePool;
-use crate::telemetry::log_store;
 
 #[derive(Clone, Debug)]
 pub struct ConfigResourceStore {
@@ -34,11 +33,16 @@ pub struct ConfigResource {
 	pub result: Option<WriteResult>,
 }
 
+/// What a write did to a stored resource.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum WriteResult {
+	/// The resource did not exist and was created.
 	Created,
+	/// The resource existed and was changed; its `revision` was incremented.
 	Updated,
+	/// The resource existed with the same value; nothing was written and its `revision` is
+	/// unchanged.
 	Unchanged,
 }
 
@@ -197,16 +201,25 @@ impl FromStr for ConfigResourceKind {
 	}
 }
 
+/// Resources of one kind to create or replace.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigResourceUpsertRequest {
+	/// The resources to write. Policy kinds cannot be written with this request; use
+	/// `PUT /api/config/resources/{kind}/{id}` with the policy id. For other kinds, the server assigns
+	/// each id: `default` for `modelCatalog`, `llm.settings`, and `mcp.settings`, a generated id for
+	/// `llm.apiKey`, and otherwise the value's `name` (`id` or `name` for `llm.model`).
 	#[serde(default)]
 	pub resources: Vec<ConfigResourceUpsert>,
 }
 
+/// A resource to write.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigResourceUpsert {
+	/// The resource, in the configuration file format of its kind. The value is an object for
+	/// non-policy kinds. For policy kinds, it has the policy's configuration shape, which can be an
+	/// array or null for some IDs.
 	pub value: Value,
 }
 
@@ -215,7 +228,7 @@ pub fn generate_session_key() -> anyhow::Result<String> {
 	Ok(hex::encode(crate::crypto::rand::bytes(32)?))
 }
 
-pub async fn setup(cfg: &log_store::Config) -> anyhow::Result<ConfigResourceStore> {
+pub async fn setup(cfg: &crate::database::DatabaseConfig) -> anyhow::Result<ConfigResourceStore> {
 	ConfigResourceStore::connect(&cfg.url, cfg.max_connections).await
 }
 

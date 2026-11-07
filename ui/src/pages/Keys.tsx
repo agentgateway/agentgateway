@@ -213,7 +213,7 @@ export function KeysPage() {
 				}
 			/>
 
-			{saveError ? (
+			{saveError && !activeEditing && !advancedOpen ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
@@ -457,7 +457,11 @@ function AdvancedSettingsDrawer(props: {
 	onSave: (policy: Partial<LlmApiKeyPolicy>) => void;
 }) {
 	return (
-		<Drawer title={props.policy ? 'Settings' : 'Enable API key auth'} onClose={props.onClose}>
+		<Drawer
+			title={props.policy ? 'Settings' : 'Enable API key auth'}
+			onClose={props.onClose}
+			error={props.saveError}
+		>
 			<PolicyControls
 				policy={props.policy}
 				databaseBacked={props.databaseBacked}
@@ -469,11 +473,6 @@ function AdvancedSettingsDrawer(props: {
 				onDisable={props.onDisable}
 				onSave={props.onSave}
 			/>
-			{props.saveError ? (
-				<StatusBanner state="bad" title="Save failed">
-					{props.saveError}
-				</StatusBanner>
-			) : null}
 		</Drawer>
 	);
 }
@@ -770,6 +769,7 @@ function KeyEditor(props: {
 		<Drawer
 			title={props.previousKey ? 'Edit virtual key' : 'Create virtual key'}
 			onClose={props.onCancel}
+			error={props.saveError}
 			dirty={draft !== initialDraft}
 			saving={props.saving}
 			raw={{
@@ -1023,11 +1023,6 @@ function KeyEditor(props: {
 					onChange={value => update({ metadataValues: value })}
 				/>
 			</CollapsiblePolicySection>
-			{props.saveError ? (
-				<StatusBanner state="bad" title="Save failed">
-					{props.saveError}
-				</StatusBanner>
-			) : null}
 		</Drawer>
 	);
 }

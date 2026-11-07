@@ -54,6 +54,15 @@ var modelsDevProviderIDs = map[string]string{
 	"nebius":           "nebius",
 }
 
+// modelsDevTypeEndpoints maps a models.dev model type to the client endpoints serving it.
+var modelsDevTypeEndpoints = map[string][]string{
+	"embedding":     {"/embeddings"},
+	"reranking":     {"/rerank"},
+	"image":         {"/images/generations", "/images/edits"},
+	"speech":        {"/audio/speech"},
+	"transcription": {"/audio/transcriptions"},
+}
+
 type modelsDevProvider struct {
 	ID     string                    `json:"id"`
 	Name   string                    `json:"name"`
@@ -64,6 +73,7 @@ type modelsDevModel struct {
 	ID               string                     `json:"id"`
 	Name             string                     `json:"name"`
 	Family           string                     `json:"family"`
+	Type             string                     `json:"type"`
 	Status           string                     `json:"status"`
 	ReleaseDate      string                     `json:"release_date"`
 	Cost             *modelsDevCost             `json:"cost"`
@@ -241,6 +251,13 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(for
 			Temperature:      m.Temperature,
 		},
 		Modalities: m.Modalities,
+	}
+	if m.Type != "" && m.Type != "chat" {
+		// Types without a served endpoint, such as video, list none.
+		entry.Endpoints = modelsDevTypeEndpoints[m.Type]
+		if entry.Endpoints == nil {
+			entry.Endpoints = []string{}
+		}
 	}
 	for _, option := range m.ReasoningOptions {
 		switch option.Type {

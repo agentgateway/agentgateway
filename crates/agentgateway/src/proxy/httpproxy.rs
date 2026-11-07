@@ -229,19 +229,7 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 		if database.llm == Some(frontend::DatabaseLlmMode::Full) {
 			log.cel.ctx().register_log_llm_payload();
 		}
-		if !database.add.is_empty() {
-			log.cel.database_fields.add = Arc::new(
-				log
-					.cel
-					.database_fields
-					.add
-					.iter()
-					.filter(|(key, _)| !database.add.contains_key(key))
-					.chain(database.add.iter())
-					.map(|(key, value)| (key.clone(), value.clone()))
-					.collect(),
-			);
-		}
+		log.cel.database_fields.add = database.add.clone();
 	}
 }
 
@@ -315,6 +303,24 @@ async fn apply_request_policies(
 		.substrate_ingress
 		.apply_without_response("substrate ingress", c, l, req, rp.headers())
 		.await?;
+
+	// Decompression runs after authentication and authorization so denied requests never pay for
+	// it; those earlier policies observe the encoded body. Every later body-aware policy sees the
+	// decoded body. Installing the decoder replaced the body content, dropping any inspection cached
+	// from the encoded bytes, so re-buffer for CEL here.
+	let compression = pol
+		.compression
+		.apply_selected("compression", c, l, req, rp.headers())
+		.await?;
+	if compression
+		.as_ref()
+		.is_some_and(|c| c.request.as_ref().is_some_and(|r| r.decompress.is_some()))
+	{
+		l.cel.ctx().maybe_buffer_request_body(req).await;
+	}
+	// Capture Accept-Encoding before the request header modifier may strip it for the upstream.
+	rp.response_compressor =
+		compression.and_then(|c| Some(c.response.as_ref()?.compress.as_ref()?.for_request(req)));
 
 	let mut route_retry = pol.retry.select("retry", req);
 	// Evaluate the retry precondition (if any) against the request before it is consumed.
@@ -815,6 +821,10 @@ impl HTTPProxy {
 		// Pass the log into the body so it finishes once the stream is entirely complete.
 		// We will also record trailer info there.
 		log.with(|l| set_final_response_fields(l, &reason, &mut resp));
+		// Compress after the log snapshot so logs see the plaintext body.
+		if let Some(compressor) = response_policies.response_compressor.take() {
+			compressor.apply(&mut resp);
+		}
 
 		if let Some(connect) = resp.extensions_mut().remove::<ConnectTunnel>() {
 			handle_connect_tunnel(connect, resp, log)
@@ -3167,6 +3177,11 @@ async fn make_backend_call(
 	}
 	if let Backend::Internal(_, internal) = backend {
 		apply_internal_path(&mut req, internal).map_err(ProxyError::Processing)?;
+		if let InternalBackend::Ui { base_path } = internal {
+			req
+				.extensions_mut()
+				.insert(crate::ui::UiBasePath(base_path.clone()));
+		}
 		let admin = inputs.admin.clone().ok_or_else(|| {
 			ProxyError::ProcessingString("internal backend requires admin service".to_string())
 		})?;
@@ -5015,6 +5030,8 @@ struct ResponsePolicies {
 	rate_limit_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
 	gateway_ext_proc: Option<ExtProcRequest>,
+	// Applied after every response policy, see `ResponseCompressor::apply`.
+	response_compressor: Option<http::compression::ResponseCompressor>,
 	// Populated by the standard request-policy flow after conditional rate-limit policies are
 	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
 	llm_request_policies: LLMRequestPolicies,

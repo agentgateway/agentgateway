@@ -1299,18 +1299,53 @@ fn convert_backend_ai_policy(
 
 fn backend_auth_credentials_from_proto(
 	credentials: Vec<proto::agent::BackendAuthCredential>,
+	diagnostics: &mut Diagnostics,
 ) -> Result<Vec<crate::http::auth::BackendAuthCredential>, ProtoError> {
+	use proto::agent::backend_auth_credential::Source;
 	credentials
 		.into_iter()
 		.map(|c| {
 			let location = optional_authorization_location(c.location.as_ref())?
 				.ok_or(ProtoError::MissingRequiredField)?;
-			Ok(crate::http::auth::BackendAuthCredential {
-				location,
-				key: secrecy::SecretString::from(c.value).into(),
-			})
+			let source = match c.source.unwrap_or(Source::Value(String::new())) {
+				Source::Value(value) => {
+					auth::BackendAuthCredentialSource::Key(secrecy::SecretString::from(value).into())
+				},
+				Source::Gcp(g) => {
+					auth::BackendAuthCredentialSource::Gcp(gcp_auth_from_proto(g, diagnostics))
+				},
+			};
+			Ok(crate::http::auth::BackendAuthCredential { location, source })
 		})
 		.collect()
+}
+
+fn gcp_auth_from_proto(g: proto::agent::Gcp, diagnostics: &mut Diagnostics) -> GcpAuth {
+	use proto::agent::gcp;
+	let credential =
+		g.credential.map(
+			|credential| match auth::gcp::GcpCredential::new(credential.into()) {
+				Ok(credential) => credential,
+				Err(error) => {
+					let reason = auth::gcp::sanitize_credential_error(&error);
+					diagnostics.add_warning(format!(
+						"GCP credential is invalid; requests using this policy will be rejected: {reason}"
+					));
+					auth::gcp::GcpCredential::new_invalid(reason)
+				},
+			},
+		);
+	match g.token_type {
+		None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
+			r#type: Some(auth::gcp::AccessToken),
+			credential,
+		},
+		Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
+			r#type: auth::gcp::IdToken,
+			audience,
+			credential,
+		},
+	}
 }
 
 fn jwt_sign_from_proto(
@@ -1353,8 +1388,8 @@ fn backend_auth_kind_from_proto(
 	s: proto::agent::BackendAuthPolicy,
 	diagnostics: &mut Diagnostics,
 ) -> Result<Option<BackendAuthKind>, ProtoError> {
+	use proto::agent::azure_explicit_config;
 	use proto::agent::azure_managed_identity_credential::user_assigned_identity;
-	use proto::agent::{azure_explicit_config, gcp};
 	Ok(Some(match s.kind {
 		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuthKind::Passthrough {
 			location: optional_authorization_location(p.authorization_location.as_ref())?,
@@ -1364,30 +1399,7 @@ fn backend_auth_kind_from_proto(
 			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
-			let credential =
-				g.credential.map(
-					|credential| match auth::gcp::GcpCredential::new(credential.into()) {
-						Ok(credential) => credential,
-						Err(error) => {
-							let reason = auth::gcp::sanitize_credential_error(&error);
-							diagnostics.add_warning(format!(
-								"GCP credential is invalid; requests using this policy will be rejected: {reason}"
-							));
-							auth::gcp::GcpCredential::new_invalid(reason)
-						},
-					},
-				);
-			BackendAuthKind::Gcp(match g.token_type {
-				None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
-					r#type: Some(auth::gcp::AccessToken),
-					credential,
-				},
-				Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
-					r#type: auth::gcp::IdToken,
-					audience,
-					credential,
-				},
-			})
+			BackendAuthKind::Gcp(gcp_auth_from_proto(g, diagnostics))
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Aws(a)) => {
 			let service_name = if a.service_name.is_empty() {
@@ -1848,15 +1860,25 @@ impl ModelRoute {
 				};
 				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
 					discovery: concrete.discovery_provider.as_ref().and_then(|provider| {
+						// Invalid providers are reported by the backend carrying the same config.
+						let provider_config = concrete
+							.discovery_provider_config
+							.as_ref()
+							.and_then(|p| ai_provider_from_proto(p, 0).ok())
+							.map(|(provider, _)| provider);
 						llm::discovery::ModelDiscovery::new(
 							strng::new(provider),
-							None,
+							provider_config.as_ref().and_then(|p| p.override_model()),
 							llm_policy
 								.transformations
 								.as_ref()
 								.and_then(|p| p.get("model"))
 								.map(AsRef::as_ref),
 						)
+						.map(|d| llm::discovery::ModelDiscovery {
+							provider_config,
+							..d
+						})
 					}),
 					id: None,
 					name: model_match.model.clone(),
@@ -2009,6 +2031,7 @@ impl ModelRoute {
 								target: resolve_reference(failover.backend.as_ref()).into(),
 								inline_policies: vec![],
 							},
+							targets: vec![],
 						}
 					},
 					None => {
@@ -2092,11 +2115,123 @@ fn openai_moderation_config_from_proto(
 	Ok(llm::openai::ModerationConfigParam { mode })
 }
 
+/// Converts an AI backend provider, returning the preset it was built from, if any.
+fn ai_provider_from_proto(
+	provider_config: &proto::agent::ai_backend::Provider,
+	provider_idx: usize,
+) -> Result<(AIProvider, Option<llm::custom::ProviderPreset>), ProtoError> {
+	use proto::agent::ai_backend::provider;
+	let mut preset = None;
+	let mut provider = match &provider_config.provider {
+		Some(provider::Provider::Openai(openai)) => {
+			let moderation = openai
+				.moderation
+				.as_ref()
+				.map(openai_moderation_from_proto)
+				.transpose()?;
+			AIProvider::OpenAI(llm::openai::Provider {
+				model_override: openai.model.as_deref().map(strng::new),
+				moderation,
+			})
+		},
+		Some(provider::Provider::Copilot(copilot)) => AIProvider::Copilot(llm::copilot::Provider {
+			model_override: copilot.model.as_deref().map(strng::new),
+		}),
+		Some(provider::Provider::Gemini(gemini)) => AIProvider::Gemini(llm::gemini::Provider {
+			model_override: gemini.model.as_deref().map(strng::new),
+		}),
+		Some(provider::Provider::Vertex(vertex)) => AIProvider::Vertex(llm::vertex::Provider {
+			model_override: vertex.model.as_deref().map(strng::new),
+			region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
+			project_id: strng::new(&vertex.project_id),
+		}),
+		Some(provider::Provider::Anthropic(anthropic)) => {
+			AIProvider::Anthropic(llm::anthropic::Provider {
+				model_override: anthropic.model.as_deref().map(strng::new),
+			})
+		},
+		Some(provider::Provider::Bedrock(bedrock)) => AIProvider::bedrock(llm::bedrock::Provider {
+			model_override: bedrock.model.as_deref().map(strng::new),
+			region: strng::new(&bedrock.region),
+			guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
+			guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+			endpoint_preference: match bedrock.endpoint_preference() {
+				proto::agent::ai_backend::BedrockEndpointPreference::MantlePreferred => {
+					llm::bedrock::BedrockEndpointPreference::MantlePreferred
+				},
+				proto::agent::ai_backend::BedrockEndpointPreference::MantleOnly => {
+					llm::bedrock::BedrockEndpointPreference::MantleOnly
+				},
+				proto::agent::ai_backend::BedrockEndpointPreference::RuntimeOnly => {
+					llm::bedrock::BedrockEndpointPreference::RuntimeOnly
+				},
+				_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
+			},
+		}),
+		Some(provider::Provider::Azure(azure)) => {
+			let resource_type = match azure.resource_type() {
+				proto::agent::ai_backend::AzureResourceType::Foundry => {
+					llm::azure::AzureResourceType::Foundry
+				},
+				_ => llm::azure::AzureResourceType::OpenAI,
+			};
+			AIProvider::azure(llm::azure::Provider {
+				model_override: azure.model.as_deref().map(strng::new),
+				resource_name: strng::new(&azure.resource_name),
+				resource_type,
+				api_version: azure.api_version.as_deref().map(strng::new),
+				project_name: azure.project_name.as_deref().map(strng::new),
+			})
+		},
+		Some(provider::Provider::Azureopenai(_)) => {
+			return Err(ProtoError::Generic(format!(
+				"AI backend provider at index {provider_idx} uses deprecated azureOpenAI format; use azure instead"
+			)));
+		},
+		Some(provider::Provider::Custom(custom)) => {
+			if custom.formats.is_empty() {
+				return Err(ProtoError::Generic(format!(
+					"AI backend custom provider at index {provider_idx} must specify at least one format"
+				)));
+			}
+			let formats = custom
+				.formats
+				.iter()
+				.map(|format| convert_provider_format_config(format, provider_idx))
+				.collect::<Result<Vec<_>, _>>()?;
+			AIProvider::Custom(llm::custom::Provider {
+				model_override: custom.model.as_deref().map(strng::new),
+				provider_override: custom.provider_override.as_deref().map(strng::new),
+				formats,
+			})
+		},
+		Some(provider::Provider::ProviderPreset(provider_preset)) => {
+			let provider_preset = proto::agent::ai_backend::ProviderPreset::try_from(*provider_preset)
+				.map_err(|_| {
+					ProtoError::Generic(format!(
+						"AI backend provider at index {provider_idx} has an unknown provider preset {provider_preset}"
+					))
+				})?;
+			let provider_preset = provider_preset_from_proto(provider_preset, provider_idx)?;
+			preset = Some(provider_preset);
+			AIProvider::Custom(provider_preset.provider(None))
+		},
+		None => {
+			return Err(ProtoError::Generic(format!(
+				"AI backend provider at index {provider_idx} is required"
+			)));
+		},
+	};
+	if let Some(model_override) = provider_config.model_override.as_deref() {
+		override_ai_provider_model(&mut provider, model_override);
+	}
+	Ok((provider, preset))
+}
+
 pub(crate) fn backend_with_policies_from_proto(
 	s: &proto::agent::Backend,
 	diagnostics: &mut Diagnostics,
 ) -> Result<BackendWithPolicies, ProtoError> {
-	use proto::agent::ai_backend::provider;
 	use proto::agent::backend;
 	let pols = s
 		.inline_policies
@@ -2152,112 +2287,7 @@ pub(crate) fn backend_with_policies_from_proto(
 						.iter()
 						.map(|policy| backend_policy_from_proto(policy, diagnostics))
 						.collect::<Result<Vec<_>, _>>()?;
-					let mut preset = None;
-					let mut provider = match &provider_config.provider {
-						Some(provider::Provider::Openai(openai)) => {
-							let moderation = openai
-								.moderation
-								.as_ref()
-								.map(openai_moderation_from_proto)
-								.transpose()?;
-							AIProvider::OpenAI(llm::openai::Provider {
-								model_override: openai.model.as_deref().map(strng::new),
-								moderation,
-							})
-						},
-						Some(provider::Provider::Copilot(copilot)) => {
-							AIProvider::Copilot(llm::copilot::Provider {
-								model_override: copilot.model.as_deref().map(strng::new),
-							})
-						},
-						Some(provider::Provider::Gemini(gemini)) => AIProvider::Gemini(llm::gemini::Provider {
-							model_override: gemini.model.as_deref().map(strng::new),
-						}),
-						Some(provider::Provider::Vertex(vertex)) => AIProvider::Vertex(llm::vertex::Provider {
-							model_override: vertex.model.as_deref().map(strng::new),
-							region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
-							project_id: strng::new(&vertex.project_id),
-						}),
-						Some(provider::Provider::Anthropic(anthropic)) => {
-							AIProvider::Anthropic(llm::anthropic::Provider {
-								model_override: anthropic.model.as_deref().map(strng::new),
-							})
-						},
-						Some(provider::Provider::Bedrock(bedrock)) => {
-							AIProvider::bedrock(llm::bedrock::Provider {
-								model_override: bedrock.model.as_deref().map(strng::new),
-								region: strng::new(&bedrock.region),
-								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
-								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								endpoint_preference: match bedrock.endpoint_preference() {
-									proto::agent::ai_backend::BedrockEndpointPreference::MantlePreferred => {
-										llm::bedrock::BedrockEndpointPreference::MantlePreferred
-									},
-									proto::agent::ai_backend::BedrockEndpointPreference::MantleOnly => {
-										llm::bedrock::BedrockEndpointPreference::MantleOnly
-									},
-									proto::agent::ai_backend::BedrockEndpointPreference::RuntimeOnly => {
-										llm::bedrock::BedrockEndpointPreference::RuntimeOnly
-									},
-									_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
-								},
-							})
-						},
-						Some(provider::Provider::Azure(azure)) => {
-							let resource_type = match azure.resource_type() {
-								proto::agent::ai_backend::AzureResourceType::Foundry => {
-									llm::azure::AzureResourceType::Foundry
-								},
-								_ => llm::azure::AzureResourceType::OpenAI,
-							};
-							AIProvider::azure(llm::azure::Provider {
-								model_override: azure.model.as_deref().map(strng::new),
-								resource_name: strng::new(&azure.resource_name),
-								resource_type,
-								api_version: azure.api_version.as_deref().map(strng::new),
-								project_name: azure.project_name.as_deref().map(strng::new),
-							})
-						},
-						Some(provider::Provider::Azureopenai(_)) => {
-							return Err(ProtoError::Generic(format!(
-								"AI backend provider at index {provider_idx} uses deprecated azureOpenAI format; use azure instead"
-							)));
-						},
-						Some(provider::Provider::Custom(custom)) => {
-							if custom.formats.is_empty() {
-								return Err(ProtoError::Generic(format!(
-									"AI backend custom provider at index {provider_idx} must specify at least one format"
-								)));
-							}
-							let formats = custom
-								.formats
-								.iter()
-								.map(|format| convert_provider_format_config(format, provider_idx))
-								.collect::<Result<Vec<_>, _>>()?;
-							AIProvider::Custom(llm::custom::Provider {
-								model_override: custom.model.as_deref().map(strng::new),
-								provider_override: custom.provider_override.as_deref().map(strng::new),
-								formats,
-							})
-						},
-						Some(provider::Provider::ProviderPreset(provider_preset)) => {
-							let provider_preset = proto::agent::ai_backend::ProviderPreset::try_from(*provider_preset)
-								.map_err(|_| ProtoError::Generic(format!(
-									"AI backend provider at index {provider_idx} has an unknown provider preset {provider_preset}"
-								)))?;
-							let provider_preset = provider_preset_from_proto(provider_preset, provider_idx)?;
-							preset = Some(provider_preset);
-							AIProvider::Custom(provider_preset.provider(None))
-						},
-						None => {
-							return Err(ProtoError::Generic(format!(
-								"AI backend provider at index {provider_idx} is required"
-							)));
-						},
-					};
-					if let Some(model_override) = provider_config.model_override.as_deref() {
-						override_ai_provider_model(&mut provider, model_override);
-					}
+					let (provider, preset) = ai_provider_from_proto(provider_config, provider_idx)?;
 
 					let provider_name = if provider_config.name.is_empty() {
 						strng::literal!("default")
@@ -2658,7 +2688,7 @@ fn backend_policy_from_proto(
 			BackendTrafficPolicy::BackendTLS(tls)
 		},
 		Some(bps::Kind::Auth(auth)) => {
-			let credentials = backend_auth_credentials_from_proto(auth.credentials.clone())?;
+			let credentials = backend_auth_credentials_from_proto(auth.credentials.clone(), diagnostics)?;
 			let auth_kind = backend_auth_kind_from_proto(auth.clone(), diagnostics)?;
 			if auth_kind.is_none() && credentials.is_empty() {
 				return Err(ProtoError::MissingRequiredField);
@@ -3263,6 +3293,66 @@ fn traffic_policy_from_proto(
 			TrafficPolicy::Buffer(RequestPolicy::single(http::buffer::Buffer {
 				request: to_body(buffer.request),
 				response: to_body(buffer.response),
+			}))
+		},
+		Some(tps::Kind::Compression(compression)) => {
+			use proto::agent::traffic_policy_spec::compression::Algorithm;
+
+			use crate::http::compression::CompressionAlgorithm;
+
+			let algorithms = |values: &[i32]| -> Result<Vec<_>, ProtoError> {
+				if values.is_empty() {
+					return Err(ProtoError::Generic(
+						"compression algorithms must not be empty".to_string(),
+					));
+				}
+				values
+					.iter()
+					.map(|v| {
+						Ok(match Algorithm::try_from(*v)? {
+							Algorithm::Gzip => CompressionAlgorithm::Gzip,
+							Algorithm::Brotli => CompressionAlgorithm::Brotli,
+							Algorithm::Deflate => CompressionAlgorithm::Deflate,
+							Algorithm::Zstd => CompressionAlgorithm::Zstd,
+						})
+					})
+					.collect()
+			};
+			TrafficPolicy::Compression(RequestPolicy::single(http::compression::Compression {
+				response: compression
+					.response
+					.as_ref()
+					.map(|r| -> Result<_, ProtoError> {
+						Ok(http::compression::CompressionResponse {
+							compress: r
+								.compress
+								.as_ref()
+								.map(|c| -> Result<_, ProtoError> {
+									Ok(http::compression::ResponseCompression {
+										algorithms: algorithms(&c.algorithms)?,
+									})
+								})
+								.transpose()?,
+						})
+					})
+					.transpose()?,
+				request: compression
+					.request
+					.as_ref()
+					.map(|r| -> Result<_, ProtoError> {
+						Ok(http::compression::CompressionRequest {
+							decompress: r
+								.decompress
+								.as_ref()
+								.map(|d| -> Result<_, ProtoError> {
+									Ok(http::compression::RequestDecompression {
+										algorithms: algorithms(&d.algorithms)?,
+									})
+								})
+								.transpose()?,
+						})
+					})
+					.transpose()?,
 			}))
 		},
 		None => return Err(ProtoError::MissingRequiredField),
@@ -4132,6 +4222,7 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
 		TrafficPolicy::CORS(_) => build!(CORS),
 		TrafficPolicy::Buffer(_) => build!(Buffer),
+		TrafficPolicy::Compression(_) => build!(Compression),
 		other => Err(ProtoError::Generic(format!(
 			"conditional traffic policy kind {} is not supported",
 			traffic_policy_kind_name(other)
@@ -4167,6 +4258,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::RequestMirror(_) => "requestMirror",
 		TrafficPolicy::DirectResponse(_) => "directResponse",
 		TrafficPolicy::Buffer(_) => "buffer",
+		TrafficPolicy::Compression(_) => "compression",
 		TrafficPolicy::CORS(_) => "cors",
 	}
 }
@@ -5928,6 +6020,12 @@ mod tests {
 			unreachable!();
 		};
 		concrete.discovery_provider = Some("openai".to_string());
+		concrete.discovery_provider_config = Some(proto::agent::ai_backend::Provider {
+			provider: Some(proto::agent::ai_backend::provider::Provider::Openai(
+				Default::default(),
+			)),
+			..Default::default()
+		});
 		proto_route.ai_policy.as_mut().unwrap().transformations = [(
 			"model".to_string(),
 			"llmRequest.model.stripPrefix(\"openai/\")".to_string(),
@@ -5939,6 +6037,10 @@ mod tests {
 		};
 		let discovery = model.discovery.unwrap();
 		assert_eq!(discovery.provider, "openai");
+		assert!(matches!(
+			discovery.provider_config,
+			Some(AIProvider::OpenAI(_))
+		));
 		assert_eq!(
 			discovery.transformation.apply("gpt-5-mini").unwrap(),
 			"openai/gpt-5-mini"
@@ -6149,7 +6251,7 @@ mod tests {
 		let ModelRouteKind::Virtual(model) = route.kind else {
 			panic!("expected virtual model route");
 		};
-		let llm::model_router::VirtualModelRouting::Failover { backend } = model.routing else {
+		let llm::model_router::VirtualModelRouting::Failover { backend, .. } = model.routing else {
 			panic!("expected failover routing");
 		};
 		assert_eq!(backend.weight, 1);
@@ -6892,5 +6994,77 @@ mod tests {
 			"error should name the group, got: {err}"
 		);
 		assert_eq!(diagnostics.into_warnings().len(), 1);
+	}
+
+	#[test]
+	fn compression_from_proto() {
+		use proto::agent::traffic_policy_spec::Compression as ProtoCompression;
+		use proto::agent::traffic_policy_spec::compression::{
+			Algorithm, Request, RequestDecompression, Response, ResponseCompression,
+		};
+
+		use crate::http::compression::CompressionAlgorithm;
+
+		let spec = |response: Vec<i32>, request: Vec<i32>| proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::Compression(
+				ProtoCompression {
+					response: Some(Response {
+						compress: Some(ResponseCompression {
+							algorithms: response,
+						}),
+					}),
+					request: Some(Request {
+						decompress: Some(RequestDecompression {
+							algorithms: request,
+						}),
+					}),
+				},
+			)),
+		};
+
+		let policy = traffic_policy_from_proto(
+			&spec(
+				vec![Algorithm::Zstd as i32, Algorithm::Brotli as i32],
+				vec![Algorithm::Gzip as i32],
+			),
+			&mut Diagnostics::default(),
+		)
+		.unwrap();
+		let TrafficPolicy::Compression(policy) = policy else {
+			panic!("expected compression policy");
+		};
+		let compression = &policy.iter().next().unwrap().pol;
+		assert_eq!(
+			compression
+				.response
+				.as_ref()
+				.and_then(|r| r.compress.as_ref())
+				.unwrap()
+				.algorithms,
+			vec![CompressionAlgorithm::Zstd, CompressionAlgorithm::Brotli]
+		);
+		assert_eq!(
+			compression
+				.request
+				.as_ref()
+				.and_then(|r| r.decompress.as_ref())
+				.unwrap()
+				.algorithms,
+			vec![CompressionAlgorithm::Gzip]
+		);
+
+		let gzip = || vec![Algorithm::Gzip as i32];
+		for (response, request) in [
+			(vec![99], gzip()),
+			(gzip(), vec![Algorithm::Gzip as i32, 99]),
+			(vec![], gzip()),
+			(gzip(), vec![]),
+		] {
+			assert!(
+				traffic_policy_from_proto(&spec(response, request), &mut Diagnostics::default()).is_err(),
+				"unknown or empty algorithms must be rejected"
+			);
+		}
 	}
 }

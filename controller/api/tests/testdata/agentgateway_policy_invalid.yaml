@@ -1679,6 +1679,19 @@ spec:
         url: https://oauth.example.com/token
         path: /token
 ---
+_err: 'additionalParams may not override a reserved OAuth parameter'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-reserved-additional-param
+spec:
+  backend:
+    auth:
+      oauthTokenExchange:
+        url: https://oauth.example.com/token
+        additionalParams:
+          Scope: '"read"'
+---
 _err: 'url path is only valid with protocol HTTP'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -1863,3 +1876,40 @@ spec:
         name: otel-collector
         port: 4317
       path: /v1/traces
+---
+_err: 'exactly one of the fields in [secretRef gcp] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-auth-credential-secretref-and-gcp
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: test
+  backend:
+    auth:
+      credentials:
+      - location:
+          header:
+            name: Proxy-Authorization
+        secretRef:
+          name: credential
+        gcp: {}
+---
+_err: 'exactly one of the fields in [secretRef gcp] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-auth-credential-no-source
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: test
+  backend:
+    auth:
+      credentials:
+      - location:
+          header:
+            name: Proxy-Authorization

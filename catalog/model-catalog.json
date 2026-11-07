@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-30T21:58:11Z"
+    "generatedAt": "2026-11-06T08:24:40Z"
   },
   "providers": {
     "anthropic": {
@@ -6792,6 +6792,15 @@
                 "cacheRead": "2.2",
                 "cacheWrite": "27.5"
               }
+            },
+            {
+              "serviceTier": "ultrafast",
+              "rates": {
+                "input": "66",
+                "output": "330",
+                "cacheRead": "6.6",
+                "cacheWrite": "82.5"
+              }
             }
           ],
           "tags": [
@@ -6960,6 +6969,15 @@
                 "output": "16.5",
                 "cacheRead": "0.22",
                 "cacheWrite": "5.5"
+              }
+            },
+            {
+              "serviceTier": "ultrafast",
+              "rates": {
+                "input": "13.2",
+                "output": "66",
+                "cacheRead": "0.66",
+                "cacheWrite": "16.5"
               }
             }
           ],
@@ -10538,6 +10556,9 @@
         "cohere-embed-v-4-0": {
           "name": "Embed v4",
           "released": "2025-04-15",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.12",
             "output": "0"
@@ -10564,6 +10585,9 @@
         "cohere-embed-v3-english": {
           "name": "Embed v3 English",
           "released": "2023-11-07",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.1",
             "output": "0"
@@ -10589,6 +10613,9 @@
         "cohere-embed-v3-multilingual": {
           "name": "Embed v3 Multilingual",
           "released": "2023-11-07",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.1",
             "output": "0"
@@ -12229,6 +12256,10 @@
         "gpt-image-1": {
           "name": "GPT-Image-1",
           "released": "2025-04-24",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "5",
             "output": "40",
@@ -12252,6 +12283,10 @@
         "gpt-image-1.5": {
           "name": "GPT-Image-1.5",
           "released": "2025-11-25",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "5",
             "output": "32",
@@ -12276,6 +12311,10 @@
         "gpt-image-2": {
           "name": "GPT-Image-2",
           "released": "2026-04-21",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "5",
             "output": "30",
@@ -12299,6 +12338,10 @@
         "gpt-image-2.5-flare": {
           "name": "GPT Image 2.5 Flare",
           "released": "2026-09-08",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "5",
             "output": "30",
@@ -12322,6 +12365,10 @@
         "gpt-image-2.5-sunburst": {
           "name": "GPT Image 2.5 Sunburst",
           "released": "2026-09-08",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "5",
             "output": "30",
@@ -13045,6 +13092,9 @@
         "text-embedding-3-large": {
           "name": "text-embedding-3-large",
           "released": "2024-01-25",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.13",
             "output": "0"
@@ -13069,6 +13119,9 @@
         "text-embedding-3-small": {
           "name": "text-embedding-3-small",
           "released": "2024-01-25",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.02",
             "output": "0"
@@ -13093,6 +13146,9 @@
         "text-embedding-ada-002": {
           "name": "text-embedding-ada-002",
           "released": "2022-12-15",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.1",
             "output": "0"
@@ -13368,8 +13424,36 @@
             ]
           }
         },
+        "moonshotai/Kimi-K3.1-Pro": {
+          "name": "Kimi K3.1 Pro",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.2"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 262144
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          }
+        },
         "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B": {
-          "name": "Nemotron Ultra",
+          "name": "Nemotron 3 Ultra",
           "released": "2026-06-04",
           "rates": {
             "input": "0.6",
@@ -19593,6 +19677,10 @@
           "name": "Nano Banana",
           "status": "deprecated",
           "released": "2025-08-26",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "0.3",
             "output": "30",
@@ -19660,6 +19748,9 @@
         "gemini-2.5-flash-preview-tts": {
           "name": "Gemini 2.5 Flash Preview TTS",
           "released": "2025-05-01",
+          "endpoints": [
+            "/audio/speech"
+          ],
           "rates": {
             "input": "0.5",
             "output": "10"
@@ -19732,6 +19823,9 @@
         "gemini-2.5-pro-preview-tts": {
           "name": "Gemini 2.5 Pro Preview TTS",
           "released": "2025-05-01",
+          "endpoints": [
+            "/audio/speech"
+          ],
           "rates": {
             "input": "1",
             "output": "20"
@@ -19797,6 +19891,10 @@
         "gemini-3-pro-image": {
           "name": "Nano Banana Pro",
           "released": "2026-05-28",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "2",
             "output": "120"
@@ -19830,6 +19928,10 @@
         "gemini-3.1-flash-image": {
           "name": "Nano Banana 2",
           "released": "2026-05-28",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "0.5",
             "output": "60"
@@ -19905,6 +20007,10 @@
         "gemini-3.1-flash-lite-image": {
           "name": "Nano Banana 2 Lite",
           "released": "2026-06-30",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "0.25",
             "output": "30"
@@ -19980,6 +20086,7 @@
         "gemini-3.1-flash-live-preview": {
           "name": "Gemini 3.1 Flash Live Preview",
           "released": "2026-03-26",
+          "endpoints": [],
           "rates": {
             "input": "0.75",
             "output": "4.5",
@@ -20020,6 +20127,9 @@
         "gemini-3.1-flash-tts-preview": {
           "name": "Gemini 3.1 Flash TTS Preview",
           "released": "2026-04-15",
+          "endpoints": [
+            "/audio/speech"
+          ],
           "rates": {
             "input": "1",
             "output": "20"
@@ -20220,6 +20330,7 @@
         "gemini-3.5-live-translate-preview": {
           "name": "Gemini 3.5 Live Translate Preview",
           "released": "2026-06-09",
+          "endpoints": [],
           "rates": {
             "input": "3.5",
             "output": "21",
@@ -20405,6 +20516,9 @@
         "gemini-embedding-001": {
           "name": "Gemini Embedding 001",
           "released": "2025-05-20",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.15",
             "output": "0"
@@ -20430,6 +20544,9 @@
         "gemini-embedding-2": {
           "name": "Gemini Embedding 2",
           "released": "2026-04-22",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.2",
             "output": "0",
@@ -20538,6 +20655,7 @@
         "gemini-omni-flash-preview": {
           "name": "Gemini Omni Flash Preview",
           "released": "2026-06-30",
+          "endpoints": [],
           "rates": {
             "input": "1.5",
             "output": "17.5"
@@ -21594,6 +21712,10 @@
         "gemini-2.5-flash-image": {
           "name": "Nano Banana",
           "released": "2025-08-26",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "0.3",
             "output": "30"
@@ -21693,6 +21815,9 @@
         "gemini-2.5-flash-tts": {
           "name": "Gemini 2.5 Flash TTS",
           "released": "2025-09-30",
+          "endpoints": [
+            "/audio/speech"
+          ],
           "rates": {
             "input": "0.5",
             "output": "10"
@@ -21807,6 +21932,9 @@
         "gemini-2.5-pro-tts": {
           "name": "Gemini 2.5 Pro TTS",
           "released": "2025-09-30",
+          "endpoints": [
+            "/audio/speech"
+          ],
           "rates": {
             "input": "1",
             "output": "20"
@@ -21895,6 +22023,10 @@
         "gemini-3-pro-image": {
           "name": "Nano Banana Pro",
           "released": "2026-05-28",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "2",
             "output": "120",
@@ -21944,6 +22076,10 @@
         "gemini-3.1-flash-image": {
           "name": "Nano Banana 2",
           "released": "2026-05-28",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "0.5",
             "output": "60",
@@ -22062,6 +22198,10 @@
         "gemini-3.1-flash-lite-image": {
           "name": "Nano Banana 2 Lite",
           "released": "2026-06-30",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "0.25",
             "output": "30",
@@ -22604,6 +22744,9 @@
         "gemini-embedding-001": {
           "name": "Gemini Embedding 001",
           "released": "2025-05-20",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.15",
             "output": "0"
@@ -22629,6 +22772,10 @@
         "gemini-nano-banana-2.1": {
           "name": "Nano Banana 2.1",
           "released": "2026-10-06",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "1.5",
             "output": "30",
@@ -24097,6 +24244,9 @@
         "Qwen/Qwen3-Embedding-4B": {
           "name": "Qwen 3 Embedding 4B",
           "released": "2025-06-05",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.01",
             "output": "0"
@@ -24121,6 +24271,9 @@
         "Qwen/Qwen3-Embedding-8B": {
           "name": "Qwen 3 Embedding 8B",
           "released": "2025-06-05",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.01",
             "output": "0"
@@ -26645,6 +26798,9 @@
         "mistral-embed": {
           "name": "Mistral Embed",
           "released": "2023-12-11",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.1",
             "output": "0"
@@ -27389,6 +27545,9 @@
         "Qwen/Qwen3-Embedding-8B": {
           "name": "Qwen3-Embedding-8B",
           "released": "2025-06-05",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.01",
             "output": "0"
@@ -29536,6 +29695,18 @@
                   "12h": "50"
                 }
               }
+            },
+            {
+              "serviceTier": "ultrafast",
+              "rates": {
+                "input": "60",
+                "output": "300",
+                "cacheRead": "6",
+                "cacheWrite": "75",
+                "cacheWriteDetails": {
+                  "12h": "150"
+                }
+              }
             }
           ],
           "limits": {
@@ -29743,6 +29914,18 @@
                 "cacheWrite": "5",
                 "cacheWriteDetails": {
                   "12h": "10"
+                }
+              }
+            },
+            {
+              "serviceTier": "ultrafast",
+              "rates": {
+                "input": "12",
+                "output": "60",
+                "cacheRead": "0.6",
+                "cacheWrite": "15",
+                "cacheWriteDetails": {
+                  "12h": "30"
                 }
               }
             }
@@ -29976,6 +30159,10 @@
         "gpt-image-2": {
           "name": "gpt-image-2",
           "released": "2026-04-21",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
           "rates": {
             "input": "5",
             "output": "30",
@@ -30031,6 +30218,7 @@
         "gpt-realtime-2.1": {
           "name": "GPT-Realtime-2.1",
           "released": "2026-07-06",
+          "endpoints": [],
           "rates": {
             "input": "4",
             "output": "24",
@@ -30355,6 +30543,9 @@
         "text-embedding-3-large": {
           "name": "text-embedding-3-large",
           "released": "2024-01-25",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.13",
             "output": "0"
@@ -30380,6 +30571,9 @@
         "text-embedding-3-small": {
           "name": "text-embedding-3-small",
           "released": "2024-01-25",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.02",
             "output": "0"
@@ -30405,6 +30599,9 @@
         "text-embedding-ada-002": {
           "name": "text-embedding-ada-002",
           "released": "2022-12-15",
+          "endpoints": [
+            "/embeddings"
+          ],
           "rates": {
             "input": "0.1",
             "output": "0"
@@ -32967,6 +33164,43 @@
             "effort": [
               "none",
               "low",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "moonshotai/Kimi-K3.1-Pro": {
+          "name": "Kimi K3.1 Pro",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "medium",
               "high",
               "max"
             ]
