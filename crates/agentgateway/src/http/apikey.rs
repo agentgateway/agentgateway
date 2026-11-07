@@ -554,9 +554,19 @@ impl LocalAPIKey {
 				"budget limit exceeds database integer range"
 			);
 		}
+		// The config API stores a stable id on the key (`agentgateway.dev/id`) and keeps it when
+		// the secret or keyHash is replaced. Spend is charged against that id. Keys that were
+		// never assigned one stay anchored to the hash, which is the only identity they have.
+		// Rows already stored under a hash are left as they are.
+		let api_key_id = metadata
+			.get("agentgateway.dev/id")
+			.and_then(serde_json::Value::as_str)
+			.filter(|id| !id.is_empty())
+			.map(str::to_owned)
+			.unwrap_or_else(|| key_hash.as_str().to_owned());
 		let budgets = (!budgets.is_empty()).then(|| MatchedBudgets {
 			api_key: api_key.expect("budget API keys have a name"),
-			api_key_id: key_hash.as_str().to_owned(),
+			api_key_id,
 			budgets,
 		});
 		Ok((
