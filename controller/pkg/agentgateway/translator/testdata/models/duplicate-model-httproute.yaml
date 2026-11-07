@@ -1,0 +1,550 @@
+# The same match.model on one HTTPRoute model rule is one router, even when
+# that route is attached to more than one listener. A newer model is rejected
+# on the conflicting rule and still programmed on its other rule.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+  - name: https
+    port: 443
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tenant1
+  namespace: default
+spec:
+  parentRefs:
+  - name: gw
+    sectionName: http
+  - name: gw
+    sectionName: https
+  rules:
+  - name: models
+    matches:
+    - path:
+        type: PathPrefix
+        value: /tenant1
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayModel
+      name: "*"
+  - name: other
+    matches:
+    - path:
+        type: PathPrefix
+        value: /other
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayModel
+      name: "*"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: a
+  namespace: default
+  creationTimestamp: "2024-01-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant1
+    sectionName: models
+  match:
+    model: gpt
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: b
+  namespace: default
+  creationTimestamp: "2024-01-02T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant1
+    sectionName: models
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant1
+    sectionName: other
+  match:
+    model: gpt
+  provider: Anthropic
+
+---
+# Output
+output:
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/a/backend.default.tenant1.models
+      name:
+        name: a
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - anthropic: {}
+            name: backend
+      key: default/b/backend.default.tenant1.other
+      name:
+        name: b
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      key: default/tenant1.00.http
+      modelRouter:
+        routerKey: /llm:router:httproute:default:tenant1:models
+      name:
+        name: tenant1
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      key: default/tenant1.00.https
+      modelRouter:
+        routerKey: /llm:router:httproute:default:tenant1:models
+      name:
+        name: tenant1
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      key: default/tenant1.01.http
+      modelRouter:
+        routerKey: /llm:router:httproute:default:tenant1:other
+      name:
+        name: tenant1
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      key: default/tenant1.01.https
+      modelRouter:
+        routerKey: /llm:router:httproute:default:tenant1:other
+      name:
+        name: tenant1
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    bind:
+      key: 443/default/gw
+      port: 443
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/gw
+      port: 80
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/gw
+      key: default/gw.http
+      name:
+        gatewayName: gw
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 443/default/gw
+      key: default/gw.https
+      name:
+        gatewayName: gw
+        gatewayNamespace: default
+        listenerName: https
+      protocol: HTTP
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/a/backend.default.tenant1.models
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1704067200"
+      key: default/a.default.tenant1.models.http
+      listenerKey: default/gw.http
+      match:
+        model: gpt
+      routerKey: /llm:router:httproute:default:tenant1:models
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/a/backend.default.tenant1.models
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1704067200"
+      key: default/a.default.tenant1.models.https
+      listenerKey: default/gw.https
+      match:
+        model: gpt
+      routerKey: /llm:router:httproute:default:tenant1:models
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/b/backend.default.tenant1.other
+        discoveryProvider: anthropic
+        discoveryProviderConfig:
+          anthropic: {}
+      created: "1704153600"
+      key: default/b.default.tenant1.other.http
+      listenerKey: default/gw.http
+      match:
+        model: gpt
+      routerKey: /llm:router:httproute:default:tenant1:other
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/b/backend.default.tenant1.other
+        discoveryProvider: anthropic
+        discoveryProviderConfig:
+          anthropic: {}
+      created: "1704153600"
+      key: default/b.default.tenant1.other.https
+      listenerKey: default/gw.https
+      match:
+        model: gpt
+      routerKey: /llm:router:httproute:default:tenant1:other
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: /llm:router:httproute:default:tenant1:models
+        weight: 1
+      key: default/tenant1.00.http
+      listenerKey: default/gw.http
+      matches:
+      - path:
+          pathPrefix: /tenant1
+      name:
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+        ruleName: models
+      trafficPolicies:
+      - urlRewrite:
+          prefix: ""
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: /llm:router:httproute:default:tenant1:models
+        weight: 1
+      key: default/tenant1.00.https
+      listenerKey: default/gw.https
+      matches:
+      - path:
+          pathPrefix: /tenant1
+      name:
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+        ruleName: models
+      trafficPolicies:
+      - urlRewrite:
+          prefix: ""
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: /llm:router:httproute:default:tenant1:other
+        weight: 1
+      key: default/tenant1.01.http
+      listenerKey: default/gw.http
+      matches:
+      - path:
+          pathPrefix: /other
+      name:
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+        ruleName: other
+      trafficPolicies:
+      - urlRewrite:
+          prefix: ""
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: /llm:router:httproute:default:tenant1:other
+        weight: 1
+      key: default/tenant1.01.https
+      listenerKey: default/gw.https
+      matches:
+      - path:
+          pathPrefix: /other
+      name:
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+        ruleName: other
+      trafficPolicies:
+      - urlRewrite:
+          prefix: ""
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: a
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+        sectionName: models
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: b
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "gpt" conflicts with default/a on HTTPRoute default/tenant1
+          rule models
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+        sectionName: models
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+        sectionName: other
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: gw
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: https
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: tenant1
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: http
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: https

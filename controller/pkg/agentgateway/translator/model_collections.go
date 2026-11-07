@@ -54,7 +54,7 @@ func TranslateModel(ctx RouteContext, obj *agentgateway.AgentgatewayModel) (*age
 	rep := reports.NewReporter(&rm)
 	routeReporter := rep.Route(obj)
 
-	parentRefs := extractModelParentReferenceInfo(ctx, obj)
+	parentRefs := acceptedModelParents(ctx, obj)
 	resources := translateModelForParents(ctx, obj, parentRefs, routeReporter)
 
 	status := rm.BuildRouteStatusWithParentRefDefaulting(context.Background(), obj, ctx.ControllerName, true)
@@ -90,7 +90,7 @@ func extractModelAncestorBackends(ctx RouteContext, model *agentgateway.Agentgat
 
 	// Collect the model's parent gateways (shared by both direct and indirect cases).
 	gateways := sets.Set[types.NamespacedName]{}
-	for _, parent := range FilteredReferences(extractModelParentReferenceInfo(ctx, model)) {
+	for _, parent := range FilteredReferences(acceptedModelParents(ctx, model)) {
 		gateways.Insert(parent.ParentGateway)
 	}
 	if len(gateways) == 0 {
