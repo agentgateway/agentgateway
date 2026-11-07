@@ -2,7 +2,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ContentScope, RequestType};
+use crate::types::RequestType;
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage};
 
 /// TypeSafe /v1/systemone request. See https://docs.typesafe.ai/api.
@@ -66,7 +66,7 @@ impl RequestType for Request {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for systemone.")
 	}
 
-	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(ContentScope, &mut String)) {
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(crate::types::RequestText, &mut String)) {
 		unimplemented!(
 			"visit_text_mut is used for prompt guard; prompt guard is disabled for systemone."
 		)

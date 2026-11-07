@@ -2140,3 +2140,64 @@ mod response_guardrails {
 		test_scopes::<types::responses::Response>("response/responses/guardrails.json");
 	}
 }
+
+/// The visitor must line up with `get_messages()`, which defines a webhook's message indexes.
+mod request_text {
+	use super::*;
+
+	fn check<R: RequestType + DeserializeOwned>(dir: &str) {
+		for entry in fs::read_dir(fixture_path(dir)).expect("failed to read fixtures") {
+			let path = entry.expect("failed to read entry").path();
+			if path.extension().is_none_or(|ext| ext != "json") {
+				continue;
+			}
+			let input = fs::read_to_string(&path).expect("failed to read fixture");
+			let Ok(mut request) = serde_json::from_str::<R>(&input) else {
+				continue;
+			};
+			let sent = request.get_messages();
+			let before = serde_json::to_string(&request.to_value().unwrap()).unwrap();
+
+			let mut joined = vec![String::new(); sent.len()];
+			request.visit_text_mut(&mut |content, text| {
+				if let Some(message) = content.get_messages_idx {
+					let out = joined
+						.get_mut(message)
+						.unwrap_or_else(|| panic!("{path:?}: message {message} out of range"));
+					out.push(' ');
+					out.push_str(text);
+				}
+			});
+
+			for (index, (message, text)) in sent.iter().zip(&joined).enumerate() {
+				// text a guard may not edit (signed or thought parts) is in the message but not visited
+				if !text
+					.split_whitespace()
+					.eq(message.content.split_whitespace())
+				{
+					assert!(
+						has_uneditable_text(&input),
+						"{path:?}: message {index} is {:?} but visited {text:?}",
+						message.content
+					);
+				}
+			}
+			let after = serde_json::to_string(&request.to_value().unwrap()).unwrap();
+			assert_eq!(before, after, "{path:?}: visiting changed the request");
+		}
+	}
+
+	fn has_uneditable_text(input: &str) -> bool {
+		["\"thought\"", "\"thoughtSignature\"", "\"signature\""]
+			.iter()
+			.any(|key| input.contains(key))
+	}
+
+	#[test]
+	fn lines_up_with_get_messages() {
+		check::<types::completions::Request>("requests/completions");
+		check::<types::messages::Request>("requests/messages");
+		check::<types::responses::Request>("requests/responses");
+		check::<types::gemini::Request>("requests/gemini");
+	}
+}

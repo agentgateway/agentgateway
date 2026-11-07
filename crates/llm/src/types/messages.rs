@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{
 	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
-	RequestType, ResponseType, SimpleChatCompletionMessage, visit_json_at,
+	RequestText, RequestType, ResponseType, SimpleChatCompletionMessage, visit_json_at,
 };
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
@@ -576,9 +576,22 @@ impl RequestType for Request {
 		self.messages = message_prompts.into_iter().map(Into::into).collect();
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(RequestText, &mut String)) {
+		// get_messages() omits an empty system prompt, so it takes no index
+		let has_system = match &self.system {
+			Some(TextBlock::Text(text)) => !text.is_empty(),
+			Some(TextBlock::Array(parts)) => parts
+				.iter()
+				.any(|part| part.text().is_some_and(|text| !text.is_empty())),
+			None => false,
+		};
+		let system = if has_system {
+			RequestText::in_message(ContentScope::SystemPrompt, 0)
+		} else {
+			ContentScope::SystemPrompt.into()
+		};
 		match &mut self.system {
-			Some(TextBlock::Text(text)) => f(ContentScope::SystemPrompt, text),
+			Some(TextBlock::Text(text)) => f(system, text),
 			Some(TextBlock::Array(parts)) => {
 				crate::types::scan_text_runs(
 					parts,
@@ -586,18 +599,20 @@ impl RequestType for Request {
 					TextPart::text_mut,
 					TextPart::rest_mut,
 					PRESERVED_REST_KEYS,
-					&mut |text| f(ContentScope::SystemPrompt, text),
+					&mut |text| f(system, text),
 				);
 			},
 			None => {},
 		}
-		for msg in &mut self.messages {
+		for (index, msg) in self.messages.iter_mut().enumerate() {
+			let content =
+				RequestText::in_message(ContentScope::Messages, index + usize::from(has_system));
 			match &mut msg.content {
-				Some(ContentBlock::Text(text)) => f(ContentScope::Messages, text),
+				Some(ContentBlock::Text(text)) => f(content, text),
 				Some(ContentBlock::Array(parts)) => {
 					for part in parts.iter_mut() {
 						if let ContentPart::Unknown(value) = part {
-							visit_tool_part_text(value, f);
+							visit_tool_part_text(value, &mut |scope, text| f(scope.into(), text));
 						}
 					}
 					crate::types::scan_text_runs(
@@ -606,7 +621,7 @@ impl RequestType for Request {
 						ContentPart::text_mut,
 						ContentPart::rest_mut,
 						PRESERVED_REST_KEYS,
-						&mut |text| f(ContentScope::Messages, text),
+						&mut |text| f(content, text),
 					);
 				},
 				None => {},

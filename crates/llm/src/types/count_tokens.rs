@@ -3,7 +3,7 @@ use agent_core::strng;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ContentScope, NormalizedMessage, RequestType, messages};
+use crate::types::{NormalizedMessage, RequestType, messages};
 use crate::{
 	AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, logged_response_parsing,
 };
@@ -73,7 +73,7 @@ impl RequestType for Request {
 		)
 	}
 
-	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(ContentScope, &mut String)) {
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(crate::types::RequestText, &mut String)) {
 		unimplemented!(
 			"visit_text_mut is used for prompt guard; prompt guard is disable for token counting."
 		)

@@ -349,11 +349,18 @@ fn moderation_flagged_records_guardrail_info() {
 fn webhook_reject_records_guardrail_info() {
 	use crate::llm::policy::webhook::{RejectAction, RequestAction};
 
-	let (outcome, detail) = Policy::webhook_request_outcome(RequestAction::Reject(RejectAction {
-		body: "blocked".to_string(),
-		status_code: 403,
-		reason: Some("policy violation".to_string()),
-	}))
+	let mut req = TextRequest {
+		content: String::new(),
+	};
+	let (outcome, detail) = Policy::webhook_request_outcome(
+		RequestAction::Reject(RejectAction {
+			body: "blocked".to_string(),
+			status_code: 403,
+			reason: Some("policy violation".to_string()),
+		}),
+		&[],
+		&mut req,
+	)
 	.unwrap();
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
 	assert_eq!(
@@ -4183,6 +4190,341 @@ fn bedrock_signed_response_mask_rejects_without_changing_signed_text() {
 		assert_eq!(actual["content"][0], original["content"][0]);
 		if !mask_signed {
 			assert_eq!(actual["content"][1]["text"], "<masked>");
+		}
+	}
+}
+
+mod webhook_mask {
+	use crate::llm::types::{completions, gemini, messages, responses};
+	use serde::de::DeserializeOwned;
+	use serde_json::{Value, json};
+
+	use super::*;
+	use crate::llm::SimpleChatCompletionMessage;
+
+	fn request<R: DeserializeOwned>(body: Value) -> R {
+		serde_json::from_value(body).unwrap()
+	}
+
+	/// Run a webhook reply that masks the given messages through the real outcome path.
+	fn apply_mask(req: &mut dyn RequestType, edits: &[(usize, &str)]) {
+		let sent = req.get_messages();
+		let mut reply = sent.clone();
+		for (index, text) in edits {
+			reply[*index].content = (*text).into();
+		}
+		let mutation = Policy::webhook_mask_mutation(&sent, reply, req);
+		let (_, rejection) =
+			Policy::apply_request_guard_outcome(GuardrailOutcome::Masked(mutation), req).unwrap();
+		assert!(rejection.is_none());
+	}
+
+	/// Sets the JSON at `pointer` in `body`, for expected results.
+	fn with(mut body: Value, pointer: &str, value: Value) -> Value {
+		*body.pointer_mut(pointer).unwrap() = value;
+		body
+	}
+
+	fn tool_history() -> Value {
+		json!({
+			"model": "gpt-4o",
+			"messages": [
+				{"role": "system", "content": "be helpful"},
+				{"role": "user", "content": "weather in Paris?"},
+				{"role": "assistant", "content": null, "tool_calls": [
+					{"id": "call_1", "type": "function",
+					 "function": {"name": "get_weather", "arguments": "{\"city\":\"Paris\"}"}}
+				]},
+				{"role": "tool", "tool_call_id": "call_1", "name": "get_weather", "content": "sunny"},
+				{"role": "user", "content": "my ssn is 123-45-6789"},
+			],
+		})
+	}
+
+	/// Send `req` to a webhook that answers with `reply_messages`, and apply its verdict.
+	async fn webhook_round_trip(
+		client: &crate::proxy::httpproxy::PolicyClient,
+		req: &mut dyn RequestType,
+		reply_messages: Value,
+	) {
+		use wiremock::matchers::{method, path};
+		use wiremock::{Mock, MockServer, ResponseTemplate};
+
+		use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target};
+
+		let server = MockServer::start().await;
+		Mock::given(method("POST"))
+			.and(path("/request"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+				"action": {"body": {"messages": reply_messages}, "reason": "pii"}
+			})))
+			.mount(&server)
+			.await;
+		let webhook = Webhook {
+			target: SimpleBackendReferenceWithPolicies {
+				target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+					*server.address(),
+				))),
+				policies: vec![],
+			},
+			headers: Default::default(),
+			forward_header_matches: vec![],
+			failure_mode: FailureMode::FailClosed,
+			action: RejectAuditAction::Reject,
+		};
+		let (outcome, _) =
+			Policy::evaluate_webhook_request(req, &HeaderMap::new(), client, &webhook, None)
+				.await
+				.unwrap();
+		let (_, rejection) = Policy::apply_request_guard_outcome(outcome, req).unwrap();
+		assert!(rejection.is_none());
+	}
+
+	//  OpenAI returns 400 if the mask strips tool_calls or tool_call_id
+	#[tokio::test]
+	async fn keeps_tool_history() {
+		let client = crate::test_helpers::policy_client();
+		let mut req: completions::Request = request(tool_history());
+		let baseline = req.to_value().unwrap();
+		let mut reply = serde_json::to_value(req.get_messages()).unwrap();
+		reply[4]["content"] = json!("my ssn is <ssn>");
+
+		webhook_round_trip(&client, &mut req, reply).await;
+
+		assert_eq!(
+			req.to_value().unwrap(),
+			with(baseline, "/messages/4/content", json!("my ssn is <ssn>"))
+		);
+	}
+
+	// a server dropping a message keeps today's rebuild
+	#[tokio::test]
+	async fn dropped_message_rebuilds() {
+		let client = crate::test_helpers::policy_client();
+		let mut req: completions::Request = request(tool_history());
+		let reply = json!([{"role": "user", "content": "hi"}]);
+
+		webhook_round_trip(&client, &mut req, reply).await;
+
+		assert_eq!(
+			req.to_value().unwrap()["messages"],
+			json!([{"role": "user", "content": "hi"}])
+		);
+	}
+
+	#[test]
+	fn unchanged_reply_leaves_body_untouched() {
+		let body = json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": [
+				{"type": "text", "text": "a"},
+				{"type": "text", "text": "b"},
+			]}],
+		});
+		let mut req: completions::Request = request(body.clone());
+		apply_mask(&mut req, &[]);
+		assert_eq!(req.to_value().unwrap(), body);
+	}
+
+	// the webhook returns one string, so split text moves to the last slot; the image is kept
+	#[test]
+	fn split_text_moves_to_last_slot() {
+		let image = json!({"type": "image_url", "image_url": {"url": "https://x/y.png"}});
+		let mut req: completions::Request = request(json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": [
+				{"type": "text", "text": "ssn 123"},
+				image,
+				{"type": "text", "text": "phone 555"},
+			]}],
+		}));
+		apply_mask(&mut req, &[(0, "ssn *** phone ***")]);
+		assert_eq!(
+			req.to_value().unwrap()["messages"][0]["content"],
+			json!([image, {"type": "text", "text": "ssn *** phone ***"}])
+		);
+	}
+
+	// Anthropic rejects empty text blocks
+	#[test]
+	fn anthropic_text_masked_away_next_to_tool_result_is_dropped() {
+		let mut req: messages::Request = request(anthropic_history(json!("be helpful")));
+		apply_mask(&mut req, &[(3, "")]);
+		assert_eq!(
+			req.to_value().unwrap()["messages"][2]["content"],
+			json!([{"type": "tool_result", "tool_use_id": "toolu_1", "content": "sunny"}])
+		);
+	}
+
+	fn anthropic_history(system: Value) -> Value {
+		json!({
+			"model": "claude",
+			"max_tokens": 10,
+			"system": system,
+			"messages": [
+				{"role": "user", "content": "weather?"},
+				{"role": "assistant", "content": [
+					{"type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {"city": "Paris"}},
+				]},
+				{"role": "user", "content": [
+					{"type": "tool_result", "tool_use_id": "toolu_1", "content": "sunny"},
+					{"type": "text", "text": "my ssn is 123"},
+				]},
+			],
+		})
+	}
+
+	#[test]
+	fn keeps_anthropic_structure() {
+		let system =
+			json!([{"type": "text", "text": "be helpful", "cache_control": {"type": "ephemeral"}}]);
+		let mut req: messages::Request = request(anthropic_history(system.clone()));
+		apply_mask(&mut req, &[(3, "my ssn is ***")]);
+		assert_eq!(
+			req.to_value().unwrap(),
+			with(
+				anthropic_history(system),
+				"/messages/2/content/1/text",
+				json!("my ssn is ***"),
+			)
+		);
+	}
+
+	// get_messages() omits the empty system prompt, so indexes start at the first message
+	#[test]
+	fn empty_anthropic_system_takes_no_index() {
+		let mut req: messages::Request = request(anthropic_history(json!("")));
+		apply_mask(&mut req, &[(2, "my ssn is ***")]);
+		assert_eq!(
+			req.to_value().unwrap(),
+			with(
+				anthropic_history(json!("")),
+				"/messages/2/content/1/text",
+				json!("my ssn is ***"),
+			)
+		);
+	}
+
+	// Claude Code style: consecutive text blocks are one run, and collapse like a regex mask
+	#[test]
+	fn anthropic_text_blocks_collapse_keeping_cache_control() {
+		let mut req: messages::Request = request(json!({
+			"model": "claude",
+			"max_tokens": 10,
+			"messages": [{"role": "user", "content": [
+				{"type": "text", "text": "ssn 123", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "thanks"},
+			]}],
+		}));
+		apply_mask(&mut req, &[(0, "ssn *** thanks")]);
+		assert_eq!(
+			req.to_value().unwrap()["messages"][0]["content"],
+			json!([{"type": "text", "text": "ssn *** thanks", "cache_control": {"type": "ephemeral"}}])
+		);
+	}
+
+	#[test]
+	fn responses_indexes_skip_function_items() {
+		let call = json!({"type": "function_call", "call_id": "c1", "name": "f", "arguments": "{}"});
+		let output = json!({"type": "function_call_output", "call_id": "c1", "output": "sunny"});
+		let body = json!({
+			"model": "gpt-4o",
+			"instructions": "be helpful",
+			"input": [
+				{"role": "user", "content": "weather?"},
+				call,
+				output,
+				{"role": "user", "content": [{"type": "input_text", "text": "my ssn is 123"}]},
+			],
+		});
+		let mut req: responses::Request = request(body.clone());
+		apply_mask(&mut req, &[(2, "my ssn is ***")]);
+		assert_eq!(
+			req.to_value().unwrap(),
+			with(body, "/input/3/content/0/text", json!("my ssn is ***"))
+		);
+	}
+
+	fn gemini_tool_history() -> Value {
+		json!({
+			"contents": [
+				{"role": "user", "parts": [{"text": "weather?"}]},
+				{"role": "model", "parts": [{"functionCall": {"name": "f", "args": {"city": "Paris"}}}]},
+				{"role": "user", "parts": [
+					{"functionResponse": {"name": "f", "response": {"out": "sunny"}}},
+					{"text": "my ssn is 123"},
+				]},
+			],
+		})
+	}
+
+	#[test]
+	fn keeps_gemini_function_parts() {
+		let mut req: gemini::Request = request(gemini_tool_history());
+		apply_mask(&mut req, &[(2, "my ssn is ***")]);
+		assert_eq!(
+			req.to_value().unwrap(),
+			with(
+				gemini_tool_history(),
+				"/contents/2/parts/1/text",
+				json!("my ssn is ***"),
+			)
+		);
+	}
+
+	// Vertex rejects {"text":""}, so a turn masked away loses its text part
+	#[test]
+	fn gemini_turn_masked_away_drops_text_part() {
+		let mut req: gemini::Request = request(gemini_tool_history());
+		apply_mask(&mut req, &[(2, "")]);
+		assert_eq!(
+			req.to_value().unwrap()["contents"][2]["parts"],
+			json!([{"functionResponse": {"name": "f", "response": {"out": "sunny"}}}])
+		);
+	}
+
+	// the signed part isn't visited, so patching only the other part would forward the ssn
+	#[test]
+	fn signed_text_is_not_forwarded() {
+		let mut req: gemini::Request = request(json!({
+			"contents": [{"role": "model", "parts": [
+				{"text": "my ssn is 123", "thoughtSignature": "sig"},
+				{"text": "thanks"},
+			]}],
+		}));
+		apply_mask(&mut req, &[(0, "my ssn is *** thanks")]);
+		let body = req.to_value().unwrap().to_string();
+		assert!(!body.contains("123"), "{body}");
+		assert!(body.contains("my ssn is ***"), "{body}");
+	}
+
+	// a tool_use-only turn has no text to patch
+	#[test]
+	fn text_added_to_toolonly_turn_is_skipped() {
+		let body = anthropic_history(json!("be helpful"));
+		let mut req: messages::Request = request(body.clone());
+		apply_mask(&mut req, &[(2, "new text")]);
+		assert_eq!(req.to_value().unwrap(), body);
+	}
+
+	// servers may drop, add or re-role messages in v1
+	#[test]
+	fn other_shapes_rebuild() {
+		let msg = |role: &str, content: &str| SimpleChatCompletionMessage {
+			role: role.into(),
+			content: content.into(),
+		};
+		let sent = vec![msg("user", "a"), msg("user", "b")];
+		for reply in [
+			vec![msg("user", "a")],
+			vec![msg("user", "a"), msg("user", "b"), msg("user", "c")],
+			vec![msg("user", "a"), msg("assistant", "b")],
+		] {
+			let mut req = TextRequest {
+				content: String::new(),
+			};
+			let mutation = Policy::webhook_mask_mutation(&sent, reply.clone(), &mut req);
+			assert!(matches!(mutation, RequestGuardMutation::Messages(m) if m == reply));
 		}
 	}
 }

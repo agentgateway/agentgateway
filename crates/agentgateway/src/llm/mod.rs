@@ -10,9 +10,9 @@ pub use agent_llm::tokenizer::{num_tokens, preload_tokenizers};
 pub use agent_llm::{
 	AIError, CacheTokenConvention, ChatFormat, ContentScope, DetectedOperation, InputFormat, LLMInfo,
 	LLMRequest, LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider,
-	ProviderState, RequestType, ResponseText, ResponseType, RouteType, SimpleChatCompletionMessage,
-	TokenGapSummary, anthropic, conversion, copilot, custom, gemini, logged_response_parsing, openai,
-	types,
+	ProviderState, RequestText, RequestType, ResponseText, ResponseType, RouteType,
+	SimpleChatCompletionMessage, TokenGapSummary, anthropic, conversion, copilot, custom, gemini,
+	logged_response_parsing, openai, types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
