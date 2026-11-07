@@ -4195,12 +4195,12 @@ fn bedrock_signed_response_mask_rejects_without_changing_signed_text() {
 }
 
 mod webhook_mask {
-	use crate::llm::types::{completions, gemini, messages, responses};
 	use serde::de::DeserializeOwned;
 	use serde_json::{Value, json};
 
 	use super::*;
 	use crate::llm::SimpleChatCompletionMessage;
+	use crate::llm::types::{completions, gemini, messages, responses};
 
 	fn request<R: DeserializeOwned>(body: Value) -> R {
 		serde_json::from_value(body).unwrap()
