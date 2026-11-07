@@ -1,6 +1,7 @@
 // Inspired by https://github.com/cdriehuys/axum-jwks/blob/main/axum-jwks/src/jwks.rs (MIT license)
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::time::Duration;
 
 use ::cel::types::dynamic::DynamicType;
 use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet, KeyAlgorithm};
@@ -11,6 +12,7 @@ use serde_json::{Map, Value};
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::dtrace::{self};
+use crate::resource_manager::ResourceFreshness;
 use crate::telemetry::log::RequestLog;
 use crate::*;
 
@@ -33,6 +35,9 @@ pub enum TokenError {
 
 	#[error("the token header does not specify a `kid`")]
 	MissingKeyId,
+
+	#[error("the trusted signing keys have exceeded their maximum age")]
+	ExpiredSigningKeys,
 
 	#[error("token uses the unknown key {0:?}")]
 	UnknownKeyId(String),
@@ -80,6 +85,8 @@ pub struct Jwt {
 pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
+	maximum_key_age: Option<Duration>,
+	key_freshness: Option<ResourceFreshness>,
 }
 
 // TODO: can we give anything useful here?
@@ -116,10 +123,17 @@ impl serde::Serialize for Provider {
 		pub struct Serde<'a> {
 			issuer: &'a str,
 			keys: Vec<&'a str>,
+			#[serde(
+				rename = "maxJwksAge",
+				skip_serializing_if = "Option::is_none",
+				with = "crate::serde_dur_option"
+			)]
+			maximum_key_age: Option<Duration>,
 		}
 		Serde {
 			issuer: &self.issuer,
 			keys: self.keys.keys().map(|x| x.as_str()).collect::<Vec<_>>(),
+			maximum_key_age: self.maximum_key_age,
 		}
 		.serialize(serializer)
 	}
@@ -168,7 +182,7 @@ pub enum LocalJwtConfig {
 		/// Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.
 		audiences: Option<Vec<String>>,
 		/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
-		jwks: serdes::FileInlineOrRemote,
+		jwks: JwksSource,
 		/// Claim requirements to enforce after the token signature is verified.
 		#[cfg_attr(feature = "schema", schemars(default))]
 		jwt_validation_options: JWTValidationOptions,
@@ -196,7 +210,7 @@ struct LocalJwtSingleConfig {
 	preserve_token: bool,
 	issuer: String,
 	audiences: Option<Vec<String>>,
-	jwks: serdes::FileInlineOrRemote,
+	jwks: JwksSource,
 	#[serde(default)]
 	jwt_validation_options: JWTValidationOptions,
 }
@@ -241,10 +255,78 @@ pub struct ProviderConfig {
 	/// Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.
 	pub audiences: Option<Vec<String>>,
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
-	pub jwks: serdes::FileInlineOrRemote,
+	pub jwks: JwksSource,
 	/// Claim requirements to enforce after the token signature is verified.
 	#[serde(default)]
 	pub jwt_validation_options: JWTValidationOptions,
+}
+
+/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged, deny_unknown_fields)]
+pub enum JwksSource {
+	File {
+		/// Path to a file on disk to load the value from.
+		file: std::path::PathBuf,
+	},
+	Inline(String),
+	Remote {
+		#[serde(deserialize_with = "serdes::de_parse")]
+		#[cfg_attr(feature = "schema", schemars(with = "String"))]
+		url: ::http::Uri,
+		/// Maximum time to trust keys since they were last fetched successfully. Fetch
+		/// failures and HTTP error responses do not renew trust; once it lapses, tokens are
+		/// rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,
+		/// but no more often than once a minute, so this must be longer than one minute.
+		/// Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS
+		/// do not use this setting.
+		#[serde(default, rename = "maxAge", with = "crate::serde_dur_option")]
+		#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+		max_age: Option<Duration>,
+	},
+}
+
+impl JwksSource {
+	async fn load(
+		&self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> Result<(JwkSet, Option<(Duration, ResourceFreshness)>), JwkError> {
+		use crate::resource_manager::{ResourceKind, ResourceRef};
+		let source = match self {
+			JwksSource::File { file } => serdes::FileInlineOrRemote::File { file: file.clone() },
+			JwksSource::Inline(jwks) => serdes::FileInlineOrRemote::Inline(jwks.clone()),
+			JwksSource::Remote { url, max_age: None } => {
+				serdes::FileInlineOrRemote::Remote { url: url.clone() }
+			},
+			JwksSource::Remote {
+				url,
+				max_age: Some(max_age),
+			} => {
+				if max_age.is_zero() {
+					return Err(JwkError::JwkLoadError(anyhow::anyhow!(
+						"JWKS maxAge must be positive"
+					)));
+				}
+				let (content, freshness) = resources
+					.fetch_with_freshness(ResourceRef::Http {
+						url: url.clone(),
+						kind: ResourceKind::Jwks,
+						max_age: Some(*max_age),
+					})
+					.await
+					.map_err(JwkError::JwkLoadError)?;
+				let jwks =
+					serde_json::from_slice(&content).map_err(|e| JwkError::JwkLoadError(e.into()))?;
+				return Ok((jwks, Some((*max_age, freshness))));
+			},
+		};
+		let jwks = source
+			.load::<JwkSet>(resources, ResourceKind::Jwks)
+			.await
+			.map_err(JwkError::JwkLoadError)?;
+		Ok((jwks, None))
+	}
 }
 
 #[apply(schema_enum!)]
@@ -351,12 +433,13 @@ impl LocalJwtConfig {
 
 		let mut providers = Vec::with_capacity(providers_cfg.len());
 		for pc in providers_cfg {
-			let jwks: JwkSet = pc
-				.jwks
-				.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
-				.await
-				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+			let (jwks, key_age) = pc.jwks.load(resources).await?;
+			let mut provider =
+				Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+			if let Some((maximum_age, freshness)) = key_age {
+				provider.maximum_key_age = Some(maximum_age);
+				provider.key_freshness = Some(freshness);
+			}
 			providers.push(provider);
 		}
 		Ok(Jwt {
@@ -369,6 +452,15 @@ impl LocalJwtConfig {
 }
 
 impl Provider {
+	fn signing_keys_expired(&self) -> bool {
+		self.maximum_key_age.is_some_and(|maximum_age| {
+			self
+				.key_freshness
+				.as_ref()
+				.is_none_or(|freshness| freshness.is_expired(maximum_age))
+		})
+	}
+
 	pub fn from_jwks(
 		jwks: JwkSet,
 		issuer: String,
@@ -476,7 +568,12 @@ impl Provider {
 			);
 		}
 
-		Ok(Provider { issuer, keys })
+		Ok(Provider {
+			issuer,
+			keys,
+			maximum_key_age: None,
+			key_freshness: None,
+		})
 	}
 }
 
@@ -655,12 +752,12 @@ impl Jwt {
 		})?;
 
 		let decode_with = |key: &Jwk| {
-			decode::<Map<String, Value>>(token, &key.decoding, &key.validation).map(|decoded_token| {
-				Claims {
+			decode::<Map<String, Value>>(token, &key.decoding, &key.validation)
+				.map(|decoded_token| Claims {
 					inner: decoded_token.claims,
 					jwt: SecretString::new(token.into()),
-				}
-			})
+				})
+				.map_err(TokenError::Invalid)
 		};
 
 		// A kid is only unique within one issuer's JWKS, so different issuers can share a kid (Entra tenants share keys; unrelated IdPs can collide)
@@ -678,6 +775,11 @@ impl Jwt {
 			let Some(key) = provider.keys.get(kid) else {
 				continue;
 			};
+			if provider.signing_keys_expired() {
+				debug!(issuer = %provider.issuer, "Signing keys exceeded their maximum age.");
+				first_error.get_or_insert(TokenError::ExpiredSigningKeys);
+				continue;
+			}
 			match decode_with(key) {
 				Ok(claims) => return Ok(claims),
 				Err(error) => {
@@ -687,12 +789,13 @@ impl Jwt {
 			}
 		}
 		if let Some(error) = first_error {
-			return Err(TokenError::Invalid(error));
+			return Err(error);
 		}
 
 		// No provider has both the token's iss and kid.
 		// Covers: unknown issuer, iss missing or not a string, and iss matches but kid doesn't.
 		// Falls back to the original, first provider that has the kid so that the same errors are produced.
+		// Its issuer does not match, so its key age is irrelevant: the token fails issuer validation.
 		let key = self
 			.providers
 			.iter()
@@ -703,10 +806,8 @@ impl Jwt {
 				TokenError::UnknownKeyId(kid.to_owned())
 			})?;
 
-		decode_with(key).map_err(|error| {
+		decode_with(key).inspect_err(|error| {
 			debug!(?error, "Token is malformed or does not pass validation.");
-
-			TokenError::Invalid(error)
 		})
 	}
 }

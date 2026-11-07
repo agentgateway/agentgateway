@@ -287,6 +287,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.url`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -410,6 +411,7 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -417,6 +419,7 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.url`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`binds[].listeners[].routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -1401,6 +1404,7 @@
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.url`|string||
+|`binds[].listeners[].policies.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`binds[].listeners[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -1408,6 +1412,7 @@
 |`binds[].listeners[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.jwtAuth.jwks.url`|string||
+|`binds[].listeners[].policies.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`binds[].listeners[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
@@ -1854,6 +1859,7 @@
 |`policies[].policy.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`policies[].policy.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.mcpAuthentication.jwks.url`|string||
+|`policies[].policy.mcpAuthentication.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`policies[].policy.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -1977,6 +1983,7 @@
 |`policies[].policy.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`policies[].policy.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.jwtAuth.providers[].jwks.url`|string||
+|`policies[].policy.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`policies[].policy.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -1984,6 +1991,7 @@
 |`policies[].policy.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`policies[].policy.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.jwtAuth.jwks.url`|string||
+|`policies[].policy.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`policies[].policy.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`policies[].policy.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -2997,6 +3005,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.url`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`routeGroups[].routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -3120,6 +3129,7 @@
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routeGroups[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -3127,6 +3137,7 @@
 |`routeGroups[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routeGroups[].routes[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.jwtAuth.jwks.url`|string||
+|`routeGroups[].routes[].policies.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routeGroups[].routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -4083,6 +4094,7 @@
 |`gateways.*.listeners[].jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.url`|string||
+|`gateways.*.listeners[].jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`gateways.*.listeners[].jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -4090,6 +4102,7 @@
 |`gateways.*.listeners[].jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.listeners[].jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].jwtAuth.jwks.url`|string||
+|`gateways.*.listeners[].jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`gateways.*.listeners[].jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`gateways.*.listeners[].authorization`|object|Authorization rules for incoming HTTP requests.|
@@ -4324,6 +4337,7 @@
 |`gateways.*.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.jwtAuth.providers[].jwks.url`|string||
+|`gateways.*.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`gateways.*.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -4331,6 +4345,7 @@
 |`gateways.*.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.jwtAuth.jwks.url`|string||
+|`gateways.*.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`gateways.*.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`gateways.*.authorization`|object|Authorization rules for incoming HTTP requests.|
@@ -4631,6 +4646,7 @@
 |`routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.mcpAuthentication.jwks.url`|string||
+|`routes[].policies.mcpAuthentication.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -4754,6 +4770,7 @@
 |`routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`routes[].policies.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -4761,6 +4778,7 @@
 |`routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routes[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.jwtAuth.jwks.url`|string||
+|`routes[].policies.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -5996,6 +6014,7 @@
 |`llm.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`llm.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.jwtAuth.providers[].jwks.url`|string||
+|`llm.policies.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`llm.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -6003,6 +6022,7 @@
 |`llm.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`llm.policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.jwtAuth.jwks.url`|string||
+|`llm.policies.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`llm.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
@@ -6354,6 +6374,7 @@
 |`mcp.policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`mcp.policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.mcpAuthentication.jwks.url`|string||
+|`mcp.policies.mcpAuthentication.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`mcp.policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -6477,6 +6498,7 @@
 |`mcp.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`mcp.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.jwtAuth.providers[].jwks.url`|string||
+|`mcp.policies.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`mcp.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -6484,6 +6506,7 @@
 |`mcp.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`mcp.policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.jwtAuth.jwks.url`|string||
+|`mcp.policies.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`mcp.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`mcp.policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -6786,6 +6809,7 @@
 |`ui.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`ui.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.jwtAuth.providers[].jwks.url`|string||
+|`ui.policies.jwtAuth.providers[].jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`ui.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
@@ -6793,6 +6817,7 @@
 |`ui.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`ui.policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.jwtAuth.jwks.url`|string||
+|`ui.policies.jwtAuth.jwks.maxAge`|string|Maximum time to trust keys since they were last fetched successfully. Fetch<br>failures and HTTP error responses do not renew trust; once it lapses, tokens are<br>rejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,<br>but no more often than once a minute, so this must be longer than one minute.<br>Unset keeps the last fetched keys indefinitely. Keys delivered inline over xDS<br>do not use this setting.|
 |`ui.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`ui.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
