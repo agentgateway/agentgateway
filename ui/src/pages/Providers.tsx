@@ -24,7 +24,12 @@ import {
 	upsertLlmProvider
 } from '@/config';
 import { useStickyQueryParam } from '@/drawerRouteState';
-import { useDeleteConfigResource, useLlmConfigData, useUpsertConfigResource } from '@/hooks';
+import {
+	resetFinishedSaves,
+	useDeleteConfigResource,
+	useLlmConfigData,
+	useUpsertConfigResource
+} from '@/hooks';
 import { ProviderConfigEditor } from '@/pages/models/ProviderConfigEditor';
 import { cleanEmpty } from '@/policies/policyUtils';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
@@ -85,8 +90,7 @@ export function ProvidersPage() {
 	const saved = upsertResource.isSuccess || deleteResource.isSuccess;
 
 	function resetSaves() {
-		upsertResource.reset();
-		deleteResource.reset();
+		resetFinishedSaves(upsertResource, deleteResource);
 	}
 
 	function saveProvider(provider: LlmProvider, previousName?: string) {
@@ -118,7 +122,7 @@ export function ProvidersPage() {
 				}
 			/>
 
-			{saveError ? (
+			{saveError && !activeEditing ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
@@ -246,6 +250,7 @@ export function ProvidersPage() {
 					previousName={activeEditing.previousName}
 					help={help}
 					saving={saving}
+					saveError={upsertResource.error?.message}
 					onCancel={closeProviderEditor}
 					onSave={saveProvider}
 				/>
@@ -275,6 +280,7 @@ function ProviderEditor(props: {
 	previousName?: string;
 	help: SchemaHelp;
 	saving: boolean;
+	saveError?: string;
 	onCancel: () => void;
 	onSave: (provider: LlmProvider, previousName?: string) => void;
 }) {
@@ -310,6 +316,7 @@ function ProviderEditor(props: {
 			onClose={props.onCancel}
 			dirty={JSON.stringify(provider) !== initialDraft}
 			saving={props.saving}
+			error={props.saveError}
 			raw={{
 				schemaPath: ['$defs', 'LocalLLMProvider'],
 				value: () => preview ?? provider,

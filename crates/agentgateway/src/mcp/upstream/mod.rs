@@ -365,13 +365,21 @@ impl Upstream {
 			}
 			ctx.stamp_trace_context(&mut request.request.get_meta_mut().0);
 			match &self {
-				Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
-					Box::pin(
+				Upstream::McpStdio(c) => {
+					// Match the HTTP upstreams: honor the backend request timeout, defaulting to 10s.
+					let timeout = ctx
+						.extensions()
+						.get::<http::filters::BackendRequestTimeout>()
+						.map_or(Duration::from_secs(10), |t| t.0);
+					let call = Box::pin(
 						c.send_message(request, &ctx)
 							.assert_size::<{ STDIO_SEND_MESSAGE_FUTURE_SIZE }>(),
-					)
-					.await?,
-				)),
+					);
+					let response = tokio::time::timeout(timeout, call)
+						.await
+						.map_err(|_| ProxyError::UpstreamCallTimeout)??;
+					Ok(mergestream::Messages::from(response))
+				},
 				Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
 					Box::pin(
 						c.send_message(request, &ctx)

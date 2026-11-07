@@ -21,6 +21,54 @@ const fakeCondition = "agentgateway.dev/SomeCondition"
 var ctx = context.Background()
 
 func TestBuildGatewayStatus(t *testing.T) {
+	t.Run("recompute insecure frontend validation condition", func(t *testing.T) {
+		for _, tt := range []struct {
+			name        string
+			tls         *gwv1.GatewayTLSConfig
+			wantPresent bool
+		}{
+			{
+				name: "fallback disabled",
+				tls: &gwv1.GatewayTLSConfig{Frontend: &gwv1.FrontendTLSConfig{
+					Default: gwv1.TLSConfig{Validation: &gwv1.FrontendTLSValidation{Mode: gwv1.AllowValidOnly}},
+				}},
+			},
+			{
+				name: "per port fallback enabled",
+				tls: &gwv1.GatewayTLSConfig{Frontend: &gwv1.FrontendTLSConfig{
+					Default: gwv1.TLSConfig{Validation: &gwv1.FrontendTLSValidation{Mode: gwv1.AllowValidOnly}},
+					PerPort: []gwv1.TLSPortConfig{{
+						Port: 443,
+						TLS:  gwv1.TLSConfig{Validation: &gwv1.FrontendTLSValidation{Mode: gwv1.AllowInsecureFallback}},
+					}},
+				}},
+				wantPresent: true,
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				gw := gw()
+				gw.Generation = 2
+				gw.Spec.TLS = tt.tls
+				gw.Status.Conditions = []metav1.Condition{{
+					Type:               string(gwv1.GatewayConditionInsecureFrontendValidationMode),
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: 1,
+				}}
+				rm := reports.NewReportMap()
+				reports.NewReporter(&rm).Gateway(gw)
+				status := rm.BuildGWStatus(ctx, *gw, 0)
+				condition := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionInsecureFrontendValidationMode))
+				if (condition != nil) != tt.wantPresent {
+					t.Fatalf("InsecureFrontendValidationMode = %v, want present: %v", condition, tt.wantPresent)
+				}
+				if tt.wantPresent {
+					assert.Equal(t, metav1.ConditionTrue, condition.Status)
+					assert.Equal(t, int64(2), condition.ObservedGeneration)
+				}
+			})
+		}
+	})
+
 	t.Run("build all positive conditions with an empty report", func(t *testing.T) {
 		gw := gw()
 		rm := reports.NewReportMap()

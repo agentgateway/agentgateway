@@ -76,7 +76,6 @@ func NewAgwStatusSyncer(
 	cacheSyncs []cache.InformerSynced,
 	extraHandlers map[schema.GroupVersionKind]ResourceStatusSyncer,
 	enableInference bool,
-	enableAgentgatewayModels bool,
 	enableXBackend bool,
 ) *AgentGwStatusSyncer {
 	f := kclient.Filter{ObjectFilter: client.ObjectFilter()}
@@ -98,6 +97,17 @@ func NewAgwStatusSyncer(
 					Status: gwv1.PolicyStatus{
 						Ancestors: s.Ancestors,
 					},
+				}
+			},
+		},
+		agentgatewayModels: StatusSyncer[*agentgateway.AgentgatewayModel, *agentgateway.AgentgatewayModelStatus]{
+			Name:           "agentgatewayModel",
+			ControllerName: controllerName,
+			Client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayModel](client, wellknown.AgentgatewayModelGVR, f),
+			Build: func(om metav1.ObjectMeta, s *agentgateway.AgentgatewayModelStatus) *agentgateway.AgentgatewayModel {
+				return &agentgateway.AgentgatewayModel{
+					ObjectMeta: om,
+					Status:     *s,
 				}
 			},
 		},
@@ -212,19 +222,6 @@ func NewAgwStatusSyncer(
 			},
 		}
 	}
-	if enableAgentgatewayModels {
-		syncer.agentgatewayModels = StatusSyncer[*agentgateway.AgentgatewayModel, *agentgateway.AgentgatewayModelStatus]{
-			Name:           "agentgatewayModel",
-			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayModel](client, wellknown.AgentgatewayModelGVR, f),
-			Build: func(om metav1.ObjectMeta, s *agentgateway.AgentgatewayModelStatus) *agentgateway.AgentgatewayModel {
-				return &agentgateway.AgentgatewayModel{
-					ObjectMeta: om,
-					Status:     *s,
-				}
-			},
-		}
-	}
 
 	return syncer
 }
@@ -252,6 +249,7 @@ func (s *AgentGwStatusSyncer) Start(ctx context.Context) error {
 		s.backendTLSPolicies.Client.HasSynced,
 		s.agentgatewayBackends.Client.HasSynced,
 		s.agentgatewayPolicies.Client.HasSynced,
+		s.agentgatewayModels.Client.HasSynced,
 	)
 	if s.xBackends.Client != nil {
 		s.client.WaitForCacheSync(
@@ -265,13 +263,6 @@ func (s *AgentGwStatusSyncer) Start(ctx context.Context) error {
 			"agent gateway status clients",
 			ctx.Done(),
 			s.inferencePools.Client.HasSynced,
-		)
-	}
-	if s.agentgatewayModels.Client != nil {
-		s.client.WaitForCacheSync(
-			"agent gateway status clients",
-			ctx.Done(),
-			s.agentgatewayModels.Client.HasSynced,
 		)
 	}
 
@@ -305,9 +296,7 @@ func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status.Re
 	case wellknown.AgentgatewayBackendGVK:
 		s.agentgatewayBackends.ApplyStatus(ctx, resource, statusObj)
 	case wellknown.AgentgatewayModelGVK:
-		if s.agentgatewayModels.Client != nil {
-			s.agentgatewayModels.ApplyStatus(ctx, resource, statusObj)
-		}
+		s.agentgatewayModels.ApplyStatus(ctx, resource, statusObj)
 	case wellknown.BackendTLSPolicyGVK:
 		s.backendTLSPolicies.ApplyStatus(ctx, resource, statusObj)
 	case wellknown.XBackendGVK:

@@ -3465,7 +3465,10 @@ fn setup_request_bedrock_sets_signing_region_with_host_override() {
 	azure::AzureResourceType::Foundry,
 	Some(custom::ProviderFormat::SystemOne)
 )]
-#[case::openai(azure::AzureResourceType::OpenAI, None)]
+#[case::openai(
+	azure::AzureResourceType::OpenAI,
+	Some(custom::ProviderFormat::Decisions)
+)]
 fn azure_decisions_capability(
 	#[case] resource_type: azure::AzureResourceType,
 	#[case] expected: Option<custom::ProviderFormat>,

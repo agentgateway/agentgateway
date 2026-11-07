@@ -252,6 +252,8 @@ output:
         backend:
           backend: default/gpt-5-mini/backend.llm
         discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
       key: default/gpt-5-mini.llm
       listenerKey: default/virtual-models.llm
       match:
@@ -265,6 +267,8 @@ output:
         backend:
           backend: default/openai-models/backend.llm
         discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
         modelVisibility: INTERNAL
       key: default/openai-models.llm
       listenerKey: default/virtual-models.llm

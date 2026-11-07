@@ -93,6 +93,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 	knownToReferences := sets.New(
 		wellknown.ServiceGVK.GroupKind(),
 		wellknown.SecretGVK.GroupKind(),
+		wellknown.ConfigMapGVK.GroupKind(),
 		wellknown.AgentgatewayBackendGVK.GroupKind(),
 		wellknown.HTTPRouteGVK.GroupKind(),
 		wellknown.InferencePoolGVK.GroupKind(),

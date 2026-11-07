@@ -49,7 +49,8 @@ status:
     parents:
     - conditions:
       - lastTransitionTime: fake
-        message: kind gateway.networking.k8s.io/v1, Kind=TCPRoute is not allowed
+        message: 'kind TCPRoute is not allowed by Gateway default/tcp-mixed-protocol-gateway
+          listener "only-allow-http-routes" (allowed kinds: none)'
         reason: NotAllowedByListeners
         status: "False"
         type: Accepted

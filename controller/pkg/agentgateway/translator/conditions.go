@@ -7,6 +7,7 @@ import (
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -121,13 +122,13 @@ func SetConditions(generation int64, existingConditions []metav1.Condition, cond
 
 func reportListenerCondition(index int, l gwv1.Listener, obj controllers.Object,
 	statusListeners []gwv1.ListenerStatus, conditions map[string]*Condition,
-	enableAgentgatewayModels bool,
+	modelKinds []schema.GroupVersionKind,
 ) []gwv1.ListenerStatus {
 	for index >= len(statusListeners) {
 		statusListeners = append(statusListeners, gwv1.ListenerStatus{})
 	}
 	cond := statusListeners[index].Conditions
-	supported, valid := GenerateSupportedKinds(l, enableAgentgatewayModels)
+	supported, valid := GenerateSupportedKinds(l, modelKinds)
 	if !valid {
 		conditions[string(gwv1.ListenerConditionResolvedRefs)] = &Condition{
 			Reason:  string(gwv1.ListenerReasonInvalidRouteKinds),
@@ -143,8 +144,9 @@ func reportListenerCondition(index int, l gwv1.Listener, obj controllers.Object,
 	return statusListeners
 }
 
-// GenerateSupportedKinds returns the supported kinds for the listener.
-func GenerateSupportedKinds(l gwv1.Listener, enableAgentgatewayModels bool) ([]gwv1.RouteGroupKind, bool) {
+// GenerateSupportedKinds returns the supported kinds for the listener. modelKinds
+// lists the model route kinds a listener may opt into.
+func GenerateSupportedKinds(l gwv1.Listener, modelKinds []schema.GroupVersionKind) ([]gwv1.RouteGroupKind, bool) {
 	supported := []gwv1.RouteGroupKind{}
 	switch l.Protocol {
 	case gwv1.HTTPProtocolType, gwv1.HTTPSProtocolType:
@@ -153,16 +155,11 @@ func GenerateSupportedKinds(l gwv1.Listener, enableAgentgatewayModels bool) ([]g
 			toRouteKind(wellknown.HTTPRouteGVK),
 			toRouteKind(wellknown.GRPCRouteGVK),
 		}
-		// AgentgatewayModel is opt-in. Listing it in allowedRoutes enables the
-		// listener's built-in LLM routes; it is not enabled by the default route
-		// kinds.
-		if enableAgentgatewayModels && l.AllowedRoutes != nil {
-			modelKind := toRouteKind(wellknown.AgentgatewayModelGVK)
-			for _, kind := range l.AllowedRoutes.Kinds {
-				if routeGroupKindEqual(modelKind, kind) {
-					supported = append(supported, modelKind)
-					break
-				}
+		// Models are opt-in: they are not part of the default route kinds. Listing any
+		// model kind in allowedRoutes admits every model kind.
+		if listsModelKind(l, modelKinds) {
+			for _, gvk := range modelKinds {
+				supported = append(supported, toRouteKind(gvk))
 			}
 		}
 	case gwv1.TCPProtocolType:
@@ -179,16 +176,32 @@ func GenerateSupportedKinds(l gwv1.Listener, enableAgentgatewayModels bool) ([]g
 	}
 	if l.AllowedRoutes != nil && len(l.AllowedRoutes.Kinds) > 0 {
 		// We need to filter down to only ones we actually support
+		// Model kinds are only in supported when one is listed, and then all are kept.
 		intersection := []gwv1.RouteGroupKind{}
 		for _, s := range supported {
-			for _, kind := range l.AllowedRoutes.Kinds {
-				if routeGroupKindEqual(s, kind) {
-					intersection = append(intersection, s)
-					break
-				}
+			if isRouteKind(modelKinds, s) || slices.ContainsFunc(l.AllowedRoutes.Kinds, func(kind gwv1.RouteGroupKind) bool {
+				return routeGroupKindEqual(s, kind)
+			}) {
+				intersection = append(intersection, s)
 			}
 		}
-		return intersection, len(intersection) == len(l.AllowedRoutes.Kinds)
+		valid := !slices.ContainsFunc(l.AllowedRoutes.Kinds, func(kind gwv1.RouteGroupKind) bool {
+			return !slices.ContainsFunc(intersection, func(s gwv1.RouteGroupKind) bool { return routeGroupKindEqual(s, kind) })
+		})
+		return intersection, valid
 	}
 	return supported, true
+}
+
+// listsModelKind reports whether the listener's allowedRoutes lists any model kind.
+func listsModelKind(l gwv1.Listener, modelKinds []schema.GroupVersionKind) bool {
+	return l.AllowedRoutes != nil && slices.ContainsFunc(l.AllowedRoutes.Kinds, func(kind gwv1.RouteGroupKind) bool {
+		return isRouteKind(modelKinds, kind)
+	})
+}
+
+func isRouteKind(kinds []schema.GroupVersionKind, kind gwv1.RouteGroupKind) bool {
+	return slices.ContainsFunc(kinds, func(gvk schema.GroupVersionKind) bool {
+		return routeGroupKindEqual(toRouteKind(gvk), kind)
+	})
 }

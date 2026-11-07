@@ -103,6 +103,8 @@ output:
         backend:
           backend: default/direct-model/backend.http
         discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
       key: default/direct-model.http
       listenerKey: default/model-gateway.http
       match:

@@ -947,9 +947,11 @@ export function Drawer(props: {
 							</StatusBanner>
 						) : null}
 						{props.error ? (
-							<StatusBanner state="bad" title="Save failed">
-								{props.error}
-							</StatusBanner>
+							<div className="drawer-save-error">
+								<StatusBanner state="bad" title="Save failed">
+									{props.error}
+								</StatusBanner>
+							</div>
 						) : null}
 					</div>
 					{props.footer ? (

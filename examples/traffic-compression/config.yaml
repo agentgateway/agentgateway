@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTP
+    routes:
+    - policies:
+        compression:
+          response:
+            compress:
+              algorithms: [gzip, brotli, zstd]
+          request:
+            decompress:
+              algorithms: [gzip]
+      backends:
+      - host: localhost:8080

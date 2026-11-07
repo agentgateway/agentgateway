@@ -213,6 +213,7 @@ export function TrafficDumpRoutesView(props: {
 								const backends = row.route.backends ?? [];
 								const policies = routeInlinePolicies(row.route);
 								const backendPolicies = backends.flatMap(backend => backend.inlinePolicies ?? []);
+								const targetedPolicies = routeTargetedPolicies(row.route, inventory.policies);
 								return (
 									<tr key={`${row.source}-${row.type}-${row.route.key}`}>
 										<td className="strong">{routeDisplayName(row.route)}</td>
@@ -222,7 +223,7 @@ export function TrafficDumpRoutesView(props: {
 										<td>{routeListenerCell(row)}</td>
 										<td>{routeMatchSummary(row)}</td>
 										<td>{backendListSummary(backends)}</td>
-										<td>{policies.length + backendPolicies.length}</td>
+										<td>{policies.length + backendPolicies.length + targetedPolicies.length}</td>
 										<td className="row-actions">
 											<Tooltip content="View route">
 												<button
@@ -246,6 +247,7 @@ export function TrafficDumpRoutesView(props: {
 				<RouteDumpDrawer
 					row={selectedRoute}
 					backends={inventory?.backends ?? []}
+					policies={inventory?.policies ?? []}
 					services={(props.dump?.services ?? []).filter(isService)}
 					onClose={() => setSelectedRouteKey(null)}
 				/>
@@ -347,12 +349,14 @@ function ListenerDumpDrawer(props: { row: DumpListenerRow; onClose: () => void }
 function RouteDumpDrawer(props: {
 	row: DumpRouteRow;
 	backends: BackendWithPolicies[];
+	policies: TargetedPolicy[];
 	services: Service[];
 	onClose: () => void;
 }) {
 	const backends = props.row.route.backends ?? [];
 	const policies = routeInlinePolicies(props.row.route);
 	const backendPolicies = backends.flatMap(backend => backend.inlinePolicies ?? []);
+	const targetedPolicies = routeTargetedPolicies(props.row.route, props.policies);
 	const resolvedBackends = resolveRouteBackends(backends, props.backends, props.services);
 	return (
 		<Drawer title={routeDisplayName(props.row.route)} onClose={props.onClose}>
@@ -377,7 +381,7 @@ function RouteDumpDrawer(props: {
 				</div>
 				<div>
 					<span>Policies</span>
-					<strong>{policies.length + backendPolicies.length}</strong>
+					<strong>{policies.length + backendPolicies.length + targetedPolicies.length}</strong>
 				</div>
 			</div>
 			<div className="drawer-yaml-section">
@@ -552,6 +556,19 @@ function routeListenerCell(row: DumpRouteRow) {
 function routeInlinePolicies(route: Route | TCPRoute): unknown[] {
 	const policies = (route as { inlinePolicies?: unknown[] }).inlinePolicies;
 	return Array.isArray(policies) ? policies : [];
+}
+
+// Matches the proxy's lookup: policies on the whole route, plus policies on this route's rule.
+function routeTargetedPolicies(route: Route | TCPRoute, policies: TargetedPolicy[]) {
+	return policies.filter(policy => {
+		const target = (policy.target as { route?: Partial<Route> } | null | undefined)?.route;
+		return (
+			target?.name === route.name &&
+			target.namespace === route.namespace &&
+			(target.kind ?? null) === (route.kind ?? null) &&
+			(target.ruleName == null || target.ruleName === route.ruleName)
+		);
+	});
 }
 
 function routeMatchSummary(row: DumpRouteRow) {

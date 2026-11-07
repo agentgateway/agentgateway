@@ -467,7 +467,7 @@ func AgwRouteCollection(
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
-					routerKey, modelServing, modelServingErr := modelServingRuleRouterKey(obj.Namespace, obj.Name, n, r)
+					routerKey, modelServing, modelServingErr := modelServingRuleRouterKey(obj.Namespace, obj.Name, n, r, ctx.isModelKind)
 					if modelServing && modelServingErr == nil && modelServingRuleMatchesRoot(r) {
 						if conflicts := rootModelRouteDirectListenerConflicts(ctx, obj); len(conflicts) > 0 {
 							yield(AgwRoute{}, &reporter.RouteCondition{
@@ -1040,7 +1040,6 @@ type RouteContextInputs struct {
 	ServiceEntries      krt.Collection[*networkingclient.ServiceEntry]
 	Backends            krt.Collection[*agentgateway.AgentgatewayBackend]
 	Models              krt.Collection[*agentgateway.AgentgatewayModel]
-	ModelsByNamespace   krt.Index[string, *agentgateway.AgentgatewayModel]
 	References          plugins.ReferenceTypes
 	ControllerName      string
 	BackendRefGrantMode apisettings.BackendRefGrantMode
@@ -1060,13 +1059,19 @@ func RouteParentRefsCollection(
 	models krt.Collection[*agentgateway.AgentgatewayModel],
 	krtopts krtutil.KrtOptions,
 ) krt.Collection[RouteParentRefs] {
-	return krt.JoinCollection([]krt.Collection[RouteParentRefs]{
+	collections := []krt.Collection[RouteParentRefs]{
 		routeParentRefsCollection(inputs, httpRouteCol, wellknown.HTTPRouteGVK, krtopts),
 		routeParentRefsCollection(inputs, grpcRouteCol, wellknown.GRPCRouteGVK, krtopts),
 		routeParentRefsCollection(inputs, tcpRouteCol, wellknown.TCPRouteGVK, krtopts),
 		routeParentRefsCollection(inputs, tlsRouteCol, wellknown.TLSRouteGVK, krtopts),
 		routeParentRefsCollection(inputs, models, wellknown.AgentgatewayModelGVK, krtopts),
-	}, krtopts.ToOptions("translator/RouteParentRefs")...)
+	}
+	if inputs.Collections != nil {
+		for _, source := range inputs.Collections.ModelSources {
+			collections = append(collections, routeParentRefsCollection(inputs, source.Models, source.GVK, krtopts))
+		}
+	}
+	return krt.JoinCollection(collections, krtopts.ToOptions("translator/RouteParentRefs")...)
 }
 
 // RouteParentRefs holds the resolved parent references of a route, so the many collections that
@@ -1199,7 +1204,7 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 	for _, r := range rules {
 		for _, b := range extract(r) {
 			ref, refNs, refName := GetBackendRef(b)
-			if ref == wellknown.HTTPRouteGVK.GroupKind() || ref == wellknown.AgentgatewayModelGVK.GroupKind() {
+			if ref == wellknown.HTTPRouteGVK.GroupKind() || ctx.isModelKind(ref) {
 				continue
 			}
 			if !ancestorBackendAllowed(ctx, sourceGVK, obj.GetNamespace(), ref, refNs, refName) {

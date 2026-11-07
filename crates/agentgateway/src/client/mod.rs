@@ -560,6 +560,8 @@ impl tower::Service<::http::Extensions> for Connector {
 pub struct Config {
 	pub resolver_cfg: ResolverConfig,
 	pub resolver_opts: ResolverOpts,
+	#[serde(with = "serde_dur_option")]
+	pub max_ttl: Option<Duration>,
 }
 
 /// Rejects loopback and link-local destinations, checked after DNS resolution.
@@ -596,7 +598,11 @@ impl Client {
 		backend_config: BackendConfig,
 		metrics: Option<Arc<crate::metrics::Metrics>>,
 	) -> Client {
-		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
+		let resolver = dns::CachedResolver::new(
+			cfg.resolver_cfg.clone(),
+			cfg.resolver_opts.clone(),
+			cfg.max_ttl,
+		);
 		let mut b = agent_pool::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
@@ -967,6 +973,7 @@ mod tests {
 			&Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+				max_ttl: None,
 			},
 			None,
 			crate::BackendConfig::default(),
@@ -1027,6 +1034,7 @@ mod tests {
 			&Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+				max_ttl: None,
 			},
 			None,
 			crate::BackendConfig::default(),

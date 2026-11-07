@@ -62,14 +62,14 @@ impl Process {
 			.lock()
 			.unwrap()
 			.insert(req_id.clone(), sender);
+		// Remove the entry however this call ends, including when the caller drops it.
+		let _pending = PendingRequest {
+			pending: &self.pending_requests,
+			id: req_id,
+		};
 
-		if let Err(e) = self.queue(JsonRpcMessage::Request(req), ctx).await {
-			self.pending_requests.lock().unwrap().remove(&req_id);
-			return Err(e);
-		}
-
-		let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
-		Ok(response)
+		self.queue(JsonRpcMessage::Request(req), ctx).await?;
+		receiver.await.map_err(|_| UpstreamError::Recv)
 	}
 	pub async fn get_event_stream(&self) -> Result<Messages, UpstreamError> {
 		if !self.is_alive() {
@@ -125,6 +125,17 @@ impl Process {
 	}
 }
 
+struct PendingRequest<'a> {
+	pending: &'a Mutex<HashMap<RequestId, oneshot::Sender<ServerJsonRpcMessage>>>,
+	id: RequestId,
+}
+
+impl Drop for PendingRequest<'_> {
+	fn drop(&mut self) {
+		self.pending.lock().unwrap().remove(&self.id);
+	}
+}
+
 type QueuedMessage = (
 	ClientJsonRpcMessage,
 	IncomingRequestContext,
@@ -152,6 +163,8 @@ impl Process {
 			loop {
 				tokio::select! {
 					req = sender_rx.recv() => match req {
+						// The caller gave up (e.g. timed out) while this was queued.
+						Some((_, _, rejected)) if rejected.is_closed() => {},
 						Some((msg, ctx, rejected)) => match proc.send(msg, &ctx).await {
 							Ok(()) => {},
 							// Rejected before anything was sent, so the transport is still usable.
@@ -285,6 +298,9 @@ mod tests {
 	use tokio::time::{Duration, timeout};
 
 	use super::*;
+	use crate::http::filters::BackendRequestTimeout;
+	use crate::mcp::upstream::Upstream;
+	use crate::proxy::ProxyError;
 
 	struct FailOnSendTransport;
 
@@ -295,6 +311,26 @@ mod tests {
 			_: &IncomingRequestContext,
 		) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
 			std::future::ready(Err(UpstreamError::InvalidRequest("boom".to_string())))
+		}
+
+		fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send {
+			std::future::pending()
+		}
+
+		fn close(&mut self) -> impl Future<Output = Result<(), UpstreamError>> + Send {
+			std::future::ready(Ok(()))
+		}
+	}
+
+	struct SilentTransport;
+
+	impl MCPTransport for SilentTransport {
+		fn send(
+			&mut self,
+			_: ClientJsonRpcMessage,
+			_: &IncomingRequestContext,
+		) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
+			std::future::ready(Ok(()))
 		}
 
 		fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send {
@@ -364,6 +400,34 @@ mod tests {
 			ServerJsonRpcMessage::Error(e) => assert_eq!(e.id, Some(RequestId::Number(1))),
 			other => panic!("expected error reply, got {other:?}"),
 		}
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn test_stdio_times_out_unanswered_request() {
+		let upstream = Upstream::McpStdio(Process::new(SilentTransport));
+		let req = JsonRpcRequest {
+			jsonrpc: Default::default(),
+			id: RequestId::Number(1),
+			request: ClientRequest::PingRequest(Default::default()),
+		};
+		let mut ctx = IncomingRequestContext::empty();
+		ctx
+			.extensions_mut()
+			.insert(BackendRequestTimeout(Duration::from_secs(2)));
+
+		let Err(err) = upstream.generic_stream("stalled", req, &ctx).await else {
+			panic!("expected timeout");
+		};
+
+		assert!(matches!(
+			err,
+			UpstreamError::Proxy(ProxyError::UpstreamCallTimeout)
+		));
+		let Upstream::McpStdio(proc) = upstream else {
+			unreachable!()
+		};
+		assert!(proc.pending_requests.lock().unwrap().is_empty());
+		assert!(proc.is_alive());
 	}
 
 	#[tokio::test]

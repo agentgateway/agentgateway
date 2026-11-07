@@ -63,7 +63,6 @@ func TestRouteCollection(t *testing.T) {
 
 func TestModels(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/models", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
-		ctx.Collections.Settings.EnableAgentgatewayModels = true
 		sq, ri := testutils.Syncer(t, ctx, "Gateway", "AgentgatewayModel", "HTTPRoute", "InferencePool")
 		r := ri.Outputs.Resources.List()
 		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {

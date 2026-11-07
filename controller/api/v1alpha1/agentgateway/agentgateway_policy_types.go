@@ -1100,6 +1100,10 @@ type Traffic struct {
 	// +optional
 	Buffer *Buffer `json:"buffer,omitempty"`
 
+	// Compresses responses sent to the client and decompresses request bodies before forwarding.
+	// +optional
+	Compression *Compression `json:"compression,omitempty"`
+
 	// Injects artificial latency before forwarding requests, for
 	// fault-injection testing.
 	// +optional
@@ -1597,6 +1601,68 @@ type Buffer struct {
 	Response *BufferBody `json:"response,omitempty"`
 }
 
+// +kubebuilder:validation:AtLeastOneFieldSet
+type Compression struct {
+	// Compression applied to responses sent to the client.
+	// +optional
+	Response *CompressionResponse `json:"response,omitempty"`
+	// Compression applied to requests received from the client.
+	// +optional
+	Request *CompressionRequest `json:"request,omitempty"`
+}
+
+// +kubebuilder:validation:AtLeastOneFieldSet
+type CompressionResponse struct {
+	// Compresses response bodies when the client advertises support in Accept-Encoding.
+	// Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) with a known
+	// length of at least 32 bytes are compressed, so streamed responses are sent as-is.
+	// Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`
+	// are never compressed.
+	// +optional
+	Compress *ResponseCompression `json:"compress,omitempty"`
+}
+
+// +kubebuilder:validation:AtLeastOneFieldSet
+type CompressionRequest struct {
+	// Decompresses request bodies before route-level body-aware policies (rate limiting,
+	// ext_proc, transformations) run and before forwarding to the backend. Authentication,
+	// authorization and gateway-phase policies run first and observe the encoded body.
+	// +optional
+	Decompress *RequestDecompression `json:"decompress,omitempty"`
+}
+
+// +k8s:enum
+type CompressionAlgorithm string
+
+const (
+	CompressionAlgorithmGzip    CompressionAlgorithm = "Gzip"
+	CompressionAlgorithmBrotli  CompressionAlgorithm = "Brotli"
+	CompressionAlgorithmDeflate CompressionAlgorithm = "Deflate"
+	CompressionAlgorithmZstd    CompressionAlgorithm = "Zstd"
+)
+
+type ResponseCompression struct {
+	// Algorithms that may be negotiated with the client's Accept-Encoding header.
+	// When the client accepts several equally, the first listed wins.
+	// If unset, defaults to Gzip.
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
+	Algorithms []CompressionAlgorithm `json:"algorithms,omitempty"`
+}
+
+type RequestDecompression struct {
+	// Algorithms decoded from request bodies. Bodies using any other (or more than one) encoding
+	// are forwarded untouched.
+	// If unset, defaults to Gzip.
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
+	Algorithms []CompressionAlgorithm `json:"algorithms,omitempty"`
+}
+
 type SecretSelector struct {
 	// Labels that must be present on each selected Secret.
 	// +required
@@ -1680,11 +1746,10 @@ type BackendAuth struct {
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
 
-	// Credentials is a list of additional credentials to inject on the
-	// backend request. Each entry resolves a Secret key and writes its value
-	// to the entry's location. `credentials` is independent of the primary
-	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
-	// alongside it.
+	// Credentials is a list of additional credentials to inject on the backend
+	// request. Each entry writes its value to the entry's location.
+	// `credentials` is independent of the primary `key`/`secretRef`/`passthrough`
+	// mechanism and may be set on its own or alongside it.
 	//
 	// +optional
 	// +kubebuilder:validation:MinItems=1
@@ -1695,6 +1760,7 @@ type BackendAuth struct {
 
 // BackendAuthCredential specifies one additional credential to inject on the
 // backend request.
+// +kubebuilder:validation:ExactlyOneOf=secretRef;gcp
 type BackendAuthCredential struct {
 	// Where the credential is inserted on the backend request.
 	// +required
@@ -1703,8 +1769,12 @@ type BackendAuthCredential struct {
 	// SecretRef references a Kubernetes Secret holding the credential value, and
 	// optionally overrides the key read from it. Defaults to `Authorization`,
 	// matching the key convention used by the top-level `secretRef`.
-	// +required
-	SecretRef LocalSecretKeyRef `json:"secretRef"`
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Fetches a Google Cloud access or ID token and writes it to `location`.
+	// +optional
+	GCP *GcpAuth `json:"gcp,omitempty"`
 }
 
 // OpenAIModerationAuth configures credentials for OpenAI Moderation requests.
@@ -1925,7 +1995,9 @@ type OAuthTokenExchange struct {
 	RequestedTokenType *OAuthTokenType `json:"requestedTokenType,omitempty"`
 
 	// Extra form params; values are CEL expressions over the incoming request.
+	// Parameters set by the gateway itself (for example `scope`, `audience`, or `client_id`) may not be overridden.
 	// +kubebuilder:validation:MaxProperties=64
+	// +kubebuilder:validation:XValidation:rule="self.all(k, !(k.lowerAscii() in ['grant_type', 'subject_token', 'subject_token_type', 'actor_token', 'actor_token_type', 'assertion', 'audience', 'resource', 'scope', 'requested_token_type', 'client_id', 'client_secret', 'client_assertion', 'client_assertion_type']))",message="additionalParams may not override a reserved OAuth parameter"
 	// +optional
 	AdditionalParams map[string]CELExpression `json:"additionalParams,omitempty"`
 

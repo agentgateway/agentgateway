@@ -109,6 +109,8 @@ output:
         backend:
           backend: default/gpt-5-mini/backend.default.tenant1.models
         discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
       key: default/gpt-5-mini.default.tenant1.models.http
       listenerKey: default/model-gateway.http
       match:

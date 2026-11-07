@@ -20,6 +20,7 @@ pub struct ModelInfo {
 	pub modalities: Modalities,
 	pub capabilities: Capabilities,
 	pub reasoning: Reasoning,
+	pub preferred_endpoints: Vec<&'static str>,
 }
 
 impl ModelInfo {
@@ -45,6 +46,7 @@ impl ModelInfo {
 			modalities: m.modalities.clone(),
 			capabilities: m.capabilities.clone(),
 			reasoning: m.reasoning.clone(),
+			preferred_endpoints: Vec::new(),
 		}
 	}
 
@@ -116,6 +118,12 @@ impl ModelInfo {
 				effort: shared(|t| &t.reasoning.effort),
 				..Default::default()
 			},
+			preferred_endpoints: first
+				.preferred_endpoints
+				.iter()
+				.filter(|e| rest.iter().all(|t| t.preferred_endpoints.contains(e)))
+				.copied()
+				.collect(),
 		}
 	}
 }
@@ -172,6 +180,8 @@ struct Entry<'a> {
 	capabilities: EntryCapabilities,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	supported_parameters: Vec<&'static str>,
+	#[serde(skip_serializing_if = "<[&str]>::is_empty")]
+	preferred_endpoints: &'a [&'static str],
 }
 
 #[derive(Serialize)]
@@ -253,6 +263,7 @@ impl<'a> Entry<'a> {
 				temperature: caps.temperature,
 			},
 			supported_parameters: params,
+			preferred_endpoints: &m.preferred_endpoints,
 		}
 	}
 }

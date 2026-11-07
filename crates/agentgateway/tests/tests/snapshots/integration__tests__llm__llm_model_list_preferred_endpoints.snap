@@ -1,0 +1,64 @@
+---
+source: crates/agentgateway/tests/tests/llm.rs
+expression: endpoints
+---
+{
+  "FLUX.1-schnell": [
+    "/images/edits",
+    "/images/generations"
+  ],
+  "azure/gpt-5.5": [
+    "/chat/completions",
+    "/responses"
+  ],
+  "bedrock/claude-sonnet-4-5": [
+    "/messages"
+  ],
+  "bedrock/llama3": [
+    "/chat/completions",
+    "/responses"
+  ],
+  "bedrock/titan-embed": null,
+  "claude-sonnet-4-5": [
+    "/messages"
+  ],
+  "custom-embedder": [
+    "/embeddings"
+  ],
+  "custom-everything": [
+    "/chat/completions",
+    "/decisions",
+    "/messages/count_tokens",
+    "/models/{model}:countTokens",
+    "/models/{model}:generateContent",
+    "/rerank",
+    "/systemone"
+  ],
+  "foundry/claude-sonnet-4-5": [
+    "/messages"
+  ],
+  "gemini-2.5-flash": [
+    "/chat/completions",
+    "/models/{model}:generateContent"
+  ],
+  "gemini-2.5-flash-image": null,
+  "gpt-5.5": [
+    "/chat/completions",
+    "/responses"
+  ],
+  "gpt-image-2": [
+    "/images/edits",
+    "/images/generations"
+  ],
+  "openai-and-azure": [
+    "/chat/completions",
+    "/responses"
+  ],
+  "text-embedding-3-small": [
+    "/embeddings"
+  ],
+  "vertex/claude-sonnet-4-5": [
+    "/messages"
+  ],
+  "vertex/gemini-embedding-001": null
+}

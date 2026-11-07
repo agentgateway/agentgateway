@@ -418,6 +418,16 @@ pub(super) async fn insert_token(
 	call_target: &Target,
 	hm: &mut HeaderMap,
 ) -> Result<(), BackendAuthError> {
+	let token = fetch_token(g, call_target).await?;
+	insert_provider_token(&token, hm)?;
+	trace!("attached GCP token");
+	Ok(())
+}
+
+pub(super) async fn fetch_token(
+	g: &GcpAuth,
+	call_target: &Target,
+) -> Result<String, BackendAuthError> {
 	let credential = match g {
 		GcpAuth::IdToken { credential, .. } | GcpAuth::AccessToken { credential, .. } => credential,
 	};
@@ -480,9 +490,7 @@ pub(super) async fn insert_token(
 			},
 		},
 	};
-	insert_provider_token(&token, hm)?;
-	trace!("attached GCP token");
-	Ok(())
+	Ok(token)
 }
 
 fn insert_provider_token(token: &str, headers: &mut HeaderMap) -> Result<(), BackendAuthError> {

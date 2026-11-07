@@ -15,6 +15,7 @@ import (
 	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -85,6 +86,9 @@ type AgwCollections struct {
 	Models               krt.Collection[*agentgateway.AgentgatewayModel]
 	ModelsByNamespace    krt.Index[string, *agentgateway.AgentgatewayModel]
 	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
+
+	// ModelSources are additional model APIs, keyed by kind.
+	ModelSources map[schema.GroupKind]ModelSource
 
 	// ControllerName is the name of the Gateway controller.
 	ControllerName string
@@ -246,16 +250,13 @@ func NewAgwCollections(
 		// agentgateway-specific CRDs
 		AgentgatewayPolicies: krt.NewFilteredInformer[*agentgateway.AgentgatewayPolicy](client, filter, krtOptions.ToOptions("informer/AgentgatewayPolicies")...),
 		Backends:             krt.NewFilteredInformer[*agentgateway.AgentgatewayBackend](client, filter, krtOptions.ToOptions("informer/AgentgatewayBackends")...),
-		Models:               krt.NewDisabledCollection[*agentgateway.AgentgatewayModel](krtOptions.ToOptions("disable/AgentgatewayModels")...),
+		Models:               krt.NewFilteredInformer[*agentgateway.AgentgatewayModel](client, filter, krtOptions.ToOptions("informer/AgentgatewayModels")...),
 	}
 
 	if settings.EnableInferExt {
 		// inference extensions cluster watch permissions are controlled by enabling EnableInferExt
 		inferencePoolGVR := wellknown.InferencePoolGVK.GroupVersion().WithResource("inferencepools")
 		agwCollections.InferencePools = krt.WrapClient(kclient.NewDelayedInformer[*inf.InferencePool](client, inferencePoolGVR, kubetypes.StandardInformer, kclient.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/InferencePools")...)
-	}
-	if settings.EnableAgentgatewayModels {
-		agwCollections.Models = krt.NewFilteredInformer[*agentgateway.AgentgatewayModel](client, filter, krtOptions.ToOptions("informer/AgentgatewayModels")...)
 	}
 	agwCollections.SetupIndexes()
 
@@ -280,4 +281,15 @@ func (c *AgwCollections) SetupIndexes() {
 
 func (c *AgwCollections) HasSynced() bool {
 	return c.GatewaysForDeployer.HasSynced()
+}
+
+// ModelKinds returns the route kinds a listener may opt into for models.
+// AgentgatewayModel is always first.
+func (c *AgwCollections) ModelKinds() []schema.GroupVersionKind {
+	kinds := []schema.GroupVersionKind{wellknown.AgentgatewayModelGVK}
+	for _, source := range c.ModelSources {
+		kinds = append(kinds, source.GVK)
+	}
+	slices.SortBy(kinds[1:], schema.GroupVersionKind.String)
+	return kinds
 }

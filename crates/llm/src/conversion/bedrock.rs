@@ -4397,13 +4397,16 @@ mod helpers {
 		))
 	}
 
-	/// Drops `anthropic-beta` values outside the allowlist from a native Anthropic Messages request,
-	/// only when the allowlist is explicitly configured.
+	/// Drops `anthropic-beta` values from a native Anthropic Messages request: `oauth-*` (Claude Code
+	/// OAuth logins), which Bedrock rejects, and, when the allowlist is explicitly configured, values
+	/// outside it.
 	pub fn filter_native_beta_header(headers: &mut http::HeaderMap) -> Result<(), AIError> {
-		if !*FILTER_NATIVE_BETA_HEADERS {
-			return Ok(());
-		}
-		let joined = allowed_beta_headers(headers, |_| true)?.join(",");
+		let joined = beta_headers(headers, |f| {
+			!f.is_empty()
+				&& !f.starts_with("oauth-")
+				&& (!*FILTER_NATIVE_BETA_HEADERS || ALLOWED_BETA_HEADERS.iter().any(|a| a == f))
+		})?
+		.join(",");
 		headers.remove("anthropic-beta");
 		if !joined.is_empty() {
 			let value = http::HeaderValue::from_str(&joined)
@@ -4419,6 +4422,16 @@ mod helpers {
 		headers: &http::HeaderMap,
 		filter: impl Fn(&str) -> bool,
 	) -> Result<Vec<&str>, AIError> {
+		beta_headers(headers, |feature| {
+			ALLOWED_BETA_HEADERS.iter().any(|f| f == feature) && filter(feature)
+		})
+	}
+
+	/// Comma-separated `anthropic-beta` values, across all headers, that pass `filter`.
+	fn beta_headers(
+		headers: &http::HeaderMap,
+		filter: impl Fn(&str) -> bool,
+	) -> Result<Vec<&str>, AIError> {
 		let mut features = Vec::new();
 		for value in headers.get_all("anthropic-beta") {
 			let header_str = value
@@ -4428,7 +4441,7 @@ mod helpers {
 				header_str
 					.split(',')
 					.map(str::trim)
-					.filter(|feature| ALLOWED_BETA_HEADERS.iter().any(|f| f == feature) && filter(feature)),
+					.filter(|feature| filter(feature)),
 			);
 		}
 		Ok(features)

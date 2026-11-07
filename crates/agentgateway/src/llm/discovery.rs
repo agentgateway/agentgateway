@@ -1,6 +1,9 @@
 use agent_core::prelude::Strng;
 
+use crate::llm::catalog::CatalogSnapshot;
+use crate::llm::custom::ProviderFormat;
 use crate::llm::model_transform::ModelTransformation;
+use crate::llm::{AIProvider, ChatFormat};
 use crate::{apply, cel, schema_enum, schema_ser_schema};
 
 #[apply(schema_enum!)]
@@ -22,6 +25,9 @@ pub struct ModelDiscovery {
 	/// The upstream model when it is fixed regardless of the served name.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	/// The configured provider, when known, used to advertise conversion-free client endpoints.
+	#[serde(skip)]
+	pub provider_config: Option<AIProvider>,
 }
 
 impl ModelDiscovery {
@@ -39,6 +45,7 @@ impl ModelDiscovery {
 			provider,
 			transformation,
 			model,
+			provider_config: None,
 		})
 	}
 
@@ -64,5 +71,75 @@ impl ModelDiscovery {
 		// the name unchanged (e.g. stripPrefix without the prefix). The catalog resolves provider
 		// aliases such as Vertex publisher prefixes.
 		target.to_string()
+	}
+
+	/// Client endpoints the gateway fully parses for the model, preferring those served natively.
+	pub fn preferred_endpoints(&self, model: &str, catalog: &CatalogSnapshot) -> Vec<&'static str> {
+		// Endpoints are model-specific, so an unexpanded wildcard advertises none.
+		let Some(provider) = self
+			.provider_config
+			.as_ref()
+			.filter(|_| !model.contains('*'))
+		else {
+			return Vec::new();
+		};
+		let custom = matches!(provider, AIProvider::Custom(_));
+		let entry = catalog.model(&self.provider, model);
+		let mut endpoints = provider
+			.supported_chat_formats(model, Some(catalog))
+			.into_iter()
+			.flat_map(|format| match format {
+				ChatFormat::OpenAICompletions => &["/chat/completions"][..],
+				ChatFormat::OpenAIResponses => &["/responses"],
+				ChatFormat::AnthropicMessages => &["/messages"],
+				ChatFormat::VertexGemini => &["/models/{model}:generateContent"],
+				// Converse is only reachable by raw passthrough, so advertise the best converted formats.
+				// Bedrock catalog entries lack endpoints, so only entries with modalities are chat models.
+				ChatFormat::BedrockConverse => match provider {
+					AIProvider::Bedrock(_) if entry.is_none_or(|m| m.modalities.output.is_empty()) => &[][..],
+					AIProvider::Bedrock(p) if p.is_anthropic_model(model) => &["/messages"],
+					_ => &["/chat/completions", "/responses"],
+				},
+			})
+			.copied()
+			.collect::<Vec<_>>();
+		let served = entry.and_then(|m| m.endpoints.as_ref());
+		// Models without catalog endpoints are chat models, unless a custom provider declares more.
+		if served.is_some() || custom {
+			// Vertex and Bedrock convert embeddings and reranking.
+			let converted = matches!(provider, AIProvider::Vertex(_) | AIProvider::Bedrock(_));
+			endpoints.extend(
+				provider
+					.supported_formats(model)
+					.into_iter()
+					.filter_map(|format| match format {
+						ProviderFormat::Embeddings if !converted => Some("/embeddings"),
+						// Azure forwards rerank requests to Chat Completions.
+						ProviderFormat::Rerank if !converted && !matches!(provider, AIProvider::Azure(_)) => {
+							Some("/rerank")
+						},
+						ProviderFormat::Decisions if custom => Some("/decisions"),
+						ProviderFormat::SystemOne if custom => Some("/systemone"),
+						ProviderFormat::AnthropicTokenCount if custom => Some("/messages/count_tokens"),
+						ProviderFormat::GeminiCountTokens if custom => Some("/models/{model}:countTokens"),
+						_ => None,
+					}),
+			);
+		}
+		if let Some(served) = served {
+			// Image and audio requests are forwarded with their OpenAI-style paths.
+			if matches!(provider, AIProvider::OpenAI(_) | AIProvider::Custom(_)) {
+				endpoints.extend([
+					"/images/generations",
+					"/images/edits",
+					"/audio/speech",
+					"/audio/transcriptions",
+				]);
+			}
+			endpoints.retain(|e| served.iter().any(|s| s == e));
+		}
+		endpoints.sort();
+		endpoints.dedup();
+		endpoints
 	}
 }

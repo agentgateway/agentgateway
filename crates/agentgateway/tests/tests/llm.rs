@@ -594,13 +594,12 @@ llm:
 
 #[tokio::test]
 async fn llm_attached_rejection_is_stored_in_log_database() {
-	let _guard =
-		agentgateway::telemetry::log_store::setup(&agentgateway::telemetry::log_store::Config {
-			url: "sqlite::memory:".to_string(),
-			max_connections: Some(1),
-		})
-		.await
-		.unwrap();
+	let _guard = agentgateway::telemetry::log_store::setup(&agentgateway::database::DatabaseConfig {
+		url: "sqlite::memory:".to_string(),
+		max_connections: Some(1),
+	})
+	.await
+	.unwrap();
 	let t = setup_local_llm_config(
 		r#"
 gateways:
@@ -745,6 +744,14 @@ llm:
           weight: 1
         - model: fast
           weight: 1
+  - name: resilient
+    routing:
+      failover:
+        targets:
+        - model: gpt-5.5
+          priority: 0
+        - model: fast
+          priority: 1
 "#;
 	let mut t = setup_local_llm_config(config).await;
 	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
@@ -779,11 +786,138 @@ llm:
 	assert_eq!(res.status(), StatusCode::NOT_FOUND);
 	// Entries without catalog metadata carry the config load time.
 	for model in models["data"].as_array_mut().unwrap() {
-		if model["id"] == "local-model" || model["id"] == "blend" {
+		if ["local-model", "blend", "resilient"].contains(&model["id"].as_str().unwrap()) {
 			model["created"] = json!(0);
 		}
 	}
+	let listed = models["data"].as_array().unwrap();
+	let described = |id: &str| {
+		let mut model = listed.iter().find(|m| m["id"] == id).unwrap().clone();
+		model.as_object_mut().unwrap().remove("id");
+		model
+	};
+	assert_eq!(described("resilient")["max_tokens"], 64000);
+	assert_eq!(described("resilient"), described("blend"));
 	insta::assert_json_snapshot!(models);
+}
+
+#[tokio::test]
+async fn llm_model_list_preferred_endpoints() {
+	let config = r#"
+llm:
+  port: 0
+  models:
+  - name: gpt-5.5
+    provider: openAI
+  - name: text-embedding-3-small
+    provider: openAI
+  - name: gpt-image-2
+    provider: openAI
+  - name: claude-sonnet-4-5
+    provider: anthropic
+  - name: gemini-2.5-flash
+    provider: gemini
+  - name: gemini-2.5-flash-image
+    provider: gemini
+  - name: vertex/claude-sonnet-4-5
+    provider: vertex
+    params:
+      model: claude-sonnet-4-5
+      vertexProject: p
+  - name: vertex/gemini-embedding-001
+    provider: vertex
+    params:
+      model: gemini-embedding-001
+      vertexProject: p
+  - name: bedrock/claude-sonnet-4-5
+    provider: bedrock
+    params:
+      model: anthropic.claude-sonnet-4-5
+      awsRegion: us-east-1
+  - name: bedrock/llama3
+    provider: bedrock
+    params:
+      model: meta.llama3-70b-instruct-v1:0
+      awsRegion: us-east-1
+  - name: bedrock/titan-embed
+    provider: bedrock
+    params:
+      model: amazon.titan-embed-text-v2:0
+      awsRegion: us-east-1
+  - name: azure/gpt-5.5
+    provider: azure
+    params:
+      model: gpt-5.5
+      azureResourceName: r
+      azureResourceType: openAI
+  - name: foundry/claude-sonnet-4-5
+    provider: azure
+    params:
+      model: claude-sonnet-4-5
+      azureResourceName: r
+      azureResourceType: foundry
+      azureProjectName: p
+  - name: FLUX.1-schnell
+    provider: togetherai
+  - name: custom-embedder
+    provider:
+      custom:
+        formats:
+        - type: embeddings
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: custom-everything
+    provider:
+      custom:
+        formats:
+        - type: completions
+        - type: generateContent
+        - type: anthropicTokenCount
+        - type: geminiCountTokens
+        - type: rerank
+        - type: decisions
+        - type: systemOne
+        - type: realtime
+    params:
+      baseUrl: http://localhost:9999/v1
+  virtualModels:
+  - name: openai-and-azure
+    routing:
+      weighted:
+        targets:
+        - model: gpt-5.5
+          weight: 1
+        - model: azure/gpt-5.5
+          weight: 1
+"#;
+	let mut t = setup_local_llm_config(config).await;
+	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
+		agentgateway::ModelCatalogSource::Inline {
+			inline: r#"{"metadata":{"generatedAt":"2099-01-01T00:00:00Z"},"providers":{
+				"openai":{"models":{"gpt-5.5":{},"text-embedding-3-small":{"endpoints":["/embeddings"]},"gpt-image-2":{"endpoints":["/images/generations","/images/edits"]}}},
+				"gcp.gemini":{"models":{"gemini-2.5-flash":{},"gemini-2.5-flash-image":{"endpoints":["/images/generations","/images/edits"]}}},
+				"gcp.vertex_ai":{"models":{"gemini-embedding-001":{"endpoints":["/embeddings"]}}},
+				"aws.bedrock":{"models":{"anthropic.claude-sonnet-4-5":{"modalities":{"input":["text"],"output":["text"]}},"meta.llama3-70b-instruct-v1:0":{"modalities":{"input":["text"],"output":["text"]}},"amazon.titan-embed-text-v2:0":{}}},
+				"togetherai":{"models":{"FLUX.1-schnell":{"endpoints":["/images/generations","/images/edits"]}}}
+			}}"#.to_string(),
+		},
+	]).await.unwrap();
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	let endpoints = models["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| {
+			(
+				m["id"].as_str().unwrap().to_string(),
+				m["preferred_endpoints"].clone(),
+			)
+		})
+		.collect::<std::collections::BTreeMap<_, _>>();
+	insta::assert_json_snapshot!(endpoints);
 }
 
 #[tokio::test]

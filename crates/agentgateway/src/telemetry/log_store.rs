@@ -11,27 +11,13 @@ use serde_json::Value;
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
-use crate::{apply, schema};
+use crate::database::DatabaseConfig;
 
 mod postgres;
 mod sqlite;
 
 static REQUEST_LOG_STORE: OnceLock<RequestLogStore> = OnceLock::new();
 static REQUEST_LOG_STORE_BACKLOG: AtomicUsize = AtomicUsize::new(0);
-
-#[apply(schema!)]
-#[derive(Eq, PartialEq)]
-pub struct Config {
-	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
-	#[serde(serialize_with = "crate::serdes::ser_redact")]
-	pub url: String,
-	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
-	/// When the request log and config stores have matching database settings, they share one pool
-	/// with this limit.
-	#[serde(default)]
-	#[cfg_attr(feature = "schema", schemars(range(min = 1)))]
-	pub max_connections: Option<u32>,
-}
 
 #[derive(Clone)]
 pub struct RequestLogStore {
@@ -61,12 +47,12 @@ impl RequestLogStore {
 	}
 }
 
-pub async fn setup(cfg: &Config) -> anyhow::Result<RequestLogStoreGuard> {
+pub async fn setup(cfg: &DatabaseConfig) -> anyhow::Result<RequestLogStoreGuard> {
 	setup_with_pool(cfg, None).await
 }
 
 pub async fn setup_with_pool(
-	cfg: &Config,
+	cfg: &DatabaseConfig,
 	pool: Option<crate::database::DatabasePool>,
 ) -> anyhow::Result<RequestLogStoreGuard> {
 	let (tx, rx) = crossbeam::channel::unbounded();
@@ -94,10 +80,14 @@ pub fn enabled() -> bool {
 	REQUEST_LOG_STORE.get().is_some()
 }
 
+/// Returned when no request log store is running.
+pub const STORE_DISABLED: &str =
+	"request log storage is not running (disabled, or no database configured)";
+
 pub async fn search(request: SearchRequest) -> anyhow::Result<SearchResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
-		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+		.ok_or_else(|| anyhow::anyhow!(STORE_DISABLED))?;
 	store
 		.request(|tx| LogStoreMsg::Search { request, tx })
 		.await
@@ -106,7 +96,7 @@ pub async fn search(request: SearchRequest) -> anyhow::Result<SearchResponse> {
 pub async fn get(request: GetRequest) -> anyhow::Result<GetResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
-		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+		.ok_or_else(|| anyhow::anyhow!(STORE_DISABLED))?;
 	store.request(|tx| LogStoreMsg::Get { request, tx }).await
 }
 
@@ -115,7 +105,7 @@ pub async fn analytics_summary(
 ) -> anyhow::Result<AnalyticsSummaryResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
-		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+		.ok_or_else(|| anyhow::anyhow!(STORE_DISABLED))?;
 	store
 		.request(|tx| LogStoreMsg::AnalyticsSummary { request, tx })
 		.await
@@ -124,7 +114,7 @@ pub async fn analytics_summary(
 pub async fn tail(request: TailRequest) -> anyhow::Result<TailResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
-		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+		.ok_or_else(|| anyhow::anyhow!(STORE_DISABLED))?;
 	store.request(|tx| LogStoreMsg::Tail { request, tx }).await
 }
 
@@ -186,7 +176,7 @@ type QueryResponse<T> = oneshot::Sender<anyhow::Result<T>>;
 
 struct LogStoreWorker {
 	receiver: Receiver<LogStoreMsg>,
-	cfg: Config,
+	cfg: DatabaseConfig,
 	pool: Option<crate::database::DatabasePool>,
 	ready_tx: Option<oneshot::Sender<anyhow::Result<()>>>,
 }
@@ -194,7 +184,7 @@ struct LogStoreWorker {
 impl LogStoreWorker {
 	fn new(
 		receiver: Receiver<LogStoreMsg>,
-		cfg: Config,
+		cfg: DatabaseConfig,
 		pool: Option<crate::database::DatabasePool>,
 		ready_tx: oneshot::Sender<anyhow::Result<()>>,
 	) -> Self {
@@ -908,7 +898,7 @@ enum Backend {
 
 impl Backend {
 	async fn connect(
-		cfg: &Config,
+		cfg: &DatabaseConfig,
 		pool: Option<crate::database::DatabasePool>,
 	) -> anyhow::Result<Self> {
 		let pool = match pool {

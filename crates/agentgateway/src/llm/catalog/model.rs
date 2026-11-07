@@ -118,6 +118,7 @@ impl Catalog {
 						bm.name = om.name.or(bm.name);
 						bm.status = om.status.or(bm.status);
 						bm.released = om.released.or(bm.released);
+						bm.endpoints = om.endpoints.or(bm.endpoints);
 						bm.limits = Limits {
 							context: om.limits.context.or(bm.limits.context),
 							input: om.limits.input.or(bm.limits.input),
@@ -228,6 +229,9 @@ pub struct Model {
 	/// Release date, as YYYY-MM-DD or YYYY-MM.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub released: Option<String>,
+	/// Client endpoints the model serves; absent means a chat model.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub endpoints: Option<Vec<String>>,
 	/// Base pricing rates for this model.
 	#[serde(default, skip_serializing_if = "Rates::is_empty")]
 	pub rates: Rates,

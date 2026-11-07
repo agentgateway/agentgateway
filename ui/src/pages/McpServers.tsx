@@ -307,7 +307,7 @@ export function McpSettingsDrawer(props: {
 	onSave: (settings: McpSettingsPatch) => void;
 }) {
 	return (
-		<Drawer title="Settings" onClose={props.onClose}>
+		<Drawer title="Settings" onClose={props.onClose} error={props.saveError}>
 			<McpSettings
 				config={props.config}
 				mcp={props.mcp}
@@ -317,11 +317,6 @@ export function McpSettingsDrawer(props: {
 				saving={props.saving}
 				onSave={props.onSave}
 			/>
-			{props.saveError ? (
-				<StatusBanner state="bad" title="Save failed">
-					{props.saveError}
-				</StatusBanner>
-			) : null}
 		</Drawer>
 	);
 }

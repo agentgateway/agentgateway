@@ -13,6 +13,7 @@ use protos::envoy::service::ext_proc::v3::ProtocolConfiguration;
 use serde_json::Value as JsonValue;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 
 use crate::cel::{Executor, Expression, RequestSnapshot};
 use crate::client::ResolvedDestination;
@@ -438,6 +439,9 @@ struct ExtProcInstance {
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
 	cleanly_closed: Arc<AtomicBool>,
+	// Cancelled when the downstream drops while a request or response phase is awaiting the
+	// processor, resetting the gRPC stream so the processor can release any state (e.g. EPP queue slot).
+	cancel: CancellationToken,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 	req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
@@ -475,6 +479,7 @@ impl ExtProcInstance {
 			rx_resp_for_request: None,
 			rx_resp_for_response: None,
 			cleanly_closed: Arc::new(AtomicBool::new(false)),
+			cancel: CancellationToken::new(),
 			metadata_context,
 			req_attributes,
 			resp_attributes,
@@ -496,6 +501,7 @@ impl ExtProcInstance {
 		let cleanly_closed = self.cleanly_closed.clone();
 		let span_client = self.span_client.clone();
 		let span_target = self.span_target.clone();
+		let cancel = self.cancel.clone();
 		let (tx_req, mut rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
 		// Enqueueing a ProcessingRequest does not mean we connected to the processor.
@@ -509,7 +515,7 @@ impl ExtProcInstance {
 			}
 			rx_req.poll_recv(cx)
 		});
-		dtrace::spawn(async move {
+		let process = async move {
 			let mut request = tonic::Request::new(req_stream);
 			*request.metadata_mut() = grpc_initial_metadata;
 			let mut span = span_client.start_grpc_span(
@@ -552,6 +558,12 @@ impl ExtProcInstance {
 						return;
 					},
 				}
+			}
+		};
+		dtrace::spawn(async move {
+			tokio::select! {
+				_ = process => {},
+				_ = cancel.cancelled() => trace!("downstream dropped, resetting ext_proc stream"),
 			}
 		});
 
@@ -944,14 +956,20 @@ impl ExtProcInstance {
 		&mut self,
 		req: http::Request,
 	) -> Result<(http::Request, Option<http::Response>), Error> {
-		let rebuffer = req.body().needs_inspection();
-		let (mut req, response) = self.mutate_request_inner(req).await?;
-		if rebuffer && self.mode_state.request_body_mode != BodySendMode::None {
-			let _ = http::inspect_body(&mut req)
-				.await
-				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+		let cancel_on_drop = self.cancel.clone().drop_guard();
+		let result: Result<_, Error> = async {
+			let rebuffer = req.body().needs_inspection();
+			let (mut req, response) = self.mutate_request_inner(req).await?;
+			if rebuffer && self.mode_state.request_body_mode != BodySendMode::None {
+				let _ = http::inspect_body(&mut req)
+					.await
+					.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+			}
+			Ok((req, response))
 		}
-		Ok((req, response))
+		.await;
+		cancel_on_drop.disarm();
+		result
 	}
 
 	async fn mutate_request_inner(
@@ -1503,16 +1521,22 @@ impl ExtProcInstance {
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
 	) -> Result<(http::Response, Option<http::Response>), Error> {
-		let rebuffer = response.body().needs_inspection();
-		let (mut response, policy_response) = self
-			.mutate_response_inner(response, request, resolved_destination_metadata)
-			.await?;
-		if rebuffer && self.mode_state.response_body_mode != BodySendMode::None {
-			let _ = http::inspect_response_body(&mut response)
-				.await
-				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+		let cancel_on_drop = self.cancel.clone().drop_guard();
+		let result: Result<_, Error> = async {
+			let rebuffer = response.body().needs_inspection();
+			let (mut response, policy_response) = self
+				.mutate_response_inner(response, request, resolved_destination_metadata)
+				.await?;
+			if rebuffer && self.mode_state.response_body_mode != BodySendMode::None {
+				let _ = http::inspect_response_body(&mut response)
+					.await
+					.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+			}
+			Ok((response, policy_response))
 		}
-		Ok((response, policy_response))
+		.await;
+		cancel_on_drop.disarm();
+		result
 	}
 
 	async fn mutate_response_inner(

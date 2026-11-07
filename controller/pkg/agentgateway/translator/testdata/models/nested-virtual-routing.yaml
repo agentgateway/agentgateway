@@ -199,6 +199,8 @@ output:
         backend:
           backend: default/guarded/backend.llm
         discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
       key: default/guarded.llm
       listenerKey: default/internal-gateway.llm
       match:

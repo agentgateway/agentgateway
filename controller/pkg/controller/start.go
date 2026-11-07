@@ -137,7 +137,6 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		agwSyncer.CacheSyncs(),
 		cfg.ExtraAgwResourceStatusHandlers,
 		cfg.AgwCollections.Settings.EnableInferExt,
-		cfg.AgwCollections.Settings.EnableAgentgatewayModels,
 		cfg.AgwCollections.Settings.EnableXBackend,
 	)
 	if err := cfg.Manager.Add(agwStatusSyncer); err != nil {

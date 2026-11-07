@@ -818,7 +818,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	let log_cfg = log::Config {
 		filter: None,
 		fields: LoggingFields::default(),
-		database_fields: Default::default(),
+		standard_attributes: Default::default(),
 		session: Default::default(),
 		level: "info".to_string(),
 		format: crate::LoggingFormat::Text,

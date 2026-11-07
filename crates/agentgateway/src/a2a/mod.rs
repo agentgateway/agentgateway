@@ -191,6 +191,7 @@ async fn rewrite_agent_card(
 	let Ok(mut agent_card) = json::from_body_with_limit::<Value>(body, buffer_limit).await else {
 		anyhow::bail!("agent card invalid JSON");
 	};
+	let gateway_agent_path = strip_agent_card_suffix(uri.path()).to_string();
 	let gateway_base = build_agent_path(uri);
 
 	// Compute the backend agent base by stripping the agent-card suffix from the
@@ -222,6 +223,7 @@ async fn rewrite_agent_card(
 					&gateway_base,
 					iface_path,
 					backend_agent_path,
+					&gateway_agent_path,
 					rewrite.as_ref(),
 				);
 				*url_val = Value::String(url);
@@ -291,6 +293,7 @@ fn public_interface_url(
 	gateway_base: &str,
 	iface_path: &str,
 	backend_agent_path: &str,
+	gateway_agent_path: &str,
 	rewrite: Option<&filters::AppliedUrlRewrite>,
 ) -> String {
 	if let Some(path) = rewrite.and_then(|rewrite| {
@@ -306,7 +309,10 @@ fn public_interface_url(
 		return replace_path(gateway_base, &path);
 	}
 
-	let relative = strip_complete_path_prefix(iface_path, backend_agent_path).unwrap_or(iface_path);
+	let relative = strip_complete_path_prefix(iface_path, backend_agent_path)
+		// The backend may already advertise the public path; don't append it twice.
+		.or_else(|| strip_complete_path_prefix(iface_path, gateway_agent_path))
+		.unwrap_or(iface_path);
 	format!("{gateway_base}{relative}")
 }
 

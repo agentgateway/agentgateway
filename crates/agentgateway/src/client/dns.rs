@@ -13,6 +13,7 @@ use hickory_resolver::net::runtime::TokioRuntimeProvider;
 
 use crate::*;
 
+const MINIMUM_TTL: Duration = Duration::from_secs(5);
 const ERROR_BACKOFF_MAX: Duration = Duration::from_secs(5);
 const ERROR_BACKOFF_BASE: Duration = Duration::from_millis(100);
 
@@ -45,6 +46,7 @@ impl<T: Copy> CircularBuffer<T> {
 pub struct CachedResolver {
 	dns: Arc<Resolver>,
 	entries: Arc<Mutex<HashMap<Strng, Arc<CacheEntry>>>>,
+	max_ttl: Option<Duration>,
 }
 
 #[derive(Debug)]
@@ -62,6 +64,7 @@ impl CacheEntry {
 		name: Strng,
 		resolver: Arc<Resolver>,
 		cache: Arc<Mutex<HashMap<Strng, Arc<CacheEntry>>>>,
+		max_ttl: Option<Duration>,
 	) {
 		self.active.store(true, Ordering::Relaxed);
 
@@ -78,13 +81,15 @@ impl CacheEntry {
 				}
 				return;
 			}
-			let (next_refresh, respect_small_value) = match resolver.resolve(name.as_str()).await {
+			let next_refresh = match resolver.resolve(name.as_str()).await {
 				Ok((ips, expiry)) => {
 					let cb = CircularBuffer::new(ips);
 					self.entries.store(Some(Arc::new(cb)));
 					// reset backoff on success
 					backoff = ERROR_BACKOFF_BASE;
-					(expiry, false)
+					let now = Instant::now();
+					let expiry = expiry.max(now + MINIMUM_TTL);
+					max_ttl.map_or(expiry, |m| expiry.min(now + m))
 				},
 				Err(e) => {
 					if self.entries.load().is_none() {
@@ -95,13 +100,13 @@ impl CacheEntry {
 					debug!("resolution failed: {e:?}");
 
 					backoff = std::cmp::min(backoff * 2, ERROR_BACKOFF_MAX);
-					(Instant::now() + backoff, true)
+					Instant::now() + backoff
 				},
 			};
 			// NB: this will run even on error, so the first fetch for a failed response will hit this and
 			// not block
 			self.notify.notify_waiters();
-			sleep_until_expired(next_refresh, respect_small_value).await;
+			tokio::time::sleep_until(next_refresh.into()).await;
 		}
 	}
 
@@ -147,7 +152,9 @@ impl Resolver {
 }
 
 impl CachedResolver {
-	pub fn new(config: ResolverConfig, mut opts: ResolverOpts) -> Self {
+	pub fn new(config: ResolverConfig, mut opts: ResolverOpts, max_ttl: Option<Duration>) -> Self {
+		// CachedResolver handles caching and refreshes, including retry backoff for failed lookups.
+		opts.cache_size = 0;
 		// always consult the system's /etc/hosts file when resolving hostnames
 		opts.use_hosts_file = hickory_resolver::config::ResolveHosts::Always;
 		let mut rb =
@@ -157,10 +164,15 @@ impl CachedResolver {
 		CachedResolver {
 			entries: Arc::new(Mutex::new(HashMap::new())),
 			dns: Arc::new(Resolver::Real(dns_resolver)),
+			max_ttl,
 		}
 	}
 
 	pub async fn resolve(&self, name: Strng) -> anyhow::Result<IpAddr> {
+		if self.max_ttl == Some(Duration::ZERO) {
+			let (ips, _) = self.dns.resolve(name.as_str()).await?;
+			return ips.first().copied().ok_or_else(|| anyhow!("no ip"));
+		}
 		// Check if we already have an entry
 		let entry = {
 			let mut cache = self.entries.lock().unwrap();
@@ -182,8 +194,9 @@ impl CachedResolver {
 				let bg_entry = entry.clone();
 				let dns = self.dns.clone();
 				let cache = self.entries.clone();
+				let max_ttl = self.max_ttl;
 				let handle = tokio::task::spawn(async move {
-					bg_entry.background(name, dns, cache).await;
+					bg_entry.background(name, dns, cache, max_ttl).await;
 				});
 				entry.background_task.store(Some(Arc::new(handle)));
 
@@ -194,19 +207,6 @@ impl CachedResolver {
 		// Return next IP
 		entry.next().await.ok_or_else(|| anyhow!("no ip"))
 	}
-}
-
-async fn sleep_until_expired(valid_until: Instant, respect_small_value: bool) {
-	const MINIMUM_TTL: Duration = Duration::from_secs(5);
-	let minimum = Instant::now() + MINIMUM_TTL;
-
-	let deadline = if respect_small_value || valid_until >= minimum {
-		valid_until
-	} else {
-		minimum
-	};
-
-	tokio::time::sleep_until(deadline.into()).await;
 }
 
 #[cfg(test)]

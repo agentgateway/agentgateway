@@ -1458,6 +1458,8 @@ pub mod typed {
 		},
 		MessageDelta {
 			delta: MessageDelta,
+			// Absent on Bedrock's guardrail responses.
+			#[serde(default)]
 			usage: MessageDeltaUsage,
 		},
 		MessageStop,

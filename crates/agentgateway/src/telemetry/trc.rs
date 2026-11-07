@@ -886,6 +886,7 @@ mod tests {
 			otlp_filter: None,
 			otlp_fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
+			standard_attributes: LoggingFields::default(),
 			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();
@@ -928,6 +929,7 @@ mod tests {
 		let otlp_fields = LoggingFields::default();
 		let metric_fields = Arc::new(MetricFields::default());
 		let database_fields = LoggingFields::default();
+		let standard_attributes = LoggingFields::default();
 		let cel_exec = CelLoggingExecutor {
 			executor: crate::cel::Executor::new_empty(),
 			filter: &filter,
@@ -935,6 +937,7 @@ mod tests {
 			otlp_filter: &otlp_filter,
 			otlp_fields: &otlp_fields,
 			metric_fields: &metric_fields,
+			standard_attributes: &standard_attributes,
 			database_fields: &database_fields,
 		};
 
@@ -974,6 +977,7 @@ mod tests {
 		let otlp_fields = LoggingFields::default();
 		let metric_fields = Arc::new(MetricFields::default());
 		let database_fields = LoggingFields::default();
+		let standard_attributes = LoggingFields::default();
 		let cel_exec = CelLoggingExecutor {
 			executor: crate::cel::Executor::new_empty(),
 			filter: &filter,
@@ -981,6 +985,7 @@ mod tests {
 			otlp_filter: &otlp_filter,
 			otlp_fields: &otlp_fields,
 			metric_fields: &metric_fields,
+			standard_attributes: &standard_attributes,
 			database_fields: &database_fields,
 		};
 
@@ -1011,6 +1016,7 @@ mod tests {
 		let otlp_fields = LoggingFields::default();
 		let metric_fields = Arc::new(MetricFields::default());
 		let database_fields = LoggingFields::default();
+		let standard_attributes = LoggingFields::default();
 		let cel_exec = CelLoggingExecutor {
 			executor: crate::cel::Executor::new_empty(),
 			filter: &filter,
@@ -1018,6 +1024,7 @@ mod tests {
 			otlp_filter: &otlp_filter,
 			otlp_fields: &otlp_fields,
 			metric_fields: &metric_fields,
+			standard_attributes: &standard_attributes,
 			database_fields: &database_fields,
 		};
 
@@ -1058,6 +1065,7 @@ mod tests {
 		let otlp_fields = LoggingFields::default();
 		let metric_fields = Arc::new(MetricFields::default());
 		let database_fields = LoggingFields::default();
+		let standard_attributes = LoggingFields::default();
 		let cel_exec = CelLoggingExecutor {
 			executor: crate::cel::Executor::new_empty(),
 			filter: &filter,
@@ -1065,6 +1073,7 @@ mod tests {
 			otlp_filter: &otlp_filter,
 			otlp_fields: &otlp_fields,
 			metric_fields: &metric_fields,
+			standard_attributes: &standard_attributes,
 			database_fields: &database_fields,
 		};
 

@@ -93,6 +93,8 @@ output:
         backend:
           backend: default/same-namespace/backend.llm
         discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
       created: "1704164645"
       key: default/same-namespace.llm
       listenerKey: default/llm-only.llm
