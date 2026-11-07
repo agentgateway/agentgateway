@@ -855,4 +855,116 @@ CREATE TABLE budget_usage (
 			Decimal::from(3)
 		);
 	}
+
+	#[test]
+	fn regenerating_an_api_key_keeps_its_budget() {
+		let original = budgeted_key(
+			serde_json::json!({"key": "sk-original"}),
+			"original",
+			Some("key-stable"),
+		);
+		let rotated = budgeted_key(
+			serde_json::json!({"key": "sk-rotated"}),
+			"rotated",
+			Some("key-stable"),
+		);
+		let hashed = budgeted_key(
+			serde_json::json!({
+				"keyHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+			}),
+			"hashed",
+			Some("key-stable"),
+		);
+
+		let policy = BudgetPolicy::default();
+		policy.register(&original, true).unwrap();
+		let budget_id = matched_budget_id(&original);
+		{
+			let mut counter = policy.counters.get_mut(&budget_id).unwrap();
+			counter.amount = Decimal::from(7);
+		}
+
+		// A new secret, a switch to keyHash, and a renamed key must keep the same counter.
+		assert_eq!(matched_budget_id(&rotated), budget_id);
+		assert_eq!(matched_budget_id(&hashed), budget_id);
+		policy.register(&rotated, true).unwrap();
+		policy.register(&hashed, true).unwrap();
+		assert_eq!(policy.counters.len(), 1);
+		assert_eq!(
+			policy.counters.get(&budget_id).unwrap().amount,
+			Decimal::from(7)
+		);
+		assert_eq!(
+			policy
+				.counters
+				.get(&budget_id)
+				.unwrap()
+				.definition
+				.as_ref()
+				.unwrap()
+				.api_key,
+			"hashed"
+		);
+	}
+
+	#[test]
+	fn budgets_without_a_stable_id_stay_tied_to_the_key_hash() {
+		let first = budgeted_key(serde_json::json!({"key": "sk-one"}), "shared-name", None);
+		let second = budgeted_key(serde_json::json!({"key": "sk-two"}), "shared-name", None);
+		let blank_id = budgeted_key(
+			serde_json::json!({"key": "sk-one"}),
+			"shared-name",
+			Some(""),
+		);
+		let first_id = matched_budget_id(&first);
+		assert_ne!(first_id, matched_budget_id(&second));
+		assert_eq!(first_id, matched_budget_id(&blank_id));
+
+		let (hash, policy) = first.users.iter().next().unwrap();
+		assert_eq!(
+			first_id,
+			budget_id(hash.as_str(), &policy.budgets.as_ref().unwrap().budgets[0])
+		);
+	}
+
+	fn budgeted_key(
+		mut credential: serde_json::Value,
+		name: &str,
+		id: Option<&str>,
+	) -> crate::http::apikey::APIKeyAuthentication {
+		let mut metadata = serde_json::Map::new();
+		metadata.insert(
+			"name".to_string(),
+			serde_json::Value::String(name.to_string()),
+		);
+		if let Some(id) = id {
+			metadata.insert(
+				"agentgateway.dev/id".to_string(),
+				serde_json::Value::String(id.to_string()),
+			);
+		}
+		let object = credential.as_object_mut().expect("credential object");
+		object.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+		object.insert(
+			"budgets".to_string(),
+			serde_json::json!([{
+				"name": "tokens",
+				"limit": {"unit": "Tokens", "amount": 40},
+				"window": {"rolling": "1h"},
+				"onBudgetExceeded": "Block"
+			}]),
+		);
+		let keys: crate::http::apikey::LocalAPIKeys =
+			serde_json::from_value(serde_json::json!({ "keys": [credential] })).unwrap();
+		keys.compile().unwrap()
+	}
+
+	fn matched_budget_id(authentication: &crate::http::apikey::APIKeyAuthentication) -> String {
+		let budgets = authentication
+			.users
+			.values()
+			.find_map(|policy| policy.budgets.clone())
+			.unwrap();
+		budget_id(&budgets.api_key_id, &budgets.budgets[0])
+	}
 }
