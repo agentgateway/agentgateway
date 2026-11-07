@@ -707,15 +707,16 @@ impl super::RequestType for Request {
 		self.messages = messages.into_iter().map(convert_message).collect();
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
-		for msg in &mut self.messages {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(super::RequestText, &mut String)) {
+		for (index, msg) in self.messages.iter_mut().enumerate() {
 			let scope = match msg.role.as_str() {
 				"tool" | "function" => ContentScope::ToolOutput,
 				"system" | "developer" => ContentScope::SystemPrompt,
 				_ => ContentScope::Messages,
 			};
+			let content = super::RequestText::in_message(scope, index);
 			match &mut msg.content {
-				Some(Content::Text(text)) => f(scope, text),
+				Some(Content::Text(text)) => f(content, text),
 				Some(Content::Array(parts)) => {
 					super::scan_text_runs(
 						parts,
@@ -723,23 +724,34 @@ impl super::RequestType for Request {
 						|p| p.text.as_mut(),
 						|p| Some(&mut p.rest),
 						PRESERVED_REST_KEYS,
-						&mut |text| f(scope, text),
+						&mut |text| f(content, text),
 					);
 				},
 				None => {},
 			}
 
+			let mut tool_text = |scope: ContentScope, text: &mut String| f(scope.into(), text);
 			// in completions API, tool call args are json-in-json
 			// avoiding parsing means a mask can potentially break the json
 			for call in msg.tool_calls.iter_mut().flatten() {
-				super::visit_json_at(call, &["function", "arguments"], ContentScope::ToolInput, f);
-				super::visit_json_at(call, &["custom", "input"], ContentScope::ToolInput, f);
+				super::visit_json_at(
+					call,
+					&["function", "arguments"],
+					ContentScope::ToolInput,
+					&mut tool_text,
+				);
+				super::visit_json_at(
+					call,
+					&["custom", "input"],
+					ContentScope::ToolInput,
+					&mut tool_text,
+				);
 			}
 			super::visit_json_at(
 				&mut msg.rest,
 				&["function_call", "arguments"],
 				ContentScope::ToolInput,
-				f,
+				&mut tool_text,
 			);
 		}
 	}

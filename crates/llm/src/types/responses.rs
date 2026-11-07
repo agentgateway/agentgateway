@@ -48,17 +48,22 @@ impl RawInputItem {
 		Self::from_typed(InputItem::from(msg))
 	}
 
-	fn as_simple_message(&self) -> Option<SimpleChatCompletionMessage> {
-		let role = self.0.get("role")?.as_str()?;
-		let role = match role {
+	/// The role and raw content of an item `get_messages()` includes.
+	fn simple_role_and_content(&self) -> Option<(Strng, &Value)> {
+		let role = match self.0.get("role")?.as_str()? {
 			"user" => strng::literal!("user"),
 			"assistant" => strng::literal!("assistant"),
 			"system" => strng::literal!("system"),
 			"developer" => strng::literal!("developer"),
 			_ => return None,
 		};
+		let content = self.0.get("content")?;
+		matches!(content, Value::String(_) | Value::Array(_)).then_some((role, content))
+	}
 
-		let content = match self.0.get("content")? {
+	fn as_simple_message(&self) -> Option<SimpleChatCompletionMessage> {
+		let (role, content) = self.simple_role_and_content()?;
+		let content = match content {
 			Value::String(text) => strng::new(text),
 			Value::Array(parts) => {
 				let text = parts
@@ -80,26 +85,37 @@ impl RawInputItem {
 		Some(SimpleChatCompletionMessage { role, content })
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	/// `message` is this item's `get_messages()` index, if it has one.
+	fn visit_text_mut(
+		&mut self,
+		message: Option<usize>,
+		f: &mut dyn FnMut(RequestText, &mut String),
+	) {
 		if let Some(role) = self.0.get("role").and_then(|r| r.as_str()) {
 			let scope = match role {
 				"system" | "developer" => ContentScope::SystemPrompt,
 				_ => ContentScope::Messages,
 			};
+			let content = RequestText {
+				scope,
+				get_messages_idx: message,
+			};
 			match self.0.get_mut("content") {
-				Some(Value::String(text)) => f(scope, text),
+				Some(Value::String(text)) => f(content, text),
 				Some(Value::Array(parts)) => {
 					// assistant refusal parts carry prose under `refusal`, not `text`
 					for part in parts.iter_mut() {
-						visit_json_at(part, &["refusal"], scope, f);
+						visit_json_at(part, &["refusal"], scope, &mut |scope, text| {
+							f(scope.into(), text)
+						});
 					}
-					scan_value_text_runs(scope, parts, f);
+					scan_value_text_runs(parts, &mut |text| f(content, text));
 				},
 				_ => {},
 			}
 			return;
 		}
-		visit_tool_item_text(&mut self.0, f);
+		visit_tool_item_text(&mut self.0, &mut |scope, text| f(scope.into(), text));
 	}
 }
 
@@ -583,11 +599,7 @@ const PRESERVED_REST_KEYS: &[&str] = &[
 	"prompt_cache_breakpoint",
 ];
 
-fn scan_value_text_runs(
-	scope: ContentScope,
-	parts: &mut Vec<Value>,
-	f: &mut dyn FnMut(ContentScope, &mut String),
-) {
+fn scan_value_text_runs(parts: &mut Vec<Value>, f: &mut dyn FnMut(&mut String)) {
 	crate::types::scan_text_runs(
 		parts,
 		"\n",
@@ -606,7 +618,7 @@ fn scan_value_text_runs(
 		// parts are pass-through JSON, so `rest` is the whole part
 		|part| Some(part),
 		PRESERVED_REST_KEYS,
-		&mut |text| f(scope, text),
+		f,
 	);
 }
 
@@ -1020,15 +1032,29 @@ impl RequestType for Request {
 		);
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(RequestText, &mut String)) {
+		let mut next_message = 0;
 		if let Some(instructions) = &mut self.instructions {
-			f(ContentScope::SystemPrompt, instructions);
+			f(
+				RequestText::in_message(ContentScope::SystemPrompt, next_message),
+				instructions,
+			);
+			next_message += 1;
 		}
 		match &mut self.input {
-			RequestInput::Text(text) => f(ContentScope::Messages, text),
+			RequestInput::Text(text) => f(
+				RequestText::in_message(ContentScope::Messages, next_message),
+				text,
+			),
 			RequestInput::Items(items) => {
 				for item in items {
-					item.visit_text_mut(f);
+					// only items get_messages() includes take an index
+					let message = item
+						.simple_role_and_content()
+						.is_some()
+						.then_some(next_message);
+					next_message += usize::from(message.is_some());
+					item.visit_text_mut(message, f);
 				}
 			},
 		}
