@@ -2539,6 +2539,142 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	);
 }
 
+fn token_bucket(max_tokens: u64) -> crate::http::localratelimit::RateLimit {
+	crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {
+		max_tokens,
+		tokens_per_fill: max_tokens,
+		fill_interval: std::time::Duration::from_secs(60),
+		limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+		key: None,
+	})
+	.unwrap()
+}
+
+/// Copilot-style completion: usage is present, finish_reason is null.
+fn completion_without_finish_reason() -> Vec<u8> {
+	serde_json::to_vec(&json!({
+		"id": "chunk-empty",
+		"object": "chat.completion",
+		"created": 1,
+		"model": "gemini",
+		"choices": [{
+			"index": 0,
+			"finish_reason": null,
+			"message": {"role": "assistant", "content": null}
+		}],
+		"usage": {
+			"prompt_tokens": 10,
+			"completion_tokens": 4,
+			"total_tokens": 14,
+			"completion_tokens_details": {"reasoning_tokens": 6}
+		}
+	}))
+	.unwrap()
+}
+
+#[tokio::test]
+async fn buffered_missing_finish_reason_is_502_and_still_charges_tokens() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = custom_provider(custom::ProviderFormat::Completions);
+	let upstream = completion_without_finish_reason();
+	for (format, error_type) in [
+		(InputFormat::Messages, "api_error"),
+		(InputFormat::Responses, "server_error"),
+	] {
+		let mut req = llm_request_with_tokens(Some(10));
+		req.input_format = format;
+		req.request_model = "gemini".into();
+		req.streaming = false;
+		let rate_limit = token_bucket(10);
+		let logging = LLMLogging::default();
+		let log = logging.response.clone();
+		let response = provider
+			.process_response(
+				PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+				req,
+				LLMResponsePolicies {
+					local_rate_limit: vec![rate_limit.shared_bucket()],
+					..Default::default()
+				},
+				None,
+				logging,
+				None,
+				::http::Response::builder()
+					.header(::http::header::CONTENT_TYPE, "application/json")
+					.body(Body::from(upstream.clone()))
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+
+		assert_eq!(response.status(), ::http::StatusCode::BAD_GATEWAY);
+		let body: Value =
+			serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+		let message = body
+			.pointer("/error/message")
+			.and_then(|value| value.as_str())
+			.unwrap_or_default();
+		assert_eq!(message, agent_llm::MISSING_FINISH_REASON_MESSAGE);
+		assert_eq!(
+			body.pointer("/error/type").and_then(|value| value.as_str()),
+			Some(error_type)
+		);
+		let info = log.take().expect("usage is logged on the 502");
+		assert_eq!(info.response.input_tokens, Some(10));
+		assert_eq!(info.response.output_tokens, Some(4));
+		assert_eq!(info.response.reasoning_tokens, Some(6));
+
+		// Request counted 10 input tokens; the response adds 4 output tokens.
+		let plain = ::http::Request::builder()
+			.body(crate::http::Body::empty())
+			.unwrap();
+		let exec = cel::Executor::new_request(&plain);
+		assert!(rate_limit.charge_tokens(Some(7), &exec).is_err());
+		assert!(rate_limit.charge_tokens(Some(6), &exec).is_ok());
+	}
+}
+
+#[tokio::test]
+async fn streamed_missing_finish_reason_charges_tokens_on_drop() {
+	let input = r#"data: {"id":"chunk-empty","choices":[{"index":0,"delta":{"role":"assistant","content":null},"finish_reason":null}],"model":"gemini","usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,"completion_tokens_details":{"reasoning_tokens":6}}}
+
+data: [DONE]
+
+"#;
+	let rate_limit = token_bucket(10);
+	let log = AsyncLog::default();
+	log.store(Some(LLMInfo {
+		request: llm_request_with_tokens(Some(10)),
+		response: LLMResponse::default(),
+	}));
+	let guard = AmendOnDrop::new(
+		log,
+		LLMResponsePolicies {
+			local_rate_limit: vec![rate_limit.shared_bucket()],
+			..Default::default()
+		},
+		None,
+		None,
+	)
+	.into_llm();
+	let body = conversion::completions::from_messages::translate_stream(
+		Body::from(input),
+		1024 * 1024,
+		guard,
+		LogContentFields::default(),
+	);
+	let _ = body.collect().await.unwrap();
+
+	let plain = ::http::Request::builder()
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let exec = cel::Executor::new_request(&plain);
+	assert!(rate_limit.charge_tokens(Some(7), &exec).is_err());
+	assert!(rate_limit.charge_tokens(Some(6), &exec).is_ok());
+}
+
 #[tokio::test]
 async fn upstream_encoding_is_applied_after_messages_response_translation() {
 	use crate::proxy::httpproxy::PolicyClient;
