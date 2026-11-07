@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-06T08:24:40Z"
+    "generatedAt": "2026-11-07T08:21:48Z"
   },
   "providers": {
     "anthropic": {
@@ -6376,6 +6376,11 @@
           }
         },
         "moonshotai.kimi-k3": {
+          "tags": [
+            "runtime"
+          ]
+        },
+        "moonshotai.kimi-k3.1": {
           "tags": [
             "runtime"
           ]
