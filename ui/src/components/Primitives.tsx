@@ -181,6 +181,42 @@ export function useDismissiblePopover<T extends HTMLElement>(open: boolean, onCl
 	return ref;
 }
 
+// Horizontal space a menu can use: the viewport, narrowed by any ancestor that clips it.
+function dropdownMenuBounds(menu: HTMLElement) {
+	const margin = 8;
+	let left = margin;
+	let right = document.documentElement.clientWidth - margin;
+	for (
+		let element = menu.parentElement;
+		element && element !== document.body;
+		element = element.parentElement
+	) {
+		const style = getComputedStyle(element);
+		if (style.overflowX !== 'visible') {
+			const start = element.getBoundingClientRect().left + element.clientLeft;
+			left = Math.max(left, start + margin);
+			right = Math.min(right, start + element.clientWidth - margin);
+		}
+		// Ancestors of a fixed element don't clip it.
+		if (style.position === 'fixed') break;
+	}
+	return { left, right };
+}
+
+// Fits the menu to its longest option and keeps it in bounds. The width only grows, so the menu
+// doesn't resize as a search narrows the options.
+function fitDropdownMenu(menu: HTMLElement) {
+	const currentWidth = Number.parseFloat(menu.style.width) || 0;
+	menu.style.width = '';
+	menu.style.left = '';
+	const bounds = dropdownMenuBounds(menu);
+	const width = Math.max(menu.getBoundingClientRect().width, currentWidth);
+	menu.style.width = `${Math.ceil(Math.min(width, bounds.right - bounds.left))}px`;
+	const rect = menu.getBoundingClientRect();
+	const shift = Math.min(0, Math.max(bounds.right - rect.right, bounds.left - rect.left));
+	if (shift) menu.style.left = `${shift}px`;
+}
+
 export function Dropdown(props: {
 	value: string;
 	options: Array<{
@@ -205,6 +241,7 @@ export function Dropdown(props: {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 	const typeaheadRef = useRef('');
@@ -219,6 +256,11 @@ export function Dropdown(props: {
 	}, [props.options, props.searchable, query]);
 	const activeOption = open ? filteredOptions[activeIndex] : undefined;
 	const activeOptionId = activeOption ? `${id}-option-${activeIndex}` : undefined;
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: refit when the rendered options change.
+	useLayoutEffect(() => {
+		if (open && menuRef.current) fitDropdownMenu(menuRef.current);
+	}, [open, filteredOptions]);
 
 	useEffect(() => {
 		if (open && props.searchable) searchRef.current?.focus();
@@ -391,6 +433,7 @@ export function Dropdown(props: {
 			{open ? (
 				<div
 					className="custom-select-menu"
+					ref={menuRef}
 					role="listbox"
 					id={`${id}-listbox`}
 					aria-label={props.ariaLabel}
