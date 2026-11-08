@@ -1,0 +1,59 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_repro","object":"response","created_at":1,"model":"gpt-6.1-sol","output":[],"status":"in_progress"},"sequence_number":1,"provider_extra":{"preserve":true}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning","id":"rs_anchor","summary":[],"encrypted_content":null},"sequence_number":2,"provider_extra":{"preserve":true}}
+
+event: response.reasoning_summary_part.added
+data: {"type":"response.reasoning_summary_part.added","output_index":0,"item_id":"rs_part","summary_index":0,"part":{"type":"summary_text","text":""},"sequence_number":3,"provider_extra":{"preserve":true}}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","output_index":0,"item_id":"rs_delta","summary_index":0,"delta":"Check the weather.","sequence_number":4,"provider_extra":{"preserve":true}}
+
+event: response.reasoning_summary_text.done
+data: {"type":"response.reasoning_summary_text.done","output_index":0,"item_id":"rs_text_done","summary_index":0,"text":"Check the weather.","sequence_number":5,"provider_extra":{"preserve":true}}
+
+event: response.reasoning_summary_part.done
+data: {"type":"response.reasoning_summary_part.done","output_index":0,"item_id":"rs_part_done","summary_index":0,"part":{"type":"summary_text","text":"Check the weather."},"sequence_number":6,"provider_extra":{"preserve":true}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_done","summary":[{"type":"summary_text","text":"Check the weather."}],"encrypted_content":"opaque-reasoning"},"sequence_number":7,"provider_extra":{"preserve":true}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":1,"item":{"type":"message","id":"msg_anchor","role":"assistant","content":[],"status":"in_progress"},"sequence_number":8,"provider_extra":{"preserve":true}}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","output_index":1,"item_id":"msg_part","content_index":0,"part":{"type":"output_text","text":"","annotations":[]},"sequence_number":9,"provider_extra":{"preserve":true}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","output_index":1,"item_id":"msg_delta","content_index":0,"delta":"Checking weather.","sequence_number":10,"provider_extra":{"preserve":true}}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","output_index":1,"item_id":"msg_text_done","content_index":0,"text":"Checking weather.","sequence_number":11,"provider_extra":{"preserve":true}}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","output_index":1,"item_id":"msg_part_done","content_index":0,"part":{"type":"output_text","text":"Checking weather.","annotations":[]},"sequence_number":12,"provider_extra":{"preserve":true}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":1,"item":{"type":"message","id":"msg_done","role":"assistant","content":[{"type":"output_text","text":"Checking weather.","annotations":[]}],"status":"completed"},"sequence_number":13,"provider_extra":{"preserve":true}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":2,"item":{"type":"function_call","id":"fc_anchor","call_id":"call_weather","name":"get_weather","arguments":"","status":"in_progress"},"sequence_number":14,"provider_extra":{"preserve":true}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","output_index":2,"item_id":"fc_delta_1","delta":"{\"location\":","sequence_number":15,"provider_extra":{"preserve":true}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","output_index":2,"item_id":"fc_delta_2","delta":"\"Shanghai\"}","sequence_number":16,"provider_extra":{"preserve":true}}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","output_index":2,"item_id":"fc_args_done","name":"get_weather","arguments":"{\"location\":\"Shanghai\"}","sequence_number":17,"provider_extra":{"preserve":true}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":2,"item":{"type":"function_call","id":"fc_done","call_id":"call_weather","name":"get_weather","arguments":"{\"location\":\"Shanghai\"}","status":"completed"},"sequence_number":18,"provider_extra":{"preserve":true}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_repro","object":"response","created_at":1,"model":"gpt-6.1-sol","output":[{"type":"reasoning","id":"rs_done","summary":[{"type":"summary_text","text":"Check the weather."}],"encrypted_content":"opaque-reasoning"},{"type":"message","id":"msg_done","role":"assistant","content":[{"type":"output_text","text":"Checking weather.","annotations":[]}],"status":"completed"},{"type":"function_call","id":"fc_done","call_id":"call_weather","name":"get_weather","arguments":"{\"location\":\"Shanghai\"}","status":"completed"}],"status":"completed","usage":{"input_tokens":3,"input_tokens_details":{"cached_tokens":0},"output_tokens":4,"output_tokens_details":{"reasoning_tokens":1},"total_tokens":7}},"sequence_number":19,"provider_extra":{"preserve":true}}
+
+data: [DONE]
+

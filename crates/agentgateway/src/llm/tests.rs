@@ -2872,6 +2872,85 @@ async fn process_streaming_exposes_request_llm_context_to_response_cel() {
 	assert!(executor.eval_bool(&expr));
 }
 
+#[tokio::test]
+async fn copilot_native_responses_stream_normalizes_item_ids() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let input = include_str!("../../../llm/src/tests/response/copilot/unstable-item-ids.json");
+	for (provider, should_normalize) in [
+		(
+			AIProvider::Copilot(copilot::Provider {
+				model_override: None,
+			}),
+			true,
+		),
+		(
+			AIProvider::OpenAI(openai::Provider {
+				model_override: None,
+				moderation: None,
+			}),
+			false,
+		),
+		(custom_provider(custom::ProviderFormat::Responses), false),
+	] {
+		let mut request = llm_request_with_tokens(None);
+		request.input_format = InputFormat::Responses;
+		request.request_model = "gpt-6.1-sol".into();
+		let log = AsyncLog::default();
+		let mut response = Response::new(Body::from(input));
+		response.headers_mut().insert(
+			::http::header::CONTENT_TYPE,
+			"text/event-stream".parse().unwrap(),
+		);
+		response.headers_mut().insert(
+			::http::header::CONTENT_LENGTH,
+			input.len().to_string().parse().unwrap(),
+		);
+		let response = provider
+			.process_streaming(
+				PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+				request,
+				LLMResponsePolicies::default(),
+				None,
+				LLMLogging {
+					response: log.clone(),
+					content: LogContentFields {
+						completion: true,
+						tool_calls: true,
+					},
+					..Default::default()
+				},
+				None,
+				response,
+			)
+			.unwrap();
+		assert!(
+			!response
+				.headers()
+				.contains_key(::http::header::CONTENT_LENGTH)
+		);
+		let output = response.collect().await.unwrap().to_bytes();
+		if should_normalize {
+			let events: Vec<Value> = String::from_utf8_lossy(&output)
+				.lines()
+				.filter_map(|line| line.strip_prefix("data: "))
+				.filter_map(|line| serde_json::from_str(line).ok())
+				.collect();
+			assert_eq!(events[3]["item_id"], "rs_anchor");
+			assert_eq!(events[9]["item_id"], "msg_anchor");
+			assert_eq!(events[14]["item_id"], "fc_anchor");
+			let info = log.take().unwrap();
+			assert_eq!(info.response.input_tokens, Some(3));
+			assert_eq!(info.response.output_tokens, Some(4));
+			let output_messages = info.response.output_messages.unwrap();
+			assert_eq!(output_messages[0].tool_calls()[0].id, "call_weather");
+		} else {
+			assert_eq!(output.as_ref(), input.as_bytes());
+		}
+	}
+}
+
 #[test]
 fn setup_request_openai_applies_prefixed_path_without_host_override() {
 	let provider = AIProvider::OpenAI(openai::Provider {
