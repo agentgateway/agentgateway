@@ -35,11 +35,11 @@ pub enum Error {
 #[derive(Copy, PartialEq, Eq, Default)]
 pub enum Mode {
 	/// Require a valid API key.
+	/// This is the default option.
+	#[default]
 	Strict,
 	/// Validate the API key when present.
-	/// This is the default option.
 	/// Warning: this allows requests without an API key.
-	#[default]
 	Optional,
 	/// Decode valid API keys for later policy use.
 	/// Warning: this allows requests with missing or invalid API keys.
@@ -442,7 +442,7 @@ pub struct LocalAPIKeys {
 	/// API keys that are accepted by this policy.
 	pub keys: Vec<LocalAPIKey>,
 
-	/// Controls whether requests must include a valid API key.
+	/// Controls whether requests must include a valid API key. Defaults to `strict`.
 	#[serde(default)]
 	pub mode: Mode,
 

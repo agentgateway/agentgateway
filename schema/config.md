@@ -393,7 +393,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `FailClosed`, `failOpen`, `FailOpen`.|
 |`binds[].listeners[].routes[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`binds[].listeners[].routes[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`binds[].listeners[].routes[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -446,7 +446,7 @@
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`binds[].listeners[].routes[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`binds[].listeners[].routes[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -470,7 +470,7 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`binds[].listeners[].routes[].policies.apiKey.location.header.name`|string|Header name containing the credential.|
@@ -1384,7 +1384,7 @@
 |`binds[].listeners[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
 |`binds[].listeners[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`binds[].listeners[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`binds[].listeners[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].policies.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`binds[].listeners[].policies.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -1555,7 +1555,7 @@
 |`binds[].listeners[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`binds[].listeners[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`binds[].listeners[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`binds[].listeners[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`binds[].listeners[].policies.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -1579,7 +1579,7 @@
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`binds[].listeners[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`binds[].listeners[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].policies.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`binds[].listeners[].policies.apiKey.location.header.name`|string|Header name containing the credential.|
@@ -1960,7 +1960,7 @@
 |`policies[].policy.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`policies[].policy.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `FailClosed`, `failOpen`, `FailOpen`.|
 |`policies[].policy.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`policies[].policy.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`policies[].policy.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`policies[].policy.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -2013,7 +2013,7 @@
 |`policies[].policy.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`policies[].policy.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`policies[].policy.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`policies[].policy.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`policies[].policy.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`policies[].policy.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -2037,7 +2037,7 @@
 |`policies[].policy.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`policies[].policy.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`policies[].policy.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`policies[].policy.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`policies[].policy.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`policies[].policy.apiKey.location.header.name`|string|Header name containing the credential.|
@@ -3103,7 +3103,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`routeGroups[].routes[].policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `FailClosed`, `failOpen`, `FailOpen`.|
 |`routeGroups[].routes[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`routeGroups[].routes[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`routeGroups[].routes[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`routeGroups[].routes[].policies.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -3156,7 +3156,7 @@
 |`routeGroups[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`routeGroups[].routes[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`routeGroups[].routes[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -3180,7 +3180,7 @@
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routeGroups[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`routeGroups[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`routeGroups[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`routeGroups[].routes[].policies.apiKey.location.header.name`|string|Header name containing the credential.|
@@ -4066,7 +4066,7 @@
 |`gateways.*.listeners[].oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
 |`gateways.*.listeners[].oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`gateways.*.listeners[].jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`gateways.*.listeners[].jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`gateways.*.listeners[].jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`gateways.*.listeners[].jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -4237,7 +4237,7 @@
 |`gateways.*.listeners[].basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`gateways.*.listeners[].basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`gateways.*.listeners[].basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`gateways.*.listeners[].basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`gateways.*.listeners[].basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`gateways.*.listeners[].basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`gateways.*.listeners[].basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -4261,7 +4261,7 @@
 |`gateways.*.listeners[].apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.listeners[].apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`gateways.*.listeners[].apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`gateways.*.listeners[].apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`gateways.*.listeners[].apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`gateways.*.listeners[].apiKey.location.header.name`|string|Header name containing the credential.|
@@ -4307,7 +4307,7 @@
 |`gateways.*.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
 |`gateways.*.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`gateways.*.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`gateways.*.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`gateways.*.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`gateways.*.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`gateways.*.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -4478,7 +4478,7 @@
 |`gateways.*.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`gateways.*.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`gateways.*.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`gateways.*.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`gateways.*.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`gateways.*.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`gateways.*.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -4502,7 +4502,7 @@
 |`gateways.*.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`gateways.*.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`gateways.*.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`gateways.*.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`gateways.*.apiKey.location.header.name`|string|Header name containing the credential.|
@@ -4737,7 +4737,7 @@
 |`routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`routes[].policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `FailClosed`, `failOpen`, `FailOpen`.|
 |`routes[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`routes[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`routes[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routes[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routes[].policies.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`routes[].policies.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -4790,7 +4790,7 @@
 |`routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`routes[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`routes[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`routes[].policies.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routes[].policies.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`routes[].policies.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -4814,7 +4814,7 @@
 |`routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routes[].policies.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`routes[].policies.apiKey.location.header.name`|string|Header name containing the credential.|
@@ -5979,7 +5979,7 @@
 |`llm.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
 |`llm.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`llm.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`llm.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`llm.policies.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`llm.policies.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -6150,7 +6150,7 @@
 |`llm.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`llm.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`llm.policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`llm.policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`llm.policies.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`llm.policies.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`llm.policies.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -6174,7 +6174,7 @@
 |`llm.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`llm.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`llm.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`llm.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`llm.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`llm.policies.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`llm.policies.apiKey.location.header.name`|string|Header name containing the credential.|
@@ -6460,7 +6460,7 @@
 |`mcp.policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`mcp.policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `FailClosed`, `failOpen`, `FailOpen`.|
 |`mcp.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`mcp.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`mcp.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`mcp.policies.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -6513,7 +6513,7 @@
 |`mcp.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`mcp.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`mcp.policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`mcp.policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`mcp.policies.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`mcp.policies.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -6537,7 +6537,7 @@
 |`mcp.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`mcp.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`mcp.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`mcp.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`mcp.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`mcp.policies.apiKey.location.header.name`|string|Header name containing the credential.|
@@ -6769,7 +6769,7 @@
 |`ui.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
 |`ui.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`ui.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
-|`ui.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`ui.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`ui.policies.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
 |`ui.policies.jwtAuth.location.header.name`|string|Header name containing the credential.|
@@ -6863,7 +6863,7 @@
 |`ui.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`ui.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
-|`ui.policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`ui.policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.<br>Possible values: `strict`, `optional`.|
 |`ui.policies.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`ui.policies.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
 |`ui.policies.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
@@ -6887,7 +6887,7 @@
 |`ui.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`ui.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`ui.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
-|`ui.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`ui.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key. Defaults to `strict`.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`ui.policies.apiKey.location.header`|object|Read the credential from an HTTP header.|
 |`ui.policies.apiKey.location.header.name`|string|Header name containing the credential.|

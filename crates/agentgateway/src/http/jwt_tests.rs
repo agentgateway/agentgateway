@@ -35,6 +35,37 @@ fn test_deserialize_missing_jwt_validation_options_defaults_to_exp() {
 	}
 }
 
+#[test]
+fn test_deserialize_missing_mode_defaults_to_strict() {
+	let single: LocalJwtConfig = serde_json::from_value(json!({
+		"issuer": "https://example.com",
+		"jwks": { "url": "https://example.com/.well-known/jwks.json" }
+	}))
+	.unwrap();
+	assert!(matches!(
+		single,
+		LocalJwtConfig::Single {
+			mode: Mode::Strict,
+			..
+		}
+	));
+
+	let multi: LocalJwtConfig = serde_json::from_value(json!({
+		"providers": [{
+			"issuer": "https://example.com",
+			"jwks": { "url": "https://example.com/.well-known/jwks.json" }
+		}]
+	}))
+	.unwrap();
+	assert!(matches!(
+		multi,
+		LocalJwtConfig::Multi {
+			mode: Mode::Strict,
+			..
+		}
+	));
+}
+
 // Deserialization: jwtValidationOptions present but requiredClaims omitted defaults to ["exp"]
 #[test]
 fn test_deserialize_jwt_validation_options_without_required_claims_defaults_to_exp() {
