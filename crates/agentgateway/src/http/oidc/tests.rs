@@ -191,6 +191,44 @@ fn signed_id_token_for_audience(aud: &str, nonce: &str) -> String {
 	.expect("signed id token")
 }
 
+/// Signs a bearer token for `user-1` with the given audience, optional `azp`, optional `typ`
+/// claim, optional JOSE header `typ` and extra claims.
+fn signed_bearer_token(
+	aud: serde_json::Value,
+	azp: Option<&str>,
+	typ_claim: Option<&str>,
+	typ_header: Option<&str>,
+	extra: serde_json::Value,
+) -> String {
+	crate::crypto::jwt::init();
+	let mut header = Header::new(Algorithm::ES256);
+	header.kid = Some(TEST_KEY_ID.into());
+	header.typ = typ_header.map(Into::into);
+	let mut claims = json!({
+		"iss": TEST_ISSUER,
+		"aud": aud,
+		"exp": now_unix() + 600,
+		"sub": "user-1",
+	});
+	if let Some(azp) = azp {
+		claims["azp"] = json!(azp);
+	}
+	if let Some(typ) = typ_claim {
+		claims["typ"] = json!(typ);
+	}
+	if let Some(extra) = extra.as_object() {
+		for (key, value) in extra {
+			claims[key] = value.clone();
+		}
+	}
+	jsonwebtoken::encode(
+		&header,
+		&claims,
+		&EncodingKey::from_ec_pem(TEST_PRIVATE_KEY_PEM.as_bytes()).expect("encoding key"),
+	)
+	.expect("signed bearer token")
+}
+
 fn request(method: Method, uri: &str, accept: Option<&str>) -> crate::http::Request {
 	let mut builder = HttpRequest::builder().method(method).uri(uri);
 	if let Some(accept) = accept {
@@ -936,6 +974,63 @@ fn assert_outcome(
 async fn apply_bearer_credentials() {
 	let id_token = signed_id_token(TEST_NONCE);
 	let wrong_audience = signed_id_token_for_audience("other-client", TEST_NONCE);
+	let multi_aud = || json!([TEST_CLIENT_ID, "account"]);
+	let foreign_azp = signed_bearer_token(multi_aud(), Some("other-app"), None, None, json!({}));
+	let multi_aud_no_azp = signed_bearer_token(multi_aud(), None, None, None, json!({}));
+	let multi_aud_matching_azp =
+		signed_bearer_token(multi_aud(), Some(TEST_CLIENT_ID), None, None, json!({}));
+	let at_jwt_header =
+		signed_bearer_token(json!(TEST_CLIENT_ID), None, None, Some("at+jwt"), json!({}));
+	let bearer_typ_claim = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		Some(TEST_CLIENT_ID),
+		Some("Bearer"),
+		None,
+		json!({}),
+	);
+	let refresh_typ_claim = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		Some(TEST_CLIENT_ID),
+		Some("Refresh"),
+		None,
+		json!({}),
+	);
+	let logout_header = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		None,
+		None,
+		Some("logout+jwt"),
+		json!({}),
+	);
+	let jwt_header = signed_bearer_token(json!(TEST_CLIENT_ID), None, None, Some("JWT"), json!({}));
+	let foreign_client_id = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		None,
+		None,
+		None,
+		json!({"client_id": "other-app"}),
+	);
+	let foreign_appid = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		None,
+		None,
+		None,
+		json!({"appid": "other-app"}),
+	);
+	let own_cid = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		None,
+		None,
+		None,
+		json!({"cid": TEST_CLIENT_ID}),
+	);
+	let id_typ_claim = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		Some(TEST_CLIENT_ID),
+		Some("ID"),
+		None,
+		json!({}),
+	);
 	// Rows without `Sec-Fetch-Mode` are navigations, so a bearer the policy does not consume
 	// shows up as a login redirect rather than the same 401 an invalid bearer gets.
 	for (name, credentials, bearer, fetch_mode, expected) in [
@@ -966,6 +1061,174 @@ async fn apply_bearer_credentials() {
 			Some(wrong_audience.as_str()),
 			Some("cors"),
 			Outcome::Rejected,
+		),
+		(
+			"foreign azp bearer",
+			OidcCredentials::SessionOrBearer,
+			Some(foreign_azp.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive foreign azp bearer",
+			OidcCredentials::Permissive,
+			Some(foreign_azp.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"multiple audiences without azp",
+			OidcCredentials::SessionOrBearer,
+			Some(multi_aud_no_azp.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive multiple audiences without azp",
+			OidcCredentials::Permissive,
+			Some(multi_aud_no_azp.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"multiple audiences with matching azp",
+			OidcCredentials::SessionOrBearer,
+			Some(multi_aud_matching_azp.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"permissive multiple audiences with matching azp",
+			OidcCredentials::Permissive,
+			Some(multi_aud_matching_azp.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"at+jwt header bearer",
+			OidcCredentials::SessionOrBearer,
+			Some(at_jwt_header.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive at+jwt header bearer",
+			OidcCredentials::Permissive,
+			Some(at_jwt_header.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"bearer typ claim",
+			OidcCredentials::SessionOrBearer,
+			Some(bearer_typ_claim.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive bearer typ claim",
+			OidcCredentials::Permissive,
+			Some(bearer_typ_claim.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"id typ claim",
+			OidcCredentials::SessionOrBearer,
+			Some(id_typ_claim.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"permissive id typ claim",
+			OidcCredentials::Permissive,
+			Some(id_typ_claim.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"refresh typ claim",
+			OidcCredentials::SessionOrBearer,
+			Some(refresh_typ_claim.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive refresh typ claim",
+			OidcCredentials::Permissive,
+			Some(refresh_typ_claim.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"logout+jwt header",
+			OidcCredentials::SessionOrBearer,
+			Some(logout_header.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive logout+jwt header",
+			OidcCredentials::Permissive,
+			Some(logout_header.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"JWT header",
+			OidcCredentials::SessionOrBearer,
+			Some(jwt_header.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"permissive JWT header",
+			OidcCredentials::Permissive,
+			Some(jwt_header.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"foreign client_id",
+			OidcCredentials::SessionOrBearer,
+			Some(foreign_client_id.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive foreign client_id",
+			OidcCredentials::Permissive,
+			Some(foreign_client_id.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"foreign appid",
+			OidcCredentials::SessionOrBearer,
+			Some(foreign_appid.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive foreign appid",
+			OidcCredentials::Permissive,
+			Some(foreign_appid.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"own cid",
+			OidcCredentials::SessionOrBearer,
+			Some(own_cid.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"permissive own cid",
+			OidcCredentials::Permissive,
+			Some(own_cid.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
 		),
 		(
 			"missing bearer",
