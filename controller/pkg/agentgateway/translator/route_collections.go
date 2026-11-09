@@ -391,6 +391,7 @@ func setDelegatedRouteParentStatus(
 	routeReporter reporter.RouteReporter,
 	bindings krt.Collection[routeGroupBindingKey],
 	bindingsBySource krt.Index[string, routeGroupBindingKey],
+	conversionErr *reporter.RouteCondition,
 ) {
 	for _, ref := range obj.Spec.ParentRefs {
 		// Only handle HTTPRoute parentRefs
@@ -437,11 +438,22 @@ func setDelegatedRouteParentStatus(
 				Message: "Parent HTTPRoute does not delegate to this route",
 			})
 		}
-		pr.SetCondition(reporter.RouteCondition{
-			Type:   gwv1.RouteConditionResolvedRefs,
-			Status: metav1.ConditionTrue,
-			Reason: gwv1.RouteReasonResolvedRefs,
-		})
+		// Mirror ProcessParentReferences: surface the child route's own conversion
+		// errors (e.g. missing backends) instead of unconditionally reporting success.
+		if conversionErr != nil {
+			pr.SetCondition(reporter.RouteCondition{
+				Type:    gwv1.RouteConditionResolvedRefs,
+				Status:  metav1.ConditionFalse,
+				Reason:  reasonResolvedRefs(conversionErr, false),
+				Message: conversionErr.Message,
+			})
+		} else {
+			pr.SetCondition(reporter.RouteCondition{
+				Type:   gwv1.RouteConditionResolvedRefs,
+				Status: metav1.ConditionTrue,
+				Reason: gwv1.RouteReasonResolvedRefs,
+			})
+		}
 	}
 }
 
@@ -512,8 +524,8 @@ func AgwRouteCollection(
 		}, func(status gwv1.RouteStatus) gwv1.HTTPRouteStatus {
 			return gwv1.HTTPRouteStatus{RouteStatus: status}
 		},
-		func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute, routeReporter reporter.RouteReporter) {
-			setDelegatedRouteParentStatus(krtctx, obj, routeReporter, httpRouteGroupBindings, bindingsBySource)
+		func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute, routeReporter reporter.RouteReporter, conversionErr *reporter.RouteCondition) {
+			setDelegatedRouteParentStatus(krtctx, obj, routeReporter, httpRouteGroupBindings, bindingsBySource, conversionErr)
 		},
 	)
 	status.RegisterStatus(queue, httpRouteStatus, GetStatus)
@@ -902,7 +914,7 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 	collectionName string,
 	translator func(ctx RouteContext, obj T) (RouteContext, iter.Seq2[R, *reporter.RouteCondition]),
 	buildStatus func(status gwv1.RouteStatus) ST,
-	postProcess ...func(krtctx krt.HandlerContext, obj T, routeReporter reporter.RouteReporter),
+	postProcess ...func(krtctx krt.HandlerContext, obj T, routeReporter reporter.RouteReporter, conversionErr *reporter.RouteCondition),
 ) (
 	krt.StatusCollection[T, ST],
 	krt.Collection[agwir.AgwResource],
@@ -938,7 +950,7 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 
 		// Apply post-processing to enrich status (e.g., delegation parent status).
 		for _, pp := range postProcess {
-			pp(krtctx, obj, routeReporter)
+			pp(krtctx, obj, routeReporter, gwResult.Error)
 		}
 
 		status := rm.BuildRouteStatusWithParentRefDefaulting(context.Background(), obj, inputs.ControllerName, true)
