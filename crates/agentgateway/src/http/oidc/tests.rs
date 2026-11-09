@@ -1017,6 +1017,20 @@ async fn apply_bearer_credentials() {
 		None,
 		json!({"appid": "other-app"}),
 	);
+	let access_token_use = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		None,
+		None,
+		Some("JWT"),
+		json!({"token_use": "access"}),
+	);
+	let id_token_use = signed_bearer_token(
+		json!(TEST_CLIENT_ID),
+		None,
+		None,
+		Some("JWT"),
+		json!({"token_use": "id"}),
+	);
 	let own_cid = signed_bearer_token(
 		json!(TEST_CLIENT_ID),
 		None,
@@ -1215,6 +1229,34 @@ async fn apply_bearer_credentials() {
 			Some(foreign_appid.as_str()),
 			Some("cors"),
 			Outcome::Continue,
+		),
+		(
+			"access token_use",
+			OidcCredentials::SessionOrBearer,
+			Some(access_token_use.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive access token_use",
+			OidcCredentials::Permissive,
+			Some(access_token_use.as_str()),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"id token_use",
+			OidcCredentials::SessionOrBearer,
+			Some(id_token_use.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"permissive id token_use",
+			OidcCredentials::Permissive,
+			Some(id_token_use.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
 		),
 		(
 			"own cid",

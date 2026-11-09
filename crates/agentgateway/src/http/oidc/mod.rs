@@ -255,6 +255,14 @@ fn verify_bearer_id_token(
 	}) {
 		return Err("token type claim is not ID");
 	}
+	// Cognito types its tokens with a `token_use` claim; ID tokens use `id`.
+	if claims
+		.inner
+		.get("token_use")
+		.is_some_and(|token_use| token_use.as_str() != Some("id"))
+	{
+		return Err("token use claim is not id");
+	}
 	// Access tokens name the requesting client in one of these claims.
 	for claim in ["client_id", "cid", "appid"] {
 		if claims
