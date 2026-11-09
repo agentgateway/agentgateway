@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-06T08:24:40Z"
+    "generatedAt": "2026-11-09T08:26:50Z"
   },
   "providers": {
     "anthropic": {
@@ -6376,6 +6376,11 @@
           }
         },
         "moonshotai.kimi-k3": {
+          "tags": [
+            "runtime"
+          ]
+        },
+        "moonshotai.kimi-k3.1": {
           "tags": [
             "runtime"
           ]
@@ -17556,6 +17561,41 @@
             ]
           }
         },
+        "moonshotai/Kimi-K3.1-Pro": {
+          "name": "Kimi K3.1 Pro",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 943718
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        },
         "nvidia/Llama-3.3-Nemotron-Super-49B-v1.5": {
           "name": "Llama 3.3 Nemotron Super 49B v1.5",
           "status": "deprecated",
@@ -18435,10 +18475,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/models/glm-5p3": {
@@ -18530,80 +18567,6 @@
             ]
           }
         },
-        "accounts/fireworks/models/gpt-oss-120b": {
-          "name": "GPT OSS 120B",
-          "status": "deprecated",
-          "released": "2025-08-05",
-          "rates": {
-            "input": "0.15",
-            "output": "0.6",
-            "cacheRead": "0.015"
-          },
-          "tiers": [
-            {
-              "serviceTier": "priority",
-              "rates": {
-                "input": "0.18",
-                "output": "0.72",
-                "cacheRead": "0.018"
-              }
-            }
-          ],
-          "limits": {
-            "context": 131072,
-            "output": 32768
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "effort": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        },
-        "accounts/fireworks/models/inkling": {
-          "name": "Inkling",
-          "status": "deprecated",
-          "released": "2026-07-15",
-          "rates": {
-            "input": "1",
-            "output": "4.05",
-            "cacheRead": "0.17"
-          },
-          "limits": {
-            "context": 1048576,
-            "output": 1048576
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          }
-        },
         "accounts/fireworks/models/kimi-k3": {
           "name": "Kimi K3",
           "released": "2026-07-16",
@@ -18648,10 +18611,54 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
+            ]
+          }
+        },
+        "accounts/fireworks/models/kimi-k3p1-pro": {
+          "name": "Kimi K3.1 Pro",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.2"
+          },
+          "tiers": [
+            {
+              "serviceTier": "priority",
+              "rates": {
+                "input": "3",
+                "output": "15",
+                "cacheRead": "0.3"
+              }
             }
+          ],
+          "limits": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "toggle": true,
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
           }
         },
         "accounts/fireworks/models/minimax-m3": {
@@ -18791,78 +18798,6 @@
             ]
           }
         },
-        "accounts/fireworks/models/nemotron-3-ultra-nvfp4": {
-          "name": "Nemotron 3 Ultra 550B A55B",
-          "status": "deprecated",
-          "released": "2026-06-04",
-          "rates": {
-            "input": "0.6",
-            "output": "2.4",
-            "cacheRead": "0.12"
-          },
-          "limits": {
-            "context": 262144,
-            "output": 128000
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "toggle": true
-          }
-        },
-        "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b": {
-          "name": "Nemotron 3.5 Lightning 30B A3B",
-          "status": "deprecated",
-          "released": "2026-08-11",
-          "rates": {
-            "input": "0.05",
-            "output": "0.2",
-            "cacheRead": "0.01"
-          },
-          "tiers": [
-            {
-              "serviceTier": "priority",
-              "rates": {
-                "input": "0.0625",
-                "output": "0.25",
-                "cacheRead": "0.0125"
-              }
-            }
-          ],
-          "limits": {
-            "context": 262144,
-            "output": 262144
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "toggle": true
-          }
-        },
         "accounts/fireworks/models/qwen3p8-2p4t-a95b": {
           "name": "Qwen3.8 2.4T A95B",
           "released": "2026-08-12",
@@ -18997,6 +18932,42 @@
             "input": "0.21",
             "output": "0.84",
             "cacheRead": "0.0042"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 384000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "toggle": true,
+            "effort": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "accounts/fireworks/routers/deepseek-v4p1-flash-1017-ultrafast": {
+          "name": "DeepSeek V4.1 Flash 1017 Ultra-fast",
+          "released": "2026-10-17",
+          "rates": {
+            "input": "2.4",
+            "output": "9.6",
+            "cacheRead": "0.048"
           },
           "limits": {
             "context": 1000000,
@@ -19287,10 +19258,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/routers/kimi-k3-fast": {
@@ -19327,10 +19295,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/routers/kimi-k3-spot": {
@@ -19367,10 +19332,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/routers/kimi-latest": {
@@ -19417,10 +19379,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/routers/minimax-latest": {
