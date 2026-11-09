@@ -311,3 +311,41 @@ litellm_settings:
 		"a false flag does not prove that all LiteLLM response caching is disabled"
 	);
 }
+
+#[test]
+fn cache_diagnostics_preserve_health_and_default_fallback_imports() {
+	for input in [
+		include_str!("litellm/cooldown-eviction.yaml"),
+		include_str!("litellm/default-fallbacks-shadowed.yaml"),
+		include_str!("litellm/default-fallbacks-max-zero.yaml"),
+	] {
+		let baseline = import_config("litellm", input).unwrap();
+		let mut with_cache = input.replace(
+			"router_settings:",
+			"router_settings:\n  cache_responses: true\n  redis_host: localhost",
+		);
+		let cache_settings = "litellm_settings:\n  cache: true\n  cache_params:\n    type: redis";
+		if with_cache.contains("litellm_settings:") {
+			with_cache = with_cache.replace("litellm_settings:", cache_settings);
+		} else {
+			with_cache.push_str(&format!("\n{cache_settings}\n"));
+		}
+		let result = import_config("litellm", &with_cache).unwrap();
+		assert_eq!(result.config, baseline.config);
+		let cache_paths = [
+			"router_settings.cache_responses",
+			"router_settings.redis_host",
+			"litellm_settings.cache",
+			"litellm_settings.cache_params.type",
+		];
+		for path in cache_paths {
+			finding(&result, path, ImportStatus::Manual);
+		}
+		let original_findings = result
+			.findings
+			.into_iter()
+			.filter(|finding| !cache_paths.contains(&finding.source_path.as_str()))
+			.collect::<Vec<_>>();
+		assert_eq!(original_findings, baseline.findings);
+	}
+}
