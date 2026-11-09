@@ -234,12 +234,10 @@ func buildHTTPRouteGroupBindings(
 func buildDelegatedHTTPRoutes(
 	httpRouteCol krt.Collection[*gwv1.HTTPRoute],
 	bindings krt.Collection[routeGroupBindingKey],
+	bindingsByNamespace krt.Index[string, routeGroupBindingKey],
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*utils.AncestorBackend]) {
-	bindingsByNamespace := krt.NewIndex(bindings, "HTTPRouteGroupBindingsByNamespace", func(binding routeGroupBindingKey) []string {
-		return []string{binding.Namespace}
-	})
 	findMatchingBindings := func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute) []routeGroupBindingKey {
 		candidates := krt.Fetch(krtctx, bindings, krt.FilterIndex(bindingsByNamespace, obj.Namespace))
 		matched := slices.Filter(candidates, func(binding routeGroupBindingKey) bool {
@@ -385,14 +383,23 @@ func buildDelegatedHTTPRoutes(
 // setDelegatedRouteParentStatus sets parent status for HTTPRoute parentRefs on delegated child routes.
 // For each HTTPRoute parentRef, it checks whether the parent actually delegates to this child via bindings,
 // and sets Accepted and ResolvedRefs conditions accordingly.
+// Parentless children adopted via a delegation backendRef carry no parentRefs at all;
+// for those, the delegating parents are inferred from bindings targeting this route.
 func setDelegatedRouteParentStatus(
 	krtctx krt.HandlerContext,
 	obj *gwv1.HTTPRoute,
 	routeReporter reporter.RouteReporter,
 	bindings krt.Collection[routeGroupBindingKey],
 	bindingsBySource krt.Index[string, routeGroupBindingKey],
+	bindingsByNamespace krt.Index[string, routeGroupBindingKey],
+	grants ReferenceGrants,
+	grantMode apisettings.BackendRefGrantMode,
 	conversionErr *reporter.RouteCondition,
 ) {
+	if len(obj.Spec.ParentRefs) == 0 {
+		setParentlessDelegatedStatus(krtctx, obj, routeReporter, bindings, bindingsByNamespace, grants, grantMode, conversionErr)
+		return
+	}
 	for _, ref := range obj.Spec.ParentRefs {
 		// Only handle HTTPRoute parentRefs
 		if ref.Group == nil || string(*ref.Group) != wellknown.GatewayGroup ||
@@ -438,22 +445,78 @@ func setDelegatedRouteParentStatus(
 				Message: "Parent HTTPRoute does not delegate to this route",
 			})
 		}
-		// Mirror ProcessParentReferences: surface the child route's own conversion
-		// errors (e.g. missing backends) instead of unconditionally reporting success.
-		if conversionErr != nil {
+		setResolvedRefsCondition(pr, conversionErr)
+	}
+}
+
+// setResolvedRefsCondition mirrors ProcessParentReferences: surface the child route's own
+// conversion errors (e.g. missing backends) instead of unconditionally reporting success.
+func setResolvedRefsCondition(pr reporter.ParentRefReporter, conversionErr *reporter.RouteCondition) {
+	if conversionErr != nil {
+		pr.SetCondition(reporter.RouteCondition{
+			Type:    gwv1.RouteConditionResolvedRefs,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonResolvedRefs(conversionErr, false),
+			Message: conversionErr.Message,
+		})
+	} else {
+		pr.SetCondition(reporter.RouteCondition{
+			Type:   gwv1.RouteConditionResolvedRefs,
+			Status: metav1.ConditionTrue,
+			Reason: gwv1.RouteReasonResolvedRefs,
+		})
+	}
+}
+
+// setParentlessDelegatedStatus reports status.parents for a route with no parentRefs that is
+// adopted by parent HTTPRoutes through delegation backendRefs (including wildcard and label
+// selectors). Each distinct delegating parent gets one entry; cross-namespace adoption without
+// a ReferenceGrant is reported as Accepted=False/RefNotPermitted, matching the data plane,
+// which skips such bindings.
+func setParentlessDelegatedStatus(
+	krtctx krt.HandlerContext,
+	obj *gwv1.HTTPRoute,
+	routeReporter reporter.RouteReporter,
+	bindings krt.Collection[routeGroupBindingKey],
+	bindingsByNamespace krt.Index[string, routeGroupBindingKey],
+	grants ReferenceGrants,
+	grantMode apisettings.BackendRefGrantMode,
+	conversionErr *reporter.RouteCondition,
+) {
+	candidates := krt.Fetch(krtctx, bindings, krt.FilterIndex(bindingsByNamespace, obj.Namespace))
+	seen := sets.New[string]()
+	var parents []types.NamespacedName
+	for _, b := range candidates {
+		if !routeMatchesRouteGroup(obj, b) || seen.InsertContains(b.Source.String()) {
+			continue
+		}
+		parents = append(parents, b.Source)
+	}
+	for _, source := range slices.SortBy(parents, types.NamespacedName.String) {
+		// Build a normalized parentRef with namespace filled in so it matches
+		// what BuildRouteStatusWithParentRefDefaulting will look up.
+		statusRef := gwv1.ParentReference{
+			Group:     new(gwv1.Group(wellknown.GatewayGroup)),
+			Kind:      new(gwv1.Kind(wellknown.HTTPRouteKind)),
+			Name:      gwv1.ObjectName(source.Name),
+			Namespace: new(gwv1.Namespace(source.Namespace)),
+		}
+		pr := routeReporter.ParentRef(&statusRef)
+		if childAllowsParent(krtctx, obj, resolvedBinding{Parent: source}, grants, grantMode) {
 			pr.SetCondition(reporter.RouteCondition{
-				Type:    gwv1.RouteConditionResolvedRefs,
-				Status:  metav1.ConditionFalse,
-				Reason:  reasonResolvedRefs(conversionErr, false),
-				Message: conversionErr.Message,
+				Type:   gwv1.RouteConditionAccepted,
+				Status: metav1.ConditionTrue,
+				Reason: gwv1.RouteReasonAccepted,
 			})
 		} else {
 			pr.SetCondition(reporter.RouteCondition{
-				Type:   gwv1.RouteConditionResolvedRefs,
-				Status: metav1.ConditionTrue,
-				Reason: gwv1.RouteReasonResolvedRefs,
+				Type:    gwv1.RouteConditionAccepted,
+				Status:  metav1.ConditionFalse,
+				Reason:  gwv1.RouteReasonRefNotPermitted,
+				Message: fmt.Sprintf("parent HTTPRoute %s may not delegate to this route (missing a ReferenceGrant?)", source.String()),
 			})
 		}
+		setResolvedRefsCondition(pr, conversionErr)
 	}
 }
 
@@ -472,6 +535,9 @@ func AgwRouteCollection(
 	httpRouteGroupBindings := buildHTTPRouteGroupBindings(httpRouteCol, inputs, krtopts)
 	bindingsBySource := krt.NewIndex(httpRouteGroupBindings, "HTTPRouteGroupBindingsBySource", func(binding routeGroupBindingKey) []string {
 		return []string{binding.Source.String()}
+	})
+	bindingsByNamespace := krt.NewIndex(httpRouteGroupBindings, "HTTPRouteGroupBindingsByNamespace", func(binding routeGroupBindingKey) []string {
+		return []string{binding.Namespace}
 	})
 
 	httpRouteStatus, httpRoutes := createRouteCollectionGeneric(httpRouteCol, inputs, krtopts, "translator/HTTPRoutes",
@@ -525,7 +591,8 @@ func AgwRouteCollection(
 			return gwv1.HTTPRouteStatus{RouteStatus: status}
 		},
 		func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute, routeReporter reporter.RouteReporter, conversionErr *reporter.RouteCondition) {
-			setDelegatedRouteParentStatus(krtctx, obj, routeReporter, httpRouteGroupBindings, bindingsBySource, conversionErr)
+			setDelegatedRouteParentStatus(krtctx, obj, routeReporter, httpRouteGroupBindings, bindingsBySource,
+				bindingsByNamespace, inputs.Grants, inputs.BackendRefGrantMode, conversionErr)
 		},
 	)
 	status.RegisterStatus(queue, httpRouteStatus, GetStatus)
@@ -549,7 +616,7 @@ func AgwRouteCollection(
 			}}},
 		}}
 	}, krtopts.ToOptions("translator/ModelRouters")...)
-	delegatedHTTPRoutes, delegatedHTTPAncestors := buildDelegatedHTTPRoutes(httpRouteCol, httpRouteGroupBindings, inputs, krtopts)
+	delegatedHTTPRoutes, delegatedHTTPAncestors := buildDelegatedHTTPRoutes(httpRouteCol, httpRouteGroupBindings, bindingsByNamespace, inputs, krtopts)
 
 	grpcRouteStatus, grpcRoutes := createRouteCollectionGeneric(grpcRouteCol, inputs, krtopts, "translator/GRPCRoutes",
 		func(ctx RouteContext, obj *gwv1.GRPCRoute) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
