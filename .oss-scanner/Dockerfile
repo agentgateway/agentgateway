@@ -1,5 +1,5 @@
 FROM docker.io/library/rust:1.99.0-trixie
-ARG GO_VERSION=1.27.1
+ARG GO_VERSION=1.27.4
 # Pinned Debian package versions break on every point release.
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
