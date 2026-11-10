@@ -500,7 +500,7 @@ mod tests {
 		}));
 
 		for event in [
-			serde_json::json!({"type": "message_start", "message": {"model": "claude-haiku-4-5", "usage": {"input_tokens": 15, "output_tokens": 1}}}),
+			serde_json::json!({"type": "message_start", "message": {"model": "claude-haiku-4-5", "usage": {"input_tokens": 15, "output_tokens": 1, "service_tier": "standard", "speed": "fast"}}}),
 			serde_json::json!({"type": "message_delta", "usage": {"output_tokens": 21}}),
 		] {
 			amend_from_stream_response(&mut log, &StreamResponse { rest: event });
@@ -510,6 +510,7 @@ mod tests {
 		assert_eq!(reported.input_tokens, Some(15));
 		assert_eq!(reported.output_tokens, Some(21));
 		assert_eq!(reported.total_tokens, Some(36));
+		assert_eq!(reported.service_tier.as_deref(), Some("fast"));
 	}
 }
 
@@ -694,13 +695,16 @@ mod lookups {
 			"cacheReadInputTokenCount",
 		],
 	];
-	pub const SERVICE_TIER: [&[&str]; 3] = [
+	pub const SERVICE_TIER: [&[&str]; 4] = [
 		// Completions
 		&["service_tier"],
 		&["response", "service_tier"],
 		// Messages
 		&["usage", "service_tier"],
+		&["message", "usage", "service_tier"],
 	];
+	// Messages fast mode; takes precedence over SERVICE_TIER when "fast".
+	pub const SPEED: [&[&str]; 2] = [&["usage", "speed"], &["message", "usage", "speed"]];
 }
 
 impl<'de> Deserialize<'de> for Response {
@@ -736,7 +740,8 @@ impl ResponseType for Response {
 				.lookup(lookups::CACHE_CREATION_INPUT_TOKENS, |v| v.as_u64()),
 			cached_input_tokens: self.lookup(lookups::CACHED_INPUT_TOKENS, |v| v.as_u64()),
 			service_tier: self
-				.lookup(lookups::SERVICE_TIER, |v| v.as_str())
+				.lookup(lookups::SPEED, |v| v.as_str().filter(|s| *s == "fast"))
+				.or_else(|| self.lookup(lookups::SERVICE_TIER, |v| v.as_str()))
 				.map(Into::into),
 			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			completion: None,
@@ -891,6 +896,12 @@ pub fn amend_from_stream_response(log: &mut StreamingUsageGuard, f: &StreamRespo
 		log,
 		lookups::SERVICE_TIER,
 		|v| v.as_str(),
+		|l, v| l.response.service_tier = Some(v.into()),
+	);
+	f.set_if(
+		log,
+		lookups::SPEED,
+		|v| v.as_str().filter(|s| *s == "fast"),
 		|l, v| l.response.service_tier = Some(v.into()),
 	);
 	// Input and output may arrive in different events (Anthropic sends input in message_start and

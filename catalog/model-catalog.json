@@ -107,6 +107,20 @@
               "1h": "16"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "16",
+                "output": "80",
+                "cacheRead": "0.4",
+                "cacheWrite": "20",
+                "cacheWriteDetails": {
+                  "1h": "32"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -479,6 +493,20 @@
               "1h": "10"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "10",
+                "output": "50",
+                "cacheRead": "1",
+                "cacheWrite": "12.5",
+                "cacheWriteDetails": {
+                  "1h": "20"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -524,6 +552,20 @@
               "1h": "10"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "10",
+                "output": "50",
+                "cacheRead": "1",
+                "cacheWrite": "12.5",
+                "cacheWriteDetails": {
+                  "1h": "20"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -569,6 +611,20 @@
               "1h": "8"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "8",
+                "output": "40",
+                "cacheRead": "0.4",
+                "cacheWrite": "10",
+                "cacheWriteDetails": {
+                  "1h": "16"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -14633,6 +14689,20 @@
               "1h": "10"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "30",
+                "output": "150",
+                "cacheRead": "3",
+                "cacheWrite": "37.5",
+                "cacheWriteDetails": {
+                  "1h": "60"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -14678,6 +14748,20 @@
               "1h": "10"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "10",
+                "output": "50",
+                "cacheRead": "1",
+                "cacheWrite": "12.5",
+                "cacheWriteDetails": {
+                  "1h": "20"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -21114,6 +21198,20 @@
               "1h": "16"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "16",
+                "output": "80",
+                "cacheRead": "0.4",
+                "cacheWrite": "20",
+                "cacheWriteDetails": {
+                  "1h": "32"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],

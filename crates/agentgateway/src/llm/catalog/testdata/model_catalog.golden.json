@@ -36,6 +36,21 @@
             ]
           }
         },
+        "claude-opus-5-5": {
+          "rates": {
+            "input": "4",
+            "output": "20"
+          },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "8",
+                "output": "40"
+              }
+            }
+          ]
+        },
         "claude-sonnet-4-5": {
           "rates": {
             "input": "3",
