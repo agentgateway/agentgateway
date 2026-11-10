@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-10T00:06:46Z"
+    "generatedAt": "2026-11-10T23:34:35Z"
   },
   "providers": {
     "anthropic": {
@@ -20866,6 +20866,45 @@
             ]
           }
         },
+        "gemini-4-carbon": {
+          "name": "Gemini 4 Carbon",
+          "released": "2026-11-10",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1",
+            "inputAudio": "2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
         "gemini-embedding-001": {
           "name": "Gemini Embedding 001",
           "released": "2025-05-20",
@@ -23117,6 +23156,45 @@
         "gemini-4-argon": {
           "name": "Gemini 4 Argon",
           "released": "2026-10-13",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1",
+            "inputAudio": "2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "gemini-4-carbon": {
+          "name": "Gemini 4 Carbon",
+          "released": "2026-11-10",
           "rates": {
             "input": "2",
             "output": "10",
@@ -26519,6 +26597,57 @@
     },
     "meta": {
       "models": {
+        "muse-ember-1.0": {
+          "name": "Muse Ember",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "0.1",
+            "output": "0.5",
+            "cacheRead": "0.004"
+          },
+          "tiers": [
+            {
+              "contextOver": 200000,
+              "rates": {
+                "input": "0.3",
+                "output": "1.5",
+                "cacheRead": "0.012"
+              }
+            }
+          ],
+          "limits": {
+            "context": 1048576,
+            "output": 524288
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "pdf",
+              "audio"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "muse-spark-1.1": {
           "name": "Muse Spark 1.1",
           "released": "2026-04-08",

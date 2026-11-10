@@ -19,7 +19,7 @@ const openaiProviderID = "openai"
 const openaiPricingURL = "https://developers.openai.com/api/docs/pricing.md"
 
 // openaiPricingSections are the pricing page sections imported; models.dev covers the rest.
-var openaiPricingSections = []string{"Realtime and audio generation models", "Transcription models"}
+var openaiPricingSections = []string{"Realtime & Audio", "Transcription"}
 
 // openaiPricingModelIDs maps display names in the pricing tables to API model ids.
 var openaiPricingModelIDs = map[string]string{
