@@ -17,6 +17,10 @@ const SQLITE_SCHEMA: &str = include_str!("sqlite_schema.sql");
 const POSTGRES_SCHEMA: &str = include_str!("postgres_schema.sql");
 const SQLITE_UPSERT: &str = include_str!("sqlite_upsert.sql");
 const POSTGRES_UPSERT: &str = include_str!("postgres_upsert.sql");
+/// "agwbudgt"
+const POSTGRES_XACT_LOCK_KEY: i64 = 0x6167_7762_7564_6774;
+/// Bounds how long schema setup waits on the advisory lock or table locks before failing.
+const POSTGRES_SCHEMA_LOCK_TIMEOUT: &str = "10s";
 
 impl BudgetPolicy {
 	/// Initializes and migrates the budget tables, prunes expired rows, preloads every persisted
@@ -51,14 +55,44 @@ impl BudgetPolicy {
 					.context("failed to prune expired budget usage")?;
 			},
 			crate::database::DatabasePool::Postgres(pool) => {
+				let mut tx = pool
+					.begin()
+					.await
+					.context("failed to begin budget database initialization")?;
+				sqlx::query("SELECT set_config('lock_timeout', $1, true)")
+					.bind(POSTGRES_SCHEMA_LOCK_TIMEOUT)
+					.execute(&mut *tx)
+					.await
+					.context("failed to configure budget database lock timeout")?;
+				sqlx::query("SELECT pg_advisory_xact_lock($1)")
+					.bind(POSTGRES_XACT_LOCK_KEY)
+					.execute(&mut *tx)
+					.await
+					.context("failed to acquire budget database schema lock")?;
 				sqlx::raw_sql(POSTGRES_SCHEMA)
-					.execute(pool)
+					.execute(&mut *tx)
 					.await
 					.context("failed to initialize budget database")?;
-				sqlx::query("ALTER TABLE budget_usage ADD COLUMN IF NOT EXISTS unit TEXT")
-					.execute(pool)
+				// `ALTER TABLE` takes an access exclusive lock and blocks every running proxy's budget traffic
+				// on each restart so first check whether its even needed
+				let has_unit = sqlx::query_scalar::<_, bool>(
+					"SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'budget_usage'::regclass \
+					 AND attname = 'unit' AND NOT attisdropped)",
+				)
+				.fetch_one(&mut *tx)
+				.await
+				.context("failed to inspect budget database schema")?;
+				if !has_unit {
+					sqlx::query("ALTER TABLE budget_usage ADD COLUMN unit TEXT")
+						.execute(&mut *tx)
+						.await
+						.context("failed to migrate budget database schema")?;
+				}
+				tx.commit()
 					.await
-					.context("failed to migrate budget database schema")?;
+					.context("failed to commit budget database initialization")?;
+				// Pruning is idempotent and safe to run concurrently in postgres, so it runs outside
+				// the schema lock to keep that critical section short for other starting proxies.
 				sqlx::query("DELETE FROM budget_usage WHERE window_end <= $1")
 					.bind(now.timestamp_millis())
 					.execute(pool)
