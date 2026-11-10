@@ -83,7 +83,7 @@ impl BudgetPolicy {
 				.await
 				.context("failed to inspect budget database schema")?;
 				if !has_unit {
-					sqlx::query("ALTER TABLE budget_usage ADD COLUMN unit TEXT")
+					sqlx::query("ALTER TABLE budget_usage ADD COLUMN IF NOT EXISTS unit TEXT")
 						.execute(&mut *tx)
 						.await
 						.context("failed to migrate budget database schema")?;
