@@ -269,10 +269,21 @@ pub struct Usage {
 	pub cache_read_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub speed: Option<String>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub iterations: Vec<UsageIteration>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+/// Anthropic reports fast mode in `usage.speed` rather than `service_tier`; treat it as the "fast"
+/// service tier so it is priced at fast rates.
+pub(crate) fn served_tier(service_tier: Option<&str>, speed: Option<&str>) -> Option<Strng> {
+	match speed {
+		Some("fast") => Some(strng::literal!("fast")),
+		_ => service_tier.map(Into::into),
+	}
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize, PartialEq, Eq)]
@@ -943,7 +954,10 @@ impl ResponseType for Response {
 			cache_creation_1h_input_tokens: usage.cache_creation_1h_input_tokens,
 			cache_creation_12h_input_tokens: None,
 			cached_input_tokens: usage.cache_read_input_tokens,
-			service_tier: self.usage.service_tier.as_deref().map(Into::into),
+			service_tier: served_tier(
+				self.usage.service_tier.as_deref(),
+				self.usage.speed.as_deref(),
+			),
 			usage_lines: usage_lines(&self.usage.iterations),
 			completion: if log_content.completion {
 				Some(
@@ -1649,6 +1663,10 @@ pub mod typed {
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub service_tier: Option<String>,
 
+		/// The speed used to serve the request (`"fast"` or `"standard"`).
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub speed: Option<String>,
+
 		#[serde(default, skip_serializing_if = "Vec::is_empty")]
 		pub iterations: Vec<super::UsageIteration>,
 	}
@@ -1836,7 +1854,10 @@ pub mod typed {
 				cache_creation_1h_input_tokens: usage.cache_creation_1h_input_tokens,
 				cache_creation_12h_input_tokens: None,
 				cached_input_tokens: usage.cache_read_input_tokens,
-				service_tier: self.usage.service_tier.as_deref().map(Into::into),
+				service_tier: super::served_tier(
+					self.usage.service_tier.as_deref(),
+					self.usage.speed.as_deref(),
+				),
 				usage_lines: super::usage_lines(&self.usage.iterations),
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
@@ -2106,6 +2127,7 @@ mod tests {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				speed: None,
 				iterations: vec![],
 				rest: Default::default(),
 			},

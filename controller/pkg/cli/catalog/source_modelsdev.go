@@ -101,6 +101,7 @@ type modelsDevMode struct {
 	Provider struct {
 		Body struct {
 			ServiceTier string `json:"service_tier"`
+			Speed       string `json:"speed"`
 		} `json:"body"`
 	} `json:"provider"`
 }
@@ -315,11 +316,14 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(for
 		entry.Tiers = tiers
 	}
 
-	// Only modes selected by an OpenAI-style service_tier map onto our service tiers.
+	// Only modes selected by an OpenAI-style service_tier, or Anthropic's speed, map onto our service tiers.
 	for _, name := range slices.Sorted(maps.Keys(m.Experimental.Modes)) {
 		mode := m.Experimental.Modes[name]
 		serviceTier := mode.Provider.Body.ServiceTier
-		if mode.Cost == nil || (serviceTier != "priority" && serviceTier != "flex" && serviceTier != "ultrafast") {
+		if mode.Provider.Body.Speed == "fast" {
+			serviceTier = "fast"
+		}
+		if mode.Cost == nil || (serviceTier != "priority" && serviceTier != "flex" && serviceTier != "ultrafast" && serviceTier != "fast") {
 			continue
 		}
 		rates, err := modelsDevBuildRates(mode.Cost, label+" "+name+" mode")
