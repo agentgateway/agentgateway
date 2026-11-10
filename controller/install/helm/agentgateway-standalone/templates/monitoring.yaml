@@ -18,7 +18,9 @@ spec:
   selector:
     matchLabels:
       {{- include "agentgateway-standalone.selectorLabels" . | nindent 6 }}
-  scrapeNativeHistograms: {{ .Values.monitoring.podMonitor.scrapeNativeHistograms }}
+  {{- if .Values.monitoring.podMonitor.scrapeNativeHistograms }}
+  scrapeNativeHistograms: true
+  {{- end }}
   scrapeClassicHistograms: {{ .Values.monitoring.podMonitor.scrapeClassicHistograms }}
   scrapeProtocols:
     {{- if .Values.monitoring.podMonitor.scrapeNativeHistograms }}

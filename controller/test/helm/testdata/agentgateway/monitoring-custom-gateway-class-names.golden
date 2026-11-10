@@ -20,7 +20,6 @@ spec:
       values:
       - "agentgateway"
       - "custom-class"
-  scrapeNativeHistograms: false
   scrapeClassicHistograms: true
   scrapeProtocols:
     - OpenMetricsText1.0.0
