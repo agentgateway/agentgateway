@@ -395,6 +395,13 @@
           "description": "The provider of the LLM.",
           "type": "string"
         },
+        "region": {
+          "description": "Backend pricing region (us, eu…), if the provider has one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "inputTokens": {
           "description": "The total number of tokens in the input/prompt, including tokens read from or written to\ncache. This has consistent semantics across providers.",
           "type": [

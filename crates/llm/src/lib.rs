@@ -280,6 +280,9 @@ pub struct LLMRequest {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub original_model: Option<Strng>,
 	pub provider: Strng,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	/// Region used for pricing, not the backend's configured location.
+	pub region: Option<Strng>,
 	pub streaming: bool,
 	pub params: LLMRequestParams,
 	#[serde(skip_serializing_if = "Option::is_none")]

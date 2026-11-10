@@ -105,6 +105,7 @@ impl RequestType for Request {
 			.unwrap_or_default(),
 			original_model: None,
 			provider,
+			region: None,
 			streaming: self
 				.lookup(lookups::STREAM, |v| v.as_bool())
 				.unwrap_or_default(),
@@ -216,6 +217,7 @@ mod tests {
 			request_model: strng::new("unknown"),
 			original_model: None,
 			provider: strng::new("aws.bedrock"),
+			region: None,
 			streaming: false,
 			params: Default::default(),
 			prompt: None,

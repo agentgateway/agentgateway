@@ -50,6 +50,7 @@ impl RequestType for Request {
 			request_model: strng::new(self.model.as_deref().unwrap_or_default()),
 			original_model: None,
 			provider,
+			region: None,
 			streaming: false,
 			params: LLMRequestParams::default(),
 			prompt: Default::default(),
