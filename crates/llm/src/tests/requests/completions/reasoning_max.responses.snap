@@ -1,0 +1,48 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/reasoning_max.json
+info:
+  model: claude-opus-4-6
+  messages:
+    - role: user
+      content: Deeply analyze quantum gravity
+  reasoning_effort: xhigh
+---
+{
+  "request": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Deeply analyze quantum gravity"
+          }
+        ]
+      }
+    ],
+    "model": "claude-opus-4-6",
+    "stream": false,
+    "store": false,
+    "reasoning": {
+      "effort": "xhigh"
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "responses",
+    "streaming": false,
+    "params": {
+      "reasoning_effort": "xhigh"
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Deeply analyze quantum gravity"
+      }
+    ]
+  }
+}

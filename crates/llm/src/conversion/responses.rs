@@ -183,6 +183,12 @@ pub mod from_messages {
 		validate_raw_request(req)?;
 		let typed = json_util::convert::<_, messages::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
+		translate_internal(typed)
+	}
+
+	pub(crate) fn translate_internal(
+		typed: messages::Request,
+	) -> Result<types::responses::Request, AIError> {
 		let messages::Request {
 			messages,
 			system,
@@ -747,7 +753,16 @@ pub mod from_messages {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<responses::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
+		let provider_usage = provider_usage(&resp);
+		let anthropic = translate_response_internal(resp)?;
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: anthropic,
+			provider_usage,
+		}))
+	}
+
+	pub(super) fn provider_usage(resp: &responses::Response) -> Option<super::super::ProviderUsage> {
+		resp.usage.as_ref().map(|u| super::super::ProviderUsage {
 			input_tokens: u.input_tokens as u64,
 			total_tokens: u.total_tokens as u64,
 			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
@@ -758,15 +773,10 @@ pub mod from_messages {
 				.and_then(|d| d.ttl_12h_tokens)
 				.map(|t| t as u64),
 			..Default::default()
-		});
-		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
-			response: anthropic,
-			provider_usage,
-		}))
+		})
 	}
 
-	fn translate_response_internal(
+	pub(crate) fn translate_response_internal(
 		resp: responses::Response,
 	) -> Result<messages::MessagesResponse, AIError> {
 		if resp.error.is_some() || matches!(resp.status, responses::Status::Failed) {
@@ -1721,5 +1731,175 @@ pub mod from_messages {
 
 	fn unsupported<T>(reason: &'static str) -> Result<T, AIError> {
 		Err(AIError::UnsupportedConversion(strng::new(reason)))
+	}
+}
+
+/// A Chat Completions client on a Responses provider, by way of the Messages converters: the
+/// request goes Chat Completions to Messages to Responses, and the response and stream come back
+/// the same way. The output limit, reasoning effort and response format are taken from the Chat
+/// Completions request, because the Messages step fills in or approximates them.
+pub mod from_completions {
+	use std::collections::HashMap;
+
+	use agent_http::Body;
+	use bytes::Bytes;
+	use serde_json::{Map, Value};
+
+	use crate::types::ResponseType;
+	use crate::types::completions::typed as completions;
+	use crate::types::responses::typed as responses;
+	use crate::{
+		AIError, LogContentFields, StreamingUsageGuard, conversion, json, logged_response_parsing,
+		types,
+	};
+
+	pub fn translate(
+		req: &types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		let xlated = translate_request(req, catalog)?;
+		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(
+		req: &types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<types::responses::Request, AIError> {
+		let typed = json::convert::<_, completions::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
+		#[allow(deprecated)]
+		// Messages fills in a default limit, so use the client's.
+		let max_output_tokens = typed.max_completion_tokens.or(typed.max_tokens);
+		let reasoning = typed
+			.reasoning_effort
+			.clone()
+			.map(|effort| responses::Reasoning {
+				effort: Some(effort),
+				..Default::default()
+			});
+		let format = typed.response_format.clone().map(|format| match format {
+			completions::ResponseFormat::Text => responses::TextResponseFormatConfiguration::Text,
+			completions::ResponseFormat::JsonObject => {
+				responses::TextResponseFormatConfiguration::JsonObject
+			},
+			completions::ResponseFormat::JsonSchema { json_schema } => {
+				responses::TextResponseFormatConfiguration::JsonSchema(json_schema)
+			},
+		});
+
+		// Messages drops strict, and Responses defaults it to false here.
+		let strict_tools: HashMap<String, bool> = typed
+			.tools
+			.iter()
+			.flatten()
+			.filter_map(|tool| match tool {
+				completions::Tool::Function(tool) => tool
+					.function
+					.strict
+					.map(|strict| (tool.function.name.clone(), strict)),
+				_ => None,
+			})
+			.collect();
+		let mut passthrough = Map::new();
+		passthrough.insert(
+			// Chat Completions doesn't store by default; Responses does.
+			"store".to_string(),
+			Value::Bool(typed.store.unwrap_or(false)),
+		);
+		if let Some(service_tier) = &typed.service_tier {
+			passthrough.insert(
+				"service_tier".to_string(),
+				Value::String(service_tier.clone()),
+			);
+		}
+		if let Some(user) = &typed.user {
+			passthrough.insert("user".to_string(), Value::String(user.clone()));
+		}
+		for key in [
+			"prompt_cache_key",
+			"prompt_cache_retention",
+			"safety_identifier",
+		] {
+			if let Some(value) = req.rest.get(key) {
+				passthrough.insert(key.to_string(), value.clone());
+			}
+		}
+
+		let request = conversion::messages::from_completions::translate_typed(typed, catalog)?;
+		let mut request = super::from_messages::translate_internal(request)?;
+		request.max_output_tokens = max_output_tokens;
+		if let Some(rest) = request.rest.as_object_mut() {
+			rest.extend(passthrough);
+			if let Some(Value::Array(tools)) = rest.get_mut("tools") {
+				for tool in tools {
+					if let Some(strict) = tool
+						.get("name")
+						.and_then(Value::as_str)
+						.and_then(|name| strict_tools.get(name))
+					{
+						tool["strict"] = Value::Bool(*strict);
+					}
+				}
+			}
+			// Messages only sets reasoning for known models; use the client's effort.
+			rest.remove("reasoning");
+			if let Some(reasoning) = reasoning {
+				rest.insert(
+					"reasoning".to_string(),
+					serde_json::to_value(reasoning).map_err(AIError::RequestMarshal)?,
+				);
+			}
+			if let Some(format) = format {
+				let format = serde_json::to_value(format).map_err(AIError::RequestMarshal)?;
+				rest.insert(
+					"text".to_string(),
+					Value::Object(Map::from_iter([("format".to_string(), format)])),
+				);
+			}
+		}
+		Ok(request)
+	}
+
+	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
+		let resp = serde_json::from_slice::<responses::Response>(bytes)
+			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = super::from_messages::provider_usage(&resp);
+		// Messages usage has no reasoning tokens, so add them back.
+		let reasoning_tokens = resp
+			.usage
+			.as_ref()
+			.map(|u| u.output_tokens_details.reasoning_tokens)
+			.filter(|tokens| *tokens > 0);
+		let resp = super::from_messages::translate_response_internal(resp)?;
+		let mut resp = conversion::messages::from_completions::translate_response_internal(resp);
+		if let (Some(usage), Some(reasoning_tokens)) = (resp.usage.as_mut(), reasoning_tokens) {
+			usage
+				.completion_tokens_details
+				.get_or_insert_with(Default::default)
+				.reasoning_tokens = Some(u64::from(reasoning_tokens));
+		}
+		let passthrough =
+			json::convert::<_, types::completions::Response>(&resp).map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: passthrough,
+			provider_usage,
+		}))
+	}
+
+	/// The Responses stage reads the provider's events, so it takes the usage guard and the content
+	/// flags; the Chat Completions stage only re-frames them.
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: LogContentFields,
+	) -> Body {
+		let events = super::from_messages::translate_stream(b, buffer_limit, log, log_content);
+		conversion::messages::from_completions::translate_stream(
+			events,
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
 	}
 }

@@ -1,0 +1,25 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/stream-refusal.json
+---
+data: {"id":"","choices":[{"index":0,"delta":{"content":"I can","role":"assistant"}}],"created":123,"model":"gpt-4.1-mini","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"","choices":[{"index":0,"delta":{"content":"not help with that."}}],"created":123,"model":"gpt-4.1-mini","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"","choices":[{"index":0,"delta":{"content":null},"finish_reason":"content_filter"}],"created":123,"model":"gpt-4.1-mini","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 5,
+  "output_tokens": 3,
+  "total_tokens": 8,
+  "reasoning_tokens": 0,
+  "cached_input_tokens": 0,
+  "provider_model": "gpt-4.1-mini",
+  "completion": [
+    "I cannot help with that."
+  ]
+}
