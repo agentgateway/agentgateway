@@ -183,7 +183,7 @@ use syn::{
 ///     field: String,
 /// }
 /// ```
-#[proc_macro_derive(DynamicType, attributes(dynamic))]
+#[proc_macro_derive(DynamicType, attributes(dynamic, serde))]
 pub fn derive_dynamic_type(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	let name = &input.ident;
