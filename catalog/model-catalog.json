@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-09T08:26:50Z"
+    "generatedAt": "2026-11-10T00:06:46Z"
   },
   "providers": {
     "anthropic": {
@@ -60,6 +60,51 @@
             "cacheWrite": "12.5",
             "cacheWriteDetails": {
               "1h": "20"
+            }
+          },
+          "tags": [
+            "adaptive_thinking"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "claude-fable-5-2": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
             }
           },
           "tags": [
@@ -1071,6 +1116,52 @@
             ]
           }
         },
+        "anthropic.claude-fable-5-2": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
+            }
+          },
+          "tags": [
+            "adaptive_thinking",
+            "runtime"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "anthropic.claude-haiku-4-5-20251001-v1:0": {
           "name": "Claude Haiku 4.5",
           "released": "2025-10-15",
@@ -1186,6 +1277,11 @@
           ]
         },
         "anthropic.claude-mythos-5-1": {
+          "tags": [
+            "runtime"
+          ]
+        },
+        "anthropic.claude-mythos-5-2": {
           "tags": [
             "runtime"
           ]
@@ -3534,6 +3630,52 @@
             ]
           }
         },
+        "global.anthropic.claude-fable-5-2": {
+          "name": "Claude Fable 5.2 (Global)",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
+            }
+          },
+          "tags": [
+            "adaptive_thinking",
+            "runtime"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
           "name": "Claude Haiku 4.5 (Global)",
           "released": "2025-10-15",
@@ -4187,6 +4329,45 @@
             "structuredOutput": true,
             "toolCall": true,
             "temperature": false
+          }
+        },
+        "global.moonshotai.kimi-k3.1": {
+          "name": "Kimi K3.1 Pro Highspeed (Global)",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "4",
+            "output": "20",
+            "cacheRead": "0.2",
+            "cacheWrite": "5"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 1048576
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
           }
         },
         "global.openai.gpt-5.6-luna": {
@@ -7965,6 +8146,52 @@
             ]
           }
         },
+        "us.anthropic.claude-fable-5-2": {
+          "name": "Claude Fable 5.2 (US)",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8.8",
+            "output": "44",
+            "cacheRead": "0.22",
+            "cacheWrite": "11",
+            "cacheWriteDetails": {
+              "1h": "17.6"
+            }
+          },
+          "tags": [
+            "adaptive_thinking",
+            "runtime"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
           "name": "Claude Haiku 4.5 (US)",
           "released": "2025-10-15",
@@ -8867,6 +9094,45 @@
             "structuredOutput": true,
             "toolCall": true,
             "temperature": false
+          }
+        },
+        "us.moonshotai.kimi-k3.1": {
+          "name": "Kimi K3.1 Pro Highspeed (US)",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "4.4",
+            "output": "22",
+            "cacheRead": "0.22",
+            "cacheWrite": "5.5"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 1048576
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
           }
         },
         "us.openai.gpt-5.6-luna": {
@@ -9810,6 +10076,50 @@
             "cacheWrite": "12.5",
             "cacheWriteDetails": {
               "1h": "20"
+            }
+          },
+          "tags": [
+            "adaptive_thinking"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
+        "claude-fable-5-2": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
             }
           },
           "tags": [
@@ -19495,7 +19805,7 @@
             }
           ],
           "limits": {
-            "context": 131072,
+            "context": 1048576,
             "output": 65536
           },
           "modalities": {
@@ -19536,7 +19846,7 @@
             }
           ],
           "limits": {
-            "context": 131072,
+            "context": 1048576,
             "output": 65536
           },
           "modalities": {
@@ -20757,6 +21067,51 @@
             "cacheWrite": "12.5",
             "cacheWriteDetails": {
               "1h": "20"
+            }
+          },
+          "tags": [
+            "adaptive_thinking"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "claude-fable-5-2@default": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
             }
           },
           "tags": [
