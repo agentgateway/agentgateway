@@ -377,13 +377,13 @@ fn test_require_is_not_sufficient_when_allow_rules_exist() {
 }
 
 #[test]
-fn test_require_actors_denies_bad_deep_actor_despite_allow() {
-	let require_actors = RuleSet::new(create_require_policy_set(vec![
-		r#"has(jwt.act) && actors(jwt).all(a, a.sub in ["agent-a", "agent-b"])"#,
+fn test_require_act_chain_denies_bad_deep_actor_despite_allow() {
+	let require_act_chain = RuleSet::new(create_require_policy_set(vec![
+		r#"has(jwt.act) && jwt.act.recurse("act").all(a, a.sub in ["agent-a", "agent-b"])"#,
 	]));
 	let allow_user = RuleSet::new(create_policy_set(vec![r#"jwt.sub == "user""#]));
 	let mut ctx = ContextBuilder::new();
-	let rs = RuleSets::from(vec![require_actors, allow_user]);
+	let rs = RuleSets::from(vec![require_act_chain, allow_user]);
 	rs.register(&mut ctx);
 	let mcp = tool_context("server", "increment");
 

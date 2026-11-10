@@ -103,50 +103,54 @@ fn unvalidated_jwt_payload() {
 }
 
 #[test]
-fn actors() {
-	assert(json!([]), r#"actors({"sub": "user"})"#);
+fn recurse() {
+	assert(
+		json!([{"sub": "user"}]),
+		r#"{"sub": "user"}.recurse("act")"#,
+	);
 	assert(
 		json!([
-			{"sub": "agent-runtime", "iss": "sts"},
-			{"sub": "agent-two"},
-			{"sub": "default"},
+			{"sub": "a", "act": {"sub": "b", "act": {"sub": "c"}}},
+			{"sub": "b", "act": {"sub": "c"}},
+			{"sub": "c"},
 		]),
-		r#"actors({"sub": "user", "act": {"sub": "agent-runtime", "iss": "sts", "act": {"sub": "agent-two", "act": {"sub": "default"}}}})"#,
+		r#"{"sub": "a", "act": {"sub": "b", "act": {"sub": "c"}}}.recurse("act")"#,
+	);
+	assert(
+		json!(["a", "b", "c"]),
+		r#"{"sub": "a", "act": {"sub": "b", "act": {"sub": "c"}}}.recurse("act").map(a, a.sub)"#,
 	);
 
-	let allowed = r#".all(a, a.sub in ["agent-runtime", "agent-two"])"#;
+	let allowed = r#".recurse("act").all(a, a.sub in ["agent-runtime", "agent-two"])"#;
 	assert(
 		json!(false),
-		&format!(r#"actors({{"act": {{"sub": "agent-two", "act": {{"sub": "default"}}}}}}){allowed}"#),
+		&format!(r#"{{"sub": "agent-two", "act": {{"sub": "default"}}}}{allowed}"#),
 	);
 	assert(
 		json!(false),
 		&format!(
-			r#"actors({{"act": {{"sub": "agent-runtime", "act": {{"sub": "agent-two", "act": {{"sub": "default"}}}}}}}}){allowed}"#
+			r#"{{"sub": "agent-runtime", "act": {{"sub": "agent-two", "act": {{"sub": "default"}}}}}}{allowed}"#
 		),
 	);
 	assert(
 		json!(true),
-		&format!(
-			r#"actors({{"act": {{"sub": "agent-runtime", "act": {{"sub": "agent-two"}}}}}}){allowed}"#
-		),
-	);
-	assert(
-		json!(true),
-		&format!(r#"actors({{"sub": "user"}}){allowed}"#),
+		&format!(r#"{{"sub": "agent-runtime", "act": {{"sub": "agent-two"}}}}{allowed}"#),
 	);
 
 	let chain = |depth: usize| {
 		let act = (1..depth).fold(r#"{"sub": "a0"}"#.to_string(), |inner, i| {
 			format!(r#"{{"sub": "a{i}", "act": {inner}}}"#)
 		});
-		format!(r#"actors({{"act": {act}}})"#)
+		format!(r#"{act}.recurse("act")"#)
 	};
 	assert(json!(32), &format!("size({})", chain(32)));
 	assert_fails(&chain(33));
-	assert_fails(r#"actors({"act": "agent"})"#);
-	assert_fails(r#"actors({"act": {"sub": "agent", "act": ["nested"]}})"#);
-	assert_fails(r#"actors("not-a-map")"#);
+
+	assert_fails(r#"{"sub": "a", "act": "b"}.recurse("act")"#);
+	assert_fails(r#"{"sub": "a", "act": null}.recurse("act")"#);
+	assert_fails(r#"{"sub": "a", "act": ["b"]}.recurse("act")"#);
+	assert_fails(r#""not-a-map".recurse("act")"#);
+	assert_fails(r#"{"sub": "a"}.recurse(1)"#);
 }
 
 #[test]

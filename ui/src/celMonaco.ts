@@ -119,6 +119,11 @@ const celMethods: readonly CelCompletionEntry[] = [
 	},
 	{ label: 'merge', insertText: 'merge($1)', detail: 'agentgateway map merge' },
 	{
+		label: 'recurse',
+		insertText: 'recurse("$1")',
+		detail: 'agentgateway follow a field repeatedly, receiver first'
+	},
+	{
 		label: 'flatten',
 		insertText: 'flatten()',
 		detail: 'agentgateway flatten for logging/tracing'
@@ -268,11 +273,6 @@ const celFunctions: readonly CelCompletionEntry[] = [
 		label: 'unvalidatedJwtPayload',
 		insertText: 'unvalidatedJwtPayload($1)',
 		detail: 'Parse JWT payload without signature validation'
-	},
-	{
-		label: 'actors',
-		insertText: 'actors($1)',
-		detail: 'RFC 8693 actor chain, current actor first'
 	},
 	{
 		label: 'variables',

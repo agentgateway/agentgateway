@@ -22,7 +22,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("json", json_parse);
 	ctx.add_function("jsonField", json_parse_field);
 	ctx.add_function("unvalidatedJwtPayload", unvalidated_jwt_payload);
-	ctx.add_function("actors", actors);
+	ctx.add_function("recurse", recurse);
 	ctx.add_function("to_json", to_json);
 	// Keep old and new name for compatibility
 	ctx.add_function("toJson", to_json);
@@ -315,33 +315,48 @@ pub fn map_merge<'a>(
 	Value::Map(MapValue::Owned(Arc::new(nv))).into()
 }
 
-const MAX_ACTOR_CHAIN_DEPTH: usize = 32;
+const MAX_RECURSE_DEPTH: usize = 32;
 
-/// Returns the RFC 8693 `act` chain as a list, current actor first, with each nested `act` removed.
-fn actors<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
-	let v: Value = v.load_value(ftx)?;
-	let act_key = KeyRef::String(StringValue::Borrowed("act"));
+/// Returns the receiver followed by each map reached by repeatedly following `field`.
+fn recurse<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	field: Argument,
+) -> ResolveResult<'a> {
+	let mut current: Value<'a> = this.load_unmaterialized(ftx)?;
+	let field: StringValue = field.load_value(ftx)?;
+	let key = KeyRef::String(field.clone());
 	let mut chain: Vec<Value<'a>> = Vec::new();
-	let mut current = must_map(v)?;
-	while let Some(act) = current.get(&act_key) {
-		let Value::Map(act) = act else {
-			return Err(ftx.error(format!("act claim must be a map, got {}", act.type_of())));
+	loop {
+		let next = match &current {
+			Value::Map(m) => m.get(&key).cloned(),
+			// Materialize only the last dynamic node, to check it is a map.
+			Value::Dynamic(d) => match d.field(field.as_ref()) {
+				Some(v) => Some(v),
+				None if matches!(d.materialize(), Value::Map(_)) => None,
+				None => return Err(recurse_not_map(ftx, &current)),
+			},
+			_ => return Err(recurse_not_map(ftx, &current)),
 		};
-		if chain.len() == MAX_ACTOR_CHAIN_DEPTH {
+		if chain.len() == MAX_RECURSE_DEPTH {
 			return Err(ftx.error(format!(
-				"act chain exceeds the maximum depth of {MAX_ACTOR_CHAIN_DEPTH}"
+				"recurse exceeds the maximum depth of {MAX_RECURSE_DEPTH}"
 			)));
 		}
-		let act = act.clone();
-		let actor = act
-			.iter()
-			.filter(|(k, _)| *k != act_key)
-			.map(|(k, v)| (k, v.clone()))
-			.collect();
-		chain.push(Value::Map(MapValue::Borrow(actor)));
-		current = act;
+		chain.push(current);
+		match next {
+			Some(v) => current = v,
+			None => break,
+		}
 	}
 	Ok(Value::List(ListValue::PartiallyOwned(chain.into())))
+}
+
+fn recurse_not_map(ftx: &FunctionContext, v: &Value) -> cel::ExecutionError {
+	ftx.error(format!(
+		"recurse expects a map, got {}",
+		v.always_materialize().type_of()
+	))
 }
 
 fn must_map(v: Value) -> Result<MapValue, cel::ExecutionError> {
