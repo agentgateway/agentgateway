@@ -1,0 +1,13 @@
+{
+  "id": "msg_json_text_only",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-4-5",
+  "content": [
+    {"type": "thinking", "thinking": "Answer directly.", "signature": "sig_1"},
+    {"type": "text", "text": "{\"score\": 1}"}
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {"input_tokens": 40, "output_tokens": 12}
+}

@@ -168,6 +168,9 @@ mod requests {
 		("multi-turn-tools", &[VERTEX_GEMINI]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
 		("generation-config", &[VERTEX_GEMINI]),
+		("json-object", &[ANTHROPIC]),
+		("json-object-reasoning", &[ANTHROPIC]),
+		("json-object-with-tools", &[ANTHROPIC]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		(
@@ -984,6 +987,13 @@ mod responses {
 		("tool", ALL_ANTHROPIC),
 		("thinking", ALL_ANTHROPIC),
 		("multiple_text_blocks", ALL_ANTHROPIC),
+		("json_object", &[MESSAGES_TO_COMPLETIONS]),
+		("json_object_after_text", &[MESSAGES_TO_COMPLETIONS]),
+		("json_object_text_only", &[MESSAGES_TO_COMPLETIONS]),
+		(
+			"caller_tool_json_object_response",
+			&[MESSAGES_TO_COMPLETIONS],
+		),
 	];
 	const ALL_COMPLETIONS: &[&str] = &[
 		COMPLETIONS_TO_COMPLETIONS,
@@ -1128,6 +1138,10 @@ mod responses {
 			"stream_tool_empty_args",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
 		),
+		("stream_json_object", &[MESSAGES_TO_COMPLETIONS]),
+		("stream_json_object_after_text", &[MESSAGES_TO_COMPLETIONS]),
+		("stream_json_object_text_only", &[MESSAGES_TO_COMPLETIONS]),
+		("stream_json_object_empty", &[MESSAGES_TO_COMPLETIONS]),
 		(
 			"stream_error",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
@@ -1309,6 +1323,7 @@ mod responses {
 
 		for (name, providers) in ANTHROPIC_RESPONSES {
 			let path = format!("response/anthropic/{name}.json");
+			let json_object = name.starts_with("json_object");
 			for provider in *providers {
 				match *provider {
 					MESSAGES_TO_MESSAGES => test_response(provider, &path, |i| {
@@ -1317,7 +1332,7 @@ mod responses {
 							.map_err(AIError::ResponseParsing)
 					}),
 					MESSAGES_TO_COMPLETIONS => test_response(provider, &path, |i| {
-						conversion::messages::from_completions::translate_response(&i)
+						conversion::messages::from_completions::translate_response(&i, json_object)
 					}),
 					MESSAGES_TO_DETECT => test_response(provider, &path, |bytes| {
 						Ok(Box::new(
@@ -1628,6 +1643,7 @@ mod responses {
 
 		for (name, providers) in ANTHROPIC_STREAM_RESPONSES {
 			let path = format!("response/anthropic/{name}.json");
+			let json_object = name.starts_with("stream_json_object");
 			for provider in *providers {
 				test_streaming(provider, &path, |response, reporter| match *provider {
 					MESSAGES_TO_MESSAGES => response.map(|body| {
@@ -1639,6 +1655,7 @@ mod responses {
 							BUFFER_LIMIT,
 							reporter,
 							LOG_CONTENT,
+							json_object,
 						)
 					}),
 					MESSAGES_TO_DETECT => types::detect::passthrough_stream(reporter, response),
@@ -1823,6 +1840,7 @@ data: {"type":"message_stop"}
 			1024 * 1024,
 			StreamingUsageGuard::default(),
 			LogContentFields::default(),
+			false,
 		)
 		.collect()
 		.await
