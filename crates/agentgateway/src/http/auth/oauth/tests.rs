@@ -773,7 +773,7 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 	assert_eq!(claims.aud, "https://issuer.example/token");
 	assert!(!claims.jti.is_empty());
 	assert_eq!(claims.nbf, claims.iat);
-	assert_eq!(claims.exp - claims.iat, 310);
+	assert_eq!(claims.exp - claims.iat, 300);
 }
 
 #[test]
