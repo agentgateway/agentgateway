@@ -25,7 +25,21 @@ type ProcessorDraft = {
 	action: Action;
 	reject: string;
 	transform: string;
+	// Fields of a loaded processor the form does not show (e.g. requestHeaders),
+	// written back only while it keeps its loaded kind.
+	loaded?: { kind: Kind; unmodeled: Record<string, unknown> };
 };
+
+const modeledFields = new Set([
+	'kind',
+	'methods',
+	'host',
+	'failureMode',
+	'metadata',
+	'condition',
+	'reject',
+	'transform'
+]);
 
 const kindOptions = [
 	{ value: 'remote', label: 'Remote', description: 'External MCP policy service' },
@@ -402,7 +416,16 @@ function initialProcessors(
 	const processors = Array.isArray(guardrails?.processors) ? guardrails.processors : [];
 	const drafts = processors.map((processor: unknown) => {
 		if (!isRecord(processor)) return undefined;
-		const base = { ...newProcessor(), methods: phaseMap(processor.methods) };
+		const base = {
+			...newProcessor(),
+			methods: phaseMap(processor.methods),
+			loaded: {
+				kind: processor.kind === 'expression' ? 'expression' : 'remote',
+				unmodeled: Object.fromEntries(
+					Object.entries(processor).filter(([key]) => !modeledFields.has(key))
+				)
+			}
+		} satisfies ProcessorDraft;
 		if (processor.kind === 'remote' && typeof processor.host === 'string') {
 			return {
 				...base,
@@ -450,9 +473,11 @@ function newProcessor(): ProcessorDraft {
 
 function buildGuardrails(processors: ProcessorDraft[]): McpGuardrailsDraft {
 	return {
-		processors: processors.map(processor =>
-			processor.kind === 'remote'
+		processors: processors.map(processor => {
+			const unmodeled = processor.loaded?.kind === processor.kind ? processor.loaded.unmodeled : {};
+			return processor.kind === 'remote'
 				? cleanEmpty({
+						...unmodeled,
 						kind: 'remote',
 						host: processor.host.trim(),
 						failureMode: processor.failureMode,
@@ -460,14 +485,15 @@ function buildGuardrails(processors: ProcessorDraft[]): McpGuardrailsDraft {
 						metadata: Object.keys(processor.metadata).length ? processor.metadata : undefined
 					})
 				: cleanEmpty({
+						...unmodeled,
 						kind: 'expression',
 						methods: processor.methods,
 						condition: processor.condition.trim() || undefined,
 						...(processor.action === 'reject'
 							? { reject: processor.reject }
 							: { transform: processor.transform.trim() })
-					})
-		)
+					});
+		})
 	} as McpGuardrailsDraft;
 }
 
