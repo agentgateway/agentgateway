@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ::cel::extractors::{Argument, This};
-use ::cel::objects::{Key, MapValue, StringValue, ValueType};
+use ::cel::objects::{Key, KeyRef, ListValue, MapValue, StringValue, ValueType};
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
 use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
@@ -22,6 +22,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("json", json_parse);
 	ctx.add_function("jsonField", json_parse_field);
 	ctx.add_function("unvalidatedJwtPayload", unvalidated_jwt_payload);
+	ctx.add_function("actors", actors);
 	ctx.add_function("to_json", to_json);
 	// Keep old and new name for compatibility
 	ctx.add_function("toJson", to_json);
@@ -312,6 +313,35 @@ pub fn map_merge<'a>(
 	let other = must_map(other)?;
 	let nv = this.iter_owned().chain(other.iter_owned()).collect();
 	Value::Map(MapValue::Owned(Arc::new(nv))).into()
+}
+
+const MAX_ACTOR_CHAIN_DEPTH: usize = 32;
+
+/// Returns the RFC 8693 `act` chain as a list, current actor first, with each nested `act` removed.
+fn actors<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	let v: Value = v.load_value(ftx)?;
+	let act_key = KeyRef::String(StringValue::Borrowed("act"));
+	let mut chain: Vec<Value<'a>> = Vec::new();
+	let mut current = must_map(v)?;
+	while let Some(act) = current.get(&act_key) {
+		let Value::Map(act) = act else {
+			return Err(ftx.error(format!("act claim must be a map, got {}", act.type_of())));
+		};
+		if chain.len() == MAX_ACTOR_CHAIN_DEPTH {
+			return Err(ftx.error(format!(
+				"act chain exceeds the maximum depth of {MAX_ACTOR_CHAIN_DEPTH}"
+			)));
+		}
+		let act = act.clone();
+		let actor = act
+			.iter()
+			.filter(|(k, _)| *k != act_key)
+			.map(|(k, v)| (k, v.clone()))
+			.collect();
+		chain.push(Value::Map(MapValue::Borrow(actor)));
+		current = act;
+	}
+	Ok(Value::List(ListValue::PartiallyOwned(chain.into())))
 }
 
 fn must_map(v: Value) -> Result<MapValue, cel::ExecutionError> {

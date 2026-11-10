@@ -270,6 +270,11 @@ const celFunctions: readonly CelCompletionEntry[] = [
 		detail: 'Parse JWT payload without signature validation'
 	},
 	{
+		label: 'actors',
+		insertText: 'actors($1)',
+		detail: 'RFC 8693 actor chain, current actor first'
+	},
+	{
 		label: 'variables',
 		insertText: 'variables()',
 		detail: 'Expose all available variables as a value'

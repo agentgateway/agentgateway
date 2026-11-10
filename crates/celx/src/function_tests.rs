@@ -103,6 +103,53 @@ fn unvalidated_jwt_payload() {
 }
 
 #[test]
+fn actors() {
+	assert(json!([]), r#"actors({"sub": "user"})"#);
+	assert(
+		json!([
+			{"sub": "agent-runtime", "iss": "sts"},
+			{"sub": "agent-two"},
+			{"sub": "default"},
+		]),
+		r#"actors({"sub": "user", "act": {"sub": "agent-runtime", "iss": "sts", "act": {"sub": "agent-two", "act": {"sub": "default"}}}})"#,
+	);
+
+	let allowed = r#".all(a, a.sub in ["agent-runtime", "agent-two"])"#;
+	assert(
+		json!(false),
+		&format!(r#"actors({{"act": {{"sub": "agent-two", "act": {{"sub": "default"}}}}}}){allowed}"#),
+	);
+	assert(
+		json!(false),
+		&format!(
+			r#"actors({{"act": {{"sub": "agent-runtime", "act": {{"sub": "agent-two", "act": {{"sub": "default"}}}}}}}}){allowed}"#
+		),
+	);
+	assert(
+		json!(true),
+		&format!(
+			r#"actors({{"act": {{"sub": "agent-runtime", "act": {{"sub": "agent-two"}}}}}}){allowed}"#
+		),
+	);
+	assert(
+		json!(true),
+		&format!(r#"actors({{"sub": "user"}}){allowed}"#),
+	);
+
+	let chain = |depth: usize| {
+		let act = (1..depth).fold(r#"{"sub": "a0"}"#.to_string(), |inner, i| {
+			format!(r#"{{"sub": "a{i}", "act": {inner}}}"#)
+		});
+		format!(r#"actors({{"act": {act}}})"#)
+	};
+	assert(json!(32), &format!("size({})", chain(32)));
+	assert_fails(&chain(33));
+	assert_fails(r#"actors({"act": "agent"})"#);
+	assert_fails(r#"actors({"act": {"sub": "agent", "act": ["nested"]}})"#);
+	assert_fails(r#"actors("not-a-map")"#);
+}
+
+#[test]
 fn random() {
 	let expr = r#"int(random() * 10.0)"#;
 	let v = eval_with_optimizations_check(expr, false)

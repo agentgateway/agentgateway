@@ -376,6 +376,40 @@ fn test_require_is_not_sufficient_when_allow_rules_exist() {
 	assert_matches!(rs.validate(&exec), true);
 }
 
+#[test]
+fn test_require_actors_denies_bad_deep_actor_despite_allow() {
+	let require_actors = RuleSet::new(create_require_policy_set(vec![
+		r#"has(jwt.act) && actors(jwt).all(a, a.sub in ["agent-a", "agent-b"])"#,
+	]));
+	let allow_user = RuleSet::new(create_policy_set(vec![r#"jwt.sub == "user""#]));
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![require_actors, allow_user]);
+	rs.register(&mut ctx);
+	let mcp = tool_context("server", "increment");
+
+	let allowed = req(json!({
+		"sub": "user",
+		"act": {"sub": "agent-a", "act": {"sub": "agent-b"}},
+	}));
+	let exec = cel::Executor::new_mcp(allowed.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), true);
+
+	let bad_deep_actor = req(json!({
+		"sub": "user",
+		"act": {"sub": "agent-a", "act": {"sub": "agent-b", "act": {"sub": "rogue"}}},
+	}));
+	let exec = cel::Executor::new_mcp(bad_deep_actor.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
+
+	let malformed = req(json!({"sub": "user", "act": "agent-a"}));
+	let exec = cel::Executor::new_mcp(malformed.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
+
+	let no_delegation = req(json!({"sub": "user"}));
+	let exec = cel::Executor::new_mcp(no_delegation.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
+}
+
 #[divan::bench]
 fn bench(b: Bencher) {
 	let policies = vec![r#"mcp.tool.name == "increment" && jwt.user.role == "admin""#];

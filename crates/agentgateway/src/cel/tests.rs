@@ -561,6 +561,30 @@ fn jwt_token_is_redacted_by_default() {
 	);
 }
 
+#[test]
+fn jwt_actors() {
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://example.com")
+		.body(Body::empty())
+		.unwrap();
+	let claims = json!({
+		"sub": "user",
+		"act": {"sub": "agent-runtime", "act": {"sub": "agent-two", "act": {"sub": "default"}}},
+	});
+	req.extensions_mut().insert(crate::http::jwt::Claims {
+		inner: claims.as_object().unwrap().clone(),
+		jwt: secrecy::SecretString::new("fake.jwt.token".into()),
+	});
+	assert_eq!(
+		json!(["agent-runtime", "agent-two", "default"]),
+		eval_request("actors(jwt).map(a, a.sub)", req)
+			.unwrap()
+			.json()
+			.unwrap()
+	);
+}
+
 mod query_accessors {
 	use cel::Value;
 	use http::Method;
