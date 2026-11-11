@@ -3674,20 +3674,34 @@ fn frontend_policy_from_proto(
 				.map_err(|e| ProtoError::Generic(e.to_string()))?;
 			FrontendPolicy::HTTP(http)
 		},
-		Some(fps::Kind::Tls(t)) => FrontendPolicy::TLS(frontend::TLS {
-			handshake_timeout: t
-				.handshake_timeout
-				.map(convert_duration)
-				.unwrap_or_else(crate::defaults::tls_handshake_timeout),
-			alpn: t
-				.alpn
-				.as_ref()
-				.map(|t| t.protocols.iter().map(|s| s.as_bytes().to_vec()).collect()),
-			min_version: map_tls_version(t.min_version),
-			max_version: map_tls_version(t.max_version),
-			cipher_suites: convert_tls_cipher_suites(&t.cipher_suites, diagnostics),
-			key_exchange_groups: convert_tls_key_exchange_groups(&t.key_exchange_groups, diagnostics),
-		}),
+		Some(fps::Kind::Tls(t)) => {
+			let cipher_suites = convert_tls_cipher_suites(&t.cipher_suites, diagnostics);
+			let key_exchange_groups =
+				convert_tls_key_exchange_groups(&t.key_exchange_groups, diagnostics);
+			// The TLS config is built lazily on the first handshake, so report an unusable selection here.
+			if let Err(e) = crate::transport::tls::provider_with_options_validated(
+				cipher_suites.as_deref().unwrap_or_default(),
+				key_exchange_groups.as_deref().unwrap_or_default(),
+			) {
+				diagnostics.add_warning(format!(
+					"invalid frontend TLS policy, TLS handshakes will fail: {e}"
+				));
+			}
+			FrontendPolicy::TLS(frontend::TLS {
+				handshake_timeout: t
+					.handshake_timeout
+					.map(convert_duration)
+					.unwrap_or_else(crate::defaults::tls_handshake_timeout),
+				alpn: t
+					.alpn
+					.as_ref()
+					.map(|t| t.protocols.iter().map(|s| s.as_bytes().to_vec()).collect()),
+				min_version: map_tls_version(t.min_version),
+				max_version: map_tls_version(t.max_version),
+				cipher_suites,
+				key_exchange_groups,
+			})
+		},
 		Some(fps::Kind::Tcp(t)) => FrontendPolicy::TCP(frontend::TCP {
 			keepalives: t
 				.keepalives
@@ -6993,6 +7007,62 @@ mod tests {
 			"error should name the group, got: {err}"
 		);
 		assert_eq!(diagnostics.into_warnings().len(), 1);
+	}
+
+	#[cfg(feature = "fips")]
+	#[rstest::rstest]
+	#[case::cipher_suite(
+		vec![proto::agent::tls_config::CipherSuite::TlsChacha20Poly1305Sha256 as i32],
+		vec![],
+		"TLS_CHACHA20_POLY1305_SHA256"
+	)]
+	#[case::key_exchange_group(
+		vec![],
+		vec![proto::agent::tls_config::KeyExchangeGroup::X25519 as i32],
+		"X25519"
+	)]
+	fn fips_frontend_policy_from_proto_non_approved_tls_warns(
+		#[case] cipher_suites: Vec<i32>,
+		#[case] key_exchange_groups: Vec<i32>,
+		#[case] expected: &str,
+	) {
+		use crate::types::proto::agent::frontend_policy_spec as fps;
+
+		let spec = proto::agent::FrontendPolicySpec {
+			kind: Some(fps::Kind::Tls(fps::Tls {
+				cipher_suites,
+				key_exchange_groups,
+				..Default::default()
+			})),
+		};
+		let mut diagnostics = Diagnostics::default();
+		let policy = frontend_policy_from_proto(&spec, &mut diagnostics)
+			.expect("a non-approved frontend TLS policy should still be stored");
+
+		assert!(matches!(policy, FrontendPolicy::TLS(_)));
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1, "{warnings:?}");
+		assert!(
+			warnings[0].contains(expected),
+			"warning should name {expected}, got: {}",
+			warnings[0]
+		);
+	}
+
+	#[test]
+	fn frontend_policy_from_proto_approved_tls_does_not_warn() {
+		use crate::types::proto::agent::frontend_policy_spec as fps;
+
+		let spec = proto::agent::FrontendPolicySpec {
+			kind: Some(fps::Kind::Tls(fps::Tls {
+				cipher_suites: vec![proto::agent::tls_config::CipherSuite::TlsAes128GcmSha256 as i32],
+				key_exchange_groups: vec![proto::agent::tls_config::KeyExchangeGroup::P256 as i32],
+				..Default::default()
+			})),
+		};
+		let mut diagnostics = Diagnostics::default();
+		frontend_policy_from_proto(&spec, &mut diagnostics).expect("valid frontend TLS policy");
+		assert!(diagnostics.into_warnings().is_empty());
 	}
 
 	#[test]
