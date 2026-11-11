@@ -1,10 +1,12 @@
-Realtime and audio generation models
+Realtime & Audio
 
-Prices per 1M tokens unless noted.
+
+
+
 
 ### Grouped Pricing Table data
 
-| Model | Modality | Input | Output / cost | Cached input |
+| Model | Modality | Input | Output | Cached input |
 | --- | --- | --- | --- | --- |
 | gpt-realtime-2.1 | Audio | $32.00 | $64.00 | $0.40 |
 | gpt-realtime-2.1 | Text | $4.00 | $24.00 | $0.40 |
@@ -35,13 +37,15 @@ Prices per 1M tokens unless noted.
 | tts-1 | Text | $15.00 / 1M characters | - | - |
 | tts-1-hd | Text | $30.00 / 1M characters | - | - |
 
+
+
   
 
-    
+Transcription
 
-Transcription models
 
-Prices per 1M tokens unless noted.
+
+
 
 ### Grouped Pricing Table data
 
@@ -55,6 +59,3 @@ Prices per 1M tokens unless noted.
 | gpt-4o-mini-transcribe | Transcription | $1.25 | $5.00 | $0.003 / minute |
 | gpt-4o-transcribe-diarize | Transcription + diarization | $2.50 | $10.00 | $0.006 / minute |
 | Whisper | Transcription | - | - | $0.006 / minute |
-
-  
-
