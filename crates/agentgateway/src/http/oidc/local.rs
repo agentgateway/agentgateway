@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use jsonwebtoken::jwk::JwkSet;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
 use super::{
 	ClientConfig, CookieSecureMode, Error, OidcPolicy, PolicyId, Provider, ProviderEndpoint,
@@ -433,14 +433,26 @@ async fn load_jwks(
 }
 
 impl PreparedOidcProvider {
-	fn compile(self, client_id: String) -> Result<Provider, Error> {
-		let provider = crate::http::jwt::Provider::from_jwks(
+	fn compile(self, client_id: String, client_secret: &SecretString) -> Result<Provider, Error> {
+		let audiences = Some(vec![client_id]);
+		let mut provider = crate::http::jwt::Provider::from_jwks(
 			self.id_token_jwks,
 			self.issuer.clone(),
-			Some(vec![client_id]),
+			audiences.clone(),
 			crate::http::jwt::JWTValidationOptions::default(),
 		)
 		.map_err(|e| Error::Config(format!("failed to create id token validator: {e}")))?;
+		// Some IdPs (for example Authing) sign ID Tokens with HS256 using the client secret, as
+		// OpenID Connect Core allows. Those tokens have no `kid`. An empty secret would let anyone
+		// forge a token, so only enable this when a secret is configured.
+		let secret = client_secret.expose_secret();
+		if !secret.is_empty() {
+			provider = provider.with_hmac_secret(
+				secret.as_bytes(),
+				audiences,
+				crate::http::jwt::JWTValidationOptions::default(),
+			);
+		}
 
 		Ok(Provider {
 			issuer: self.issuer,
@@ -477,7 +489,7 @@ impl PreparedOidcPolicy {
 		} = self;
 		let scopes = dedupe_scopes(scopes);
 		let token_endpoint_auth = provider.token_endpoint_auth;
-		let provider = Arc::new(provider.compile(client_id.clone())?);
+		let provider = Arc::new(provider.compile(client_id.clone(), &client_secret)?);
 
 		Ok(OidcPolicy {
 			refresh_cache: Default::default(),
