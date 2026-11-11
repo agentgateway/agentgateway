@@ -22,7 +22,6 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("json", json_parse);
 	ctx.add_function("jsonField", json_parse_field);
 	ctx.add_function("unvalidatedJwtPayload", unvalidated_jwt_payload);
-	ctx.add_function("recurse", recurse);
 	ctx.add_function("to_json", to_json);
 	// Keep old and new name for compatibility
 	ctx.add_function("toJson", to_json);
@@ -30,6 +29,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("mapValues", map_values);
 	ctx.add_function("filterKeys", filter_keys);
 	ctx.add_function("merge", map_merge);
+	ctx.add_function("recurse", recurse);
 	ctx.add_function("variables", variables);
 	ctx.add_function("random", random);
 	ctx.add_function("default", default);
@@ -315,7 +315,12 @@ pub fn map_merge<'a>(
 	Value::Map(MapValue::Owned(Arc::new(nv))).into()
 }
 
-const MAX_RECURSE_DEPTH: usize = 32;
+fn must_map(v: Value) -> Result<MapValue, cel::ExecutionError> {
+	match v {
+		Value::Map(map) => Ok(map),
+		_ => Err(v.error_expected_type(ValueType::Map)),
+	}
+}
 
 /// Returns the receiver followed by each map reached by repeatedly following `field`.
 fn recurse<'a>(
@@ -334,15 +339,10 @@ fn recurse<'a>(
 			Value::Dynamic(d) => match d.field(field.as_ref()) {
 				Some(v) => Some(v),
 				None if matches!(d.materialize(), Value::Map(_)) => None,
-				None => return Err(recurse_not_map(ftx, &current)),
+				None => return Err(not_map(&current)),
 			},
-			_ => return Err(recurse_not_map(ftx, &current)),
+			_ => return Err(not_map(&current)),
 		};
-		if chain.len() == MAX_RECURSE_DEPTH {
-			return Err(ftx.error(format!(
-				"recurse exceeds the maximum depth of {MAX_RECURSE_DEPTH}"
-			)));
-		}
 		chain.push(current);
 		match next {
 			Some(v) => current = v,
@@ -352,18 +352,8 @@ fn recurse<'a>(
 	Ok(Value::List(ListValue::PartiallyOwned(chain.into())))
 }
 
-fn recurse_not_map(ftx: &FunctionContext, v: &Value) -> cel::ExecutionError {
-	ftx.error(format!(
-		"recurse expects a map, got {}",
-		v.always_materialize().type_of()
-	))
-}
-
-fn must_map(v: Value) -> Result<MapValue, cel::ExecutionError> {
-	match v {
-		Value::Map(map) => Ok(map),
-		_ => Err(v.error_expected_type(ValueType::Map)),
-	}
+fn not_map(v: &Value) -> cel::ExecutionError {
+	v.always_materialize().error_expected_type(ValueType::Map)
 }
 
 fn fail<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {

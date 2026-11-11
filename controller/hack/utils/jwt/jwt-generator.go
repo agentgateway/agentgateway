@@ -19,20 +19,6 @@ import (
 
 // use this to generate jwks and a jwt signed by the key in it
 
-type actorChains []string
-
-func (a *actorChains) String() string { return strings.Join(*a, " ") }
-
-func (a *actorChains) Set(v string) error {
-	*a = append(*a, v)
-	return nil
-}
-
-type claims struct {
-	jwt.RegisteredClaims
-	Act map[string]any `json:"act,omitempty"`
-}
-
 func main() {
 	audience := flag.String("audience", "", "optional JWT audience")
 	var actors actorChains
@@ -76,6 +62,20 @@ func main() {
 		}
 		fmt.Printf("jwt, sub: 'ignore@agentgateway.dev', actors: '%s': %s\n", chain, token)
 	}
+}
+
+type actorChains []string
+
+func (a *actorChains) String() string { return strings.Join(*a, " ") }
+
+func (a *actorChains) Set(v string) error {
+	*a = append(*a, v)
+	return nil
+}
+
+type claims struct {
+	jwt.RegisteredClaims
+	Act map[string]any `json:"act,omitempty"`
 }
 
 // actClaim nests actors so the first one is the outermost act.

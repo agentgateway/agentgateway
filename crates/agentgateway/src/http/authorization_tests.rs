@@ -408,6 +408,10 @@ fn test_require_act_chain_denies_bad_deep_actor_despite_allow() {
 	let no_delegation = req(json!({"sub": "user"}));
 	let exec = cel::Executor::new_mcp(no_delegation.as_ref(), &mcp);
 	assert_matches!(rs.validate(&exec), false);
+
+	let empty_actor = req(json!({"sub": "user", "act": {}}));
+	let exec = cel::Executor::new_mcp(empty_actor.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
 }
 
 #[divan::bench]

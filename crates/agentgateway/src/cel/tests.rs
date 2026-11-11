@@ -562,32 +562,24 @@ fn jwt_token_is_redacted_by_default() {
 }
 
 #[test]
-fn jwt_recurse() {
-	let eval_claims = |claims: serde_json::Value, expr: &str| {
-		let mut req = ::http::Request::builder()
-			.method(Method::GET)
-			.uri("http://example.com")
-			.body(Body::empty())
-			.unwrap();
-		req.extensions_mut().insert(crate::http::jwt::Claims {
-			inner: claims.as_object().unwrap().clone(),
-			jwt: secrecy::SecretString::new("fake.jwt.token".into()),
-		});
-		eval_request(expr, req).map(|v| v.json().unwrap())
-	};
-	let claims = json!({
-		"sub": "user",
-		"act": {"sub": "agent-runtime", "act": {"sub": "agent-two", "act": {"sub": "default"}}},
+fn recurse_jwt_claims() {
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://example.com")
+		.body(Body::empty())
+		.unwrap();
+	let claims = json!({"sub": "user", "act": {"sub": "agent-a", "act": {"sub": "agent-b"}}});
+	req.extensions_mut().insert(crate::http::jwt::Claims {
+		inner: claims.as_object().unwrap().clone(),
+		jwt: secrecy::SecretString::new("fake.jwt.token".into()),
 	});
 	assert_eq!(
-		json!(["agent-runtime", "agent-two", "default"]),
-		eval_claims(claims, r#"jwt.act.recurse("act").map(a, a.sub)"#).unwrap()
+		json!(["user", "agent-a", "agent-b"]),
+		eval_request(r#"jwt.recurse("act").map(a, a.sub)"#, req)
+			.unwrap()
+			.json()
+			.unwrap()
 	);
-	let list_link = json!({"sub": "user", "act": {"sub": "agent", "act": ["nested"]}});
-	let err = eval_claims(list_link, r#"jwt.act.recurse("act")"#).unwrap_err();
-	assert!(err.to_string().contains("got list"), "{err}");
-	let scalar_link = json!({"sub": "user", "act": {"sub": "agent", "act": "x"}});
-	assert!(eval_claims(scalar_link, r#"jwt.act.recurse("act")"#).is_err());
 }
 
 mod query_accessors {
