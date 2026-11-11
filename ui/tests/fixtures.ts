@@ -1,7 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 import { dump, load } from 'js-yaml';
 
-import { mcpSettingsFields } from '@/config';
+import { llmSettingsFields, mcpSettingsFields } from '@/config';
 import type { DumpModel, StoresDump } from '@/gateway-admin';
 
 export type TestConfig = Record<string, unknown>;
@@ -845,6 +845,14 @@ function upsertFileConfigResource(
 		else keys.push(value);
 		return;
 	}
+	if (kind === 'llm.settings') {
+		const llm = ensureRecord(config, 'llm');
+		for (const field of llmSettingsFields) {
+			if (value[field] === undefined) delete llm[field];
+			else llm[field] = value[field];
+		}
+		return;
+	}
 	if (kind === 'mcp.settings') {
 		const mcp = ensureRecord(config, 'mcp');
 		for (const field of mcpSettingsFields) {
@@ -905,6 +913,11 @@ function deleteFileConfigResource(config: TestConfig, kind: string, id: string) 
 				(stringValue(record(value.metadata)['agentgateway.dev/id']) || `@index:${index}`) !== id
 			);
 		});
+		return;
+	}
+	if (kind === 'llm.settings') {
+		const llm = record(config.llm);
+		for (const field of llmSettingsFields) delete llm[field];
 		return;
 	}
 	if (kind === 'mcp.settings') {
