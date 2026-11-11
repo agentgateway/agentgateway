@@ -1,0 +1,7 @@
+# The root .dockerignore leaves out examples/, which the Rust tests read. This image gets the full checkout.
+target
+.idea
+.vscode
+.DS_Store
+**/node_modules
+ui/dist
