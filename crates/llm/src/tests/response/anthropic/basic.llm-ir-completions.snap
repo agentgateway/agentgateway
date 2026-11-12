@@ -1,0 +1,62 @@
+---
+source: crates/llm/src/ir_golden_chat_client_tests.rs
+description: src/tests/response/anthropic/basic.json
+info:
+  id: msg_012JYtNYb8sv6Hb67TcGT7xW
+  type: message
+  role: assistant
+  model: claude-haiku-4-5-20251001
+  content:
+    - type: text
+      text: Hi there! How are you doing today? Is there anything I can help you with?
+  stop_reason: end_turn
+  stop_sequence: ~
+  usage:
+    input_tokens: 15
+    cache_creation_input_tokens: 13
+    cache_read_input_tokens: 12
+    output_tokens: 21
+    service_tier: standard
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "body": {
+      "id": "chatcmpl-msg_012JYtNYb8sv6Hb67TcGT7xW",
+      "object": "chat.completion",
+      "created": 1700000000,
+      "model": "claude-haiku-4-5-20251001",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Hi there! How are you doing today? Is there anything I can help you with?",
+            "refusal": null
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 40,
+        "completion_tokens": 21,
+        "total_tokens": 61,
+        "prompt_tokens_details": {
+          "cached_tokens": 12
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 40,
+    "output_tokens": 21,
+    "total_tokens": 61,
+    "cached_tokens": 12,
+    "cache_write_tokens": 13,
+    "reasoning_tokens": null
+  }
+}

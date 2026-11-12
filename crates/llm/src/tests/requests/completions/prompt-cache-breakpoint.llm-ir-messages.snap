@@ -1,0 +1,61 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/prompt-cache-breakpoint.json
+info:
+  model: claude-sonnet-4-6
+  messages:
+    - role: system
+      content:
+        - type: text
+          text: You are a helpful assistant.
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: developer
+      content:
+        - type: text
+          text: Follow the developer instructions.
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: user
+      content:
+        - type: text
+          text: What is prompt caching?
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: image_url
+          image_url:
+            url: "data:image/png;base64,aGVsbG8="
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: assistant
+      content:
+        - type: text
+          text: I will look that up.
+          prompt_cache_breakpoint:
+            mode: explicit
+      tool_calls:
+        - id: call_lookup
+          type: function
+          function:
+            name: lookup
+            arguments: "{}"
+    - role: tool
+      tool_call_id: call_lookup
+      content:
+        - type: text
+          text: Prompt caching reuses a prompt prefix.
+          prompt_cache_breakpoint:
+            mode: explicit
+  tools:
+    - type: function
+      function:
+        name: lookup
+        description: Look up information
+        parameters:
+          type: object
+          properties: {}
+---
+{
+  "disposition": "unsupported: `prompt_cache_breakpoint`, which the IR refuses from Responses clients too",
+  "refused": "unsupported request: field `messages[0].content[0].prompt_cache_breakpoint`; field `messages[1].content[0].prompt_cache_breakpoint`; field `messages[2].content[0].prompt_cache_breakpoint`; field `messages[2].content[1].prompt_cache_breakpoint`; field `messages[3].content[0].prompt_cache_breakpoint`; field `messages[4].content[0].prompt_cache_breakpoint`"
+}

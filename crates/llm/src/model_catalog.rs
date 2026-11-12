@@ -58,6 +58,23 @@ pub(crate) fn anthropic_thinking_capabilities(
 pub trait ModelCatalogHandle: Send + Sync {
 	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool;
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>>;
+	/// How a provider's model lets reasoning be set; `None` when the catalog doesn't know
+	/// the model.
+	fn reasoning(&self, provider: &str, model_id: &str) -> Option<Reasoning>;
+}
+
+/// How a model lets reasoning be set, as the catalog records it. Empty when it records
+/// nothing.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Reasoning {
+	/// Whether the model supports reasoning; `None` means unknown.
+	pub supported: Option<bool>,
+	/// Effort levels the model takes, in the provider's words.
+	pub effort: Vec<String>,
+	/// The smallest and largest reasoning token budget, when it takes one.
+	pub budget_tokens: Option<(Option<u64>, Option<u64>)>,
+	/// Whether reasoning can be turned off.
+	pub toggle: Option<bool>,
 }
 
 /// Borrowed catalog handle threaded through the request path; `None` when no catalog is loaded.
@@ -89,5 +106,9 @@ impl ModelCatalogHandle for TestCatalog {
 
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>> {
 		self.models.get(model_id).map(|t| Arc::new(t.clone()))
+	}
+
+	fn reasoning(&self, _provider: &str, _model_id: &str) -> Option<Reasoning> {
+		None
 	}
 }

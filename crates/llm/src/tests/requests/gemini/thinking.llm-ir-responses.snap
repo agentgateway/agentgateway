@@ -1,0 +1,28 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/gemini/thinking.json
+info:
+  contents:
+    - role: user
+      parts:
+        - text: Prove that sqrt(2) is irrational.
+    - role: model
+      parts:
+        - text: The classic argument is by contradiction.
+          thought: true
+          thoughtSignature: Ck0BdGhvdWdodC1zaWduYXR1cmUtb25l
+        - text: Suppose sqrt(2) = a/b in lowest terms.
+          thoughtSignature: Ck0BdGhvdWdodC1zaWduYXR1cmUtdHdv
+    - role: user
+      parts:
+        - text: Continue.
+  generationConfig:
+    temperature: 1
+    thinkingConfig:
+      thinkingLevel: high
+      includeThoughts: true
+---
+{
+  "disposition": "refuses thought signatures Gemini wrote, which only Gemini can read",
+  "refused": "unsupported request: `contents[1].parts[0].thoughtSignature` was not written by this gateway; `contents[1].parts[1].thoughtSignature` was not written by this gateway"
+}

@@ -1,0 +1,56 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/gpt_adaptive_thinking_with_tools.json
+info:
+  model: gpt-5.6-terra
+  max_tokens: 64
+  thinking:
+    type: adaptive
+  tools:
+    - name: get_weather
+      description: Get the weather for a location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+  messages:
+    - role: user
+      content: Say hi
+---
+{
+  "disposition": "changed: adaptive thinking without an effort sends no `reasoning_effort`, leaving the model's default, where legacy sends `none` beside tools",
+  "request": {
+    "model": "gpt-5.6-terra",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hi"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get the weather for a location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      }
+    ],
+    "max_completion_tokens": 64
+  },
+  "dropped": []
+}

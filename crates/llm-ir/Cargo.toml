@@ -1,0 +1,61 @@
+[package]
+name = "agent-llm-ir"
+description = "Conversion core for LLM API formats: plain state machines with no I/O"
+version = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+publish = { workspace = true }
+
+[dependencies]
+base64.workspace = true
+memchr.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# Only used by benchmarks and parity tests against the legacy implementation.
+agent-core.workspace = true
+agent-http.workspace = true
+agent-llm.workspace = true
+async-stream.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+http.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+# tikv-jemallocator.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tokio_sse_codec.workspace = true
+
+divan.workspace = true
+insta.workspace = true
+proptest.workspace = true
+rstest.workspace = true
+
+[[bench]]
+name = "conversion"
+harness = false
+
+[[bench]]
+name = "components"
+harness = false
+
+[[bench]]
+name = "legacy_vs_ir"
+harness = false
+
+[lints.clippy]
+expect_used = "deny"
+panic = "deny"
+unwrap_used = "deny"
+format_collect = "warn"
+format_push_string = "warn"
+missing_const_for_fn = "warn"
+must_use_candidate = "warn"
+needless_collect = "warn"
+or_fun_call = "warn"
+redundant_clone = "warn"
+redundant_pub_crate = "warn"
+use_self = "warn"

@@ -1,0 +1,69 @@
+---
+source: crates/llm/src/ir_golden_chat_client_tests.rs
+description: src/tests/response/anthropic/thinking.json
+info:
+  id: msg_01BE9GBzjs95TqdG8FeUanUn
+  type: message
+  role: assistant
+  model: claude-opus-4-6
+  content:
+    - type: thinking
+      thinking: The user is asking me about the current weather in San Francisco
+      signature: Es8DCkYI
+    - type: text
+      text: "I don't have access to real-time weather data"
+  stop_reason: end_turn
+  stop_sequence: ~
+  usage:
+    input_tokens: 47
+    cache_creation_input_tokens: 150
+    cache_read_input_tokens: 2
+    cache_creation:
+      ephemeral_5m_input_tokens: 100
+      ephemeral_1h_input_tokens: 50
+    output_tokens: 251
+    service_tier: standard
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "body": {
+      "id": "chatcmpl-msg_01BE9GBzjs95TqdG8FeUanUn",
+      "object": "chat.completion",
+      "created": 1700000000,
+      "model": "claude-opus-4-6",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "I don't have access to real-time weather data",
+            "refusal": null,
+            "reasoning_content": "The user is asking me about the current weather in San Francisco"
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 199,
+        "completion_tokens": 251,
+        "total_tokens": 450,
+        "prompt_tokens_details": {
+          "cached_tokens": 2
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 199,
+    "output_tokens": 251,
+    "total_tokens": 450,
+    "cached_tokens": 2,
+    "cache_write_tokens": 150,
+    "reasoning_tokens": null
+  }
+}

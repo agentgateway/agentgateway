@@ -1,0 +1,56 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/reasoning_replay_unsigned.json
+info:
+  model: "anthropic.claude-3-7-sonnet-20250219-v1:0"
+  messages:
+    - role: user
+      content: Hi
+    - role: assistant
+      content: Hello
+      reasoning_content: no signature here
+    - role: user
+      content: Continue
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hi"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Continue",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [
+    "assistant reasoning text"
+  ]
+}

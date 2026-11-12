@@ -350,10 +350,31 @@ struct RequestedModel {
 }
 
 enum RequestedModelLocation {
-	/// The parsed body is cached on the request as `ParsedJson`.
+	/// A JSON body, parsed and cached on the request as `ParsedJson` unless only its model was read.
 	Body,
 	Multipart,
 	Path,
+}
+
+/// How the router reads the model from a JSON body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ModelRead {
+	/// Parses the body into a value that later readers reuse.
+	Parsed,
+	/// Reads only the model and refuses a repeated one. An expression that reads `llmRequest`
+	/// still gets the parsed body.
+	ModelOnly,
+}
+
+impl ModelRead {
+	/// Only the LLM IR gains from reading the model alone, since legacy converters reuse the
+	/// parsed body.
+	pub(crate) fn for_config(config: &crate::Config) -> Self {
+		match config.llm_ir_enabled {
+			true => Self::ModelOnly,
+			false => Self::Parsed,
+		}
+	}
 }
 
 impl ModelRouter {
@@ -450,7 +471,8 @@ impl ModelRouter {
 		if is_model_list_request(req) {
 			return ResolveResult::DirectResponse(self.model_list_response(req, catalog));
 		}
-		let requested_model = match requested_model(req).await {
+		let read = ModelRead::for_config(&client.inputs.cfg);
+		let requested_model = match requested_model(req, read).await {
 			Ok(requested_model) => requested_model,
 			Err(resp) => return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp),
 		};
@@ -657,6 +679,14 @@ impl ModelRouter {
 					});
 				},
 				VirtualModelRouting::Conditional(targets) => {
+					if targets
+						.iter()
+						.filter_map(|target| target.when.as_deref())
+						.any(reads_llm_request)
+						&& let Err(resp) = parse_for_expressions(req, &location).await
+					{
+						return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp);
+					}
 					let exec = cel::Executor::new_request(req);
 					match targets.iter().find(|target| {
 						target
@@ -682,6 +712,11 @@ impl ModelRouter {
 					}
 				},
 				VirtualModelRouting::Callout(callout) => {
+					if callout.expressions().any(reads_llm_request)
+						&& let Err(resp) = parse_for_expressions(req, &location).await
+					{
+						return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp);
+					}
 					let selection = match callout.select(client, req).await {
 						Ok(selection) if self.has_model(&selection.model) => Ok(selection),
 						Ok(selection) => Err(format!("selected unknown model {}", selection.model)),
@@ -835,6 +870,24 @@ fn model_authorization_denied_response() -> Response {
 		"Model authorization denied",
 		"model_authorization_denied",
 	)
+}
+
+/// Whether an expression reads the parsed request body, as `llmRequest`.
+fn reads_llm_request(expression: &cel::Expression) -> bool {
+	expression
+		.attributes()
+		.contains(cel::Attributes::LlmRequest)
+}
+
+/// Parses a JSON body for expressions that read it, if only its model was read.
+async fn parse_for_expressions(
+	req: &mut Request,
+	location: &RequestedModelLocation,
+) -> RouterResult<()> {
+	if matches!(location, RequestedModelLocation::Body) {
+		json_body(req).await?;
+	}
+	Ok(())
 }
 
 fn request_body_too_large_response() -> Response {
@@ -994,7 +1047,11 @@ fn model_name_matches(pattern: &str, model: &str) -> bool {
 
 /// Exposes the request model as `llm.requestModel` and, if requested, the parsed JSON body as
 /// `llmRequest` to policy CEL.
-pub(crate) async fn set_llm_cel_context(req: &mut Request, include_body: bool) -> RouterResult<()> {
+pub(crate) async fn set_llm_cel_context(
+	req: &mut Request,
+	include_body: bool,
+	read: ModelRead,
+) -> RouterResult<()> {
 	// Clear first so a failed parse below leaves no model rather than a stale one. This runs again
 	// after route policies and virtual model rewrites, so keep the model seen first.
 	let previous = req
@@ -1010,7 +1067,7 @@ pub(crate) async fn set_llm_cel_context(req: &mut Request, include_body: bool) -
 	if include_body {
 		let _ = json_body(req).await;
 	}
-	if let Ok(requested) = requested_model(req).await {
+	if let Ok(requested) = requested_model(req, read).await {
 		let request_model = strng::new(requested.model);
 		let original_model = req
 			.extensions()
@@ -1032,11 +1089,7 @@ async fn json_body(req: &mut Request) -> RouterResult<&Value> {
 		let body = body_bytes(req).await?;
 		let body = serde_json::from_slice(&body).map_err(|err| {
 			tracing::debug!(%err, "failed to parse LLM request body");
-			Box::new(llm_error_response(
-				::http::StatusCode::BAD_REQUEST,
-				"LLM request body must be valid JSON",
-				"invalid_request_body",
-			))
+			Box::new(invalid_json_response())
 		})?;
 		req
 			.body_mut()
@@ -1051,7 +1104,7 @@ async fn json_body(req: &mut Request) -> RouterResult<&Value> {
 	)
 }
 
-async fn requested_model(req: &mut Request) -> RouterResult<RequestedModel> {
+async fn requested_model(req: &mut Request, read: ModelRead) -> RouterResult<RequestedModel> {
 	let path = req.uri().path();
 	if let Some(model) = crate::llm::types::detect::extract_model_from_path(path) {
 		return Ok(RequestedModel {
@@ -1068,22 +1121,62 @@ async fn requested_model(req: &mut Request) -> RouterResult<RequestedModel> {
 			location: RequestedModelLocation::Multipart,
 		});
 	}
+	if read == ModelRead::ModelOnly && req.body().extension::<crate::json::ParsedJson>().is_none() {
+		let body = body_bytes(req).await?;
+		return Ok(RequestedModel {
+			model: body_model(&body)?,
+			location: RequestedModelLocation::Body,
+		});
+	}
 	let model = json_body(req)
 		.await?
 		.get("model")
 		.and_then(Value::as_str)
 		.map(ToString::to_string)
-		.ok_or_else(|| {
-			Box::new(llm_error_response(
-				::http::StatusCode::BAD_REQUEST,
-				"LLM request body is missing string field 'model'",
-				"missing_model",
-			))
-		})?;
+		.ok_or_else(|| Box::new(missing_model_response()))?;
 	Ok(RequestedModel {
 		model,
 		location: RequestedModelLocation::Body,
 	})
+}
+
+/// The body's one `model`, read without parsing the body into a value. The whole body is still
+/// checked as JSON, and a repeated `model` is refused, so what reads the body next can't take
+/// a different model than the one routed and authorized.
+fn body_model(body: &[u8]) -> RouterResult<String> {
+	match agent_llm_ir::read_model(body) {
+		Ok(Some(model)) => Ok(model.into_owned()),
+		Ok(None) => Err(Box::new(missing_model_response())),
+		// Only a refused body is parsed, to answer as the parsed body would.
+		Err(err) => {
+			tracing::debug!(%err, "failed to read the LLM request model");
+			Err(Box::new(match serde_json::from_slice::<Value>(body) {
+				Err(_) => invalid_json_response(),
+				Ok(parsed) if parsed.get("model").is_some_and(Value::is_string) => llm_error_response(
+					::http::StatusCode::BAD_REQUEST,
+					"LLM request body repeats field 'model'",
+					"repeated_model",
+				),
+				Ok(_) => missing_model_response(),
+			}))
+		},
+	}
+}
+
+fn invalid_json_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::BAD_REQUEST,
+		"LLM request body must be valid JSON",
+		"invalid_request_body",
+	)
+}
+
+fn missing_model_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::BAD_REQUEST,
+		"LLM request body is missing string field 'model'",
+		"missing_model",
+	)
 }
 
 async fn rewrite_request_model(
@@ -1093,18 +1186,25 @@ async fn rewrite_request_model(
 	fields: Vec<(String, Option<Value>)>,
 ) -> RouterResult<()> {
 	match location {
-		RequestedModelLocation::Body => rewrite_body_model(req, target, fields),
+		RequestedModelLocation::Body => rewrite_body_model(req, target, fields).await,
 		RequestedModelLocation::Path => rewrite_uri_model(req, target),
 		RequestedModelLocation::Multipart => rewrite_multipart_request_model(req, target).await,
 	}
 }
 
 /// Sets `model` and any callout-selected `fields` on the cached JSON body, and re-serializes it.
-fn rewrite_body_model(
+/// Without a cached body, the bytes are changed instead.
+async fn rewrite_body_model(
 	req: &mut Request,
 	target: &str,
 	fields: Vec<(String, Option<Value>)>,
 ) -> RouterResult<()> {
+	if req.body().extension::<crate::json::ParsedJson>().is_none() {
+		let body = body_bytes(req).await?;
+		let rewritten = rewrite_body_bytes(&body, target, fields)?;
+		req.replace_body_bytes(rewritten.into());
+		return Ok(());
+	}
 	let Some(crate::json::ParsedJson(mut body)) = req.body_mut().remove_extension() else {
 		return Ok(());
 	};
@@ -1130,6 +1230,54 @@ fn rewrite_body_model(
 		.body_mut()
 		.insert_extension(crate::json::ParsedJson(body));
 	Ok(())
+}
+
+/// Sets `model` and `fields` at the body's top level and keeps the client's bytes otherwise: the
+/// model is replaced in place when nothing else changes, and otherwise every other top-level
+/// value is copied as the client wrote it. `requested_model` already refused a repeated model.
+fn rewrite_body_bytes(
+	body: &[u8],
+	target: &str,
+	fields: Vec<(String, Option<Value>)>,
+) -> RouterResult<Vec<u8>> {
+	use std::borrow::Cow;
+
+	use serde_json::value::{RawValue, to_raw_value};
+
+	if fields.is_empty()
+		&& let Some(rewritten) = agent_llm_ir::replace_model(body, target)
+	{
+		return Ok(rewritten);
+	}
+	let failed = |err: serde_json::Error| {
+		tracing::debug!(%err, "failed to rewrite LLM request body");
+		Box::new(llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"Failed to rewrite LLM request body model",
+			"request_body_rewrite_failed",
+		))
+	};
+	let parsed: indexmap::IndexMap<String, &RawValue> =
+		serde_json::from_slice(body).map_err(failed)?;
+	let mut top: indexmap::IndexMap<String, Cow<'_, RawValue>> = parsed
+		.into_iter()
+		.map(|(name, value)| (name, Cow::Borrowed(value)))
+		.collect();
+	for (name, value) in fields {
+		match value {
+			Some(value) => {
+				top.insert(name, Cow::Owned(to_raw_value(&value).map_err(failed)?));
+			},
+			None => {
+				top.shift_remove(&name);
+			},
+		}
+	}
+	top.insert(
+		"model".to_string(),
+		Cow::Owned(to_raw_value(target).map_err(failed)?),
+	);
+	serde_json::to_vec(&top).map_err(failed)
 }
 
 pub(crate) fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
@@ -1433,6 +1581,81 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 	Ok(body)
 }
 
+/// The router reading a request's model, and then changing it as a virtual model does. Run with
+/// `cargo bench -p agentgateway -F internal_benches --bench bench_tests -- model_router`.
+#[cfg(feature = "internal_benches")]
+mod benches {
+	use divan::Bencher;
+
+	use super::*;
+
+	const CASES: [(ModelRead, usize); 4] = [
+		(ModelRead::Parsed, 1),
+		(ModelRead::Parsed, 4096),
+		(ModelRead::ModelOnly, 1),
+		(ModelRead::ModelOnly, 4096),
+	];
+
+	#[divan::bench(args = CASES, consts = [false, true])]
+	fn read<const MODEL_LAST: bool>(b: Bencher, (read, repeats): (ModelRead, usize)) {
+		let runtime = runtime();
+		let body = body(repeats, MODEL_LAST);
+		b.with_inputs(|| request(&body))
+			.bench_local_values(|mut req| {
+				runtime.block_on(async {
+					let requested = requested_model(&mut req, read).await.unwrap();
+					assert_eq!(requested.model, "smart-model");
+				});
+				req
+			});
+	}
+
+	#[divan::bench(args = CASES, consts = [false, true])]
+	fn read_and_rewrite<const MODEL_LAST: bool>(b: Bencher, (read, repeats): (ModelRead, usize)) {
+		let runtime = runtime();
+		let body = body(repeats, MODEL_LAST);
+		b.with_inputs(|| request(&body))
+			.bench_local_values(|mut req| {
+				runtime.block_on(async {
+					let requested = requested_model(&mut req, read).await.unwrap();
+					Box::pin(rewrite_request_model(
+						&mut req,
+						requested.location,
+						"economy-model",
+						Vec::new(),
+					))
+					.await
+					.unwrap();
+				});
+				req
+			});
+	}
+
+	fn runtime() -> tokio::runtime::Runtime {
+		tokio::runtime::Builder::new_current_thread()
+			.build()
+			.unwrap()
+	}
+
+	/// A Chat request whose one message repeats awkward text `repeats` times.
+	fn body(repeats: usize, model_last: bool) -> Bytes {
+		let messages = serde_json::json!([{"role": "user",
+			"content": "quoted \"text\"\n日本語 ".repeat(repeats)}]);
+		let body = match model_last {
+			false => format!(r#"{{"model":"smart-model","max_tokens":64,"messages":{messages}}}"#),
+			true => format!(r#"{{"max_tokens":64,"messages":{messages},"model":"smart-model"}}"#),
+		};
+		Bytes::from(body)
+	}
+
+	fn request(body: &Bytes) -> Request {
+		::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::from(body.clone()))
+			.unwrap()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1446,8 +1669,11 @@ mod tests {
 			.map(|model| model.0.as_str())
 	}
 
+	#[rstest::rstest]
 	#[tokio::test]
-	async fn conditional_virtual_model_can_use_llm_request() {
+	async fn conditional_virtual_model_can_use_llm_request(
+		#[values(false, true)] llm_ir_enabled: bool,
+	) {
 		let model = |name: &str| ModelRoute {
 			discovery: None,
 			id: None,
@@ -1502,7 +1728,7 @@ mod tests {
 				.resolve(
 					&mut req,
 					&llm::catalog::ModelCatalog::default(),
-					&crate::test_helpers::policy_client(),
+					&policy_client(llm_ir_enabled),
 				)
 				.await,
 			ResolveResult::Backend(_)
@@ -1576,8 +1802,9 @@ mod tests {
 		);
 	}
 
+	#[rstest::rstest]
 	#[tokio::test]
-	async fn callout_virtual_model() {
+	async fn callout_virtual_model(#[values(false, true)] llm_ir_enabled: bool) {
 		use wiremock::matchers::{body_json, header, method, path};
 		use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -1692,7 +1919,7 @@ mod tests {
 				},
 			],
 		);
-		let client = crate::test_helpers::policy_client();
+		let client = policy_client(llm_ir_enabled);
 		let resolve = async |model: &str| {
 			let mut req = ::http::Request::builder()
 				.uri("http://example.com/v1/chat/completions")
@@ -2393,7 +2620,7 @@ mod tests {
 			.body(http::Body::from(compressed))
 			.unwrap();
 
-		let requested = requested_model(&mut req)
+		let requested = requested_model(&mut req, ModelRead::Parsed)
 			.await
 			.expect("gzip request body should decode");
 		assert_eq!(requested.model, "claude-opus-4-8");
@@ -2405,6 +2632,142 @@ mod tests {
 				.expect("decompressed request body"),
 			Bytes::from_static(body)
 		);
+	}
+
+	/// The parsed body keeps the last of a repeated `model`. Reading only the model refuses the
+	/// repeat, since a provider might take a different one than the router checked.
+	#[rstest::rstest]
+	#[case::parsed(ModelRead::Parsed, Ok("b"))]
+	#[case::model_only(ModelRead::ModelOnly, Err("repeated_model"))]
+	#[tokio::test]
+	async fn a_repeated_model(#[case] read: ModelRead, #[case] expected: Result<&str, &str>) {
+		let mut req = chat_request(r#"{"model":"a","messages":[],"model":"b"}"#);
+		let requested = match requested_model(&mut req, read).await {
+			Ok(requested) => Ok(requested.model),
+			refused => Err(error_code(refused).await),
+		};
+		assert_eq!(
+			requested,
+			expected
+				.map(String::from)
+				.map_err(|code| (::http::StatusCode::BAD_REQUEST, code.into()))
+		);
+	}
+
+	/// Either way the whole body is checked as JSON before the model is used.
+	#[rstest::rstest]
+	#[case::broken_after_the_model(r#"{"model":"a","messages":[}"#, "invalid_request_body")]
+	#[case::not_an_object(r#"["a"]"#, "missing_model")]
+	#[case::not_a_name(r#"{"model":5,"messages":[]}"#, "missing_model")]
+	#[case::missing(r#"{"messages":[]}"#, "missing_model")]
+	#[case::null(r#"{"model":null}"#, "missing_model")]
+	#[tokio::test]
+	async fn a_body_without_one_model_is_refused(
+		#[case] body: &str,
+		#[case] code: &str,
+		#[values(ModelRead::Parsed, ModelRead::ModelOnly)] read: ModelRead,
+	) {
+		let mut req = chat_request(body);
+		assert_eq!(
+			error_code(requested_model(&mut req, read).await).await,
+			(::http::StatusCode::BAD_REQUEST, code.into())
+		);
+	}
+
+	/// The parsed body is written out again to change its model. With the LLM IR on, changing
+	/// only the model keeps the rest of the client's bytes.
+	#[rstest::rstest]
+	#[case::parsed(
+		false,
+		(true, r#"{"model":"economy-model","max_tokens":256,"temperature":1.0}"#)
+	)]
+	#[case::model_only(
+		true,
+		(false, r#"{"model": "economy-model", "max_tokens": 256, "temperature": 1.0}"#)
+	)]
+	#[tokio::test]
+	async fn a_routed_model_is_rewritten(
+		#[case] llm_ir_enabled: bool,
+		#[case] expected: (bool, &str),
+	) {
+		let router = ModelRouter::new(
+			vec![concrete_model("economy-model")],
+			vec![VirtualModelRoute {
+				name: "smart-model".to_string(),
+				created: 0,
+				llm_policy: Arc::default(),
+				routing: VirtualModelRouting::Conditional(vec![ConditionalTarget {
+					model: "economy-model".to_string(),
+					invalid: false,
+					when: None,
+				}]),
+			}],
+		);
+		let mut req =
+			chat_request(r#"{"model": "smart-model", "max_tokens": 256, "temperature": 1.0}"#);
+		assert!(matches!(
+			router
+				.resolve(
+					&mut req,
+					&llm::catalog::ModelCatalog::default(),
+					&policy_client(llm_ir_enabled),
+				)
+				.await,
+			ResolveResult::Backend(_)
+		));
+		let parsed = req.body().extension::<crate::json::ParsedJson>().is_some();
+		let body = http::read_body_with_limit(req.into_body(), 1024)
+			.await
+			.expect("rewritten request body");
+		assert_eq!((parsed, std::str::from_utf8(&body).unwrap()), expected);
+	}
+
+	fn policy_client(llm_ir_enabled: bool) -> crate::proxy::httpproxy::PolicyClient {
+		let mut config = crate::config::parse_config("{}".to_string(), None).expect("empty config");
+		config.llm_ir_enabled = llm_ir_enabled;
+		let proxy = crate::test_helpers::proxymock::setup_proxy_test_with_config(config);
+		crate::proxy::httpproxy::PolicyClient::new(proxy.inputs())
+	}
+
+	fn chat_request(body: &str) -> Request {
+		::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::from(body.to_string()))
+			.expect("valid request")
+	}
+
+	async fn error_code(result: RouterResult<RequestedModel>) -> (::http::StatusCode, String) {
+		let Err(response) = result else {
+			panic!("expected the request to be refused");
+		};
+		let status = response.status();
+		let body = http::read_body_with_limit(response.into_body(), 1024)
+			.await
+			.expect("error body");
+		let error: Value = serde_json::from_slice(&body).expect("error JSON");
+		(status, error["error"]["code"].as_str().unwrap().to_string())
+	}
+
+	fn concrete_model(name: &str) -> ModelRoute {
+		ModelRoute {
+			discovery: None,
+			id: None,
+			name: name.to_string(),
+			created: 0,
+			visibility: ModelVisibility::Internal,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				passthrough: None,
+				llm: Arc::default(),
+				authorization: None,
+			},
+			backend_policies: vec![],
+		}
 	}
 
 	#[tokio::test]
@@ -2423,7 +2786,7 @@ mod tests {
 				.body(http::Body::from(body.to_vec()))
 				.unwrap();
 
-			let requested = requested_model(&mut req)
+			let requested = requested_model(&mut req, ModelRead::Parsed)
 				.await
 				.expect("the model rides the Gemini path");
 			assert_eq!(requested.model, "gemini-2.5-flash", "{uri}");

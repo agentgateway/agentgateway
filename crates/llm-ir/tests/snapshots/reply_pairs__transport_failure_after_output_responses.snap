@@ -1,0 +1,18 @@
+---
+source: crates/llm-ir/tests/reply_pairs.rs
+expression: sent
+---
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_msg_1","object":"response","created_at":1700000000,"model":"test-model","status":"in_progress","output":[]},"sequence_number":0}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","id":"msg_0","role":"assistant","status":"in_progress","content":[]},"sequence_number":1}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","item_id":"msg_0","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]},"sequence_number":2}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_0","output_index":0,"content_index":0,"delta":"Hello","sequence_number":3}
+
+event: response.failed
+data: {"type":"response.failed","response":{"id":"resp_msg_1","object":"response","created_at":1700000000,"model":"test-model","status":"failed","output":[],"usage":{"input_tokens":3,"input_tokens_details":{"cached_tokens":0},"output_tokens":1,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":4},"error":{"code":"server_error","message":"The provider failed."}},"sequence_number":4}

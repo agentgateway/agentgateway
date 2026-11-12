@@ -1,0 +1,27 @@
+---
+source: crates/llm-ir/tests/client_reply.rs
+expression: sse(stream(&reply))
+---
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_msg_1","object":"response","created_at":1700000000,"model":"claude-test","status":"in_progress","output":[]},"sequence_number":0}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","id":"msg_0","role":"assistant","status":"in_progress","content":[]},"sequence_number":1}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","item_id":"msg_0","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]},"sequence_number":2}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_0","output_index":0,"content_index":0,"delta":"Hello","sequence_number":3}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","item_id":"msg_0","output_index":0,"content_index":0,"text":"Hello","sequence_number":4}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","item_id":"msg_0","output_index":0,"content_index":0,"part":{"type":"output_text","text":"Hello","annotations":[]},"sequence_number":5}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_0","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Hello","annotations":[]}]},"sequence_number":6}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_msg_1","object":"response","created_at":1700000000,"model":"claude-test","status":"completed","output":[{"type":"message","id":"msg_0","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Hello","annotations":[]}]}],"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":15}},"sequence_number":7}

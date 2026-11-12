@@ -112,6 +112,19 @@ test:
 test-release:
 	cargo test --profile quick-release --tests --benches --examples $(if $(TIMINGS),--timings)
 
+# Runs each fuzz target for FUZZ_SECONDS. Needs nightly Rust and cargo-fuzz.
+FUZZ_TARGETS ?= llm_ir_request llm_ir_reply
+FUZZ_SECONDS ?= 60
+.PHONY: fuzz
+fuzz:
+	@for target in $(FUZZ_TARGETS); do \
+		cargo +nightly fuzz run $$target -- -max_total_time=$(FUZZ_SECONDS) || exit 1; \
+	done
+
+.PHONY: fuzz-check
+fuzz-check:
+	cargo check --manifest-path fuzz/Cargo.toml --bins --locked
+
 .PHONY: check-default-members
 check-default-members:
 	@cargo metadata --no-deps --format-version 1 | jq -e -f tools/check-default-members.jq >/dev/null

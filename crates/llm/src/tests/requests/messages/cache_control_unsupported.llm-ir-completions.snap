@@ -1,0 +1,41 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/cache_control_unsupported.json
+info:
+  model: gpt-5.5
+  max_tokens: 1024
+  system:
+    - type: text
+      text: Stable instructions
+    - type: text
+      text: Cached instructions
+      cache_control:
+        type: ephemeral
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: Return CACHE_CONTROL_OK
+          cache_control:
+            type: ephemeral
+---
+{
+  "disposition": "changed: system blocks are joined with a blank line, where legacy sends each as its own part",
+  "request": {
+    "model": "gpt-5.5",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Stable instructions\n\nCached instructions"
+      },
+      {
+        "role": "user",
+        "content": "Return CACHE_CONTROL_OK"
+      }
+    ],
+    "max_completion_tokens": 1024
+  },
+  "dropped": [
+    "cache_control"
+  ]
+}

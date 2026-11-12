@@ -1,0 +1,24 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/basic.json
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 1024
+  messages:
+    - role: user
+      content: "Hello, world"
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "model": "claude-sonnet-4-20250514",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, world"
+      }
+    ],
+    "max_completion_tokens": 1024
+  },
+  "dropped": []
+}

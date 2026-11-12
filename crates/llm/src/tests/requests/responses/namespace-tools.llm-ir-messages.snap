@@ -1,0 +1,195 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/responses/namespace-tools.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input:
+    - role: user
+      content: Run JavaScript in both kernels.
+    - type: function_call
+      call_id: call_1
+      namespace: mcp__node_repl
+      name: js
+      arguments: "{\"code\":\"1 + 1\"}"
+    - type: function_call_output
+      call_id: call_1
+      output: "2"
+    - type: function_call
+      call_id: call_2
+      namespace: other_kernel
+      name: js
+      arguments: "{\"code\":\"2 + 2\"}"
+    - type: function_call_output
+      call_id: call_2
+      output: "4"
+  tools:
+    - type: namespace
+      name: mcp__node_repl
+      description: Run JavaScript in the persistent Node kernel.
+      tools:
+        - type: function
+          name: js
+          description: Run JavaScript.
+          parameters:
+            type: object
+            properties:
+              code:
+                type: string
+            required:
+              - code
+            additionalProperties: false
+          strict: false
+    - type: namespace
+      name: other_kernel
+      description: Run JavaScript in another kernel.
+      tools:
+        - type: function
+          name: js
+          description: Run JavaScript.
+          parameters:
+            type: object
+            properties:
+              code:
+                type: string
+            required:
+              - code
+            additionalProperties: false
+          strict: false
+    - type: function
+      name: finish
+      description: Finish the task.
+      parameters:
+        type: object
+        properties: {}
+        additionalProperties: false
+      strict: true
+  tool_choice: auto
+---
+{
+  "disposition": "converts; legacy has no Responses-to-Messages conversion",
+  "request": {
+    "model": "gpt-4o",
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Run JavaScript in both kernels."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "call_1",
+            "name": "mcp__node_repl__js",
+            "input": {
+              "code": "1 + 1"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_1",
+            "content": [
+              {
+                "type": "text",
+                "text": "2"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "call_2",
+            "name": "other_kernel__js",
+            "input": {
+              "code": "2 + 2"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_2",
+            "content": [
+              {
+                "type": "text",
+                "text": "4"
+              }
+            ],
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "name": "mcp__node_repl__js",
+        "description": "Run JavaScript in the persistent Node kernel.\n\nRun JavaScript.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code"
+          ],
+          "additionalProperties": false
+        },
+        "strict": false
+      },
+      {
+        "name": "other_kernel__js",
+        "description": "Run JavaScript in another kernel.\n\nRun JavaScript.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code"
+          ],
+          "additionalProperties": false
+        },
+        "strict": false
+      },
+      {
+        "name": "finish",
+        "description": "Finish the task.",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    ],
+    "tool_choice": {
+      "type": "auto"
+    }
+  },
+  "dropped": []
+}

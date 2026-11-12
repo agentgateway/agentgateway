@@ -332,6 +332,13 @@ impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.state.load().snapshot.get_model_tags(model_id)
 	}
+	fn reasoning(
+		&self,
+		provider: &str,
+		model_id: &str,
+	) -> Option<agent_llm::model_catalog::Reasoning> {
+		self.state.load().snapshot.reasoning(provider, model_id)
+	}
 }
 
 impl agent_llm::model_catalog::ModelCatalogHandle for CatalogSnapshot {
@@ -340,6 +347,23 @@ impl agent_llm::model_catalog::ModelCatalogHandle for CatalogSnapshot {
 	}
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.get_model_tags(model_id)
+	}
+	fn reasoning(
+		&self,
+		provider: &str,
+		model_id: &str,
+	) -> Option<agent_llm::model_catalog::Reasoning> {
+		let model = self.model(provider, model_id)?;
+		let reasoning = &model.reasoning;
+		Some(agent_llm::model_catalog::Reasoning {
+			supported: model.capabilities.reasoning,
+			effort: reasoning.effort.clone(),
+			budget_tokens: reasoning
+				.budget_tokens
+				.as_ref()
+				.map(|budget| (budget.min, budget.max)),
+			toggle: reasoning.toggle,
+		})
 	}
 }
 

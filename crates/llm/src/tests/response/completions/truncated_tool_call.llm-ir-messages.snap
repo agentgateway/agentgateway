@@ -1,0 +1,51 @@
+---
+source: crates/llm/src/ir_golden_chat_tests.rs
+description: src/tests/response/completions/truncated_tool_call.json
+info:
+  id: chatcmpl-truncated-tool-call
+  object: chat.completion
+  created: 1700000000
+  model: gpt-x
+  choices:
+    - index: 0
+      message:
+        role: assistant
+        content: ~
+        tool_calls:
+          - id: call_1
+            type: function
+            function:
+              name: get_weather
+              arguments: "{\"location\": \"Par"
+      finish_reason: length
+  usage:
+    prompt_tokens: 20
+    completion_tokens: 15
+    total_tokens: 35
+---
+{
+  "disposition": "legacy bug: legacy writes the cut-off arguments as a string `input`, which Messages doesn't allow; the IR leaves out the incomplete call",
+  "client": {
+    "body": {
+      "id": "chatcmpl-truncated-tool-call",
+      "type": "message",
+      "role": "assistant",
+      "content": [],
+      "model": "gpt-x",
+      "stop_reason": "max_tokens",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 20,
+        "output_tokens": 15
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 20,
+    "output_tokens": 15,
+    "total_tokens": 35,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

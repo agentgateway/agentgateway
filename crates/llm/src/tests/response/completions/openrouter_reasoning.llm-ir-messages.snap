@@ -1,0 +1,66 @@
+---
+source: crates/llm/src/ir_tests/mod.rs
+description: src/tests/response/completions/openrouter_reasoning.json
+info:
+  id: gen-1758648153-xeB95xIQsxABYYNTJLAj
+  provider: test
+  model: test
+  object: chat.completion
+  created: 1758648153
+  choices:
+    - logprobs: ~
+      finish_reason: stop
+      native_finish_reason: stop
+      index: 0
+      message:
+        role: assistant
+        content: hello world!
+        refusal: ~
+        reasoning: "Okay, the user wants me to write a story"
+        reasoning_details:
+          - type: reasoning.text
+            text: "Okay, the user wants me to write a story"
+            format: unknown
+            index: 0
+  usage:
+    prompt_tokens: 23
+    completion_tokens: 796
+    total_tokens: 819
+    prompt_tokens_details: ~
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "body": {
+      "id": "gen-1758648153-xeB95xIQsxABYYNTJLAj",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Okay, the user wants me to write a story",
+          "signature": "agentgateway.llm-ir.v1:YWdlbnRnYXRld2F5LmxsbS1pci52MToAAAAAAAAABmdvbGRlbgAAAAAAAAAGb3BlbmFpAAAAAAAAAAtpbnB1dC1tb2RlbAAAAAAAAAASbWVzc2FnZXMtc2lnbmF0dXJleyJyZWFzb25pbmciOiJPa2F5LCB0aGUgdXNlciB3YW50cyBtZSB0byB3cml0ZSBhIHN0b3J5In0"
+        },
+        {
+          "type": "text",
+          "text": "hello world!"
+        }
+      ],
+      "model": "test",
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 23,
+        "output_tokens": 796
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 23,
+    "output_tokens": 796,
+    "total_tokens": 819,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}
