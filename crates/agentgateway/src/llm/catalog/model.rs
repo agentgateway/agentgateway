@@ -97,6 +97,24 @@ impl Catalog {
 				}
 			}
 		}
+		self.check_reasoning_budgets()
+	}
+
+	/// Overlays merge `min` and `max` separately, so a merged catalog needs this check too.
+	pub(super) fn check_reasoning_budgets(&self) -> anyhow::Result<()> {
+		for (provider, entry) in &self.providers {
+			for (model, pricing) in &entry.models {
+				if let Some(BudgetTokens {
+					min: Some(min),
+					max: Some(max),
+					..
+				}) = &pricing.reasoning.budget_tokens
+					&& min > max
+				{
+					anyhow::bail!("{provider}/{model}: reasoning budgetTokens min {min} is above max {max}");
+				}
+			}
+		}
 		Ok(())
 	}
 
@@ -761,6 +779,18 @@ mod tests {
 		assert_eq!(reasoning.toggle, Some(false), "explicit false wins");
 		let budget = reasoning.budget_tokens.as_ref().unwrap();
 		assert_eq!((budget.min, budget.max), (Some(2048), Some(32000)));
+	}
+
+	#[test]
+	fn inverted_reasoning_budget_is_rejected() {
+		let err = from_json(
+			r#"{"providers":{"gemini":{"models":{"m":{"reasoning":{"budgetTokens":{"min":2048,"max":1024}}}}}}}"#,
+		)
+		.unwrap_err();
+		assert_eq!(
+			err.to_string(),
+			"gemini/m: reasoning budgetTokens min 2048 is above max 1024"
+		);
 	}
 
 	#[test]

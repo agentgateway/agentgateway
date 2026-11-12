@@ -142,7 +142,7 @@ impl ModelCatalog {
 			model::from_json(BUILTIN_CATALOG_JSON).context("invalid built-in model catalog")?;
 		let catalog = Arc::new(Self {
 			state: ArcSwap::from_pointee(ModelCatalogState {
-				snapshot: Arc::new(CatalogSnapshot::from_catalogs([builtin])),
+				snapshot: Arc::new(CatalogSnapshot::from_catalogs([builtin])?),
 				sources,
 			}),
 			file_watch: Mutex::new(None),
@@ -386,7 +386,7 @@ impl fmt::Debug for CatalogSnapshot {
 impl CatalogSnapshot {
 	#[cfg(test)]
 	pub fn parse(json: &str) -> anyhow::Result<Self> {
-		Ok(Self::from_catalogs([model::from_json(json)?]))
+		Self::from_catalogs([model::from_json(json)?])
 	}
 
 	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
@@ -400,7 +400,7 @@ impl CatalogSnapshot {
 		self.model_tags.get(model_id).cloned()
 	}
 
-	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
+	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> anyhow::Result<Self> {
 		let mut base: Option<CatalogData> = None;
 		let mut overlays = Vec::new();
 		for catalog in catalogs {
@@ -419,6 +419,9 @@ impl CatalogSnapshot {
 		let merged = overlays
 			.into_iter()
 			.fold(base.unwrap_or_default(), CatalogData::override_with);
+		merged
+			.check_reasoning_budgets()
+			.context("invalid merged model catalog")?;
 		let model_tags = merged
 			.providers
 			.values()
@@ -438,11 +441,11 @@ impl CatalogSnapshot {
 				(provider.clone(), models)
 			})
 			.collect();
-		CatalogSnapshot {
+		Ok(CatalogSnapshot {
 			catalog: Some(merged),
 			model_tags,
 			model_info,
-		}
+		})
 	}
 
 	fn empty() -> Self {
@@ -959,7 +962,7 @@ async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCa
 		}
 	}
 	Ok(LoadedCatalog {
-		snapshot: CatalogSnapshot::from_catalogs(catalogs),
+		snapshot: CatalogSnapshot::from_catalogs(catalogs)?,
 		missing,
 	})
 }
@@ -1796,7 +1799,7 @@ mod tests {
 	fn later_layer_overrides_earlier() {
 		let base = model::from_json(&test_catalog("1")).unwrap();
 		let overlay = model::from_json(&test_catalog("9")).unwrap();
-		let snap = CatalogSnapshot::from_catalogs([base, overlay]);
+		let snap = CatalogSnapshot::from_catalogs([base, overlay]).unwrap();
 		let resp = LLMResponse {
 			input_tokens: Some(1_000_000),
 			..Default::default()
@@ -1808,6 +1811,23 @@ mod tests {
 			CacheTokenConvention::InputIncludesCache,
 		);
 		assert_eq!(cost, Some(9.0), "later layer's rate wins");
+	}
+
+	#[test]
+	fn overlay_that_inverts_the_reasoning_budget_is_rejected() {
+		let base = model::from_json(
+			r#"{"providers":{"gemini":{"models":{"m":{"reasoning":{"budgetTokens":{"min":0,"max":24576}}}}}}}"#,
+		)
+		.unwrap();
+		let overlay = model::from_json(
+			r#"{"providers":{"gemini":{"models":{"m":{"reasoning":{"budgetTokens":{"min":30000}}}}}}}"#,
+		)
+		.unwrap();
+		let err = CatalogSnapshot::from_catalogs([base, overlay]).unwrap_err();
+		assert_eq!(
+			format!("{err:#}"),
+			"invalid merged model catalog: gemini/m: reasoning budgetTokens min 30000 is above max 24576"
+		);
 	}
 
 	#[test]
@@ -1832,15 +1852,16 @@ mod tests {
 				.0
 		};
 
-		let day7 = CatalogSnapshot::from_catalogs([generated(5, "5"), generated(7, "7")]);
+		let day7 = CatalogSnapshot::from_catalogs([generated(5, "5"), generated(7, "7")]).unwrap();
 		assert_eq!(input_cost(&day7), Some(7.0));
 
-		let day10 = CatalogSnapshot::from_catalogs([generated(10, "10"), generated(7, "7")]);
+		let day10 = CatalogSnapshot::from_catalogs([generated(10, "10"), generated(7, "7")]).unwrap();
 		assert_eq!(input_cost(&day10), Some(10.0));
 
 		let user_override = model::from_json(&test_catalog("12")).unwrap();
 		let overridden =
-			CatalogSnapshot::from_catalogs([generated(10, "10"), generated(7, "7"), user_override]);
+			CatalogSnapshot::from_catalogs([generated(10, "10"), generated(7, "7"), user_override])
+				.unwrap();
 		assert_eq!(input_cost(&overridden), Some(12.0));
 	}
 
