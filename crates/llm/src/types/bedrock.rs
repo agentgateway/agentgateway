@@ -43,20 +43,10 @@ pub struct DocumentBlock {
 	pub source: DocumentSource,
 }
 
-/// A union: exactly one member is set.
-/// https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_DocumentSource.html
 #[derive(Clone, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub enum DocumentSource {
-	Bytes(String),
-	Text(String),
-	Content(Vec<DocumentContentBlock>),
-}
-
-#[derive(Clone, Deserialize, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub enum DocumentContentBlock {
-	Text(String),
+pub struct DocumentSource {
+	pub bytes: String,
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
