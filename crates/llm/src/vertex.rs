@@ -73,7 +73,18 @@ fn prepare_anthropic_body(
 	);
 	apply(&mut body);
 	remove_unsupported_vertex_fields(&mut body);
+	move_cache_prefix_last(&mut body);
 	serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
+}
+
+/// Vertex misses the prompt cache at random when `messages` comes before `system` or `tools` in
+/// the body, so the three go last, in the order the cache prefix is built.
+fn move_cache_prefix_last(body: &mut Map<String, Value>) {
+	for key in ["tools", "system", "messages"] {
+		if let Some(value) = body.shift_remove(key) {
+			body.insert(key.to_string(), value);
+		}
+	}
 }
 
 impl Provider {
@@ -423,6 +434,23 @@ mod tests {
 		assert!(p.is_gemini_model("gemini-2.5-flash"));
 		assert!(!p.is_gemini_model("claude-sonnet-4-5"));
 		assert!(!p.is_gemini_model("gemini-embedding-001"));
+	}
+
+	#[test]
+	fn test_anthropic_body_ends_with_cache_prefix() {
+		let body = serde_json::json!({
+			"messages": [{"role": "user", "content": "hi"}],
+			"model": "claude-haiku-4-5",
+			"system": "be brief",
+			"max_tokens": 16,
+			"tools": [{"name": "lookup", "input_schema": {"type": "object"}}],
+		});
+		let out = prepare_anthropic_message_body(serde_json::to_vec(&body).unwrap()).unwrap();
+		let out: Map<String, Value> = serde_json::from_slice(&out).unwrap();
+		let keys: Vec<&str> = out.keys().map(String::as_str).collect();
+		assert_eq!(keys[keys.len() - 3..], ["tools", "system", "messages"]);
+		assert_eq!(out["messages"], body["messages"]);
+		assert_eq!(out["tools"], body["tools"]);
 	}
 
 	#[test]
