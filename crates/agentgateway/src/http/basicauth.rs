@@ -44,11 +44,11 @@ impl Error {
 #[derive(Copy, PartialEq, Eq, Default)]
 pub enum Mode {
 	/// Require a valid username and password.
+	/// This is the default option.
+	#[default]
 	Strict,
 	/// Validate credentials when present.
-	/// This is the default option.
 	/// Warning: this allows requests without Basic Auth credentials.
-	#[default]
 	Optional,
 }
 
@@ -207,7 +207,7 @@ pub struct LocalBasicAuth {
 	#[serde(default)]
 	pub realm: Option<String>,
 
-	/// Controls whether requests must include valid Basic Auth credentials.
+	/// Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.
 	#[serde(default)]
 	pub mode: Mode,
 

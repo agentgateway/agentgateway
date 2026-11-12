@@ -308,6 +308,7 @@ fn signed_cli_token() -> String {
 
 fn cli_jwt_auth_policy() -> Value {
 	json!({
+		"mode": "optional",
 		"issuer": CLI_ISSUER,
 		"audiences": [CLI_AUDIENCE],
 		"jwks": serde_json::to_string(&test_jwks()).expect("jwks"),
@@ -920,4 +921,37 @@ async fn basic_auth() {
 	)
 	.await;
 	assert_eq!(res.status(), 401);
+}
+
+#[rstest::rstest]
+#[case::jwt_default("jwtAuth", None, 401)]
+#[case::jwt_optional("jwtAuth", Some("optional"), 200)]
+#[case::api_key_default("apiKey", None, 401)]
+#[case::api_key_optional("apiKey", Some("optional"), 200)]
+#[case::basic_auth_default("basicAuth", None, 401)]
+#[case::basic_auth_optional("basicAuth", Some("optional"), 200)]
+#[tokio::test]
+async fn auth_mode_missing_credential(
+	#[case] policy: &str,
+	#[case] mode: Option<&str>,
+	#[case] expected: u16,
+) {
+	let mut config = match policy {
+		"jwtAuth" => json!({
+			"issuer": CLI_ISSUER,
+			"audiences": [CLI_AUDIENCE],
+			"jwks": serde_json::to_string(&test_jwks()).expect("jwks"),
+		}),
+		"apiKey" => json!({"keys": [{"key": "sk-123"}]}),
+		"basicAuth" => json!({"htpasswd": "user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00"}),
+		_ => unreachable!(),
+	};
+	if let Some(mode) = mode {
+		config["mode"] = json!(mode);
+	}
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind.attach_route_policy(json!({ policy: config })).await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), expected);
 }

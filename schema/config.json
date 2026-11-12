@@ -6895,9 +6895,9 @@
           "type": "object",
           "properties": {
             "mode": {
-              "description": "Controls whether requests must include a JWT and how validation failures are handled.",
+              "description": "Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.",
               "$ref": "#/$defs/Mode",
-              "default": "optional"
+              "default": "strict"
             },
             "location": {
               "description": "Where to read the JWT from in incoming requests.",
@@ -6932,9 +6932,9 @@
           "type": "object",
           "properties": {
             "mode": {
-              "description": "Controls whether requests must include a JWT and how validation failures are handled.",
+              "description": "Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.",
               "$ref": "#/$defs/Mode",
-              "default": "optional"
+              "default": "strict"
             },
             "location": {
               "description": "Where to read the JWT from in incoming requests.",
@@ -6985,12 +6985,12 @@
     "Mode": {
       "oneOf": [
         {
-          "description": "Require a valid JWT from a configured issuer.",
+          "description": "Require a valid JWT from a configured issuer.\nThis is the default option.",
           "type": "string",
           "const": "strict"
         },
         {
-          "description": "Validate the JWT when present.\nThis is the default option.\nWarning: this allows requests without a JWT.",
+          "description": "Validate the JWT when present.\nWarning: this allows requests without a JWT.",
           "type": "string",
           "const": "optional"
         },
@@ -7258,9 +7258,9 @@
           "default": null
         },
         "mode": {
-          "description": "Controls whether requests must include valid Basic Auth credentials.",
+          "description": "Controls whether requests must include valid Basic Auth credentials. Defaults to `strict`.",
           "$ref": "#/$defs/BasicAuthMode",
-          "default": "optional"
+          "default": "strict"
         },
         "authorizationLocation": {
           "description": "Where to read the Basic Auth credentials from in incoming requests.",
@@ -7282,12 +7282,12 @@
       "description": "Validation mode for Basic Auth.",
       "oneOf": [
         {
-          "description": "Require a valid username and password.",
+          "description": "Require a valid username and password.\nThis is the default option.",
           "type": "string",
           "const": "strict"
         },
         {
-          "description": "Validate credentials when present.\nThis is the default option.\nWarning: this allows requests without Basic Auth credentials.",
+          "description": "Validate credentials when present.\nWarning: this allows requests without Basic Auth credentials.",
           "type": "string",
           "const": "optional"
         }
@@ -7304,9 +7304,9 @@
           }
         },
         "mode": {
-          "description": "Controls whether requests must include a valid API key.",
+          "description": "Controls whether requests must include a valid API key. Defaults to `strict`.",
           "$ref": "#/$defs/APIKeyMode",
-          "default": "optional"
+          "default": "strict"
         },
         "location": {
           "description": "Where to read the API key from in incoming requests.",
@@ -7488,12 +7488,12 @@
       "description": "Validation mode for API key authentication.",
       "oneOf": [
         {
-          "description": "Require a valid API key.",
+          "description": "Require a valid API key.\nThis is the default option.",
           "type": "string",
           "const": "strict"
         },
         {
-          "description": "Validate the API key when present.\nThis is the default option.\nWarning: this allows requests without an API key.",
+          "description": "Validate the API key when present.\nWarning: this allows requests without an API key.",
           "type": "string",
           "const": "optional"
         },

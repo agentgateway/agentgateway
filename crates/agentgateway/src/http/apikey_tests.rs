@@ -217,6 +217,15 @@ async fn test_apikey_cookie_extracts_and_strips() {
 	assert!(req.extensions().get::<Claims>().is_some());
 }
 
+#[test]
+fn test_apikey_missing_mode_defaults_to_strict() {
+	let local: LocalAPIKeys = serde_json::from_value(serde_json::json!({
+		"keys": [{"key": "k1"}]
+	}))
+	.unwrap();
+	assert_eq!(local.mode, Mode::Strict);
+}
+
 #[tokio::test]
 async fn test_apikey_sha256_extracts_and_strips() {
 	let local: LocalAPIKeys = serde_json::from_value(serde_json::json!({
