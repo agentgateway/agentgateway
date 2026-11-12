@@ -557,8 +557,8 @@ async fn test_aws_sign_request_explicit_region() {
 	*req.method_mut() = http::Method::POST;
 
 	let aws_auth = AwsAuth::ExplicitConfig {
-		access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
-		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
+		access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()).into(),
+		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()).into(),
 		region: Some("us-west-2".to_string()),
 		session_token: None,
 		service_name: None,
@@ -633,8 +633,8 @@ async fn test_aws_sign_requestallback() {
 	*req.method_mut() = http::Method::POST;
 
 	let aws_auth = AwsAuth::ExplicitConfig {
-		access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
-		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
+		access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()).into(),
+		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()).into(),
 		region: None, // No region in config
 		session_token: None,
 		service_name: None,
@@ -1896,5 +1896,357 @@ fn test_jwt_sign_rejects_unknown_field() {
 	assert!(
 		result.is_err(),
 		"unknown fields in jwtSign config must be rejected"
+	);
+}
+
+fn explicit_aws_auth(config: serde_json::Value) -> AwsAuth {
+	let auth: AwsAuth = serde_json::from_value(config).expect("should deserialize");
+	assert!(
+		matches!(auth, AwsAuth::ExplicitConfig { .. }),
+		"expected explicit config, got {auth:?}"
+	);
+	auth
+}
+
+#[test]
+fn test_aws_explicit_static_credentials_still_redacted() {
+	let auth = explicit_aws_auth(serde_json::json!({
+		"accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+		"secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		"sessionToken": "static-session-token"
+	}));
+	let serialized = serde_json::to_string(&auth).expect("should serialize");
+	for secret in [
+		"AKIAIOSFODNN7EXAMPLE",
+		"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		"static-session-token",
+	] {
+		assert!(
+			!serialized.contains(secret),
+			"static credentials must stay redacted: {serialized}"
+		);
+	}
+}
+
+#[test]
+fn test_aws_explicit_credentials_reject_invalid_config() {
+	for config in [
+		// Invalid CEL must be rejected, not parsed as implicit auth, which would
+		// sign with the ambient credentials.
+		serde_json::json!({
+			"accessKeyId": {"expression": "this is not cel ("},
+			"secretAccessKey": "secret"
+		}),
+		serde_json::json!({
+			"accessKeyId": {"expression": "request.headers[\"x-akid\"]", "value": "AKID"},
+			"secretAccessKey": "secret"
+		}),
+	] {
+		assert!(
+			serde_json::from_value::<AwsAuth>(config.clone()).is_err(),
+			"should be rejected: {config}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn test_aws_explicit_credentials_reject_bad_values_without_leaking() {
+	for (expression, reason) in [
+		(r#""""#, "produced an empty string"),
+		("false", "must produce a string, got bool"),
+		("42", "must produce a string, got int"),
+		(
+			r#"{"secret": request.headers["x-secret"]}"#,
+			"must produce a string, got map",
+		),
+		(r#"request.headers["x-secret"] + 1"#, "failed to evaluate"),
+	] {
+		let auth = explicit_aws_auth(serde_json::json!({
+			"accessKeyId": {"expression": expression},
+			"secretAccessKey": "secret",
+		}));
+		let mut req = crate::http::Request::new(crate::http::Body::empty());
+		*req.uri_mut() = "https://bedrock-runtime.us-east-1.amazonaws.com/model/invoke"
+			.parse()
+			.unwrap();
+		req
+			.headers_mut()
+			.insert("x-secret", "do-not-leak-this".parse().unwrap());
+		let err = aws::sign_request(&crate::test_helpers::test_client(), &mut req, &auth)
+			.await
+			.expect_err("bad credential values must be rejected");
+		let message = format!("{err:?}");
+		assert!(message.contains(reason), "{expression}: {message}");
+		assert!(
+			!message.contains("do-not-leak-this"),
+			"{expression}: evaluated values must not appear in errors: {message}"
+		);
+		assert!(req.headers().get(http::header::AUTHORIZATION).is_none());
+	}
+}
+
+/// Per-tenant session credentials an ext_authz service hands the gateway.
+struct TenantAwsCredentials {
+	access_key_id: &'static str,
+	secret_access_key: &'static str,
+	session_token: &'static str,
+}
+
+const TENANT_AWS_CREDENTIALS: [(&str, TenantAwsCredentials); 2] = [
+	(
+		"tenant-a",
+		TenantAwsCredentials {
+			access_key_id: "ASIATENANTAAAAAAAAAA",
+			secret_access_key: "tenant-a-secret-access-key",
+			session_token: "tenant-a-session-token",
+		},
+	),
+	(
+		"tenant-b",
+		TenantAwsCredentials {
+			access_key_id: "ASIATENANTBBBBBBBBBB",
+			secret_access_key: "tenant-b-secret-access-key",
+			session_token: "tenant-b-session-token",
+		},
+	),
+];
+
+fn tenant_aws_credentials(tenant: &str) -> Option<&'static TenantAwsCredentials> {
+	TENANT_AWS_CREDENTIALS
+		.iter()
+		.find(|(name, _)| *name == tenant)
+		.map(|(_, creds)| creds)
+}
+
+/// Allows every request, returning the caller's tenant credentials as
+/// `extauthz.aws` dynamic metadata. Unknown tenants are allowed with no
+/// credentials.
+struct TenantCredentialsAuthz;
+
+#[async_trait::async_trait]
+impl crate::test_helpers::extauthmock::Handler for TenantCredentialsAuthz {
+	async fn check(
+		&mut self,
+		request: &crate::http::ext_authz::proto::CheckRequest,
+	) -> Result<crate::http::ext_authz::proto::CheckResponse, tonic::Status> {
+		let tenant = request
+			.attributes
+			.as_ref()
+			.and_then(|a| a.request.as_ref())
+			.and_then(|r| r.http.as_ref())
+			.and_then(|h| h.headers.get("x-tenant"))
+			.cloned()
+			.unwrap_or_default();
+		let mut response = crate::test_helpers::extauthmock::allow_response(None)?;
+		if let Some(creds) = tenant_aws_credentials(&tenant) {
+			response.dynamic_metadata = Some(
+				crate::http::envoy_proto_common::json_to_struct(serde_json::json!({
+					"aws": {
+						"access_key_id": creds.access_key_id,
+						"secret_access_key": creds.secret_access_key,
+						"session_token": creds.session_token,
+					}
+				}))
+				.unwrap(),
+			);
+		}
+		Ok(response)
+	}
+}
+
+/// A gateway whose route asks ext_authz for credentials and signs the upstream
+/// request with them.
+async fn setup_ext_authz_aws_signing(
+	authz: std::net::SocketAddr,
+) -> (
+	wiremock::MockServer,
+	crate::test_helpers::proxymock::TestBind,
+) {
+	let upstream = crate::test_helpers::proxymock::simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(crate::test_helpers::proxymock::simple_bind());
+	t.attach_route(serde_json::json!({
+		"name": "bedrock",
+		"policies": {
+			"extAuthz": {"host": authz.to_string(), "protocol": {"grpc": {}}},
+			"backendAuth": {"aws": {
+				"accessKeyId": {"expression": "extauthz.aws.access_key_id"},
+				"secretAccessKey": {"expression": "extauthz.aws.secret_access_key"},
+				"sessionToken": {"expression": "extauthz.aws.session_token"},
+				"region": "us-east-1",
+			}},
+		},
+		"backends": [{"host": upstream.address().to_string()}],
+	}))
+	.await;
+	(upstream, t)
+}
+
+/// The Authorization header SigV4 produces for `received` when signed with
+/// `creds` at the request's own x-amz-date. It matches the received header only
+/// if the gateway signed with exactly this secret key and session token.
+fn expected_sigv4_authorization(
+	received: &wiremock::Request,
+	creds: &TenantAwsCredentials,
+) -> String {
+	let header = |name: &str| {
+		received
+			.headers
+			.get(name)
+			.unwrap_or_else(|| panic!("upstream request is missing {name}"))
+			.to_str()
+			.unwrap()
+	};
+	let signed_at = chrono::NaiveDateTime::parse_from_str(header("x-amz-date"), "%Y%m%dT%H%M%SZ")
+		.unwrap()
+		.and_utc();
+	let identity = aws_credential_types::Credentials::new(
+		creds.access_key_id,
+		creds.secret_access_key,
+		Some(creds.session_token.to_string()),
+		None,
+		"test",
+	)
+	.into();
+	let params = aws_sigv4::sign::v4::SigningParams::builder()
+		.identity(&identity)
+		.region("us-east-1")
+		.name("bedrock")
+		.time(signed_at.into())
+		.settings(aws_sigv4::http_request::SigningSettings::default())
+		.build()
+		.unwrap()
+		.into();
+	// The headers the gateway signed: everything SigV4 covers except what
+	// signing itself added.
+	let signed_headers: Vec<(&str, &str)> = received
+		.headers
+		.iter()
+		.map(|(k, v)| (k.as_str(), v.to_str().unwrap()))
+		.filter(|(k, _)| {
+			(*k == "host" || *k == "content-type" || k.starts_with("x-amz-"))
+				&& *k != "x-amz-date"
+				&& *k != "x-amz-security-token"
+		})
+		.collect();
+	let url = received.url.to_string().replace("http://", "https://");
+	let signable = aws_sigv4::http_request::SignableRequest::new(
+		received.method.as_str(),
+		url,
+		signed_headers.into_iter(),
+		aws_sigv4::http_request::SignableBody::Bytes(&received.body),
+	)
+	.unwrap();
+	let (instructions, _) = aws_sigv4::http_request::sign(signable, &params)
+		.unwrap()
+		.into_parts();
+	instructions
+		.headers()
+		.find(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+		.map(|(_, value)| value.to_string())
+		.expect("signing produces an authorization header")
+}
+
+#[tokio::test]
+async fn test_aws_explicit_credentials_from_ext_authz_sign_each_tenant() {
+	let authz = crate::test_helpers::extauthmock::ExtAuthMock::new(|| TenantCredentialsAuthz)
+		.spawn()
+		.await;
+	let (upstream, t) = setup_ext_authz_aws_signing(authz.address).await;
+	// Concurrent requests for different tenants, on separate connections, through
+	// one route and policy.
+	let io_a = t.serve_http(crate::test_helpers::proxymock::BIND_KEY);
+	let io_b = t.serve_http(crate::test_helpers::proxymock::BIND_KEY);
+	let (a, b) = tokio::join!(
+		crate::test_helpers::proxymock::send_request_headers(
+			io_a,
+			http::Method::POST,
+			"http://lo/model/m/invoke",
+			&[("x-tenant", "tenant-a")],
+		),
+		crate::test_helpers::proxymock::send_request_headers(
+			io_b,
+			http::Method::POST,
+			"http://lo/model/m/invoke",
+			&[("x-tenant", "tenant-b")],
+		),
+	);
+	assert_eq!(a.status(), 200);
+	assert_eq!(b.status(), 200);
+
+	let received = upstream.received_requests().await.unwrap();
+	assert_eq!(
+		received.len(),
+		2,
+		"each tenant's request reaches the upstream"
+	);
+	let mut tenants = Vec::new();
+	for request in &received {
+		let tenant = request.headers.get("x-tenant").unwrap().to_str().unwrap();
+		let creds = tenant_aws_credentials(tenant).unwrap();
+		assert_eq!(
+			request.headers.get("x-amz-security-token").unwrap(),
+			creds.session_token,
+			"{tenant}: must carry its own session token"
+		);
+		assert_eq!(
+			request
+				.headers
+				.get("authorization")
+				.unwrap()
+				.to_str()
+				.unwrap(),
+			expected_sigv4_authorization(request, creds),
+			"{tenant}: must be signed with its own secret key"
+		);
+		tenants.push(tenant.to_string());
+	}
+	tenants.sort();
+	assert_eq!(tenants, ["tenant-a", "tenant-b"]);
+}
+
+#[tokio::test]
+async fn test_aws_explicit_credentials_missing_from_ext_authz_never_reach_upstream() {
+	// Ambient credentials are available, and must not be used instead.
+	let _env_guard = crate::config::lock_env_for_tests_async().await;
+	let previous: Vec<_> = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+		.into_iter()
+		.map(|name| (name, std::env::var_os(name)))
+		.collect();
+	unsafe {
+		std::env::set_var("AWS_ACCESS_KEY_ID", "AKIAAMBIENT");
+		std::env::set_var("AWS_SECRET_ACCESS_KEY", "ambient-secret");
+	}
+
+	let authz = crate::test_helpers::extauthmock::ExtAuthMock::new(|| TenantCredentialsAuthz)
+		.spawn()
+		.await;
+	let (upstream, t) = setup_ext_authz_aws_signing(authz.address).await;
+	let io = t.serve_http(crate::test_helpers::proxymock::BIND_KEY);
+	let response = crate::test_helpers::proxymock::send_request_headers(
+		io,
+		http::Method::POST,
+		"http://lo/model/m/invoke",
+		&[("x-tenant", "unknown-tenant")],
+	)
+	.await;
+
+	for (name, value) in previous {
+		unsafe {
+			match value {
+				Some(value) => std::env::set_var(name, value),
+				None => std::env::remove_var(name),
+			}
+		}
+	}
+	assert!(
+		!response.status().is_success(),
+		"request without credentials must fail, got {}",
+		response.status()
+	);
+	assert!(
+		upstream.received_requests().await.unwrap().is_empty(),
+		"an unsigned or ambient-signed request must never reach the upstream"
 	);
 }

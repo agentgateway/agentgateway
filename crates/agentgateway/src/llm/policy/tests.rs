@@ -2272,8 +2272,9 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 		action: RejectAuditAction::Reject,
 		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Aws(
 			AwsAuth::ExplicitConfig {
-				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
-				secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
+				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()).into(),
+				secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into())
+					.into(),
 				region: Some("us-east-1".to_string()),
 				session_token: None,
 				service_name: None,
