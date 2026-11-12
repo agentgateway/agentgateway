@@ -3326,6 +3326,15 @@ impl AIProvider {
 		);
 
 		let resp = Response::from_parts(parts, body);
+		let resp = if matches!(self, AIProvider::Copilot(_))
+			&& input_format == InputFormat::Responses
+			&& chat_translation
+				.is_some_and(|translation| translation.output == ChatFormat::OpenAIResponses)
+		{
+			resp.map(|body| conversion::copilot::normalize_responses_stream(body, buffer))
+		} else {
+			resp
+		};
 		let resp = if matches!(input_format, InputFormat::Detect(_)) {
 			resp
 		} else {
