@@ -7583,6 +7583,8 @@ These types are used by many fields. Fields of these types link here instead of 
 
 |Field|Type|Description|
 |-|-|-|
+|`<Guardrails>.tokenization`|object|Reversible replacement of sensitive text before provider calls.|
+|`<Guardrails>.tokenization.email`|boolean|Replace standard email addresses in Chat Completions text with request-scoped tokens and restore them in replies, including streams.|
 |`<Guardrails>.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`<Guardrails>.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`<Guardrails>.request[].regex`|object|Apply regex-based masking or rejection rules.|

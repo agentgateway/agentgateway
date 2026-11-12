@@ -88,6 +88,7 @@ pub mod streaming_guardrails;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+pub mod tokenization;
 
 /// Routes stored in a deterministic order: **longest key to shortest key**, with `"*"` always last.
 ///
@@ -303,6 +304,9 @@ pub struct PromptEnrichment {
 
 #[apply(schema!)]
 pub struct PromptGuard {
+	/// Reversible replacement of sensitive text before provider calls.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub tokenization: Option<tokenization::Tokenization>,
 	/// Apply prompt guards to streaming responses and realtime websocket messages.
 	#[serde(default, skip_serializing_if = "PromptGuardStreamingMode::is_disabled")]
 	pub streaming: PromptGuardStreamingMode,
@@ -315,6 +319,10 @@ pub struct PromptGuard {
 }
 
 impl PromptGuard {
+	pub fn email_tokenization_enabled(&self) -> bool {
+		self.tokenization.as_ref().is_some_and(|p| p.email)
+	}
+
 	pub(crate) fn validate(&self) -> Result<(), String> {
 		for guard in &self.request {
 			guard.validate_scope()?;

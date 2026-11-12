@@ -4112,6 +4112,9 @@ fn merge_prompt_guards(
 			if model.streaming.is_enabled() {
 				shared.streaming = model.streaming;
 			}
+			if model.email_tokenization_enabled() {
+				shared.tokenization = model.tokenization;
+			}
 			shared.request.extend(model.request);
 			shared.response.extend(model.response);
 			Some(shared)

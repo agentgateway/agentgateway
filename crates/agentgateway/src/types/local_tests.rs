@@ -3088,3 +3088,35 @@ frontendPolicies:
 		.expect("a rotation of the root certificate is published")
 		.unwrap();
 }
+
+#[test]
+fn merged_prompt_guards_preserve_email_tokenization() {
+	let enabled: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"tokenization": {"email": true}
+	}))
+	.unwrap();
+	let disabled: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"tokenization": {"email": false}
+	}))
+	.unwrap();
+	for (shared, model) in [(enabled.clone(), disabled.clone()), (disabled, enabled)] {
+		let merged = super::merge_prompt_guards(Some(shared), Some(model))
+			.unwrap()
+			.unwrap();
+		assert!(merged.email_tokenization_enabled());
+	}
+}
+
+#[test]
+fn tokenization_yaml_round_trips_and_rejects_the_removed_key() {
+	let guard: llm::policy::PromptGuard =
+		serde_norway::from_str("tokenization:\n  email: true\n").unwrap();
+	assert!(guard.email_tokenization_enabled());
+	let serialized = serde_norway::to_string(&guard).unwrap();
+	let value: serde_json::Value = serde_norway::from_str(&serialized).unwrap();
+	assert_eq!(value["tokenization"]["email"], true);
+	let error =
+		serde_norway::from_str::<llm::policy::PromptGuard>("pseudonymization:\n  email: true\n")
+			.unwrap_err();
+	assert!(error.to_string().contains("unknown field"));
+}

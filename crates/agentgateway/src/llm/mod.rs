@@ -2498,6 +2498,17 @@ impl AIProvider {
 			}
 		}
 
+		if guardrail_rejection.is_none()
+			&& original_format == InputFormat::Completions
+			&& policies
+				.and_then(|p| p.prompt_guard.as_ref())
+				.is_some_and(|g| g.email_tokenization_enabled())
+		{
+			parts
+				.extensions
+				.insert(policy::tokenization::EmailTokens::tokenize(req)?);
+		}
+
 		let mut llm_info =
 			req.to_llm_request(self.provider(), tokenize && guardrail_rejection.is_none())?;
 		llm_info.original_model = parts
@@ -2893,6 +2904,9 @@ impl AIProvider {
 					.and_then(|value| value.to_str().ok())
 			{
 				llm_resp.service_tier = Some(strng::new(tier));
+			}
+			if let Some(tokens) = &rate_limit.tokenization {
+				tokens.restore_response(resp.as_mut());
 			}
 			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
 			(llm_resp, Bytes::copy_from_slice(&body))
@@ -3342,6 +3356,7 @@ impl AIProvider {
 		{
 			use policy::PromptGuard;
 			let temp_guard = PromptGuard {
+				tokenization: None,
 				streaming: policy::PromptGuardStreamingMode::Enabled,
 				request: vec![],
 				response: response_policies.prompt_guard.clone(),
@@ -3356,6 +3371,7 @@ impl AIProvider {
 			vec![]
 		};
 
+		let tokenization = response_policies.tokenization.clone();
 		let logger = AmendOnDrop::new(log, response_policies, req_snapshot, model_catalog).into_llm();
 		let stream_format = match self {
 			AIProvider::Bedrock(_) => "awsEventStream",
@@ -3402,14 +3418,16 @@ impl AIProvider {
 			}
 		};
 
-		if !evaluators.is_empty() {
-			// `logger` is owned by the translated body; pass None to avoid double-logging.
-			return Ok(
-				translated
-					.map(|b| b.transform_stream(|b| GuardedSseBody::new(b, evaluators, buffer, None))),
-			);
-		}
-		Ok(translated)
+		let guarded = if evaluators.is_empty() {
+			translated
+		} else {
+			translated.map(|b| b.transform_stream(|b| GuardedSseBody::new(b, evaluators, buffer, None)))
+		};
+		Ok(if let Some(tokens) = tokenization {
+			guarded.map(|b| b.transform_stream(|b| tokens.restore_stream(b, buffer)))
+		} else {
+			guarded
+		})
 	}
 
 	async fn read_body_and_default_model<T: RequestType + DeserializeOwned>(

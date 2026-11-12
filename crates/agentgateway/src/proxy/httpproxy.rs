@@ -675,6 +675,10 @@ async fn apply_llm_request_policies(
 		.as_deref()
 		.and_then(|llm| llm.prompt_guard.as_ref());
 	Ok(store::LLMResponsePolicies {
+		tokenization: req
+			.extensions()
+			.get::<Arc<llm::policy::tokenization::EmailTokens>>()
+			.cloned(),
 		local_rate_limit,
 		remote_rate_limit: response,
 		request_traceparent: req.headers().get(TRACEPARENT).cloned(),
@@ -4125,6 +4129,7 @@ mod tests {
 	) -> crate::store::LLMResponsePolicies {
 		let policy = llm::Policy {
 			prompt_guard: Some(PromptGuard {
+				tokenization: None,
 				streaming,
 				request: vec![],
 				response: vec![response_regex_guard()],
