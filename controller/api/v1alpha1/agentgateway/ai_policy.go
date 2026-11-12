@@ -234,9 +234,6 @@ type OpenAIModeration struct {
 	// would-be rejection without blocking.
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
-	// Policies for communicating with OpenAI.
-	// +optional
-	Policies *OpenAIModerationPolicy `json:"policies,omitempty"`
 }
 
 type BedrockGuardrails struct {
@@ -266,10 +263,6 @@ type BedrockGuardrails struct {
 	// request/response is never blocked or masked.
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
-
-	// Policies for communicating with AWS Bedrock Guardrails.
-	// +optional
-	Policies *BedrockGuardrailsPolicy `json:"policies,omitempty"`
 }
 
 type GoogleModelArmor struct {
@@ -296,14 +289,14 @@ type GoogleModelArmor struct {
 	// would-be rejection without blocking.
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
-
-	// Policies for communicating with Google Model Armor.
-	// +optional
-	Policies *GoogleModelArmorPolicy `json:"policies,omitempty"`
 }
 
 // Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.policies) || (!has(self.regex) && !has(self.webhook))",message="policies is not supported for regex or webhook guards"
+// +kubebuilder:validation:XValidation:rule="!has(self.openAIModeration) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.aws) && !has(self.policies.auth.gcp))",message="openAIModeration policies.auth supports only key or secretRef"
+// +kubebuilder:validation:XValidation:rule="!has(self.bedrockGuardrails) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.gcp))",message="bedrockGuardrails policies.auth supports only key, secretRef, or aws"
+// +kubebuilder:validation:XValidation:rule="!has(self.googleModelArmor) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.key) && !has(self.policies.auth.secretRef) && !has(self.policies.auth.aws))",message="googleModelArmor policies.auth supports only gcp"
 // +kubebuilder:validation:XValidation:rule="!has(self.scope) || !has(self.webhook) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: webhook guards do not support scope; they always inspect SystemPrompt + Messages"
 type PromptguardRequest struct {
 	// Custom response message to return to the client. If not specified, defaults to
@@ -346,10 +339,18 @@ type PromptguardRequest struct {
 	// Google Model Armor settings for prompt guarding.
 	// +optional
 	GoogleModelArmor *GoogleModelArmor `json:"googleModelArmor,omitempty"`
+
+	// Policies for communicating with the prompt guard provider. Not supported
+	// for `regex` or `webhook` guards.
+	// +optional
+	Policies *PromptGuardPolicy `json:"policies,omitempty"`
 }
 
 // Prompt guards to apply to responses returned by the LLM provider.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.policies) || (!has(self.regex) && !has(self.webhook))",message="policies is not supported for regex or webhook guards"
+// +kubebuilder:validation:XValidation:rule="!has(self.bedrockGuardrails) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.gcp))",message="bedrockGuardrails policies.auth supports only key, secretRef, or aws"
+// +kubebuilder:validation:XValidation:rule="!has(self.googleModelArmor) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.key) && !has(self.policies.auth.secretRef) && !has(self.policies.auth.aws))",message="googleModelArmor policies.auth supports only gcp"
 // +kubebuilder:validation:XValidation:rule="!has(self.scope) || !has(self.webhook) || (self.scope.size() == 1 && 'Messages' in self.scope)",message="scope: webhook guards do not support a non-default scope; they always inspect the default (Messages)"
 type PromptguardResponse struct {
 	// Custom response message to return to the client. If not specified, defaults to
@@ -386,6 +387,11 @@ type PromptguardResponse struct {
 	// Google Model Armor settings for prompt guarding.
 	// +optional
 	GoogleModelArmor *GoogleModelArmor `json:"googleModelArmor,omitempty"`
+
+	// Policies for communicating with the prompt guard provider. Not supported
+	// for `regex` or `webhook` guards.
+	// +optional
+	Policies *PromptGuardPolicy `json:"policies,omitempty"`
 }
 
 // Prompt guards that block unwanted requests to the LLM provider and mask sensitive data.
