@@ -865,9 +865,7 @@ impl HTTPProxy {
 		});
 
 		crate::http::mark_sensitive_headers(&mut req, &self.inputs.cfg.sensitive_headers);
-		normalize_uri(log.tls_info.as_ref(), &mut req)
-			.map_err(ProxyError::Processing)
-			.snapshot_on_err(log, &mut req)?;
+		normalize_uri(log.tls_info.as_ref(), &mut req).snapshot_on_err(log, &mut req)?;
 		set_destination_hostname(&mut req);
 		let connect_upgrade = if req.method() == ::http::Method::CONNECT {
 			req.extensions_mut().remove::<OnUpgrade>()
@@ -4795,15 +4793,27 @@ fn get_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
 
 // Normalize the Host header into the URI authority so the rest of the code doesn't need to care
 // whether the client supplied Host or :authority.
-fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
+fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> Result<(), ProxyError> {
 	debug!("request before normalization: {req:?}");
-	let host = req.headers_mut().remove(http::header::HOST);
+	let host = match req.headers_mut().entry(http::header::HOST) {
+		http::header::Entry::Occupied(e) => {
+			let (_, mut values) = e.remove_entry_mult();
+			let host = values.next();
+			// RFC 9112 §3.2: more than one Host field line is a 400.
+			if values.next().is_some() {
+				return Err(ProxyError::InvalidRequest);
+			}
+			host
+		},
+		http::header::Entry::Vacant(_) => None,
+	};
 	if req.uri().authority().is_none()
 		&& let Some(host) = host
 	{
 		let mut parts = std::mem::take(req.uri_mut()).into_parts();
 		// TODO(https://github.com/hyperium/http/pull/811) actually make this shared
-		let host = Authority::try_from(host.as_bytes())?;
+		let host =
+			Authority::try_from(host.as_bytes()).map_err(|e| ProxyError::Processing(e.into()))?;
 
 		parts.authority = Some(host);
 		if parts.path_and_query.is_some() && parts.scheme.is_none() {
@@ -4814,7 +4824,7 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::
 				parts.scheme = Some(Scheme::HTTP);
 			}
 		}
-		*req.uri_mut() = Uri::from_parts(parts)?
+		*req.uri_mut() = Uri::from_parts(parts).map_err(|e| ProxyError::Processing(e.into()))?
 	}
 	debug!("request after normalization: {req:?}");
 	Ok(())
