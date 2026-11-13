@@ -34,7 +34,8 @@ export const playgroundRequestHeaders: Record<CorsTarget, string[]> = {
 	mcp: ['content-type', 'authorization', 'mcp-session-id']
 };
 
-// Mirrors the gateway's CORS policy: `*` allows any origin or header, otherwise each must be listed.
+// Mirrors the gateway's CORS policy for the playground's uncredentialed POSTs.
+// POST is a safelisted method, so allowMethods doesn't matter.
 export function corsNeedsUpdate(
 	cors: CorsPolicy | null | undefined,
 	target: CorsTarget,
@@ -44,12 +45,38 @@ export function corsNeedsUpdate(
 	if (!cors) return true;
 	const headers = [...playgroundRequestHeaders[target], ...extraHeaders];
 	return (
-		!allows(cors.allowOrigins, [origin]) ||
-		!hasValue(cors.allowMethods, 'GET') ||
-		!hasValue(cors.allowMethods, 'POST') ||
+		!originAllowed(cors.allowOrigins, origin) ||
 		!allows(cors.allowHeaders, headers) ||
-		(target === 'mcp' && !hasValue(cors.exposeHeaders, 'Mcp-Session-Id'))
+		(target === 'mcp' && !allows(cors.exposeHeaders, ['Mcp-Session-Id']))
 	);
+}
+
+// Same rules as the gateway: scheme, host and port must match, ports default by scheme,
+// and `*` in the host matches any run of characters.
+function originAllowed(allowOrigins: string[] | undefined, origin: string) {
+	if (hasValue(allowOrigins, '*')) return true;
+	const request = parseOrigin(origin);
+	return Boolean(
+		request &&
+			allowOrigins?.some(value => {
+				const allowed = parseOrigin(value);
+				if (allowed?.scheme !== request.scheme || allowed.port !== request.port) return false;
+				const host = allowed.host.split('*').map(escapeRegExp).join('.*');
+				return new RegExp(`^${host}$`).test(request.host);
+			})
+	);
+}
+
+function parseOrigin(value: string) {
+	const match = /^(https?):\/\/([^/?#:]+)(?::(\d+))?$/i.exec(value);
+	if (!match) return null;
+	const scheme = match[1].toLowerCase();
+	const port = Number(match[3] ?? (scheme === 'https' ? 443 : 80));
+	return { scheme, host: match[2].toLowerCase(), port };
+}
+
+function escapeRegExp(value: string) {
+	return value.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function applyPlaygroundCors(

@@ -1754,20 +1754,25 @@ test('LLM playground can retry when the CORS listener stays unavailable', async 
 	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 });
 
-for (const [cors, allowOrigins, allowHeaders, warns] of [
-	['this origin and any header', ['http://127.0.0.1:19100'], ['*'], false],
-	['any origin and the sent headers', ['*'], ['Authorization', 'Content-Type'], false],
-	['a header list without Authorization', ['*'], ['content-type'], true]
+for (const [name, cors, warns] of [
+	['this origin', { allowOrigins: ['http://127.0.0.1:19100'], allowHeaders: ['*'] }, false],
+	['a host pattern', { allowOrigins: ['http://*.0.0.1:19100'], allowHeaders: ['*'] }, false],
+	[
+		'any origin and the sent headers',
+		{ allowOrigins: ['*'], allowHeaders: ['Authorization', 'Content-Type'] },
+		false
+	],
+	[
+		'a header list without Authorization',
+		{ allowOrigins: ['*'], allowHeaders: ['content-type'] },
+		true
+	]
 ] as const) {
-	test(`LLM playground sends selected virtual model name (CORS allows ${cors})`, async ({
+	test(`LLM playground sends selected virtual model name (CORS allows ${name})`, async ({
 		page
 	}) => {
 		const config = populatedConfig();
-		(config.llm as { policies: { cors?: unknown } }).policies.cors = {
-			allowOrigins,
-			allowHeaders,
-			allowMethods: ['GET', 'POST']
-		};
+		(config.llm as { policies: { cors?: unknown } }).policies.cors = cors;
 		const gateway = await mockGateway(page, config);
 		await page.goto('/llm/playground');
 
