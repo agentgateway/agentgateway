@@ -300,7 +300,8 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|[`<Guardrails>`](#guardrails)|Prompt and response guardrails to apply to LLM traffic.|
@@ -1867,7 +1868,8 @@
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`policies[].policy.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`policies[].policy.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`policies[].policy.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`policies[].policy.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|[`<Guardrails>`](#guardrails)|Prompt and response guardrails to apply to LLM traffic.|
@@ -3010,7 +3012,8 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`routeGroups[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`routeGroups[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`routeGroups[].routes[].policies.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|[`<Guardrails>`](#guardrails)|Prompt and response guardrails to apply to LLM traffic.|
@@ -4644,7 +4647,8 @@
 |`routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`routes[].policies.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].policies.ai.promptGuard`|[`<Guardrails>`](#guardrails)|Prompt and response guardrails to apply to LLM traffic.|
@@ -6367,7 +6371,8 @@
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`mcp.policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`mcp.policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`mcp.policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`mcp.policies.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|[`<Guardrails>`](#guardrails)|Prompt and response guardrails to apply to LLM traffic.|
