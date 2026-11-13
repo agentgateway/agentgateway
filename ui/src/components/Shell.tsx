@@ -210,7 +210,7 @@ export function Shell() {
 				</Layout.Header>
 				<Layout.Content className="content">
 					{runtime.data?.ui.servedByAdmin && !dumpMode && !config.isPending && (
-						<AdminPortBanner url={uiGatewayUrl(config.data)} />
+						<AdminPortBanner url={uiGatewayUrl(config.data)} configLoaded={config.isSuccess} />
 					)}
 					{runtime.data?.configReload && !runtime.data.configReload.synchronized && (
 						<StatusBanner state="warn" title="Configuration reload failed">
@@ -230,7 +230,7 @@ export function Shell() {
 	);
 }
 
-function AdminPortBanner({ url }: { url: string | null }) {
+function AdminPortBanner({ url, configLoaded }: { url: string | null; configLoaded: boolean }) {
 	return (
 		<StatusBanner state="warn" title="Use the gateway UI">
 			The admin port still serves this UI, but it's legacy. Some features, like the playgrounds,
@@ -239,12 +239,12 @@ function AdminPortBanner({ url }: { url: string | null }) {
 				<>
 					Open it at <a href={url}>{url}</a>.
 				</>
-			) : (
+			) : configLoaded ? (
 				<>
 					To serve it on a gateway, add a <code>ui</code> section to your config. See the{' '}
 					<a href="https://agentgateway.dev/docs/standalone/latest/">docs</a>.
 				</>
-			)}
+			) : null}
 		</StatusBanner>
 	);
 }
