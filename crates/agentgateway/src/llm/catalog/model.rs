@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use super::PricingTier;
-use crate::llm::{Provider as _, vertex};
+use crate::llm::{Provider as _, azure, vertex};
 
 // Unknown fields are captured rather than denied by serde, so catalogs from newer versions can be
 // loaded leniently. `validate` rejects them for catalogs written for this version.
@@ -171,13 +171,33 @@ impl Catalog {
 	/// Like `resolve`, but also returns the catalog model ID that matched.
 	pub fn resolve_entry(&self, provider: &str, model: &str) -> Option<(&String, &Model)> {
 		let models = &self.providers.get(provider)?.models;
-		models.get_key_value(model).or_else(|| {
-			if provider != vertex::Provider::NAME.as_str() {
-				return None;
-			}
-			models.get_key_value(vertex::Provider::canonical_model(model).as_str())
+		models.get_key_value(model).or_else(|| match provider {
+			p if p == vertex::Provider::NAME.as_str() => {
+				models.get_key_value(vertex::Provider::canonical_model(model).as_str())
+			},
+			p if p == azure::Provider::NAME.as_str() => {
+				// Azure deployment names are case-insensitive, and responses report dated model
+				// versions while the catalog is keyed by the undated lowercase model.
+				let model = model.to_ascii_lowercase();
+				models
+					.get_key_value(model.as_str())
+					.or_else(|| models.get_key_value(strip_version_date(&model)?))
+			},
+			_ => None,
 		})
 	}
+}
+
+/// Strips a trailing `-YYYY-MM-DD` or `-YYYYMMDD` model version.
+fn strip_version_date(model: &str) -> Option<&str> {
+	["-dddd-dd-dd", "-dddddddd"].into_iter().find_map(|pattern| {
+		let split = model.len().checked_sub(pattern.len())?;
+		model.as_bytes()[split..]
+			.iter()
+			.zip(pattern.bytes())
+			.all(|(c, p)| if p == b'd' { c.is_ascii_digit() } else { *c == p })
+			.then(|| &model[..split])
+	})
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -802,6 +822,29 @@ mod tests {
 		);
 		assert_eq!(input("gcp.vertex_ai", "google/pinned"), Some(m("3")));
 		assert_eq!(input("openai", "google/gemini-x"), None);
+	}
+
+	#[test]
+	fn resolve_azure_versions() {
+		let catalog = from_json(
+			r#"{"providers":{
+				"azure":{"models":{
+					"gpt-x":{"rates":{"input":"1"}},
+					"gpt-x-2026-01-02":{"rates":{"input":"2"}},
+					"claude-x":{"rates":{"input":"3"}},
+					"mistral-large":{"rates":{"input":"4"}}
+				}},
+				"openai":{"models":{"gpt-x":{"rates":{"input":"1"}}}}
+			}}"#,
+		)
+		.unwrap();
+		let input = |p, m| catalog.resolve(p, m).and_then(|m| m.rates.input.clone());
+		assert_eq!(input("azure", "GPT-X"), Some(m("1")));
+		assert_eq!(input("azure", "gpt-x-2026-03-17"), Some(m("1")));
+		assert_eq!(input("azure", "gpt-x-2026-01-02"), Some(m("2")));
+		assert_eq!(input("azure", "claude-x-20251001"), Some(m("3")));
+		assert_eq!(input("azure", "mistral-large-2411"), None);
+		assert_eq!(input("openai", "gpt-x-2026-03-17"), None);
 	}
 
 	#[test]
