@@ -27,19 +27,15 @@ pub struct DefaultAwsServiceName(pub String);
 #[apply(schema!)]
 #[serde(untagged)]
 pub enum AwsAuth {
-	/// Use explicit AWS credentials
+	/// Use explicit AWS credentials. Each credential is either a static value or
+	/// `{expression: ...}`, a CEL expression evaluated against each request.
 	#[serde(rename_all = "camelCase")]
 	ExplicitConfig {
-		#[serde(serialize_with = "ser_redact")]
-		#[cfg_attr(feature = "schema", schemars(with = "String"))]
-		access_key_id: SecretString,
-		#[serde(serialize_with = "ser_redact")]
-		#[cfg_attr(feature = "schema", schemars(with = "String"))]
-		secret_access_key: SecretString,
+		access_key_id: AwsCredentialValue,
+		secret_access_key: AwsCredentialValue,
 		region: Option<String>,
-		#[serde(serialize_with = "ser_redact", skip_serializing_if = "Option::is_none")]
-		#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-		session_token: Option<SecretString>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		session_token: Option<AwsCredentialValue>,
 		/// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
 		#[serde(skip_serializing_if = "Option::is_none")]
 		service_name: Option<String>,
@@ -67,6 +63,98 @@ pub enum AwsAuth {
 		#[cfg_attr(feature = "schema", schemars(skip))]
 		assume_role_cache: AwsAssumeRoleCache,
 	},
+}
+
+/// A static credential, or `{expression: ...}` to compute it from each request.
+// Untagged, so a plain string keeps its existing meaning.
+#[apply(schema!)]
+#[serde(
+	untagged,
+	expecting = "a credential string, or `{expression: ...}` with a valid CEL expression"
+)]
+pub enum AwsCredentialValue {
+	/// Static credential value.
+	Static(
+		#[serde(serialize_with = "ser_redact")]
+		#[cfg_attr(feature = "schema", schemars(with = "String"))]
+		SecretString,
+	),
+	/// CEL expression evaluated against each request to produce the credential,
+	/// for example a value returned by an external authorization service. If the
+	/// expression does not produce a non-empty string, the request is rejected;
+	/// it never falls back to other credentials.
+	Dynamic { expression: Arc<cel::Expression> },
+}
+
+impl From<SecretString> for AwsCredentialValue {
+	fn from(value: SecretString) -> Self {
+		Self::Static(value)
+	}
+}
+
+impl From<String> for AwsCredentialValue {
+	fn from(value: String) -> Self {
+		Self::Static(value.into())
+	}
+}
+
+impl AwsCredentialValue {
+	fn expression(&self) -> Option<&cel::Expression> {
+		match self {
+			Self::Static(_) => None,
+			Self::Dynamic { expression } => Some(expression),
+		}
+	}
+
+	/// Resolves the credential for this request. Fails closed: an expression that
+	/// errors, or does not produce a non-empty string, is an error. Errors name the
+	/// field and expression but never include evaluated values, since CEL errors can
+	/// carry them.
+	fn resolve(&self, field: &str, req: &http::Request) -> anyhow::Result<String> {
+		let expression = match self {
+			Self::Static(value) => return Ok(value.expose_secret().to_string()),
+			Self::Dynamic { expression } => expression,
+		};
+		let fail = |reason: &str| {
+			anyhow::anyhow!(
+				"{field} (expression {:?}) {reason}",
+				expression.original_expression
+			)
+		};
+		let exec = cel::Executor::new_request(req);
+		let value = exec
+			.eval(expression)
+			.map_err(|_| fail("failed to evaluate"))?
+			.always_materialize_owned();
+		if !matches!(value, cel::Value::String(_)) {
+			return Err(fail(&format!(
+				"must produce a string, got {}",
+				value.type_of().as_str()
+			)));
+		}
+		match value.as_str() {
+			Ok(s) if !s.is_empty() => Ok(s.into_owned()),
+			_ => Err(fail("produced an empty string")),
+		}
+	}
+}
+
+/// Builds the credentials for explicit AWS auth, evaluating any expressions
+/// against the request.
+fn explicit_credentials(
+	req: &http::Request,
+	access_key_id: &AwsCredentialValue,
+	secret_access_key: &AwsCredentialValue,
+	session_token: Option<&AwsCredentialValue>,
+) -> anyhow::Result<Credentials> {
+	let mut builder = Credentials::builder()
+		.access_key_id(access_key_id.resolve("accessKeyId", req)?)
+		.secret_access_key(secret_access_key.resolve("secretAccessKey", req)?)
+		.provider_name("bedrock");
+	if let Some(token) = session_token {
+		builder = builder.session_token(token.resolve("sessionToken", req)?);
+	}
+	Ok(builder.build())
 }
 
 #[derive(Default, Clone)]
@@ -551,10 +639,29 @@ impl AwsAuth {
 		}
 	}
 
-	/// CEL expressions this auth config evaluates per request (dynamic session
-	/// tags and session name), for registration with the CEL context builder.
+	/// CEL expressions this auth config evaluates per request (explicit
+	/// credentials, dynamic session tags and session name), for registration with
+	/// the CEL context builder.
 	pub fn cel_expressions(&self) -> impl Iterator<Item = &cel::Expression> {
-		self.assume_role().into_iter().flat_map(|assume_role| {
+		let explicit = match self {
+			AwsAuth::ExplicitConfig {
+				access_key_id,
+				secret_access_key,
+				session_token,
+				..
+			} => Some([
+				Some(access_key_id),
+				Some(secret_access_key),
+				session_token.as_ref(),
+			]),
+			AwsAuth::Implicit { .. } => None,
+		};
+		let explicit = explicit
+			.into_iter()
+			.flatten()
+			.flatten()
+			.filter_map(AwsCredentialValue::expression);
+		explicit.chain(self.assume_role().into_iter().flat_map(|assume_role| {
 			assume_role.tags.expressions().chain(
 				assume_role
 					.session_name
@@ -562,7 +669,7 @@ impl AwsAuth {
 					.and_then(|name| name.expression())
 					.map(|e| e.as_ref()),
 			)
-		})
+		}))
 	}
 
 	fn source_credentials_cache(&self) -> Option<&AwsCredentialsCache> {
@@ -613,6 +720,25 @@ pub(super) async fn sign_request(
 		},
 		_ => None,
 	};
+	// Explicit credentials are resolved here too, for the same reason; they never
+	// fall back to the ambient credential chain.
+	let explicit_creds = match aws_auth {
+		AwsAuth::ExplicitConfig {
+			access_key_id,
+			secret_access_key,
+			session_token,
+			..
+		} => Some(
+			explicit_credentials(
+				req,
+				access_key_id,
+				secret_access_key,
+				session_token.as_ref(),
+			)
+			.map_err(BackendAuthError::local)?,
+		),
+		AwsAuth::Implicit { .. } => None,
+	};
 	let lim = crate::http::buffer_limit(req);
 	let body = match req
 		.body_mut()
@@ -654,20 +780,23 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
-	let creds = tokio::time::timeout(
-		super::CLOUD_AUTH_TIMEOUT,
-		Box::pin(load_credentials(
-			client,
-			aws_auth,
-			region,
-			resolved_tags,
-			resolved_session_name,
-		)),
-	)
-	.await
-	.ctx("AWS credential fetch timed out after 5s")
-	.map_err(BackendAuthError::credential_provider)?
-	.map_err(classify_aws_credentials_error)?
+	let creds = match explicit_creds {
+		Some(creds) => creds,
+		None => tokio::time::timeout(
+			super::CLOUD_AUTH_TIMEOUT,
+			Box::pin(load_credentials(
+				client,
+				aws_auth,
+				region,
+				resolved_tags,
+				resolved_session_name,
+			)),
+		)
+		.await
+		.ctx("AWS credential fetch timed out after 5s")
+		.map_err(BackendAuthError::credential_provider)?
+		.map_err(classify_aws_credentials_error)?,
+	}
 	.into();
 
 	let service = signing_service_name(req, aws_auth);
@@ -775,24 +904,8 @@ async fn load_source_credentials(
 	aws_auth: &AwsAuth,
 ) -> anyhow::Result<Credentials> {
 	match aws_auth {
-		AwsAuth::ExplicitConfig {
-			access_key_id,
-			secret_access_key,
-			session_token,
-			region: _,
-			service_name: _,
-		} => {
-			// Use explicit credentials
-			let mut builder = Credentials::builder()
-				.access_key_id(access_key_id.expose_secret())
-				.secret_access_key(secret_access_key.expose_secret())
-				.provider_name("bedrock");
-
-			if let Some(token) = session_token {
-				builder = builder.session_token(token.expose_secret());
-			}
-
-			Ok(builder.build())
+		AwsAuth::ExplicitConfig { .. } => {
+			anyhow::bail!("explicit AWS credentials are resolved from the request, not loaded")
 		},
 		AwsAuth::Implicit { .. } => {
 			let cache = aws_auth

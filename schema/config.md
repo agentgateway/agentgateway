@@ -6972,10 +6972,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<BackendPolicies>.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<BackendPolicies>.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<BackendPolicies>.backendAuth.aws.accessKeyId`|string||
-|`<BackendPolicies>.backendAuth.aws.secretAccessKey`|string||
+|`<BackendPolicies>.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<BackendPolicies>.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<BackendPolicies>.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<BackendPolicies>.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<BackendPolicies>.backendAuth.aws.region`|string||
 |`<BackendPolicies>.backendAuth.aws.sessionToken`|string||
+|`<BackendPolicies>.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<BackendPolicies>.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<BackendPolicies>.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<BackendPolicies>.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -7227,10 +7230,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<BackendAuth>.gcp.type`|enum|Possible values: `accessToken`.|
 |`<BackendAuth>.aws`|object|Sign backend requests with AWS credentials.|
-|`<BackendAuth>.aws.accessKeyId`|string||
-|`<BackendAuth>.aws.secretAccessKey`|string||
+|`<BackendAuth>.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<BackendAuth>.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<BackendAuth>.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<BackendAuth>.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<BackendAuth>.aws.region`|string||
 |`<BackendAuth>.aws.sessionToken`|string||
+|`<BackendAuth>.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<BackendAuth>.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<BackendAuth>.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<BackendAuth>.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -7661,10 +7667,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -7955,10 +7964,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -8243,10 +8255,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -8531,10 +8546,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -8817,10 +8835,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -9127,10 +9148,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -9423,10 +9447,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -9711,10 +9738,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
@@ -9997,10 +10027,13 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string|A static credential, or `{expression: ...}` to compute it from each request.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.sessionToken.expression`|string|CEL expression evaluated against each request to produce the credential,<br>for example a value returned by an external authorization service. If the<br>expression does not produce a non-empty string, the request is rejected;<br>it never falls back to other credentials.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|

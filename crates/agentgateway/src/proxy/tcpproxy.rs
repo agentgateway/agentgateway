@@ -1269,8 +1269,8 @@ mod tests {
 		let user_policies = BackendPolicies {
 			backend_auth: Some(BackendAuth::new(BackendAuthKind::Aws(
 				AwsAuth::ExplicitConfig {
-					access_key_id: SecretString::from("AKID"),
-					secret_access_key: SecretString::from("SECRET"),
+					access_key_id: SecretString::from("AKID").into(),
+					secret_access_key: SecretString::from("SECRET").into(),
 					region: Some("us-west-2".to_string()),
 					session_token: None,
 					service_name: None,

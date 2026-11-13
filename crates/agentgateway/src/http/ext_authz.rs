@@ -62,9 +62,20 @@ pub mod proto {
 	};
 }
 
-#[apply(schema!)]
-#[derive(Default, ::cel::DynamicType)]
+#[derive(Clone, Default, serde::Deserialize, serde::Serialize, ::cel::DynamicType)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ExtAuthzDynamicMetadata(serde_json::Map<String, JsonValue>);
+
+// Metadata values are often credentials for the backend, such as API keys or AWS
+// session credentials, so Debug, which request debug and trace logs use, shows only
+// the keys.
+impl std::fmt::Debug for ExtAuthzDynamicMetadata {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ExtAuthzDynamicMetadata")
+			.field("keys", &self.0.keys().collect::<Vec<_>>())
+			.finish_non_exhaustive()
+	}
+}
 
 #[apply(schema!)]
 pub struct BodyOptions {
