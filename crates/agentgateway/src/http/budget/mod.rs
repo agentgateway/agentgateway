@@ -567,6 +567,10 @@ impl crate::store::RequestPolicyTrait for BudgetPolicy {
 	}
 }
 
+#[cfg(all(test, target_os = "linux"))]
+#[path = "postgres_tests.rs"]
+mod postgres_tests;
+
 #[cfg(test)]
 mod tests {
 	use super::*;

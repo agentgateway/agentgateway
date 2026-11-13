@@ -230,6 +230,7 @@ stacker = "0.1"
 subtle = "2"
 sync_wrapper = "1"
 tempfile = "3.27"
+testcontainers-modules = { version = "0.15", features = ["postgres"] }
 thiserror = "2.0"
 tiktoken = { version = "4.1", default-features = false, features = ["vocab-o200k_base"] }
 tokio = { version = "1.53", features = ["full", "macros", "sync"] }

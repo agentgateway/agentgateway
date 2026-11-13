@@ -244,6 +244,10 @@ legacyreqwest = { package = "reqwest", version = "0.12", default-features = fals
     "rustls-tls",
 ] }
 
+# Postgres integration tests start a database with Docker, which CI only provides on Linux.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+testcontainers-modules.workspace = true
+
 [lints.clippy]
 # This rule makes code more confusing
 assigning_clones = "allow"
