@@ -31,15 +31,15 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 			}
 		} else if req.OpenAIModeration != nil {
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_OpenaiModeration{
-				OpenaiModeration: processModeration(ctx, namespace, req.OpenAIModeration),
+				OpenaiModeration: processModeration(ctx, namespace, req.OpenAIModeration, req.Policies),
 			}
 		} else if req.BedrockGuardrails != nil {
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_BedrockGuardrails{
-				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails),
+				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails, req.Policies),
 			}
 		} else if req.GoogleModelArmor != nil {
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_GoogleModelArmor{
-				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor),
+				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor, req.Policies),
 			}
 		}
 
@@ -93,11 +93,11 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 			}
 		} else if resp.BedrockGuardrails != nil {
 			pgResp.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_BedrockGuardrails{
-				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, resp.BedrockGuardrails),
+				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, resp.BedrockGuardrails, resp.Policies),
 			}
 		} else if resp.GoogleModelArmor != nil {
 			pgResp.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_GoogleModelArmor{
-				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, resp.GoogleModelArmor),
+				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, resp.GoogleModelArmor, resp.Policies),
 			}
 		}
 
@@ -276,7 +276,7 @@ func processRegex(regex *agentgateway.Regex) *api.BackendPolicySpec_Ai_RegexRule
 	return rules
 }
 
-func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway.OpenAIModeration) *api.BackendPolicySpec_Ai_Moderation {
+func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway.OpenAIModeration, policies *agentgateway.PromptGuardPolicy) *api.BackendPolicySpec_Ai_Moderation {
 	if moderation == nil {
 		return nil
 	}
@@ -286,8 +286,8 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 	pgModeration.Action = mapRejectAuditAction(moderation.Action)
 	pgModeration.FailureMode = guardrailFailureMode(moderation.FailureMode)
 
-	if moderation.Policies != nil {
-		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, moderation.Policies)
+	if policies != nil {
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
@@ -298,7 +298,7 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 	return pgModeration
 }
 
-func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agentgateway.BedrockGuardrails) *api.BackendPolicySpec_Ai_BedrockGuardrails {
+func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agentgateway.BedrockGuardrails, policies *agentgateway.PromptGuardPolicy) *api.BackendPolicySpec_Ai_BedrockGuardrails {
 	if guardrails == nil {
 		return nil
 	}
@@ -311,8 +311,8 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 		FailureMode: guardrailFailureMode(guardrails.FailureMode),
 	}
 
-	if guardrails.Policies != nil {
-		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardrails.Policies)
+	if policies != nil {
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
@@ -323,7 +323,7 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 	return pgGuardrails
 }
 
-func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgateway.GoogleModelArmor) *api.BackendPolicySpec_Ai_GoogleModelArmor {
+func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgateway.GoogleModelArmor, policies *agentgateway.PromptGuardPolicy) *api.BackendPolicySpec_Ai_GoogleModelArmor {
 	if armor == nil {
 		return nil
 	}
@@ -342,8 +342,8 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 		pgArmor.Location = new("us-central1")
 	}
 
-	if armor.Policies != nil {
-		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, armor.Policies)
+	if policies != nil {
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {

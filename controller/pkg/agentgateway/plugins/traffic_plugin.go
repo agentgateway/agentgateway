@@ -2565,25 +2565,16 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 			if p.Webhook != nil {
 				app(p.Webhook.BackendRef)
 			}
-			if p.OpenAIModeration != nil {
-				appAuxiliaryTunnel(p.OpenAIModeration.Policies)
-			}
-			if p.GoogleModelArmor != nil {
-				appAuxiliaryTunnel(p.GoogleModelArmor.Policies)
-			}
-			if p.BedrockGuardrails != nil {
-				appAuxiliaryTunnel(p.BedrockGuardrails.Policies)
+			if p.Policies != nil {
+				appAuxiliaryTunnel(p.Policies)
 			}
 		}
 		for _, p := range s.AI.PromptGuard.Response {
 			if p.Webhook != nil {
 				app(p.Webhook.BackendRef)
 			}
-			if p.GoogleModelArmor != nil {
-				appAuxiliaryTunnel(p.GoogleModelArmor.Policies)
-			}
-			if p.BedrockGuardrails != nil {
-				appAuxiliaryTunnel(p.BedrockGuardrails.Policies)
+			if p.Policies != nil {
+				appAuxiliaryTunnel(p.Policies)
 			}
 		}
 	}

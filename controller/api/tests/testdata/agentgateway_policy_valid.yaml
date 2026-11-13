@@ -237,10 +237,10 @@ spec:
             identifier: guardrail
             version: DRAFT
             region: us-west-2
-            policies:
-              auth:
-                secretRef:
-                  name: bedrock-api-key
+          policies:
+            auth:
+              secretRef:
+                name: bedrock-api-key
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -259,12 +259,12 @@ spec:
             identifier: guardrail
             version: DRAFT
             region: us-west-2
-            policies:
-              auth:
-                key: test-key
-                location:
-                  header:
-                    name: X-Api-Key
+          policies:
+            auth:
+              key: test-key
+              location:
+                header:
+                  name: X-Api-Key
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

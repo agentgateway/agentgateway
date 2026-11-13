@@ -110,12 +110,12 @@ spec:
             kind: Service
             name: guardrail-webhook
             port: 8443
-      - openAIModeration:
-          policies:
-            tunnel:
-              backendRef:
-                name: moderation-proxy
-                port: 8082
+      - openAIModeration: {}
+        policies:
+          tunnel:
+            backendRef:
+              name: moderation-proxy
+              port: 8082
 
 ---
 # Output
