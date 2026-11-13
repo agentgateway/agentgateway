@@ -143,8 +143,15 @@ impl BasicAuthentication {
 			})
 			.ok_or_else(invalid_credentials)?;
 
-		// Verify credentials
-		let valid = self.htpasswd.check(&username, &password);
+		// Password hashing is CPU-bound and can take hundreds of milliseconds, so it runs on the
+		// blocking pool to keep it off the async workers.
+		let htpasswd = self.htpasswd.clone();
+		let (username, valid) = tokio::task::spawn_blocking(move || {
+			let valid = htpasswd.check(&username, &password);
+			(username, valid)
+		})
+		.await
+		.map_err(|_| invalid_credentials())?;
 
 		if valid {
 			// Authentication successful

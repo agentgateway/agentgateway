@@ -17,6 +17,8 @@ pub mod md5;
 
 static BCRYPT_IDS: [&str; 4] = ["$2a$", "$2b$", "$2x$", "$2y$"];
 static SHA1_ID: &str = "{SHA}";
+/// Highest accepted bcrypt cost; each increment doubles verification time.
+const MAX_BCRYPT_COST: u32 = 14;
 
 pub struct Htpasswd<'a>(HashMap<Cow<'a, str>, Hash<'a>>);
 
@@ -104,6 +106,7 @@ impl<'a> Hash<'a> {
 		} else if BCRYPT_IDS.iter().any(|id| hash.starts_with(id)) {
 			bcrypt::HashParts::from_str(hash)
 				.ok()
+				.filter(|parts| parts.get_cost() <= MAX_BCRYPT_COST)
 				.map(|_| Hash::BCrypt(Cow::Borrowed(hash)))
 		} else if hash.starts_with("{SHA}") {
 			Some(Hash::SHA1(Cow::Borrowed(&hash[SHA1_ID.len()..])))
@@ -229,9 +232,10 @@ crypt_test:bGVh02xkuGli2";
 	#[test]
 	fn malformed_bcrypt_entry_is_ignored() {
 		let htpasswd = Htpasswd::new(
-			"broken:$2y$05$short\nbcrypt_test:$2y$05$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa",
+			"broken:$2y$05$short\nexpensive:$2y$31$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa\nbcrypt_test:$2y$05$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa",
 		);
 		assert!(!htpasswd.check("broken", "password"));
+		assert!(!htpasswd.0.contains_key("expensive"));
 		assert!(htpasswd.check("bcrypt_test", "password"));
 	}
 }
