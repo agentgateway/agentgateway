@@ -233,6 +233,56 @@ impl Error {
 	}
 }
 
+/// Checks that a bearer token is an ID token issued to this client. The signature, issuer,
+/// audience and expiry are already validated.
+fn verify_bearer_id_token(
+	token: &str,
+	claims: &jwt::Claims,
+	client_id: &str,
+) -> Result<(), &'static str> {
+	let header = jsonwebtoken::decode_header(token).map_err(|_| "invalid token header")?;
+	if header.typ.as_deref().is_some_and(|typ| {
+		let typ = typ.to_ascii_lowercase();
+		typ.strip_prefix("application/").unwrap_or(&typ) != "jwt"
+	}) {
+		return Err("token header type is not JWT");
+	}
+	// Keycloak types its tokens with a `typ` claim; ID tokens use `ID`.
+	if claims.inner.get("typ").is_some_and(|typ| {
+		!typ
+			.as_str()
+			.is_some_and(|typ| typ.eq_ignore_ascii_case("id"))
+	}) {
+		return Err("token type claim is not ID");
+	}
+	// Cognito types its tokens with a `token_use` claim; ID tokens use `id`.
+	if claims
+		.inner
+		.get("token_use")
+		.is_some_and(|token_use| token_use.as_str() != Some("id"))
+	{
+		return Err("token use claim is not id");
+	}
+	// Access tokens name the requesting client in one of these claims.
+	for claim in ["client_id", "cid", "appid"] {
+		if claims
+			.inner
+			.get(claim)
+			.is_some_and(|value| value.as_str() != Some(client_id))
+		{
+			return Err("token was issued to another client");
+		}
+	}
+	match claims.inner.get("azp") {
+		Some(Value::String(azp)) if azp == client_id => Ok(()),
+		Some(_) => Err("azp does not match client id"),
+		None if matches!(claims.inner.get("aud"), Some(Value::Array(aud)) if aud.len() > 1) => {
+			Err("azp is required with multiple audiences")
+		},
+		None => Ok(()),
+	}
+}
+
 struct CallbackQuery {
 	state: String,
 	code: Option<String>,
@@ -264,7 +314,17 @@ impl OidcPolicy {
 			&& (self.credentials == OidcCredentials::SessionOrBearer || permissive)
 			&& let Some(token) = bearer.extract(req)
 		{
-			match self.provider.id_token_validator.validate_claims(&token) {
+			let validated = self
+				.provider
+				.id_token_validator
+				.validate_claims(&token)
+				.map_err(|e| e.to_string())
+				.and_then(|claims| {
+					verify_bearer_id_token(&token, &claims, &self.client.client_id)
+						.map_err(String::from)
+						.map(|()| claims)
+				});
+			match validated {
 				Ok(claims) => {
 					if let Some(Value::String(sub)) = claims.inner.get("sub") {
 						log.jwt_sub = Some(sub.clone());
