@@ -490,6 +490,10 @@ pub struct LLMResponse {
 	pub service_tier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub provider_model: Option<Strng>,
+	/// Underlying model that served the request, when the provider reports it out of band
+	/// (Azure `x-ms-served-model`). Preferred over `provider_model` for pricing.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub served_model: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]

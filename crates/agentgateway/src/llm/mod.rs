@@ -2894,6 +2894,14 @@ impl AIProvider {
 			{
 				llm_resp.service_tier = Some(strng::new(tier));
 			}
+			if matches!(self, AIProvider::Azure(_))
+				&& let Some(model) = parts
+					.headers
+					.get("x-ms-served-model")
+					.and_then(|value| value.to_str().ok())
+			{
+				llm_resp.served_model = Some(strng::new(model));
+			}
 			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
 			(llm_resp, Bytes::copy_from_slice(&body))
 		};
@@ -3297,6 +3305,14 @@ impl AIProvider {
 				.and_then(|value| value.to_str().ok())
 		{
 			llmresp.response.service_tier = Some(strng::new(tier));
+		}
+		if matches!(self, AIProvider::Azure(_))
+			&& let Some(model) = resp
+				.headers()
+				.get("x-ms-served-model")
+				.and_then(|value| value.to_str().ok())
+		{
+			llmresp.response.served_model = Some(strng::new(model));
 		}
 		let buffer = http::response_buffer_limit(&resp);
 

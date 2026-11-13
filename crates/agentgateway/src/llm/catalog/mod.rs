@@ -238,14 +238,12 @@ impl ModelCatalog {
 		let state = self.state.load();
 		let snapshot = &state.snapshot;
 		let primary = |resp: &LLMResponse| {
-			if let Some(provider_model) = &info.response.provider_model {
-				let projection = snapshot.project_with_missing_trace(
-					provider,
-					provider_model.as_str(),
-					resp,
-					convention,
-					false,
-				);
+			for model in [&info.response.served_model, &info.response.provider_model]
+				.into_iter()
+				.flatten()
+			{
+				let projection =
+					snapshot.project_with_missing_trace(provider, model.as_str(), resp, convention, false);
 				if projection.status != CostLookupStatus::Missing {
 					return projection;
 				}
