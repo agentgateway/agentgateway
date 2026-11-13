@@ -1,4 +1,4 @@
-import { Plus, Server, Trash2 } from 'lucide-react';
+import { Braces, Plus, Server, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
@@ -12,13 +12,44 @@ import type { SchemaHelp } from '@/schemaHelp';
 
 type Phase = 'off' | 'request' | 'response' | 'full';
 type FailureMode = 'failOpen' | 'failClosed';
+type Kind = 'remote' | 'expression';
+type Action = 'reject' | 'transform';
 
 type ProcessorDraft = {
+	kind: Kind;
+	methods: Record<string, Phase>;
 	host: string;
 	failureMode: FailureMode;
-	methods: Record<string, Phase>;
 	metadata: Record<string, string>;
+	condition: string;
+	action: Action;
+	reject: string;
+	transform: string;
+	// Fields of a loaded processor the form does not show (e.g. requestHeaders),
+	// written back only while it keeps its loaded kind.
+	loaded?: { kind: Kind; unmodeled: Record<string, unknown> };
 };
+
+const modeledFields = new Set([
+	'kind',
+	'methods',
+	'host',
+	'failureMode',
+	'metadata',
+	'condition',
+	'reject',
+	'transform'
+]);
+
+const kindOptions = [
+	{ value: 'remote', label: 'Remote', description: 'External MCP policy service' },
+	{ value: 'expression', label: 'Expression', description: 'In-process CEL' }
+];
+
+const actionOptions = [
+	{ value: 'reject', label: 'Reject', description: 'Deny matching requests' },
+	{ value: 'transform', label: 'Transform', description: 'Rewrite params or result' }
+];
 
 const phaseOptions = [
 	{ value: 'off', label: 'Off' },
@@ -47,7 +78,9 @@ export function McpGuardrailsPolicyEditor(props: {
 	const merged = useMergedEdits(props.guardrails, preview);
 
 	if (!initial) {
-		return <UnsupportedInForm supports="remote processors with a host target" />;
+		return (
+			<UnsupportedInForm supports="expression processors and remote processors with a host target" />
+		);
 	}
 
 	function addProcessor() {
@@ -80,7 +113,8 @@ export function McpGuardrailsPolicyEditor(props: {
 		const nextErrors: Record<number, string> = {};
 		if (!processors.length) nextErrors[0] = 'At least one processor is required.';
 		processors.forEach((processor, index) => {
-			if (!processor.host.trim()) nextErrors[index] = 'Processor host is required.';
+			const problem = processorProblem(processor);
+			if (problem) nextErrors[index] = problem;
 			if (!Object.keys(processor.methods).length)
 				nextErrors[index] = 'Add at least one MCP method match.';
 		});
@@ -119,7 +153,7 @@ export function McpGuardrailsPolicyEditor(props: {
 			{processors.length === 0 ? (
 				<EmptyState
 					title="No MCP guardrail processors"
-					description="Add a remote policy processor to inspect MCP requests and responses."
+					description="Add a remote policy service or CEL expression to inspect MCP requests and responses."
 					action={
 						<button className="button primary" type="button" onClick={addProcessor}>
 							<Plus size={16} />
@@ -137,15 +171,21 @@ export function McpGuardrailsPolicyEditor(props: {
 						>
 							<div className="mcp-processor-header">
 								<span className="policy-form-section-icon compact">
-									<Server size={16} />
+									{processor.kind === 'remote' ? <Server size={16} /> : <Braces size={16} />}
 								</span>
 								<div className="mcp-processor-title">
 									<strong>Processor {index + 1}</strong>
-									<code>{processor.host || 'No host configured'}</code>
+									<code>{processorSummary(processor)}</code>
 								</div>
-								<span className={processor.failureMode === 'failOpen' ? 'badge warn' : 'badge'}>
-									{processor.failureMode === 'failOpen' ? 'Fail open' : 'Fail closed'}
-								</span>
+								{processor.kind === 'remote' ? (
+									<span className={processor.failureMode === 'failOpen' ? 'badge warn' : 'badge'}>
+										{processor.failureMode === 'failOpen' ? 'Fail open' : 'Fail closed'}
+									</span>
+								) : (
+									<span className={processor.action === 'reject' ? 'badge warn' : 'badge'}>
+										{processor.action === 'reject' ? 'Reject' : 'Transform'}
+									</span>
+								)}
 								<button
 									className="table-action danger"
 									type="button"
@@ -156,31 +196,49 @@ export function McpGuardrailsPolicyEditor(props: {
 								</button>
 							</div>
 
-							<div className="mcp-processor-controls">
-								<Field label="Host" tooltip={props.help.field<Processor>('Processor', 'host')}>
-									<input
-										value={processor.host}
-										onChange={event => updateProcessor(index, { host: event.target.value })}
-										placeholder="guardrails.example.com:9000"
-									/>
-								</Field>
-								<FieldGroup
-									label="Failure mode"
-									tooltip={props.help.field<Processor>('Processor', 'failureMode')}
-								>
-									<EnumSelector
-										ariaLabel={`Processor ${index + 1} failure mode`}
-										value={processor.failureMode}
-										options={failureOptions}
-										schema={props.help.fieldNode<Processor>('Processor', 'failureMode')}
-										onChange={value =>
-											updateProcessor(index, {
-												failureMode: value as FailureMode
-											})
-										}
-									/>
-								</FieldGroup>
-							</div>
+							<FieldGroup label="Type">
+								<EnumSelector
+									ariaLabel={`Processor ${index + 1} type`}
+									value={processor.kind}
+									options={kindOptions}
+									onChange={value => updateProcessor(index, { kind: value as Kind })}
+								/>
+							</FieldGroup>
+
+							{processor.kind === 'remote' ? (
+								<div className="mcp-processor-controls">
+									<Field label="Host" tooltip={props.help.field<Processor>('Processor', 'host')}>
+										<input
+											value={processor.host}
+											onChange={event => updateProcessor(index, { host: event.target.value })}
+											placeholder="guardrails.example.com:9000"
+										/>
+									</Field>
+									<FieldGroup
+										label="Failure mode"
+										tooltip={props.help.field<Processor>('Processor', 'failureMode')}
+									>
+										<EnumSelector
+											ariaLabel={`Processor ${index + 1} failure mode`}
+											value={processor.failureMode}
+											options={failureOptions}
+											schema={props.help.fieldNode<Processor>('Processor', 'failureMode')}
+											onChange={value =>
+												updateProcessor(index, {
+													failureMode: value as FailureMode
+												})
+											}
+										/>
+									</FieldGroup>
+								</div>
+							) : (
+								<ExpressionControls
+									index={index}
+									processor={processor}
+									help={props.help}
+									onChange={patch => updateProcessor(index, patch)}
+								/>
+							)}
 
 							<MethodPhaseEditor
 								methods={processor.methods}
@@ -188,15 +246,17 @@ export function McpGuardrailsPolicyEditor(props: {
 								onChange={methods => updateProcessor(index, { methods })}
 							/>
 
-							<KeyValueEditor
-								label="Metadata"
-								tooltip={props.help.field<Processor>('Processor', 'metadata')}
-								values={processor.metadata}
-								keyPlaceholder="metadata key"
-								valuePlaceholder="CEL expression"
-								valueKind="cel"
-								onChange={metadata => updateProcessor(index, { metadata })}
-							/>
+							{processor.kind === 'remote' ? (
+								<KeyValueEditor
+									label="Metadata"
+									tooltip={props.help.field<Processor>('Processor', 'metadata')}
+									values={processor.metadata}
+									keyPlaceholder="metadata key"
+									valuePlaceholder="CEL expression"
+									valueKind="cel"
+									onChange={metadata => updateProcessor(index, { metadata })}
+								/>
+							) : null}
 
 							{errors[index] ? <small className="field-error">{errors[index]}</small> : null}
 						</section>
@@ -277,46 +337,163 @@ function MethodPhaseEditor(props: {
 	);
 }
 
-// The form edits remote processors with a host; any other processor makes the
-// whole policy unsupported (undefined).
+function ExpressionControls(props: {
+	index: number;
+	processor: ProcessorDraft;
+	help: SchemaHelp;
+	onChange: (patch: Partial<ProcessorDraft>) => void;
+}) {
+	const { processor } = props;
+	return (
+		<div className="policy-editor-stack">
+			<Field
+				label="Condition"
+				hint="Optional. When empty, the action applies to every matched method."
+				tooltip={props.help.propertyDescription('Processor', ['condition'])}
+			>
+				<input
+					className="mono-input"
+					value={processor.condition}
+					onChange={event => props.onChange({ condition: event.target.value })}
+					placeholder={'mcp.tool.name == "delete_repo"'}
+				/>
+			</Field>
+			<FieldGroup label="Action">
+				<EnumSelector
+					ariaLabel={`Processor ${props.index + 1} action`}
+					value={processor.action}
+					options={actionOptions}
+					onChange={value => props.onChange({ action: value as Action })}
+				/>
+			</FieldGroup>
+			{processor.action === 'reject' ? (
+				<Field
+					label="Reject message"
+					tooltip={props.help.propertyDescription('Processor', ['reject'])}
+				>
+					<input
+						value={processor.reject}
+						onChange={event => props.onChange({ reject: event.target.value })}
+						placeholder="This tool is not allowed"
+					/>
+				</Field>
+			) : (
+				<Field
+					label="Transform"
+					tooltip={props.help.propertyDescription('Processor', ['transform'])}
+				>
+					<textarea
+						className="mono-input"
+						rows={3}
+						value={processor.transform}
+						onChange={event => props.onChange({ transform: event.target.value })}
+						placeholder={'merge(mcp.params, {"arguments": {...}})'}
+					/>
+				</Field>
+			)}
+		</div>
+	);
+}
+
+function processorProblem(processor: ProcessorDraft): string | undefined {
+	if (processor.kind === 'remote')
+		return processor.host.trim() ? undefined : 'Processor host is required.';
+	if (processor.action === 'reject')
+		return processor.reject.trim() ? undefined : 'Reject message is required.';
+	return processor.transform.trim() ? undefined : 'Transform expression is required.';
+}
+
+function processorSummary(processor: ProcessorDraft) {
+	if (processor.kind === 'remote') return processor.host || 'No host configured';
+	return processor.condition.trim() || 'Always';
+}
+
+// The form edits expression processors and remote processors with a host; any
+// other processor makes the whole policy unsupported (undefined).
 function initialProcessors(
 	guardrails: McpGuardrailsDraft | null | undefined
 ): ProcessorDraft[] | undefined {
 	const processors = Array.isArray(guardrails?.processors) ? guardrails.processors : [];
-	const drafts = processors.map((processor: unknown) =>
-		isRecord(processor) && processor.kind === 'remote' && typeof processor.host === 'string'
-			? {
-					host: processor.host,
-					failureMode: processor.failureMode === 'failOpen' ? 'failOpen' : 'failClosed',
-					methods: phaseMap(processor.methods),
-					metadata: stringMap(processor.metadata),
-					requestHeaders: ''
-				}
-			: undefined
-	);
+	const drafts = processors.map((processor: unknown) => {
+		if (!isRecord(processor)) return undefined;
+		const base = {
+			...newProcessor(),
+			methods: phaseMap(processor.methods),
+			loaded: {
+				kind: processor.kind === 'expression' ? 'expression' : 'remote',
+				unmodeled: Object.fromEntries(
+					Object.entries(processor).filter(([key]) => !modeledFields.has(key))
+				)
+			}
+		} satisfies ProcessorDraft;
+		if (processor.kind === 'remote' && typeof processor.host === 'string') {
+			return {
+				...base,
+				host: processor.host,
+				failureMode: processor.failureMode === 'failOpen' ? 'failOpen' : 'failClosed',
+				metadata: stringMap(processor.metadata)
+			} satisfies ProcessorDraft;
+		}
+		if (processor.kind === 'expression') {
+			const condition = typeof processor.condition === 'string' ? processor.condition : '';
+			if (typeof processor.reject === 'string')
+				return {
+					...base,
+					kind: 'expression',
+					condition,
+					reject: processor.reject
+				} satisfies ProcessorDraft;
+			if (typeof processor.transform === 'string')
+				return {
+					...base,
+					kind: 'expression',
+					condition,
+					action: 'transform',
+					transform: processor.transform
+				} satisfies ProcessorDraft;
+		}
+		return undefined;
+	});
 	return drafts.every(Boolean) ? (drafts as ProcessorDraft[]) : undefined;
 }
 
 function newProcessor(): ProcessorDraft {
 	return {
+		kind: 'remote',
+		methods: { 'tools/call': 'request' },
 		host: '',
 		failureMode: 'failClosed',
-		methods: { 'tools/call': 'request' },
-		metadata: {}
+		metadata: {},
+		condition: '',
+		action: 'reject',
+		reject: '',
+		transform: ''
 	};
 }
 
 function buildGuardrails(processors: ProcessorDraft[]): McpGuardrailsDraft {
 	return {
-		processors: processors.map(processor =>
-			cleanEmpty({
-				kind: 'remote',
-				host: processor.host.trim(),
-				failureMode: processor.failureMode,
-				methods: processor.methods,
-				metadata: Object.keys(processor.metadata).length ? processor.metadata : undefined
-			})
-		)
+		processors: processors.map(processor => {
+			const unmodeled = processor.loaded?.kind === processor.kind ? processor.loaded.unmodeled : {};
+			return processor.kind === 'remote'
+				? cleanEmpty({
+						...unmodeled,
+						kind: 'remote',
+						host: processor.host.trim(),
+						failureMode: processor.failureMode,
+						methods: processor.methods,
+						metadata: Object.keys(processor.metadata).length ? processor.metadata : undefined
+					})
+				: cleanEmpty({
+						...unmodeled,
+						kind: 'expression',
+						methods: processor.methods,
+						condition: processor.condition.trim() || undefined,
+						...(processor.action === 'reject'
+							? { reject: processor.reject }
+							: { transform: processor.transform.trim() })
+					});
+		})
 	} as McpGuardrailsDraft;
 }
 
