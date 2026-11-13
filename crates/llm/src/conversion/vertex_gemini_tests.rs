@@ -1937,6 +1937,136 @@ fn streaming_usage_suppressed_on_interim_content_chunks() {
 	assert_eq!(c2["choices"][0]["finish_reason"], "stop");
 }
 
+// Issue #4227: Gemini's constrained decoding can loop on a single field until the token
+// budget is exhausted when a multi-property object schema lacks propertyOrdering.
+// The Google Gen AI SDK (python-genai process_schema) injects it client-side; we must match.
+#[test]
+fn property_ordering_injected_for_multi_property_objects() {
+	let s = response_schema(json!({
+		"type": "object",
+		"properties": {
+			"title": { "type": "string" },
+			"description": { "type": "string" },
+			"meta": {
+				"type": "object",
+				"properties": {
+					"author": { "type": "string" },
+					"version": { "type": "integer" }
+				}
+			},
+			"tags": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"name": { "type": "string" },
+						"weight": { "type": "number" }
+					}
+				}
+			},
+			"sole": { "type": "string" }
+		}
+	}));
+	// Declaration order at every level, mirroring list(properties.keys()) in the SDK.
+	assert_eq!(
+		s["propertyOrdering"],
+		json!(["title", "description", "meta", "tags", "sole"]),
+		"top-level ordering: {s}"
+	);
+	assert_eq!(
+		s["properties"]["meta"]["propertyOrdering"],
+		json!(["author", "version"]),
+		"nested object ordering: {s}"
+	);
+	assert_eq!(
+		s["properties"]["tags"]["items"]["propertyOrdering"],
+		json!(["name", "weight"]),
+		"array item ordering: {s}"
+	);
+}
+
+#[test]
+fn property_ordering_not_injected_for_single_property_objects() {
+	// The SDK injects only when len(properties) > 1.
+	let s = response_schema(json!({
+		"type": "object",
+		"properties": { "person": { "type": "string" } }
+	}));
+	assert!(
+		s.get("propertyOrdering").is_none(),
+		"single-property object must not get ordering: {s}"
+	);
+}
+
+#[test]
+fn existing_property_ordering_is_preserved() {
+	let s = response_schema(json!({
+		"type": "object",
+		"propertyOrdering": ["b", "a"],
+		"properties": { "a": { "type": "string" }, "b": { "type": "string" } }
+	}));
+	assert_eq!(
+		s["propertyOrdering"],
+		json!(["b", "a"]),
+		"caller-provided ordering wins: {s}"
+	);
+}
+
+#[test]
+fn property_ordering_injected_in_anyof_branches() {
+	let s = response_schema(json!({
+		"anyOf": [
+			{
+				"type": "object",
+				"properties": { "a": { "type": "string" }, "b": { "type": "string" } }
+			},
+			{ "type": "string" }
+		]
+	}));
+	// clean_schema_node may collapse or keep the union; in either shape the object
+	// branch must carry the ordering.
+	let branches = s.get("anyOf").and_then(Value::as_array);
+	let obj = match branches {
+		Some(arr) => arr.iter().find(|v| v["type"] == "object").unwrap().clone(),
+		None => s.clone(), // collapsed to the single object member
+	};
+	assert_eq!(
+		obj["propertyOrdering"],
+		json!(["a", "b"]),
+		"anyOf object branch ordering: {s}"
+	);
+}
+
+#[test]
+fn tool_parameters_get_property_ordering() {
+	// Same normalization must protect the functionDeclarations path (issue #4227):
+	// tool-call loops are reported for tools + structured output combos as well.
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "save_event",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"name": { "type": "string" },
+						"when": { "type": "string" }
+					},
+					"required": ["name"]
+				}
+			}
+		}]
+	}));
+	let params = &g["tools"][0]["functionDeclarations"][0]["parameters"];
+	assert_eq!(
+		params["propertyOrdering"],
+		json!(["name", "when"]),
+		"tool parameters must carry ordering: {params}"
+	);
+}
+
 // ---------- Native Gemini inbound: SSE passthrough with usage extraction ----------
 
 mod passthrough {
