@@ -80,6 +80,8 @@ pub struct Jwt {
 pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
+	/// Shared-secret key for HMAC-signed tokens, which have no `kid`. Only set for OIDC ID Tokens.
+	hmac: Option<Jwk>,
 }
 
 // TODO: can we give anything useful here?
@@ -449,23 +451,12 @@ impl Provider {
 					vec![explicit_alg]
 				},
 			};
-			// The new() requires 1 algorithm, so just pass the first before we override it
-			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
-			validation.validate_nbf = true;
-			validation.algorithms = supported_algorithms;
-			// Override required_spec_claims with the user-configured set. A configured
-			// issuer or audience also implies that the corresponding claim must exist;
-			// otherwise there is nothing to match against the configured value.
-			// validate_exp remains true, so exp is still validated if present.
-			validation.required_spec_claims = jwt_validation_options.required_claims.clone();
-			validation.set_issuer(std::slice::from_ref(&issuer));
-			validation.required_spec_claims.insert("iss".to_owned());
-			if let Some(audiences) = audiences.as_ref().filter(|audiences| !audiences.is_empty()) {
-				validation.set_audience(audiences);
-				validation.required_spec_claims.insert("aud".to_owned());
-			} else {
-				validation.validate_aud = false;
-			}
+			let validation = build_validation(
+				supported_algorithms,
+				&issuer,
+				audiences.as_deref(),
+				&jwt_validation_options,
+			);
 
 			keys.insert(
 				kid,
@@ -476,8 +467,66 @@ impl Provider {
 			);
 		}
 
-		Ok(Provider { issuer, keys })
+		Ok(Provider {
+			issuer,
+			keys,
+			hmac: None,
+		})
 	}
+
+	/// Additionally accept HS256/HS384/HS512 tokens signed with a shared secret.
+	///
+	/// OpenID Connect Core (3.1.3.7 and 10.1) uses the client secret as the HMAC key for ID Tokens
+	/// when the IdP is configured to sign with an HMAC algorithm. Such tokens carry no `kid` and
+	/// there is no JWKS to look one up in. This is only meant for ID Token validation, where the
+	/// secret is the OIDC client secret; the key is never derived from the token itself.
+	pub fn with_hmac_secret(
+		mut self,
+		secret: &[u8],
+		audiences: Option<Vec<String>>,
+		jwt_validation_options: JWTValidationOptions,
+	) -> Self {
+		let validation = build_validation(
+			HMAC_ALGORITHMS.to_vec(),
+			&self.issuer,
+			audiences.as_deref(),
+			&jwt_validation_options,
+		);
+		self.hmac = Some(Jwk {
+			decoding: DecodingKey::from_secret(secret),
+			validation,
+		});
+		self
+	}
+}
+
+/// HMAC algorithms accepted for tokens verified against a shared secret.
+const HMAC_ALGORITHMS: [Algorithm; 3] = [Algorithm::HS256, Algorithm::HS384, Algorithm::HS512];
+
+fn build_validation(
+	algorithms: Vec<Algorithm>,
+	issuer: &str,
+	audiences: Option<&[String]>,
+	jwt_validation_options: &JWTValidationOptions,
+) -> Validation {
+	// The new() requires 1 algorithm, so just pass the first before we override it
+	let mut validation = Validation::new(*algorithms.first().unwrap());
+	validation.validate_nbf = true;
+	validation.algorithms = algorithms;
+	// Override required_spec_claims with the user-configured set. A configured
+	// issuer or audience also implies that the corresponding claim must exist;
+	// otherwise there is nothing to match against the configured value.
+	// validate_exp remains true, so exp is still validated if present.
+	validation.required_spec_claims = jwt_validation_options.required_claims.clone();
+	validation.set_issuer(&[issuer]);
+	validation.required_spec_claims.insert("iss".to_owned());
+	if let Some(audiences) = audiences.filter(|audiences| !audiences.is_empty()) {
+		validation.set_audience(audiences);
+		validation.required_spec_claims.insert("aud".to_owned());
+	} else {
+		validation.validate_aud = false;
+	}
+	validation
 }
 
 impl Jwt {
@@ -648,11 +697,6 @@ impl Jwt {
 
 			TokenError::InvalidHeader(error)
 		})?;
-		let kid = header.kid.as_ref().ok_or_else(|| {
-			debug!(?header, "Header is missing the `kid` attribute.");
-
-			TokenError::MissingKeyId
-		})?;
 
 		let decode_with = |key: &Jwk| {
 			decode::<Map<String, Value>>(token, &key.decoding, &key.validation).map(|decoded_token| {
@@ -669,6 +713,37 @@ impl Jwt {
 		let iss = jsonwebtoken::dangerous::insecure_decode_claims::<UnverifiedIssuer>(token)
 			.ok()
 			.and_then(|claims| claims.iss);
+
+		// HMAC-signed tokens have no kid. They are only verified against a provider that opted in with
+		// a shared secret and whose issuer matches, and only with an HMAC algorithm, so an HMAC token
+		// can never be checked against an asymmetric key (or the reverse).
+		if HMAC_ALGORITHMS.contains(&header.alg) {
+			let mut first_error = None;
+			for provider in &self.providers {
+				let Some(key) = provider.hmac.as_ref() else {
+					continue;
+				};
+				if iss.as_deref() != Some(provider.issuer.as_str()) {
+					continue;
+				}
+				match decode_with(key) {
+					Ok(claims) => return Ok(claims),
+					Err(error) => {
+						debug!(?error, issuer = %provider.issuer, "HMAC token does not pass validation.");
+						first_error.get_or_insert(error);
+					},
+				}
+			}
+			if let Some(error) = first_error {
+				return Err(TokenError::Invalid(error));
+			}
+		}
+
+		let kid = header.kid.as_ref().ok_or_else(|| {
+			debug!(?header, "Header is missing the `kid` attribute.");
+
+			TokenError::MissingKeyId
+		})?;
 
 		let mut first_error = None;
 		for provider in &self.providers {
