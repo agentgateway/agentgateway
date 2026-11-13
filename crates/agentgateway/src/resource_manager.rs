@@ -263,7 +263,8 @@ struct Inner {
 }
 
 struct Entry {
-	content: Bytes,
+	// None retains a failed first JWKS fetch without inventing cached key data.
+	content: Option<Bytes>,
 	next_refresh: Option<Instant>,
 }
 
@@ -395,7 +396,30 @@ impl ResourceManager {
 		if let Some(content) = self.cached(&resource) {
 			return Ok(content);
 		}
-		let FetchResult { content, next } = self.fetch(&resource).await?;
+		let FetchResult { content, next } = match self.fetch(&resource).await {
+			Ok(result) => result,
+			Err(e) => {
+				if matches!(
+					&resource,
+					ResourceRef::Http {
+						kind: ResourceKind::Jwks,
+						..
+					}
+				) {
+					self
+						.inner
+						.entries
+						.lock()
+						.expect("resource cache mutex poisoned")
+						.entry(resource)
+						.or_insert(Entry {
+							content: None,
+							next_refresh: None,
+						});
+				}
+				return Err(e);
+			},
+		};
 		self.store(resource, content.clone(), next);
 		Ok(content)
 	}
@@ -422,6 +446,25 @@ impl ResourceManager {
 			retained.clone(),
 		);
 		self.retain_cached_and_watched_resources(&retained);
+		// Start retries only once the dependency belongs to an accepted config.
+		// Scheduling during the fetch could race with a slow config computation:
+		// the scheduler would discard the retry while the resource is inactive.
+		let mut entries = self
+			.inner
+			.entries
+			.lock()
+			.expect("resource cache mutex poisoned");
+		for (resource, entry) in entries.iter_mut() {
+			if entry.content.is_none() && entry.next_refresh.is_none() {
+				let at = Instant::now() + FAILED_HTTP_REFRESH;
+				entry.next_refresh = Some(at);
+				let _ = self.inner.scheduler_tx.send(ScheduledRefresh {
+					at,
+					resource: resource.clone(),
+				});
+			}
+		}
+		drop(entries);
 		// refresh_file ignores watch events for files that are not active yet, so a
 		// change between a new file's first read and this commit would be lost.
 		for resource in retained.difference(&previous) {
@@ -470,7 +513,7 @@ impl ResourceManager {
 			.lock()
 			.expect("resource cache mutex poisoned")
 			.get(resource)
-			.map(|e| e.content.clone())
+			.and_then(|e| e.content.clone())
 	}
 
 	fn store(&self, resource: ResourceRef, content: Bytes, next: Option<Instant>) {
@@ -482,7 +525,7 @@ impl ResourceManager {
 			.insert(
 				resource.clone(),
 				Entry {
-					content,
+					content: Some(content),
 					next_refresh: next,
 				},
 			);
@@ -549,11 +592,11 @@ impl ResourceManager {
 				.expect("resource cache mutex poisoned");
 			let changed = entries
 				.get(&resource)
-				.is_none_or(|entry| entry.content != content);
+				.is_none_or(|entry| entry.content.as_ref() != Some(&content));
 			entries.insert(
 				resource.clone(),
 				Entry {
-					content,
+					content: Some(content),
 					next_refresh: next,
 				},
 			);
@@ -675,11 +718,11 @@ impl ResourceManager {
 				.expect("resource cache mutex poisoned");
 			let changed = entries
 				.get(&resource)
-				.is_none_or(|entry| entry.content != content);
+				.is_none_or(|entry| entry.content.as_ref() != Some(&content));
 			entries.insert(
 				resource.clone(),
 				Entry {
-					content,
+					content: Some(content),
 					next_refresh: None,
 				},
 			);
@@ -772,6 +815,13 @@ async fn fetch_direct(client: &Client, resource: &ResourceRef) -> anyhow::Result
 				)
 				.await
 				.with_context(|| format!("fetch {url}"))?;
+			if *kind == ResourceKind::Jwks {
+				anyhow::ensure!(
+					resp.status().is_success(),
+					"fetch {url}: HTTP {}",
+					resp.status()
+				);
+			}
 			let ttl = ttl_from_headers(resp.headers(), kind.default_ttl());
 			let body = crate::http::read_resp_body(resp).await?;
 			Ok(FetchResult {
@@ -1063,7 +1113,7 @@ mod tests {
 			.expect("resource cache mutex poisoned");
 		let entry = entries.get(&resource).expect("entry should remain cached");
 		// A failed refresh must not touch the last-known-good content.
-		assert_eq!(entry.content, Bytes::from_static(b"v1"));
+		assert_eq!(entry.content, Some(Bytes::from_static(b"v1")));
 		// The retry scheduled after the failure must be reflected in the cached
 		// entry's `next_refresh`, because `should_refresh` gates the scheduler's
 		// eventual retry on that value matching exactly. Before the fix,

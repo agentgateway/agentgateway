@@ -419,16 +419,13 @@ async fn load_jwks(
 	jwks: FileInlineOrRemote,
 	source: &'static str,
 ) -> Result<JwkSet, Error> {
-	let jwks = jwks
-		.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
-		.await
-		.map_err(|e| {
-			Error::Config(format!(
-				"failed to load oidc jwks from {} {}: {e}",
-				source,
-				describe_file_inline_or_remote(&jwks)
-			))
-		})?;
+	let jwks = jwks.load_jwks(resources).await.map_err(|e| {
+		Error::Config(format!(
+			"failed to load oidc jwks from {} {}: {e}",
+			source,
+			describe_file_inline_or_remote(&jwks)
+		))
+	})?;
 	Ok(jwks)
 }
 
