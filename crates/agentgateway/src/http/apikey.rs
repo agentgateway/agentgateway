@@ -465,7 +465,8 @@ pub enum LocalAPIKey {
 		#[serde(rename = "allowedModels", default)]
 		allowed_models: Option<Vec<String>>,
 		/// Independent budgets charged after LLM responses. A request is not charged when its provider
-		/// does not report the usage or cost required by the budget unit.
+		/// does not report the usage or cost required by the budget unit. Usage is counted per key,
+		/// or per `metadata.budgetScope` when set, so keys rotated within one scope share usage.
 		#[serde(default)]
 		budgets: Vec<Budget>,
 	},
@@ -481,7 +482,8 @@ pub enum LocalAPIKey {
 		#[serde(rename = "allowedModels", default)]
 		allowed_models: Option<Vec<String>>,
 		/// Independent budgets charged after LLM responses. A request is not charged when its provider
-		/// does not report the usage or cost required by the budget unit.
+		/// does not report the usage or cost required by the budget unit. Usage is counted per key,
+		/// or per `metadata.budgetScope` when set, so keys rotated within one scope share usage.
 		#[serde(default)]
 		budgets: Vec<Budget>,
 	},
@@ -554,9 +556,17 @@ impl LocalAPIKey {
 				"budget limit exceeds database integer range"
 			);
 		}
+		let budget_owner = metadata
+			.get("budgetScope")
+			.and_then(serde_json::Value::as_str)
+			.filter(|scope| !scope.is_empty())
+			.map_or_else(
+				|| key_hash.as_str().to_owned(),
+				|scope| format!("scope:{scope}"),
+			);
 		let budgets = (!budgets.is_empty()).then(|| MatchedBudgets {
 			api_key: api_key.expect("budget API keys have a name"),
-			api_key_id: key_hash.as_str().to_owned(),
+			api_key_id: budget_owner,
 			budgets,
 		});
 		Ok((

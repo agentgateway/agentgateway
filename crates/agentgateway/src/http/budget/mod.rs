@@ -127,6 +127,7 @@ struct BudgetDefinition {
 /// the configured unit. Requests with unavailable usage are logged but cannot be charged or blocked
 /// retroactively.
 #[apply(schema_de!)]
+#[derive(PartialEq)]
 pub struct Budget {
 	/// Stable name for this budget within its owning API key.
 	pub name: String,
@@ -141,6 +142,7 @@ pub struct Budget {
 }
 
 #[apply(schema_de!)]
+#[derive(PartialEq)]
 pub struct BudgetLimit {
 	pub unit: BudgetLimitUnit,
 	pub amount: BudgetAmount,
@@ -226,6 +228,7 @@ impl BudgetLimitUnit {
 }
 
 #[apply(schema_de!)]
+#[derive(PartialEq)]
 pub struct BudgetWindow {
 	/// Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.
 	/// Windows are aligned to the Unix epoch rather than starting with the first request: `1h`
@@ -237,7 +240,7 @@ pub struct BudgetWindow {
 }
 
 #[apply(schema_de!)]
-#[derive(Copy)]
+#[derive(Copy, PartialEq)]
 pub enum BudgetExceededAction {
 	#[serde(rename = "Audit")]
 	Audit,
@@ -402,12 +405,30 @@ impl BudgetPolicy {
 			!has_budgets || self.database.get().is_some() || database_configured,
 			"API key budgets require config.database to be configured"
 		);
+		let mut definitions: HashMap<String, &Budget> = HashMap::new();
 		for policy in authentication.users.values() {
 			let Some(budgets) = policy.budgets.as_ref() else {
 				continue;
 			};
 			for budget in &budgets.budgets {
 				let budget_id = budget_id(&budgets.api_key_id, budget);
+				if let Some(scope) = budgets.api_key_id.strip_prefix("scope:") {
+					// A load registers every API key policy into one candidate registration, so compare
+					// against it to catch scopes split across policies.
+					let conflicts = match &self.registration {
+						Some(registration) => registration
+							.get(&budget_id)
+							.is_some_and(|previous| previous.budget != *budget),
+						None => definitions
+							.insert(budget_id.clone(), budget)
+							.is_some_and(|previous| previous != budget),
+					};
+					anyhow::ensure!(
+						!conflicts,
+						"budget {:?} is defined differently by API keys sharing budgetScope {scope:?}",
+						budget.name,
+					);
+				}
 				if let Some(registration) = &self.registration {
 					BudgetCounter::configured(&budgets.api_key, budget, now)?;
 					registration.insert(
@@ -594,6 +615,58 @@ mod tests {
 			err.to_string(),
 			"API key budgets require config.database to be configured"
 		);
+	}
+
+	#[test]
+	fn keys_sharing_a_budget_scope_must_agree_on_each_budget() {
+		let key = |key: &str, scope: &str, unit: &str| {
+			serde_json::json!({
+				"key": key,
+				"metadata": {"name": "rotated", "budgetScope": scope},
+				"budgets": [{
+					"name": "monthly",
+					"limit": {"unit": unit, "amount": 40},
+					"window": {"rolling": "1h"},
+					"onBudgetExceeded": "Block"
+				}]
+			})
+		};
+		let policy = |keys: Vec<serde_json::Value>| -> crate::http::apikey::APIKeyAuthentication {
+			serde_json::from_value::<crate::http::apikey::LocalAPIKeys>(
+				serde_json::json!({ "keys": keys }),
+			)
+			.unwrap()
+			.compile()
+			.unwrap()
+		};
+		let conflict =
+			"budget \"monthly\" is defined differently by API keys sharing budgetScope \"team-a\"";
+
+		let one_policy = policy(vec![
+			key("sk-old", "team-a", "Tokens"),
+			key("sk-new", "team-a", "USD"),
+		]);
+		let err = BudgetPolicy::default()
+			.register(&one_policy, true)
+			.unwrap_err();
+		assert_eq!(err.to_string(), conflict);
+
+		let candidate = BudgetPolicy::default().registration_policy();
+		candidate
+			.register(&policy(vec![key("sk-old", "team-a", "Tokens")]), true)
+			.unwrap();
+		let err = candidate
+			.register(&policy(vec![key("sk-new", "team-a", "USD")]), true)
+			.unwrap_err();
+		assert_eq!(err.to_string(), conflict);
+
+		let candidate = BudgetPolicy::default().registration_policy();
+		candidate
+			.register(&policy(vec![key("sk-old", "team-a", "Tokens")]), true)
+			.unwrap();
+		candidate
+			.register(&policy(vec![key("sk-new", "team-b", "USD")]), true)
+			.unwrap();
 	}
 
 	#[test]
