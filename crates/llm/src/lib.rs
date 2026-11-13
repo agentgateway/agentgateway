@@ -625,8 +625,8 @@ impl Default for StreamingUsageGuard {
 }
 
 pub use types::{
-	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseText, ResponseType,
-	SimpleChatCompletionMessage, ToolCall,
+	ContentScope, OutputMessage, OutputMessagePart, RequestText, RequestType, ResponseText,
+	ResponseType, SimpleChatCompletionMessage, ToolCall,
 };
 
 pub fn logged_response_parsing(bytes: &[u8]) -> impl FnOnce(serde_json::Error) -> AIError + '_ {
