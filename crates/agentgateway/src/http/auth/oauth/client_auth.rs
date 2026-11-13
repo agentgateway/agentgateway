@@ -554,7 +554,11 @@ pub(super) fn sign_client_assertion(
 	}
 
 	let now = unix_timestamp_now()?;
-	let times = jwt_claim_times(now, CLIENT_ASSERTION_LIFETIME, CLIENT_ASSERTION_CLOCK_SKEW)?;
+	let times = jwt_claim_times(
+		now,
+		CLIENT_ASSERTION_LIFETIME.saturating_sub(CLIENT_ASSERTION_CLOCK_SKEW),
+		CLIENT_ASSERTION_CLOCK_SKEW,
+	)?;
 	let claims = ClientAssertionClaims {
 		iss: client_id,
 		sub: client_id,
