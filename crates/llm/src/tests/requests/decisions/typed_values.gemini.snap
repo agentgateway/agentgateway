@@ -1,0 +1,80 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/decisions/typed_values.json
+info:
+  model: gemini-decision-1
+  input:
+    - role: user
+      content:
+        - type: input_json
+          data:
+            reset_worked: true
+        - type: input_text
+          text: The user can log in now.
+  questions:
+    - type: predicate
+      name: same
+      instructions: Can the user log in?
+    - type: predicate
+      name: same
+      instructions: Did the password reset work?
+    - type: choice
+      instructions: Pick a typed outcome.
+      choices:
+        - value: true
+          description: Resolved.
+        - value: "true"
+        - value: true_
+        - value: false
+          description: Unresolved.
+    - type: score
+      name: resolution with spaces
+      instructions: How complete is the resolution?
+      levels:
+        - label: unresolved
+        - label: partial
+        - label: complete
+---
+{
+  "request": {
+    "model": "gemini-decision-1",
+    "input": "[{\"role\":\"user\",\"content\":\"{\\\"reset_worked\\\":true}\\nThe user can log in now.\"}]",
+    "questions": {
+      "q_0": {
+        "type": "noul",
+        "instructions": "Can the user log in?"
+      },
+      "q_1": {
+        "type": "noul",
+        "instructions": "Did the password reset work?"
+      },
+      "q_2": {
+        "type": "choice",
+        "instructions": "Pick a typed outcome.",
+        "criteria": {
+          "o_000": "Boolean value true. Resolved.",
+          "o_001": "String value \"true\".",
+          "o_002": "String value \"true_\".",
+          "o_003": "Boolean value false. Unresolved."
+        }
+      },
+      "q_3": {
+        "type": "score",
+        "instructions": "How complete is the resolution?",
+        "criteria": [
+          "unresolved",
+          "partial",
+          "complete"
+        ]
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Decisions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-decision-1",
+    "provider": "gemini",
+    "streaming": false,
+    "params": {}
+  }
+}

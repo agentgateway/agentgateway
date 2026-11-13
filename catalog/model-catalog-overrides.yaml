@@ -30,3 +30,14 @@ providers:
         name: Jev Preview
         rates: *jev-rates
         capabilities: *jev-capabilities
+  gcp.gemini:
+    models:
+      gemini-decision-1:
+        name: Gemini Decision 1
+        endpoints: [/decisions]
+        limits:
+          context: 262144
+          output: 0
+        modalities:
+          input: [text, image, video, audio, pdf]
+          output: []

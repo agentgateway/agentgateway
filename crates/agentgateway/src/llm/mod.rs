@@ -1035,7 +1035,11 @@ impl AIProvider {
 		}
 	}
 
-	pub fn supported_formats(&self, request_model: &str) -> Vec<custom::ProviderFormat> {
+	pub fn supported_formats(
+		&self,
+		request_model: &str,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
+	) -> Vec<custom::ProviderFormat> {
 		use custom::ProviderFormat::*;
 		match self {
 			AIProvider::OpenAI(_) => vec![
@@ -1065,7 +1069,19 @@ impl AIProvider {
 				}
 				formats
 			},
-			AIProvider::Gemini(_) => vec![Completions, Embeddings, GeminiCountTokens],
+			AIProvider::Gemini(_) => {
+				let mut formats = vec![Completions, Embeddings, GeminiCountTokens];
+				if catalog.is_some_and(|catalog| {
+					catalog.model_supports_endpoint(
+						gemini::Provider::NAME.as_str(),
+						request_model,
+						"/decisions",
+					)
+				}) {
+					formats.push(Decisions);
+				}
+				formats
+			},
 			AIProvider::Anthropic(_) => vec![Messages, AnthropicTokenCount],
 			AIProvider::Bedrock(p) => {
 				let mut formats = vec![Completions, Messages, Responses, Embeddings, Rerank];
@@ -1179,14 +1195,22 @@ impl AIProvider {
 			})
 	}
 
-	pub fn supports_format(&self, format: custom::ProviderFormat, request_model: &str) -> bool {
-		self.supported_formats(request_model).contains(&format)
+	pub fn supports_format(
+		&self,
+		format: custom::ProviderFormat,
+		request_model: &str,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
+	) -> bool {
+		self
+			.supported_formats(request_model, catalog)
+			.contains(&format)
 	}
 
 	fn non_chat_provider_format_for(
 		&self,
 		input_format: InputFormat,
 		request_model: &str,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Option<custom::ProviderFormat> {
 		use custom::ProviderFormat::*;
 		let format = match input_format {
@@ -1198,12 +1222,12 @@ impl AIProvider {
 			InputFormat::Decisions => {
 				return [Decisions, SystemOne]
 					.into_iter()
-					.find(|f| self.supports_format(*f, request_model));
+					.find(|f| self.supports_format(*f, request_model, catalog));
 			},
 			InputFormat::SystemOne => {
 				return [SystemOne, Decisions]
 					.into_iter()
-					.find(|f| self.supports_format(*f, request_model));
+					.find(|f| self.supports_format(*f, request_model, catalog));
 			},
 			InputFormat::Detect(_)
 			| InputFormat::Completions
@@ -1212,7 +1236,7 @@ impl AIProvider {
 			| InputFormat::Gemini => return None,
 		};
 		self
-			.supports_format(format, request_model)
+			.supports_format(format, request_model, catalog)
 			.then_some(format)
 	}
 
@@ -1392,42 +1416,28 @@ impl AIProvider {
 			return Ok(());
 		}
 
+		let translated = llm_request
+			.is_some_and(|request| request_was_translated(self, route_type, request, bedrock_endpoint));
 		if has_host_override && path_prefix.is_none() && !matches!(self, AIProvider::Custom(_)) {
+			if translated {
+				strip_translated_query(self, req)?;
+			}
 			return Ok(());
 		}
 
 		// The client's query belongs to the inbound API format (e.g. Anthropic's `?beta=true`), so
-		// drop it once the request is translated to another format; strict upstreams like Google
-		// reject unknown parameters. Bedrock Converse is always a translation, even though its route
-		// type mirrors the input format.
-		let translated = llm_request.is_some_and(|l| {
-			if let (AIProvider::Bedrock(p), Some(endpoint)) = (self, bedrock_endpoint)
-				&& !bedrock_native_chat(p, endpoint, Some(l))
-			{
-				return true;
-			}
-			let same_format = match l.input_format {
-				InputFormat::Completions => RouteType::Completions,
-				InputFormat::Messages => RouteType::Messages,
-				InputFormat::Responses => RouteType::Responses,
-				InputFormat::Gemini => RouteType::GenerateContent,
-				_ => return false,
-			};
-			route_type != same_format
-		});
+		// do not reinterpret or forward it after translation. Preserve only a Gemini query API key
+		// when it remains the request's credential. Bedrock Converse is always a translation, even
+		// though its route type mirrors the input format.
 		if translated {
-			http::modify_req_uri(req, |uri| {
-				let path = uri.path_and_query.as_ref().map_or("/", |p| p.path());
-				uri.path_and_query = Some(PathAndQuery::try_from(path)?);
-				Ok(())
-			})?;
+			strip_translated_query(self, req)?;
 		}
 
 		// Native Gemini paths carry their own `?alt=sse` (see `native_gemini_path`) while the
 		// client's query is preserved alongside, so a client-sent `alt` would arrive upstream
 		// duplicated. countTokens is unary and never sets one, but Google honours `alt=sse` there
 		// too and answers with SSE framing that `CountTokensResponse` cannot parse — so drop the
-		// client's `alt` on both native routes (same gate as the render below). Stripping it here
+		// client's `alt` on native generation and count-token routes. Stripping it here
 		// rather than at parse time keeps `alt` intact on the paths above.
 		if route_type == RouteType::GeminiCountTokens
 			|| llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini)))
@@ -1477,9 +1487,8 @@ impl AIProvider {
 				Ok(())
 			}),
 			AIProvider::Gemini(_) => {
-				// Native Gemini renders (provider_state VertexGemini) go to the native
-				// generateContent endpoint, and countTokens is only ever native; everything else
-				// uses the OpenAI-compat shim.
+				// Gemini renders use native generateContent, countTokens, and Decisions endpoints.
+				// Other formats use the OpenAI-compatible endpoints.
 				let native = llm_request
 					.filter(|l| {
 						route_type == RouteType::GeminiCountTokens
@@ -1695,7 +1704,7 @@ impl AIProvider {
 			AIProvider::Gemini(_)
 				if matches!(
 					route_type,
-					RouteType::GenerateContent | RouteType::GeminiCountTokens
+					RouteType::GenerateContent | RouteType::GeminiCountTokens | RouteType::Decisions
 				) || llm_request
 					.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini))) =>
 			{
@@ -1956,6 +1965,7 @@ impl AIProvider {
 				managed_body,
 				tokenize,
 				log,
+				None,
 				|provider, req, _, _| provider.render_embeddings_request(req),
 			)
 			.await
@@ -1984,6 +1994,7 @@ impl AIProvider {
 				managed_body,
 				tokenize,
 				log,
+				None,
 				|provider, req, _, _| provider.render_rerank_request(req),
 			)
 			.await
@@ -1996,6 +2007,7 @@ impl AIProvider {
 		req: Request,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::decisions::Request>(policies, req, log)
@@ -2012,9 +2024,17 @@ impl AIProvider {
 				managed_body,
 				tokenize,
 				log,
-				|provider, req, _, llm| match provider
-					.non_chat_provider_format_for(InputFormat::Decisions, &llm.request_model)
-				{
+				catalog,
+				|provider, req, _, llm| match provider.non_chat_provider_format_for(
+					InputFormat::Decisions,
+					&llm.request_model,
+					catalog,
+				) {
+					Some(custom::ProviderFormat::Decisions) if matches!(provider, AIProvider::Gemini(_)) => {
+						let (body, state) = conversion::gemini::from_decisions::translate(req)?;
+						llm.provider_state = Some(ProviderState::GeminiDecisions(Arc::new(state)));
+						Ok(body)
+					},
 					Some(custom::ProviderFormat::SystemOne) => {
 						let (body, state) = conversion::systemone::from_decisions::translate(req)?;
 						llm.provider_state = Some(ProviderState::SystemOneDecisions(Arc::new(state)));
@@ -2033,6 +2053,7 @@ impl AIProvider {
 		req: Request,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::systemone::Request>(policies, req, log)
@@ -2049,9 +2070,17 @@ impl AIProvider {
 				managed_body,
 				tokenize,
 				log,
-				|provider, req, _, llm| match provider
-					.non_chat_provider_format_for(InputFormat::SystemOne, &llm.request_model)
-				{
+				catalog,
+				|provider, req, _, llm| match provider.non_chat_provider_format_for(
+					InputFormat::SystemOne,
+					&llm.request_model,
+					catalog,
+				) {
+					Some(custom::ProviderFormat::Decisions) if matches!(provider, AIProvider::Gemini(_)) => {
+						let (body, state) = conversion::gemini::from_systemone::translate(req)?;
+						llm.provider_state = Some(ProviderState::GeminiSystemOne(Arc::new(state)));
+						Ok(body)
+					},
 					Some(custom::ProviderFormat::Decisions) => {
 						let (body, state) = conversion::systemone::from_systemone::translate(req)?;
 						llm.provider_state = Some(ProviderState::DecisionsSystemOne(Arc::new(state)));
@@ -2122,6 +2151,7 @@ impl AIProvider {
 				.model
 				.as_deref()
 				.ok_or_else(|| AIError::MissingField("model not specified".into()))?,
+			catalog,
 		);
 		if use_local {
 			let count = num_tokens(
@@ -2156,6 +2186,7 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
+				catalog,
 				move |provider, req, parts, llm| {
 					provider.render_count_tokens_request(req, &parts.headers, &llm.request_model, catalog)
 				},
@@ -2188,6 +2219,7 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
+				None,
 				|provider, req, _, llm| {
 					provider.render_gemini_count_tokens_request(req, &llm.request_model)
 				},
@@ -2341,6 +2373,7 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
+				None,
 				|_, req, _, _| match req {
 					types::detect::Request::Raw(bytes)
 					| types::detect::Request::Multipart { body: bytes, .. } => Ok(bytes.to_vec()),
@@ -2632,6 +2665,7 @@ impl AIProvider {
 		mut managed_body: Body,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 		render: F,
 	) -> Result<RequestResult, AIError>
 	where
@@ -2649,6 +2683,7 @@ impl AIProvider {
 							.model()
 							.as_deref()
 							.ok_or_else(|| AIError::MissingField("model not specified".into()))?,
+						catalog,
 					)
 					.ok_or_else(|| {
 						AIError::UnsupportedConversion(strng::format!(
@@ -3197,6 +3232,9 @@ impl AIProvider {
 		bytes: Bytes,
 	) -> Result<(LLMResponse, Bytes), AIError> {
 		let bytes = match &req.provider_state {
+			Some(ProviderState::GeminiDecisions(state)) => Bytes::from(
+				conversion::gemini::from_decisions::translate_response(&bytes, state)?,
+			),
 			Some(ProviderState::SystemOneDecisions(state)) => Bytes::from(
 				conversion::systemone::from_decisions::translate_response(&bytes, state)?,
 			),
@@ -3213,6 +3251,9 @@ impl AIProvider {
 		bytes: Bytes,
 	) -> Result<(LLMResponse, Bytes), AIError> {
 		let bytes = match &req.provider_state {
+			Some(ProviderState::GeminiSystemOne(state)) => Bytes::from(
+				conversion::gemini::from_systemone::translate_response(&bytes, state)?,
+			),
 			Some(ProviderState::DecisionsSystemOne(state)) => Bytes::from(
 				conversion::systemone::from_systemone::translate_response(&bytes, state)?,
 			),
@@ -3587,6 +3628,12 @@ impl AIProvider {
 				// Passthrough; Vertex embeddings endpoint already returns OpenAI-compatible errors.
 				Ok(bytes.clone())
 			},
+			(AIProvider::Gemini(_), InputFormat::Decisions) => {
+				conversion::gemini::translate_error_to_decisions(bytes, status)
+			},
+			(AIProvider::Gemini(_), InputFormat::SystemOne) => {
+				conversion::gemini::translate_error_to_systemone(bytes)
+			},
 			(_, InputFormat::Detect(_) | InputFormat::Decisions | InputFormat::SystemOne) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
@@ -3641,6 +3688,63 @@ fn google_invalid_argument(message: &str) -> ::http::Response<Body> {
 		.header(::http::header::CONTENT_TYPE, "application/json")
 		.body(Body::from(body.to_string()))
 		.expect("failed to build gemini error response")
+}
+
+fn strip_translated_query(provider: &AIProvider, req: &mut Request) -> anyhow::Result<()> {
+	let keep_query_key = matches!(provider, AIProvider::Gemini(_))
+		&& !req.headers().contains_key(::http::header::AUTHORIZATION);
+	http::modify_req_uri(req, |uri| {
+		let Some(path_and_query) = uri.path_and_query.as_ref() else {
+			return Ok(());
+		};
+		let path = path_and_query.path().to_string();
+		let mut query = url::form_urlencoded::Serializer::new(String::new());
+		if keep_query_key && let Some(source) = path_and_query.query() {
+			for (key, value) in url::form_urlencoded::parse(source.as_bytes()) {
+				if matches!(key.as_ref(), "key" | "$key") {
+					query.append_pair(&key, &value);
+				}
+			}
+		}
+		let query = query.finish();
+		uri.path_and_query = Some(if query.is_empty() {
+			PathAndQuery::try_from(path)?
+		} else {
+			PathAndQuery::from_maybe_shared(format!("{path}?{query}"))?
+		});
+		Ok(())
+	})
+}
+
+fn request_was_translated(
+	provider: &AIProvider,
+	route_type: RouteType,
+	request: &LLMRequest,
+	bedrock_endpoint: Option<bedrock::BedrockEndpoint>,
+) -> bool {
+	match request.provider_state {
+		Some(
+			ProviderState::SystemOneDecisions(_)
+			| ProviderState::DecisionsSystemOne(_)
+			| ProviderState::GeminiSystemOne(_)
+			| ProviderState::GeminiDecisions(_),
+		) => return true,
+		Some(ProviderState::VertexGemini) => return request.input_format != InputFormat::Gemini,
+		_ => {},
+	}
+	if let (AIProvider::Bedrock(provider), Some(endpoint)) = (provider, bedrock_endpoint)
+		&& !bedrock_native_chat(provider, endpoint, Some(request))
+	{
+		return true;
+	}
+	let same_format = match request.input_format {
+		InputFormat::Completions => RouteType::Completions,
+		InputFormat::Messages => RouteType::Messages,
+		InputFormat::Responses => RouteType::Responses,
+		InputFormat::Gemini => RouteType::GenerateContent,
+		_ => return false,
+	};
+	route_type != same_format
 }
 
 /// Remove `alt` from the request query, keeping any other parameters (e.g. `key`).

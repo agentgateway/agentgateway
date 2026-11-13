@@ -1,0 +1,30 @@
+{
+  "model": "gemini-decision-1",
+  "input": [{
+    "role": "user",
+    "content": [
+      {"type": "input_json", "data": {"reset_worked": true}},
+      {"type": "input_text", "text": "The user can log in now."}
+    ]
+  }],
+  "questions": [
+    {"type": "predicate", "name": "same", "instructions": "Can the user log in?"},
+    {"type": "predicate", "name": "same", "instructions": "Did the password reset work?"},
+    {
+      "type": "choice",
+      "instructions": "Pick a typed outcome.",
+      "choices": [
+        {"value": true, "description": "Resolved."},
+        {"value": "true"},
+        {"value": "true_"},
+        {"value": false, "description": "Unresolved."}
+      ]
+    },
+    {
+      "type": "score",
+      "name": "resolution with spaces",
+      "instructions": "How complete is the resolution?",
+      "levels": [{"label": "unresolved"}, {"label": "partial"}, {"label": "complete"}]
+    }
+  ]
+}

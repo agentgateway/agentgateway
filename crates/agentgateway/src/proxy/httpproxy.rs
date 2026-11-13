@@ -2510,6 +2510,7 @@ async fn process_llm_request(
 			req,
 			llm.tokenize,
 			log,
+			catalog,
 		))
 		.await
 		.map_err(ProxyError::AIRequest)?,
@@ -2519,6 +2520,7 @@ async fn process_llm_request(
 			req,
 			llm.tokenize,
 			log,
+			catalog,
 		))
 		.await
 		.map_err(ProxyError::AIRequest)?,

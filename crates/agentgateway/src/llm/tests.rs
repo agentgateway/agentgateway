@@ -3073,6 +3073,94 @@ fn setup_request_drops_inbound_query_only_when_translated() {
 }
 
 #[test]
+fn setup_request_preserves_gemini_query_auth_with_host_override() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let decision_request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "test",
+		"questions": [{"type": "predicate", "instructions": "test?"}]
+	}))
+	.expect("decision request should parse");
+	let (_, state) = conversion::gemini::from_decisions::translate(&decision_request)
+		.expect("decision request should translate");
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Decisions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-decision-1".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::GeminiDecisions(state.into())),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/decisions?key=client-key&foo=bar",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Decisions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/decisions");
+	assert_eq!(req.uri().query(), Some("key=client-key"));
+}
+
+#[test]
+fn setup_request_drops_translated_query_with_host_override() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-2.5-flash".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::VertexGemini),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/messages?beta=true",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/messages");
+	assert_eq!(req.uri().query(), None);
+}
+
+#[test]
 fn setup_request_custom_generate_content_defaults_to_the_native_path() {
 	// A static configured path cannot carry the model or the streaming method, so the
 	// default for the native Gemini chat format is the canonical Gemini API shape.
@@ -3481,7 +3569,7 @@ fn azure_decisions_capability(
 		resource_type,
 	});
 	assert_eq!(
-		provider.non_chat_provider_format_for(InputFormat::Decisions, "deployment-alias"),
+		provider.non_chat_provider_format_for(InputFormat::Decisions, "deployment-alias", None),
 		expected
 	);
 }
@@ -3514,7 +3602,14 @@ async fn azure_foundry_uses_systemone_with_deployment_alias() {
 		request,
 		upstream_route_type,
 	} = provider
-		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.process_decisions_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
 		.await
 		.expect("Foundry Decisions should convert")
 	else {
@@ -3541,7 +3636,14 @@ async fn azure_foundry_uses_systemone_with_deployment_alias() {
 		request,
 		upstream_route_type,
 	} = provider
-		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.process_systemone_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
 		.await
 		.expect("Foundry SystemOne should forward natively")
 	else {
@@ -3651,7 +3753,7 @@ fn copilot_decisions_capability(
 		model_override: None,
 	});
 	assert_eq!(
-		provider.non_chat_provider_format_for(InputFormat::Decisions, model),
+		provider.non_chat_provider_format_for(InputFormat::Decisions, model, None),
 		expected
 	);
 	assert!(
@@ -3684,7 +3786,14 @@ async fn copilot_uses_systemone_with_model_override() {
 		request,
 		upstream_route_type,
 	} = provider
-		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.process_decisions_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
 		.await
 		.expect("Copilot Decisions should convert")
 	else {
@@ -3710,7 +3819,14 @@ async fn copilot_uses_systemone_with_model_override() {
 		request,
 		upstream_route_type,
 	} = provider
-		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.process_systemone_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
 		.await
 		.expect("Copilot SystemOne should forward natively")
 	else {

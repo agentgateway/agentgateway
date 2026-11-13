@@ -1481,8 +1481,8 @@ pub mod typed {
 
 	#[derive(Debug, Deserialize, Serialize)]
 	pub struct GoogleError {
-		/// The numeric error code (e.g. 400).
-		pub code: i32,
+		/// The error code: numeric (e.g. 400) on most endpoints, a string (e.g. "safety") on Decisions.
+		pub code: serde_json::Value,
 		/// The human-readable error message.
 		pub message: String,
 		/// The programmatic error status (e.g. "INVALID_ARGUMENT", "RESOURCE_EXHAUSTED").

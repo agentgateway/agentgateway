@@ -332,6 +332,13 @@ impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.state.load().snapshot.get_model_tags(model_id)
 	}
+	fn model_supports_endpoint(&self, provider_id: &str, model_id: &str, endpoint: &str) -> bool {
+		self
+			.state
+			.load()
+			.snapshot
+			.model_supports_endpoint(provider_id, model_id, endpoint)
+	}
 }
 
 impl agent_llm::model_catalog::ModelCatalogHandle for CatalogSnapshot {
@@ -340,6 +347,9 @@ impl agent_llm::model_catalog::ModelCatalogHandle for CatalogSnapshot {
 	}
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.get_model_tags(model_id)
+	}
+	fn model_supports_endpoint(&self, provider_id: &str, model_id: &str, endpoint: &str) -> bool {
+		self.model_supports_endpoint(provider_id, model_id, endpoint)
 	}
 }
 
@@ -374,6 +384,13 @@ impl CatalogSnapshot {
 
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.model_tags.get(model_id).cloned()
+	}
+
+	fn model_supports_endpoint(&self, provider_id: &str, model_id: &str, endpoint: &str) -> bool {
+		self
+			.model(provider_id, model_id)
+			.and_then(|model| model.endpoints.as_ref())
+			.is_some_and(|endpoints| endpoints.iter().any(|candidate| candidate == endpoint))
 	}
 
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
@@ -2123,6 +2140,21 @@ mod tests {
 		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(5.0));
+	}
+
+	#[tokio::test]
+	async fn builtin_catalog_marks_gemini_decision_endpoint() {
+		let catalog = ModelCatalog::new(Vec::new()).await.unwrap();
+		assert!(catalog.as_handle().model_supports_endpoint(
+			gemini::Provider::NAME.as_str(),
+			"gemini-decision-1",
+			"/decisions",
+		));
+		assert!(!catalog.as_handle().model_supports_endpoint(
+			gemini::Provider::NAME.as_str(),
+			"gemini-2.5-flash",
+			"/decisions",
+		));
 	}
 
 	#[tokio::test]
