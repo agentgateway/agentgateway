@@ -2312,7 +2312,7 @@ async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
 }
 
 #[rstest::rstest]
-#[case::preserves_path(None, None, "/v1/messages?trace=repro")]
+#[case::drops_translated_query(None, None, "/v1/messages")]
 #[case::path_override(Some("/custom/chat/completions"), None, "/custom/chat/completions")]
 #[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses")]
 #[tokio::test]
