@@ -26,10 +26,20 @@ pub struct ImportPlan {
 	pub providers: Vec<ImportedProvider>,
 	pub models: Vec<ImportedModel>,
 	pub routes: IndexMap<String, ImportedRoute>,
+	pub inbound_api_key: Option<ImportedInboundAPIKey>,
 	pub findings: Vec<ImportFinding>,
 	/// Outlier-detection policy applied to emitted model backends that do not override it. Populated from
 	/// source-wide health settings (for example LiteLLM `router_settings.cooldown_time`).
 	pub model_health: Option<Value>,
+}
+
+#[derive(Debug)]
+pub struct ImportedInboundAPIKey {
+	pub key: String,
+	/// `None` omits `location` entirely, relying on the schema's own default
+	/// (`Authorization: Bearer`). `Some` is used only for a custom header,
+	/// which the schema has no default for.
+	pub location: Option<Value>,
 }
 
 #[derive(Debug)]
@@ -153,6 +163,7 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		providers,
 		models,
 		routes,
+		inbound_api_key,
 		findings,
 		model_health,
 	} = plan;
@@ -289,6 +300,20 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 	}
 	if !virtual_models.is_empty() {
 		llm.insert("virtualModels".to_string(), Value::Array(virtual_models));
+	}
+	let mut llm_policies = Map::new();
+	if let Some(api_key) = inbound_api_key {
+		let mut policy = Map::from_iter([
+			("keys".to_string(), json!([{"key": api_key.key}])),
+			("mode".to_string(), json!("strict")),
+		]);
+		if let Some(location) = api_key.location {
+			policy.insert("location".to_string(), location);
+		}
+		llm_policies.insert("apiKey".to_string(), Value::Object(policy));
+	}
+	if !llm_policies.is_empty() {
+		llm.insert("policies".to_string(), Value::Object(llm_policies));
 	}
 	config
 		.as_object_mut()
@@ -448,6 +473,7 @@ impl ConfigImporter for LiteLlmImporter {
 		if let Some((source_path, fallbacks)) = fallbacks {
 			apply_fallbacks(fallbacks, source_path, &mut plan);
 		}
+		apply_litellm_inbound_api_key(&config.general_settings, &mut plan)?;
 
 		let router_default_fallbacks = config.router_settings.get("default_fallbacks");
 		let litellm_default_fallbacks = config.litellm_settings.get("default_fallbacks");
@@ -607,6 +633,11 @@ impl ConfigImporter for LiteLlmImporter {
 			("environment_variables", &config.environment_variables),
 		] {
 			for setting in values.keys() {
+				if section == "general_settings"
+					&& matches!(setting.as_str(), "master_key" | "litellm_key_header_name")
+				{
+					continue;
+				}
 				if setting == "database_url"
 					|| (section == "environment_variables" && setting == "DATABASE_URL")
 				{
@@ -773,6 +804,105 @@ fn report_litellm_cache_value(
 		},
 		_ => {},
 	}
+}
+
+/// Maps LiteLLM's `general_settings.master_key` (and an optional custom
+/// `litellm_key_header_name`) to a standalone inbound `apiKey` policy.
+fn apply_litellm_inbound_api_key(
+	settings: &Map<String, Value>,
+	plan: &mut ImportPlan,
+) -> anyhow::Result<()> {
+	let Some(master_key) = settings.get("master_key") else {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.master_key".to_string(),
+			status: ImportStatus::Manual,
+			message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+				.to_string(),
+		});
+		if settings.contains_key("litellm_key_header_name") {
+			plan.findings.push(ImportFinding {
+				source_path: "general_settings.litellm_key_header_name".to_string(),
+				status: ImportStatus::Manual,
+				message:
+					"LiteLLM custom API-key header has no master_key to authenticate and was not emitted"
+						.to_string(),
+			});
+		}
+		return Ok(());
+	};
+
+	let Value::String(master_key) = master_key else {
+		bail!("general_settings.master_key must be a string, got {master_key}");
+	};
+
+	let mut literal_key_contains_dollar = false;
+	match master_key.strip_prefix("os.environ/") {
+		Some("") => bail!("general_settings.master_key's environment reference must name a variable"),
+		Some(_) => {},
+		None => {
+			if master_key.is_empty() {
+				bail!("general_settings.master_key must not be empty");
+			}
+			literal_key_contains_dollar = master_key.contains('$');
+		},
+	}
+	// Reuse the same `os.environ/NAME` -> `$NAME` normalization every other
+	// imported field already goes through, so the master key expands the same
+	// way as everything else agentgateway's config loader resolves.
+	let Value::String(key) = normalize_environment_references(Value::String(master_key.clone()))
+	else {
+		unreachable!("normalize_environment_references preserves the String variant");
+	};
+
+	let (location, status, message) = match settings.get("litellm_key_header_name") {
+		None => (
+			None,
+			ImportStatus::Approximate,
+			"Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+				.to_string(),
+		),
+		Some(Value::String(name)) => {
+			let Ok(name) = ::http::HeaderName::from_bytes(name.as_bytes()) else {
+				bail!("general_settings.litellm_key_header_name {name:?} is not a valid HTTP header name");
+			};
+			(
+				Some(json!({"header": {"name": name.as_str()}})),
+				ImportStatus::Approximate,
+				"Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+					.to_string(),
+			)
+		},
+		Some(other) => {
+			bail!("general_settings.litellm_key_header_name must be a string, got {other}")
+		},
+	};
+
+	plan.inbound_api_key = Some(ImportedInboundAPIKey { key, location });
+	plan.findings.push(ImportFinding {
+		source_path: "general_settings.master_key".to_string(),
+		status,
+		message,
+	});
+	if literal_key_contains_dollar {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.master_key".to_string(),
+			status: ImportStatus::Manual,
+			message: "This literal master_key contains '$'; agentgateway's config loader expands $VAR references in string values, so this key may not load as written. Move it to an environment variable with os.environ/VAR_NAME instead"
+				.to_string(),
+		});
+	}
+	if matches!(
+		settings.get("litellm_key_header_name"),
+		Some(Value::String(_))
+	) {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.litellm_key_header_name".to_string(),
+			status: ImportStatus::Exact,
+			message: "Mapped LiteLLM's custom API-key header name to the inbound API-key policy"
+				.to_string(),
+		});
+	}
+	Ok(())
 }
 
 fn report_litellm_database(findings: &mut Vec<ImportFinding>, source_path: &str) {
@@ -2196,6 +2326,37 @@ mod tests {
 		});
 	}
 
+	fn assert_litellm_bail(name: &str, expected_message_substring: &str) {
+		let input_path = fixture_path(name);
+		let input = fs::read_to_string(&input_path)
+			.unwrap_or_else(|error| panic!("{}: {error}", input_path.display()));
+		let error = import_config("litellm", &input)
+			.expect_err(&format!("{}: expected an error", input_path.display()));
+		let message = error.to_string();
+		assert!(
+			message.contains(expected_message_substring),
+			"{}: expected {expected_message_substring:?} in {message:?}",
+			input_path.display()
+		);
+	}
+
+	/// Like [`assert_litellm_bail`], but requires the exact message: several
+	/// `master_key` failure modes only differ by wording, and a substring match
+	/// on "master_key" alone can't tell them apart.
+	fn assert_litellm_bail_exact(name: &str, expected_message: &str) {
+		let input_path = fixture_path(name);
+		let input = fs::read_to_string(&input_path)
+			.unwrap_or_else(|error| panic!("{}: {error}", input_path.display()));
+		let error = import_config("litellm", &input)
+			.expect_err(&format!("{}: expected an error", input_path.display()));
+		assert_eq!(
+			error.to_string(),
+			expected_message,
+			"{}",
+			input_path.display()
+		);
+	}
+
 	#[test]
 	fn imports_litellm_models_load_balancing_and_fallbacks() {
 		assert_litellm_golden("load-balancing-fallbacks");
@@ -2249,6 +2410,63 @@ mod tests {
 	#[test]
 	fn reports_invalid_or_ambiguous_upstream_headers() {
 		assert_litellm_golden("invalid-upstream-headers");
+	}
+
+	#[test]
+	fn imports_litellm_inbound_api_key_policy() {
+		assert_litellm_golden("inbound-api-key");
+	}
+
+	#[test]
+	fn imports_literal_litellm_master_key() {
+		assert_litellm_golden("inbound-api-key-literal");
+	}
+
+	#[test]
+	fn rejects_invalid_litellm_api_key_header_name() {
+		assert_litellm_bail("inbound-api-key-invalid-header", "litellm_key_header_name");
+	}
+
+	#[test]
+	fn rejects_non_string_litellm_master_key() {
+		assert_litellm_bail_exact(
+			"inbound-api-key-non-string",
+			"general_settings.master_key must be a string, got 12345",
+		);
+	}
+
+	#[test]
+	fn rejects_empty_litellm_master_key_environment_reference() {
+		assert_litellm_bail_exact(
+			"inbound-api-key-empty-env",
+			"general_settings.master_key's environment reference must name a variable",
+		);
+	}
+
+	#[test]
+	fn rejects_non_string_litellm_api_key_header_name() {
+		assert_litellm_bail(
+			"inbound-api-key-non-string-header",
+			"litellm_key_header_name",
+		);
+	}
+
+	#[test]
+	fn rejects_empty_litellm_master_key() {
+		assert_litellm_bail_exact(
+			"inbound-api-key-empty-literal",
+			"general_settings.master_key must not be empty",
+		);
+	}
+
+	#[test]
+	fn reports_litellm_api_key_header_without_master_key() {
+		assert_litellm_golden("inbound-api-key-header-without-master-key");
+	}
+
+	#[test]
+	fn warns_on_literal_litellm_master_key_containing_dollar() {
+		assert_litellm_golden("inbound-api-key-literal-dollar");
 	}
 
 	#[test]

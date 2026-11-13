@@ -1,0 +1,36 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/inbound-api-key-literal-dollar.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-ab$cd
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "This literal master_key contains '$'; agentgateway's config loader expands $VAR references in string values, so this key may not load as written. Move it to an environment variable with os.environ/VAR_NAME instead"
