@@ -1,8 +1,9 @@
 use agent_core::strng::{self, Strng};
 use rmcp::model::{
 	CallToolRequestMethod, CompleteRequestMethod, ConstString, GetPromptRequestMethod,
-	ListPromptsRequestMethod, ListResourceTemplatesRequestMethod, ListResourcesRequestMethod,
-	ListToolsRequestMethod, ReadResourceRequestMethod, SubscribeRequestMethod,
+	GetSkillRequestMethod, ListPromptsRequestMethod, ListResourceTemplatesRequestMethod,
+	ListResourcesRequestMethod, ListSkillsRequestMethod, ListToolsRequestMethod,
+	ReadResourceDirectoryRequestMethod, ReadResourceRequestMethod, SubscribeRequestMethod,
 	UnsubscribeRequestMethod,
 };
 
@@ -11,6 +12,9 @@ use rmcp::model::{
 pub const TOOLS_CALL: Strng = strng::literal!(CallToolRequestMethod::VALUE);
 pub const PROMPTS_GET: Strng = strng::literal!(GetPromptRequestMethod::VALUE);
 pub const RESOURCES_READ: Strng = strng::literal!(ReadResourceRequestMethod::VALUE);
+pub const RESOURCES_DIRECTORY_READ: Strng =
+	strng::literal!(ReadResourceDirectoryRequestMethod::VALUE);
+pub const SKILLS_GET: Strng = strng::literal!(GetSkillRequestMethod::VALUE);
 
 // Method names for the fanout list requests, one per dedicated `Relay::merge_*`
 // function. Used to populate `mcp.methodName` for RBAC authorization (see
@@ -21,6 +25,7 @@ pub const PROMPTS_LIST: Strng = strng::literal!(ListPromptsRequestMethod::VALUE)
 pub const RESOURCES_LIST: Strng = strng::literal!(ListResourcesRequestMethod::VALUE);
 pub const RESOURCES_TEMPLATES_LIST: Strng =
 	strng::literal!(ListResourceTemplatesRequestMethod::VALUE);
+pub const SKILLS_LIST: Strng = strng::literal!(ListSkillsRequestMethod::VALUE);
 
 // Single-target methods that don't run the request-phase hook yet; only the
 // response phase fires for them.

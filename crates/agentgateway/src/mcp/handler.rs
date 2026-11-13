@@ -14,9 +14,9 @@ use rmcp::model::{
 	CacheScope, CallToolRequestMethod, ClientJsonRpcMessage, ClientNotification, ClientRequest,
 	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, GetMeta, Implementation,
 	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
-	ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, RequestId,
-	RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerJsonRpcMessage,
-	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
+	ListResourcesResult, ListSkillsResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+	RequestId, RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerJsonRpcMessage,
+	ServerNotification, ServerRequest, ServerResult, Skill, SkillResources, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
 
@@ -57,6 +57,7 @@ fn list_params_mut(request: &mut ClientRequest) -> Option<&mut Option<PaginatedR
 		ClientRequest::ListPromptsRequest(r) => Some(&mut r.params),
 		ClientRequest::ListResourcesRequest(r) => Some(&mut r.params),
 		ClientRequest::ListResourceTemplatesRequest(r) => Some(&mut r.params),
+		ClientRequest::ListSkillsRequest(r) => Some(&mut r.params),
 		_ => None,
 	}
 }
@@ -67,6 +68,7 @@ fn list_next_cursor_mut(result: &mut ServerResult) -> Option<&mut Option<String>
 		ServerResult::ListPromptsResult(r) => Some(&mut r.next_cursor),
 		ServerResult::ListResourcesResult(r) => Some(&mut r.next_cursor),
 		ServerResult::ListResourceTemplatesResult(r) => Some(&mut r.next_cursor),
+		ServerResult::ListSkillsResult(r) => Some(&mut r.next_cursor),
 		_ => None,
 	}
 }
@@ -175,6 +177,18 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 	}
 }
 
+// A skill is a set of resources, so every URI in its entry (the skill itself and each file in
+// its manifest) is namespaced like a resource URI. `resources/read` then routes the files of a
+// skill to the target that serves it.
+fn namespace_skill(default_target_name: Option<&String>, target: &str, skill: &mut Skill) {
+	skill.uri = resource_uri(default_target_name, target, &skill.uri);
+	if let SkillResources::Files(files) = &mut skill.resources {
+		for file in files {
+			file.uri = resource_uri(default_target_name, target, &file.uri);
+		}
+	}
+}
+
 pub(super) fn rewrite_resource_messages(
 	default_target_name: Option<&String>,
 	target: &str,
@@ -202,6 +216,11 @@ pub(super) fn rewrite_resource_messages(
 				_ => {},
 			}
 		}
+	}
+	if let ServerJsonRpcMessage::Response(resp) = &mut message
+		&& let ServerResult::GetSkillResult(get) = &mut resp.result
+	{
+		namespace_skill(default_target_name, target, &mut get.skill);
 	}
 	message
 }
@@ -424,6 +443,37 @@ impl Relay {
 				&mut resource_allowed,
 				message,
 			)
+		})
+	}
+
+	// `resources/directory/read` shares its result type with `resources/list` but is answered by
+	// one target, so no merge function sees it. Its children are filtered and namespaced like a
+	// resource listing, so the directory can't reveal resources the caller can't read.
+	fn rewrite_directory_listing(
+		&self,
+		target: &str,
+		stream: Messages,
+		cel: CelExecWrapper,
+	) -> Messages {
+		let target = target.to_string();
+		let default_target_name = self.upstreams.default_target_name.clone();
+		let policies = self.policies.clone();
+		stream.map_server_messages(move |mut message| {
+			if let ServerJsonRpcMessage::Response(resp) = &mut message
+				&& let ServerResult::ListResourcesResult(dir) = &mut resp.result
+			{
+				dir.resources.retain(|r| {
+					policies.validate(
+						&rbac::ResourceType::Resource(rbac::ResourceId::new(target.clone(), r.uri.to_string())),
+						&crate::mcp::guardrails::methods::RESOURCES_DIRECTORY_READ,
+						&cel,
+					)
+				});
+				for r in &mut dir.resources {
+					r.uri = resource_uri(default_target_name.as_ref(), &target, &r.uri);
+				}
+			}
+			message
 		})
 	}
 
@@ -1078,6 +1128,57 @@ impl Relay {
 			)
 		})
 	}
+	pub fn merge_skills(&self) -> Box<MergeFn> {
+		let policies = self.policies.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
+		Box::new(move |streams, cel| {
+			let skills = streams
+				.into_iter()
+				.map(|(server_name, s)| {
+					let skills = match s {
+						ServerResult::ListSkillsResult(lsr) => lsr.skills,
+						_ => return Err(incompatible_upstream_result("skills/list")),
+					};
+					Ok(
+						skills
+							.into_iter()
+							.filter(|skill| {
+								policies.validate(
+									&rbac::ResourceType::Resource(rbac::ResourceId::new(
+										server_name.to_string(),
+										skill.uri.clone(),
+									)),
+									&crate::mcp::guardrails::methods::SKILLS_LIST,
+									cel,
+								)
+							})
+							// Prefix skill URIs with service name when multiplexing to avoid conflicts
+							.map(|mut skill| {
+								namespace_skill(
+									default_target_name.as_ref(),
+									server_name.as_str(),
+									&mut skill,
+								);
+								skill
+							})
+							.collect_vec(),
+					)
+				})
+				.collect::<Result<Vec<Vec<_>>, ClientError>>()?
+				.into_iter()
+				.flatten()
+				.collect_vec();
+			Ok(
+				ListSkillsResult {
+					skills,
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
+				.into(),
+			)
+		})
+	}
 	pub fn merge_resource_templates(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
@@ -1158,6 +1259,9 @@ impl Relay {
 			&r.request,
 			ClientRequest::DiscoverRequest(_) | ClientRequest::SubscriptionsListenRequest(_)
 		);
+		// Skills are an optional extension. A target that rejects `skills/list` serves no skills;
+		// the merge skips it (see `send_fanout_to`).
+		let skills_list = matches!(&r.request, ClientRequest::ListSkillsRequest(_));
 		let selected_upstreams = self
 			.upstreams
 			.iter_named()
@@ -1225,15 +1329,16 @@ impl Relay {
 			match result {
 				Ok(s) => streams.push((name, s)),
 				Err(e) => {
-					let method_rejection = fail_on_method_rejection
-						&& match &e {
-							UpstreamError::InvalidMethod(_) => true,
-							UpstreamError::Http(ClientError::Status(response)) => matches!(
-								response.status(),
-								StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
-							),
+					let method_rejection = match &e {
+						UpstreamError::InvalidMethod(_) => fail_on_method_rejection || skills_list,
+						UpstreamError::Http(ClientError::Status(response)) => match response.status() {
+							// Modern upstreams answer an unknown method with 404.
+							StatusCode::NOT_FOUND => fail_on_method_rejection || skills_list,
+							StatusCode::BAD_REQUEST | StatusCode::METHOD_NOT_ALLOWED => fail_on_method_rejection,
 							_ => false,
-						};
+						},
+						_ => false,
+					};
 					if method_rejection {
 						streams.push((
 							name,
@@ -1391,6 +1496,8 @@ impl Relay {
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
 		let mcp_log = mcp_log.or_else(|| ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned());
 		let cel = CelExecWrapper::from(ctx.clone());
+		let directory_cel =
+			matches!(&r.request, ClientRequest::ReadResourceDirectoryRequest(_)).then(|| cel.clone());
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(
@@ -1400,6 +1507,10 @@ impl Relay {
 			.await?,
 			cel,
 		);
+		let stream = match directory_cel {
+			Some(cel) => self.rewrite_directory_listing(service_name, stream, cel),
+			None => stream,
+		};
 		let stream = track_outbound_server_requests_for_downstream(
 			service_name.into(),
 			stream,
@@ -1637,6 +1748,8 @@ impl Relay {
 		let id = r.id.clone();
 		// Preserve discovery errors through the merge for protocol fallback.
 		let fail_on_discovery_rejection = matches!(&r.request, ClientRequest::DiscoverRequest(_));
+		// Skills are an optional extension, so a target without it must not fail the listing.
+		let skip_method_rejection = matches!(&r.request, ClientRequest::ListSkillsRequest(_));
 		let (streams, service_names) = self
 			.fanout_open_streams(&r, &mut ctx, target_names, request_for_target)
 			.await?;
@@ -1673,7 +1786,8 @@ impl Relay {
 			cel,
 			self.upstreams.failure_mode,
 			fail_on_discovery_rejection,
-		);
+		)
+		.with_skip_method_rejection(skip_method_rejection);
 
 		// Response-phase hook runs once on the merged (muxed) result.
 		respond_with_guardrails(
@@ -2112,6 +2226,14 @@ fn normalize_outbound_for_protocol(
 			normalize_result_type(&mut r.result_type, downstream_modern);
 			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
+		ServerResult::ListSkillsResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::GetSkillResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
 		ServerResult::CompleteResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
 		ServerResult::GetPromptResult(r) => {
 			normalize_result_type(&mut r.result_type, downstream_modern)
@@ -2184,6 +2306,14 @@ fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMess
 			r.cache_scope = Some(CacheScope::Private);
 		},
 		ServerResult::ReadResourceResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListSkillsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::GetSkillResult(r) => {
 			r.ttl_ms = Some(0);
 			r.cache_scope = Some(CacheScope::Private);
 		},
