@@ -28,11 +28,21 @@ pub enum BedrockEndpoint {
 	Mantle,
 }
 
+/// Which chat API a model uses on Bedrock Runtime.
+#[apply(schema_enum!)]
+pub enum BedrockRuntimeApi {
+	/// Translate chat requests to the Converse API.
+	Converse,
+	/// Forward chat requests to Runtime's native OpenAI and Anthropic APIs, like Mantle.
+	Native,
+}
+
 // Mantle signs SigV4 under this name instead of the default "bedrock".
 const MANTLE_SIGNING_SERVICE_NAME: &str = "bedrock-mantle";
 
 // Runtime chat uses Converse unless AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE=false, in which case it
-// uses the native OpenAI/Anthropic APIs, like Mantle. Temporary until native becomes the default.
+// uses the native OpenAI/Anthropic APIs, like Mantle. `Provider::runtime_api` overrides it per
+// provider. Temporary until native becomes the default.
 static RUNTIME_CONVERSE: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
 	std::env::var("AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE").map_or(true, |v| v != "false")
 });
@@ -54,6 +64,10 @@ pub struct Provider {
 	/// Which endpoint to prefer (Runtime vs Mantle).
 	#[serde(default)]
 	pub endpoint_preference: BedrockEndpointPreference,
+	/// Chat API on Runtime. Unset follows `AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE` (Converse by
+	/// default).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub runtime_api: Option<BedrockRuntimeApi>,
 }
 
 impl super::Provider for Provider {
@@ -124,7 +138,10 @@ impl Provider {
 	pub fn native_chat(&self, endpoint: BedrockEndpoint) -> bool {
 		match endpoint {
 			BedrockEndpoint::Mantle => true,
-			BedrockEndpoint::Runtime => !*RUNTIME_CONVERSE,
+			BedrockEndpoint::Runtime => match self.runtime_api {
+				Some(api) => api == BedrockRuntimeApi::Native,
+				None => !*RUNTIME_CONVERSE,
+			},
 		}
 	}
 
@@ -339,6 +356,7 @@ mod tests {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: pref,
+			runtime_api: None,
 		}
 	}
 
@@ -434,6 +452,56 @@ mod tests {
 			p.resolve_endpoint(RouteType::Embeddings, Some("only.mantle"), catalog),
 			BedrockEndpoint::Runtime
 		);
+	}
+
+	#[test]
+	fn runtime_api_selects_native_or_converse_chat_on_runtime() {
+		let model = "global.openai.gpt-6.1-sol";
+		let runtime = BedrockEndpoint::Runtime;
+		let mut p = provider(BedrockEndpointPreference::RuntimeOnly);
+
+		p.runtime_api = Some(BedrockRuntimeApi::Native);
+		assert!(p.native_chat(runtime));
+		assert_eq!(
+			p.get_path_for_route(
+				RouteType::Responses,
+				false,
+				model,
+				runtime,
+				p.native_chat(runtime)
+			)
+			.as_str(),
+			"/openai/v1/responses"
+		);
+		assert_eq!(
+			p.supported_chat_formats(model, None),
+			vec![
+				ChatFormat::OpenAICompletions,
+				ChatFormat::OpenAIResponses,
+				ChatFormat::BedrockConverse
+			]
+		);
+
+		p.runtime_api = Some(BedrockRuntimeApi::Converse);
+		assert!(!p.native_chat(runtime));
+		assert_eq!(
+			p.get_path_for_route(
+				RouteType::Responses,
+				false,
+				model,
+				runtime,
+				p.native_chat(runtime)
+			)
+			.as_str(),
+			"/model/global.openai.gpt-6.1-sol/converse"
+		);
+		assert_eq!(
+			p.supported_chat_formats(model, None),
+			vec![ChatFormat::BedrockConverse]
+		);
+
+		// Mantle has no Converse API, whatever the Runtime setting.
+		assert!(p.native_chat(BedrockEndpoint::Mantle));
 	}
 
 	#[test]
