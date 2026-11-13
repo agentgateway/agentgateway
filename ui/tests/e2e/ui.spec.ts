@@ -44,6 +44,10 @@ test('core pages render with mocked gateway data', async ({ page }) => {
 		await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
 		await expect(page.locator('body')).not.toContainText('Configuration API unavailable');
 	}
+
+	await page.goto('/traffic/policies');
+	await expect(page.getByText('Readonly policies unavailable')).toBeVisible();
+	await expect(page.getByText('Readonly mode')).toHaveCount(0);
 });
 
 test('log detail renders the normalized conversation', async ({ page }) => {

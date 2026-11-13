@@ -35,7 +35,7 @@ export function DumpPoliciesPage() {
 				title="Policies"
 				description="Read-only top-level policies from the active gateway dump."
 			/>
-			<ReadonlyModeBanner />
+			{dumpMode ? <ReadonlyModeBanner /> : null}
 
 			<Panel>
 				{mode.isLoading ? (
