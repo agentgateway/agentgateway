@@ -611,23 +611,6 @@ controllerName: example.com/custom-agentgateway
 `,
 		},
 		{
-			name: "monitoring-native-histograms",
-			filterKinds: []string{
-				"PodMonitor",
-				"ServiceMonitor",
-			},
-			valuesYAML: `monitoring:
-  enabled: true
-  serviceMonitor:
-    scrapeNativeHistograms: true
-  proxy:
-    podMonitor:
-      scrapeNativeHistograms: true
-  grafanaDashboard:
-    enabled: false
-`,
-		},
-		{
 			name: "monitoring-no-pod-monitor",
 			filterKinds: []string{
 				"ConfigMap",

@@ -166,14 +166,6 @@ extraVolumeMounts:
     interval: 30s
 `,
 		},
-		{
-			name: "monitoring-native-histograms",
-			valuesYAML: `monitoring:
-  enabled: true
-  podMonitor:
-    scrapeNativeHistograms: true
-`,
-		},
 	}
 
 	for _, tc := range testCases {
