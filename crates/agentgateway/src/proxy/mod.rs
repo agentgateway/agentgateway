@@ -85,6 +85,7 @@ impl ProxyError {
 			| ProxyError::BackendAuthenticationFailed(
 				http::auth::BackendAuthError::CredentialProvider(_),
 			)
+			| ProxyError::SubstrateEgressFailed(_)
 			| ProxyError::UpstreamTCPProxy(_) => ProxyResponseReason::UpstreamFailure,
 			ProxyError::RequestTimeout | ProxyError::UpstreamCallTimeout => ProxyResponseReason::Timeout,
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
@@ -267,6 +268,8 @@ pub enum ProxyError {
 	SubstrateEgressUpgradeDenied(&'static str),
 	#[error("{0}")]
 	SubstrateEgressUnavailable(String),
+	#[error("{0}")]
+	SubstrateEgressFailed(String),
 	#[error("rate limit exceeded")]
 	RateLimitExceeded {
 		limit: u64,
@@ -452,6 +455,7 @@ impl ProxyError {
 			ProxyError::SubstrateEgressDenied(_) => "actor egress policy denied",
 			ProxyError::SubstrateEgressUpgradeDenied(message) => return (*message).into(),
 			ProxyError::SubstrateEgressUnavailable(_) => "service unavailable",
+			ProxyError::SubstrateEgressFailed(_) => "backend authentication failed",
 			ProxyError::RequestLimitExceeded => "request limit exceeded",
 			ProxyError::GuardrailRejected { .. } => "request rejected by guardrail",
 			ProxyError::DirectResponse { .. } => "direct response",
@@ -579,6 +583,7 @@ impl ProxyError {
 				StatusCode::FORBIDDEN
 			},
 			ProxyError::SubstrateEgressUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::SubstrateEgressFailed(_) => StatusCode::BAD_GATEWAY,
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
