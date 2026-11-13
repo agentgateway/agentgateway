@@ -441,6 +441,15 @@ fn rewrite_authorization_server_metadata(
 			if let Some(aud) = auth.audiences.first() {
 				ae.push_str(&format!("?audience={}", aud));
 			}
+			// Auth0's own registration endpoint is only live when Dynamic Application
+			// Registration is enabled on the tenant, and it is not proxied, so clients that
+			// follow this metadata bypass the `clientId` short-circuit entirely. Point them at
+			// the gateway's registration handler, as every other provider adapter does.
+			if let Some(serde_json::Value::String(re)) =
+				json::traverse_mut(resp, &["registration_endpoint"])
+			{
+				*re = format!("{current_uri}/client-registration");
+			}
 		},
 		Some(McpIDP::Okta {}) => {
 			// Okta does not support RFC 8707. Workaround by appending audience as a query param.
@@ -1001,6 +1010,7 @@ mod tests {
 	#[tokio::test]
 	async fn provider_metadata_uses_configured_authorization_server(
 		#[values(
+			McpIDP::Auth0 {},
 			McpIDP::Okta {},
 			McpIDP::Descope {},
 			McpIDP::Keycloak {},
@@ -1044,6 +1054,7 @@ mod tests {
 	#[rstest::rstest]
 	fn provider_metadata_falls_back_to_request_url(
 		#[values(
+			McpIDP::Auth0 {},
 			McpIDP::Okta {},
 			McpIDP::Descope {},
 			McpIDP::Keycloak {},
@@ -1263,6 +1274,33 @@ mod tests {
 			.expect("request should build");
 		req.extensions_mut().insert(auth);
 		req
+	}
+
+	#[test]
+	fn auth0_metadata_keeps_audience_workaround_alongside_registration_rewrite() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Auth0 {});
+		auth.audiences = vec!["https://mcp.example.com/mcp".to_string()];
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+		let mut metadata = serde_json::json!({
+			"authorization_endpoint": "https://idp.example.com/authorize",
+			"registration_endpoint": "https://idp.example.com/oidc/register",
+		});
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		// Auth0 has no RFC 8707 support, so the audience must still be pinned on authorize.
+		assert_eq!(
+			metadata["authorization_endpoint"],
+			"https://idp.example.com/authorize?audience=https://mcp.example.com/mcp"
+		);
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
 	}
 
 	fn default_auth() -> McpAuthentication {
