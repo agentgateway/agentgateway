@@ -5245,7 +5245,7 @@
           "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.\nIf omitted, the JWKS URL is derived from the issuer and provider.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FileInlineOrRemote"
+              "$ref": "#/$defs/JwksSource"
             },
             {
               "type": "null"
@@ -5378,7 +5378,8 @@
       "type": "object",
       "additionalProperties": true
     },
-    "FileInlineOrRemote": {
+    "JwksSource": {
+      "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
       "anyOf": [
         {
           "type": "object",
@@ -5388,6 +5389,7 @@
               "type": "string"
             }
           },
+          "additionalProperties": false,
           "required": [
             "file"
           ]
@@ -5400,8 +5402,17 @@
           "properties": {
             "url": {
               "type": "string"
+            },
+            "maxAge": {
+              "description": "Maximum time to trust keys since they were last fetched successfully. Fetch\nfailures and HTTP error responses do not renew trust; once it lapses, tokens are\nrejected with 503 until a fetch succeeds. Refetches are scheduled before expiry,\nbut no more often than once a minute, so this must be longer than one minute.\nUnset keeps the last fetched keys indefinitely. Keys delivered inline over xDS\ndo not use this setting.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
             }
           },
+          "additionalProperties": false,
           "required": [
             "url"
           ]
@@ -6967,7 +6978,7 @@
             },
             "jwks": {
               "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
-              "$ref": "#/$defs/FileInlineOrRemote"
+              "$ref": "#/$defs/JwksSource"
             },
             "jwtValidationOptions": {
               "description": "Claim requirements to enforce after the token signature is verified.",
@@ -7020,7 +7031,7 @@
         },
         "jwks": {
           "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
-          "$ref": "#/$defs/FileInlineOrRemote"
+          "$ref": "#/$defs/JwksSource"
         },
         "jwtValidationOptions": {
           "description": "Claim requirements to enforce after the token signature is verified.",
@@ -7162,6 +7173,36 @@
         "clientId",
         "clientSecret",
         "redirectURI"
+      ]
+    },
+    "FileInlineOrRemote": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "description": "Path to a file on disk to load the value from.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ]
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
       ]
     },
     "TokenEndpointAuth": {
