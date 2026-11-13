@@ -58,6 +58,7 @@ export function llmGatewayOrigin(config: GatewayConfig | null | undefined) {
 		config &&
 		uiGateways.length > 0 &&
 		refs.length > 0 &&
+		!servedFromAdminPort(config) &&
 		gatewayRefsOverlap(config, uiGateways, refs)
 	) {
 		// The proxy strips ui.basePath for everything on the UI's gateway, not just the UI.
@@ -86,6 +87,7 @@ function playgroundEndpoint(
 		config &&
 		uiGateways.length > 0 &&
 		targets.length > 0 &&
+		!servedFromAdminPort(config) &&
 		gatewayRefsOverlap(config, uiGateways, targets)
 	) {
 		return { baseUrl: `${config.ui?.basePath ?? ''}${sameOriginBaseUrl}`, sameOrigin: true };
@@ -132,6 +134,12 @@ function uiGatewayRefs(config: GatewayConfig | null | undefined) {
 	if (refs.length) return refs;
 	if (config?.ui && config.gateways?.default) return ['default'];
 	return [];
+}
+
+// The admin server also serves the UI, but none of the gateway routes.
+function servedFromAdminPort(config: GatewayConfig) {
+	const port = /:(\d+)$/.exec(config.config?.adminAddr ?? 'localhost:15000')?.[1];
+	return port !== undefined && window.location.port === port;
 }
 
 function gatewayRefs(refs: string | string[] | null | undefined) {
