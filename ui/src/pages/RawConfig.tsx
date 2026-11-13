@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
+import { Button, Table, Tabs } from 'antd';
 import { Clipboard, Download, FileText, RotateCcw, Save, Trash2 } from 'lucide-react';
-import { Fragment, lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
 import type { ConfigResource } from '@/api/configResourcesApi';
 import { ConfigDiffDrawer, ConfigSaveButton } from '@/components/ConfigDiffDrawer';
@@ -10,7 +11,8 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip
+	Tooltip,
+	tablePagination
 } from '@/components/Primitives';
 import { validateGatewayConfig } from '@/configValidation';
 import { maskKey } from '@/credentialDisplay';
@@ -111,42 +113,34 @@ function RawConfigEditorPage() {
 				actions={
 					view === 'file' ? (
 						<div className="button-row">
-							<button
-								className="button"
-								type="button"
+							<Button
+								icon={<Clipboard size={16} />}
 								disabled={!text}
 								onClick={() => void copyConfig(text)}
 							>
-								<Clipboard size={16} />
 								Copy
-							</button>
-							<button
-								className="button"
-								type="button"
+							</Button>
+							<Button
+								icon={<Download size={16} />}
 								disabled={!text}
 								onClick={() => downloadConfig(text)}
 							>
-								<Download size={16} />
 								Download
-							</button>
-							<button
-								className="button"
-								type="button"
+							</Button>
+							<Button
+								icon={<RotateCcw size={16} />}
 								disabled={!dirty || update.isPending}
 								onClick={() => updateText(initialText)}
 							>
-								<RotateCcw size={16} />
 								Reset
-							</button>
-							<button
-								className="button"
-								type="button"
+							</Button>
+							<Button
+								icon={<FileText size={16} />}
 								disabled={!dirty || update.isPending}
 								onClick={() => setDiffOpen(true)}
 							>
-								<FileText size={16} />
 								View diff
-							</button>
+							</Button>
 							<ConfigSaveButton disabled={!dirty || update.isPending} onClick={() => void save()}>
 								<Save size={16} />
 								Save
@@ -157,26 +151,15 @@ function RawConfigEditorPage() {
 			/>
 
 			{hybrid ? (
-				<div className="segmented-control compact raw-config-view-tabs" role="tablist">
-					<button
-						className={view === 'file' ? 'active' : ''}
-						type="button"
-						role="tab"
-						aria-selected={view === 'file'}
-						onClick={() => setView('file')}
-					>
-						File
-					</button>
-					<button
-						className={view === 'database' ? 'active' : ''}
-						type="button"
-						role="tab"
-						aria-selected={view === 'database'}
-						onClick={() => setView('database')}
-					>
-						Database
-					</button>
-				</div>
+				<Tabs
+					className="raw-config-view-tabs"
+					activeKey={view}
+					onChange={key => setView(key as 'file' | 'database')}
+					items={[
+						{ key: 'file', label: 'File' },
+						{ key: 'database', label: 'Database' }
+					]}
+				/>
 			) : null}
 
 			{view === 'file' && config.isError ? (
@@ -261,72 +244,63 @@ function DatabaseResourcesPanel(props: {
 				) : props.resources.length === 0 ? (
 					<StatusBanner state="info" title="No database resources" />
 				) : (
-					<div className="table-wrap">
-						<table className="data-table raw-config-resource-table">
-							<thead>
-								<tr>
-									<th>Kind</th>
-									<th>ID</th>
-									<th>Revision</th>
-									<th>Updated</th>
-									<th>Value</th>
-								</tr>
-							</thead>
-							<tbody>
-								{props.resources.map(resource => {
-									const key = `${resource.kind}:${resource.id}`;
+					<Table
+						className="raw-config-resource-table"
+						size="small"
+						rowKey={resourceKey}
+						dataSource={props.resources}
+						pagination={tablePagination}
+						expandable={{
+							showExpandColumn: false,
+							expandedRowKeys: expanded ? [expanded] : [],
+							expandedRowRender: resource => <JsonBlock value={redactedResourceValue(resource)} />
+						}}
+						columns={[
+							{ title: 'Kind', dataIndex: 'kind', render: (kind: string) => <code>{kind}</code> },
+							{ title: 'ID', dataIndex: 'id', render: (id: string) => <code>{id}</code> },
+							{
+								title: 'Revision',
+								dataIndex: 'revision',
+								render: (revision?: number) => revision ?? '—'
+							},
+							{
+								title: 'Updated',
+								dataIndex: 'updatedAt',
+								render: (updatedAt?: string) =>
+									updatedAt ? new Date(updatedAt).toLocaleString() : '—'
+							},
+							{
+								title: 'Value',
+								key: 'value',
+								render: (_, resource) => {
+									const key = resourceKey(resource);
 									const open = expanded === key;
 									return (
-										<Fragment key={key}>
-											<tr>
-												<td>
-													<code>{resource.kind}</code>
-												</td>
-												<td>
-													<code>{resource.id}</code>
-												</td>
-												<td>{resource.revision ?? '—'}</td>
-												<td>
-													{resource.updatedAt ? new Date(resource.updatedAt).toLocaleString() : '—'}
-												</td>
-												<td>
-													<div className="button-row compact">
-														<button
-															className="button compact"
-															type="button"
-															aria-expanded={open}
-															onClick={() => setExpanded(open ? null : key)}
-														>
-															{open ? 'Hide JSON' : 'View JSON'}
-														</button>
-														{dangerousActionsVisible ? (
-															<Tooltip content="Delete database resource">
-																<button
-																	className="icon-button danger"
-																	type="button"
-																	aria-label="Delete database resource"
-																	onClick={() => setDeleting(resource)}
-																>
-																	<Trash2 size={15} />
-																</button>
-															</Tooltip>
-														) : null}
-													</div>
-												</td>
-											</tr>
-											{open ? (
-												<tr className="raw-config-resource-detail">
-													<td colSpan={5}>
-														<JsonBlock value={redactedResourceValue(resource)} />
-													</td>
-												</tr>
+										<div className="button-row compact">
+											<Button
+												size="small"
+												aria-expanded={open}
+												onClick={() => setExpanded(open ? null : key)}
+											>
+												{open ? 'Hide JSON' : 'View JSON'}
+											</Button>
+											{dangerousActionsVisible ? (
+												<Tooltip content="Delete database resource">
+													<Button
+														danger
+														size="small"
+														aria-label="Delete database resource"
+														icon={<Trash2 size={15} />}
+														onClick={() => setDeleting(resource)}
+													/>
+												</Tooltip>
 											) : null}
-										</Fragment>
+										</div>
 									);
-								})}
-							</tbody>
-						</table>
-					</div>
+								}
+							}
+						]}
+					/>
 				)}
 			</Panel>
 			{deleting ? (
@@ -338,7 +312,7 @@ function DatabaseResourcesPanel(props: {
 					onCancel={() => setDeleting(null)}
 					onConfirm={() => {
 						if (!dangerousActionsVisible) return;
-						const key = `${deleting.kind}:${deleting.id}`;
+						const key = resourceKey(deleting);
 						deleteResource.mutate(
 							{ kind: deleting.kind, id: deleting.id },
 							{
@@ -358,6 +332,10 @@ function DatabaseResourcesPanel(props: {
 			) : null}
 		</>
 	);
+}
+
+function resourceKey(resource: ConfigResource) {
+	return `${resource.kind}:${resource.id}`;
 }
 
 function redactedResourceValue(resource: ConfigResource) {

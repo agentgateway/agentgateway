@@ -1,3 +1,4 @@
+import { Input } from 'antd';
 import { useEffect } from 'react';
 
 import { Dropdown, Field, FieldGroup } from '@/components/Primitives';
@@ -101,7 +102,7 @@ function PortField(props: {
 }) {
 	return (
 		<Field label={props.label} tooltip={props.tooltip}>
-			<input
+			<Input
 				value={props.value?.toString() ?? ''}
 				disabled={props.disabled}
 				onChange={event => {

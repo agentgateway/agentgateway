@@ -1,5 +1,5 @@
 import Editor from '@monaco-editor/react';
-import { Link } from '@tanstack/react-router';
+import { Button, Tag } from 'antd';
 import { Braces, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import type * as Monaco from 'monaco-editor';
 import { useState } from 'react';
@@ -7,8 +7,10 @@ import { useState } from 'react';
 import { celEditorOptions, celLanguage, configureCelMonaco } from '@/celMonaco';
 import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
-import { EmptyState, StatusBanner } from '@/components/Primitives';
+import { ButtonLink, EmptyState, StatusBanner } from '@/components/Primitives';
+import { monacoTheme } from '@/monacoWorkers';
 import type { AuthorizationDraft } from '@/policies/types';
+import { useTheme } from '@/theme';
 
 type RuleEffect = 'allow' | 'deny' | 'require';
 type AuthzRule = {
@@ -18,6 +20,12 @@ type AuthzRule = {
 
 const defaultNewRule = 'request.path.startsWith("/v1/")';
 const celPlaygroundExpressionKey = 'agw.cel.pendingExpression';
+const effectColor: Record<RuleEffect, string | undefined> = {
+	allow: 'success',
+	deny: 'error',
+	require: undefined
+};
+
 const effectOptions: Array<EnumSelectorOption<RuleEffect>> = [
 	{ value: 'allow', label: 'Allow', description: 'Permit matching requests.' },
 	{ value: 'deny', label: 'Deny', description: 'Reject matching requests.' },
@@ -35,6 +43,7 @@ export function AuthorizationPolicyEditor(props: {
 	saving: boolean;
 	onSave: (authorization: AuthorizationDraft) => void;
 }) {
+	const { theme } = useTheme();
 	const [rules, setRules] = useState<AuthzRule[]>(() => initialRules(props.authorization));
 	const [editingIndex, setEditingIndex] = useState<number | null>(() => (rules.length ? 0 : null));
 	const [errors, setErrors] = useState<Record<number, string>>({});
@@ -119,10 +128,9 @@ export function AuthorizationPolicyEditor(props: {
 					</strong>
 					<small>Each CEL expression is saved under allow, deny, or require.</small>
 				</div>
-				<button className="button" type="button" onClick={addRule}>
-					<Plus size={16} />
+				<Button icon={<Plus size={16} />} onClick={addRule}>
 					Add rule
-				</button>
+				</Button>
 			</div>
 
 			{rules.length === 0 ? (
@@ -130,10 +138,9 @@ export function AuthorizationPolicyEditor(props: {
 					title="No authorization rules"
 					description="Add a CEL expression to start authorizing requests."
 					action={
-						<button className="button primary" type="button" onClick={addRule}>
-							<Plus size={16} />
+						<Button type="primary" icon={<Plus size={16} />} onClick={addRule}>
 							Add rule
-						</button>
+						</Button>
 					}
 				/>
 			) : (
@@ -150,7 +157,12 @@ export function AuthorizationPolicyEditor(props: {
 									<div>
 										<div className="authz-rule-title">
 											<strong>Rule {index + 1}</strong>
-											<span className={`badge authz-effect ${rule.effect}`}>{rule.effect}</span>
+											<Tag
+												className={`authz-effect ${rule.effect}`}
+												color={effectColor[rule.effect]}
+											>
+												{rule.effect}
+											</Tag>
 										</div>
 										{!editing ? <code>{rule.expression.trim() || 'Empty rule'}</code> : null}
 									</div>
@@ -163,32 +175,34 @@ export function AuthorizationPolicyEditor(props: {
 												onChange={value => updateEffect(index, value)}
 											/>
 										</div>
-										<button
-											className="table-action"
-											type="button"
+										<Button
+											type="text"
+											size="small"
+											icon={<Pencil size={14} />}
 											onClick={() => setEditingIndex(editing ? null : index)}
 										>
-											<Pencil size={14} />
 											{editing ? 'Done' : 'Edit'}
-										</button>
-										<Link
-											className="table-action"
+										</Button>
+										<ButtonLink
+											variant="text"
+											size="small"
+											icon={<Braces size={14} />}
 											to="/cel"
 											onClick={() =>
 												localStorage.setItem(celPlaygroundExpressionKey, rule.expression)
 											}
 										>
-											<Braces size={14} />
 											Playground
-										</Link>
-										<button
-											className="table-action danger"
-											type="button"
+										</ButtonLink>
+										<Button
+											type="text"
+											size="small"
+											danger
+											icon={<Trash2 size={14} />}
 											onClick={() => removeRule(index)}
 										>
-											<Trash2 size={14} />
 											Delete
-										</button>
+										</Button>
 									</div>
 								</div>
 								{editing ? (
@@ -196,9 +210,7 @@ export function AuthorizationPolicyEditor(props: {
 										<Editor
 											beforeMount={configureCelMonaco}
 											language={celLanguage}
-											theme={
-												document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'
-											}
+											theme={monacoTheme(theme)}
 											value={rule.expression}
 											onChange={value => updateRule(index, value ?? '')}
 											onMount={configureMiniEditor}
@@ -223,10 +235,9 @@ export function AuthorizationPolicyEditor(props: {
 				</StatusBanner>
 			) : null}
 			{!props.formId ? (
-				<button className="button primary" type="submit" disabled={props.saving}>
-					<Save size={16} />
+				<Button type="primary" htmlType="submit" icon={<Save size={16} />} disabled={props.saving}>
 					Apply authorization
-				</button>
+				</Button>
 			) : null}
 		</form>
 	);

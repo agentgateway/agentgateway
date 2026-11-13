@@ -1,13 +1,14 @@
-import { Link } from '@tanstack/react-router';
+import { Button, Checkbox, Input, InputNumber, Tag } from 'antd';
 import { Braces, Cable, Play, RotateCcw } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 
 import { sendMcpJsonRpc } from '@/api/playgroundApi';
 import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import {
+	ButtonLink,
 	Dropdown,
+	EmptyState,
 	Field,
 	FieldGroup,
 	JsonBlock,
@@ -35,7 +36,6 @@ type McpResponse = {
 	sessionId: string | null;
 	body: unknown;
 };
-
 const storageKeys = {
 	tool: 'mcpPlaygroundTool'
 };
@@ -175,13 +175,11 @@ export function McpPlaygroundPage() {
 					title="Browser access is not allowed"
 					action={
 						mcpData.hybrid && fileCorsOwned ? (
-							<Link className="button" to="/mcp/policies" hash="cors">
+							<ButtonLink to="/mcp/policies" hash="cors">
 								Configure CORS
-							</Link>
+							</ButtonLink>
 						) : (
-							<button
-								className="button"
-								type="button"
+							<Button
 								disabled={upsertPolicy.isPending}
 								onClick={() => {
 									upsertPolicy.mutate({
@@ -192,7 +190,7 @@ export function McpPlaygroundPage() {
 								}}
 							>
 								Apply CORS
-							</button>
+							</Button>
 						)
 					}
 				>
@@ -220,9 +218,8 @@ export function McpPlaygroundPage() {
 							</strong>
 						</div>
 						{initialized ? (
-							<button
-								className="button"
-								type="button"
+							<Button
+								icon={<RotateCcw size={16} />}
 								onClick={() => {
 									setInitialized(false);
 									setSessionId('');
@@ -232,28 +229,26 @@ export function McpPlaygroundPage() {
 									setError(null);
 								}}
 							>
-								<RotateCcw size={16} />
 								Reset
-							</button>
+							</Button>
 						) : (
-							<button
-								className="button primary"
-								type="button"
+							<Button
+								type="primary"
+								icon={<Cable size={16} />}
+								loading={loading === 'initialize'}
 								disabled={loading !== null || !baseUrl.trim()}
 								onClick={initialize}
 							>
-								<Cable size={16} />
 								Initialize
-							</button>
+							</Button>
 						)}
 					</div>
 
 					<details className="schema-details mcp-auth-details">
 						<summary>Authorization header</summary>
 						<Field label="Bearer token">
-							<input
+							<Input
 								value={bearerToken}
-								type="text"
 								className="masked-secret-input"
 								autoComplete="off"
 								autoCorrect="off"
@@ -317,15 +312,15 @@ export function McpPlaygroundPage() {
 						</FieldGroup>
 					)}
 					<div className="button-row mcp-call-actions">
-						<button
-							className="button primary"
-							type="button"
+						<Button
+							type="primary"
+							icon={<Play size={16} />}
+							loading={loading === 'call'}
 							disabled={loading !== null || !initialized || !baseUrl.trim() || !toolName.trim()}
 							onClick={callTool}
 						>
-							<Play size={16} />
 							Call tool
-						</button>
+						</Button>
 					</div>
 				</Panel>
 				<Panel className="playground-response-panel">
@@ -335,10 +330,10 @@ export function McpPlaygroundPage() {
 					{result ? (
 						<McpResultView response={result} />
 					) : (
-						<div className="empty-state">
-							<h3>No response yet</h3>
-							<p>Initialize or send a tool request to inspect MCP behavior.</p>
-						</div>
+						<EmptyState
+							title="No response yet"
+							description="Initialize or send a tool request to inspect MCP behavior."
+						/>
 					)}
 				</Panel>
 			</section>
@@ -393,36 +388,33 @@ function ToolArgumentsForm(props: {
 				}
 				if (type === 'boolean') {
 					return (
-						<label className="config-option-row" key={name}>
-							<input
-								type="checkbox"
-								checked={Boolean(value)}
-								onChange={event =>
-									props.onChange({
-										...props.values,
-										[name]: event.target.checked
-									})
-								}
-								onKeyDown={event => submitOnModEnter(event, props.onSubmit)}
-							/>
+						<Checkbox
+							className="option-checkbox"
+							key={name}
+							checked={Boolean(value)}
+							onChange={event =>
+								props.onChange({
+									...props.values,
+									[name]: event.target.checked
+								})
+							}
+							onKeyDown={event => submitOnModEnter(event, props.onSubmit)}
+						>
 							<span>
 								<strong>{label}</strong>
 								{property.description ? <small>{property.description}</small> : null}
 							</span>
-						</label>
+						</Checkbox>
 					);
 				}
 				if (type === 'number' || type === 'integer') {
 					return (
 						<Field label={label} hint={property.description} key={name}>
-							<input
-								type="number"
-								value={typeof value === 'number' ? value : ''}
-								onChange={event =>
-									props.onChange({
-										...props.values,
-										[name]: event.target.value === '' ? '' : Number(event.target.value)
-									})
+							<InputNumber
+								style={{ width: '100%' }}
+								value={typeof value === 'number' ? value : null}
+								onChange={next =>
+									props.onChange({ ...props.values, [name]: typeof next === 'number' ? next : '' })
 								}
 								onKeyDown={event => submitOnModEnter(event, props.onSubmit)}
 							/>
@@ -449,7 +441,7 @@ function ToolArgumentsForm(props: {
 				}
 				return (
 					<Field label={label} hint={property.description} key={name}>
-						<input
+						<Input
 							value={typeof value === 'string' ? value : ''}
 							onChange={event => props.onChange({ ...props.values, [name]: event.target.value })}
 							onKeyDown={event => submitOnModEnter(event, props.onSubmit)}
@@ -461,10 +453,7 @@ function ToolArgumentsForm(props: {
 	);
 }
 
-function submitOnModEnter(
-	event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
-	onSubmit: () => void
-) {
+function submitOnModEnter(event: KeyboardEvent, onSubmit: () => void) {
 	if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
 		event.preventDefault();
 		onSubmit();
@@ -558,9 +547,9 @@ function McpResultView(props: { response: McpResponse }) {
 	return (
 		<div className="mcp-result-view">
 			<div className="mcp-result-status">
-				<span className={error || toolError ? 'badge bad' : 'badge ok'}>
+				<Tag color={error || toolError ? 'error' : 'success'}>
 					{error ? 'error' : toolError ? 'tool error' : `HTTP ${props.response.status}`}
-				</span>
+				</Tag>
 				{props.response.sessionId ? <span className="mono">{props.response.sessionId}</span> : null}
 			</div>
 
@@ -575,9 +564,7 @@ function McpResultView(props: { response: McpResponse }) {
 					<div className="mcp-tool-list">
 						{tools.map(tool => (
 							<div className="mcp-tool-row" key={tool.name}>
-								<span className="config-chip">
-									<span>{tool.name}</span>
-								</span>
+								<Tag>{tool.name}</Tag>
 								{tool.description ? <small>{tool.description}</small> : null}
 							</div>
 						))}

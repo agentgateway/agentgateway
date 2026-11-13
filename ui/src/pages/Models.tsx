@@ -1,4 +1,5 @@
-import { Link } from '@tanstack/react-router';
+import { createLink } from '@tanstack/react-router';
+import { Button, Input, InputNumber, Table, Tag } from 'antd';
 import {
 	Activity,
 	FileText,
@@ -18,6 +19,7 @@ import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import {
+	ButtonLink,
 	ConfirmDialog,
 	Drawer,
 	Dropdown,
@@ -26,8 +28,10 @@ import {
 	FieldGroup,
 	PageHeader,
 	Panel,
+	SegmentedControl,
 	StatusBanner,
-	Tooltip
+	Tooltip,
+	tablePagination
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { WildcardModelSelector } from '@/components/WildcardModelSelector';
@@ -103,6 +107,9 @@ import { randomUuid } from '@/randomUuid';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
 import type { GatewayConfig, LlmModel, LlmProvider, LlmVirtualModel, ProviderName } from '@/types';
 
+const TagLink = createLink(Tag);
+
+type ModelRow = { kind: 'model'; model: LlmModel } | { kind: 'virtual'; model: LlmVirtualModel };
 type VirtualRoutingStrategy = 'weighted' | 'failover' | 'conditional';
 type ConditionalVirtualTarget = NonNullable<
 	LlmVirtualModel['routing']['conditional']
@@ -196,7 +203,7 @@ function ModelsEditorPage() {
 				isDatabaseConfigResource(resources, 'llm.virtualModel', activeVirtualEditing.previousName))
 	);
 	const modelRows = useMemo(
-		() => [
+		(): ModelRow[] => [
 			...models.map(model => ({ kind: 'model' as const, model })),
 			...virtualModels.map(model => ({ kind: 'virtual' as const, model }))
 		],
@@ -269,6 +276,12 @@ function ModelsEditorPage() {
 		resetFinishedSaves(upsertResource, deleteResource);
 	}
 
+	function rowDatabaseBacked(row: ModelRow) {
+		return row.kind === 'virtual'
+			? isDatabaseConfigResource(resources, 'llm.virtualModel', row.model.name)
+			: isDatabaseConfigResource(resources, 'llm.model', modelIdentity(row.model));
+	}
+
 	function saveModel(model: LlmModel, previousId?: string) {
 		if (hybrid) model.id ??= randomUuid();
 		upsertResource.mutate(
@@ -309,14 +322,12 @@ function ModelsEditorPage() {
 				description="Configure the models callers can request and the providers that serve them."
 				actions={
 					<div className="button-row">
-						<button className="button" type="button" onClick={openNewVirtualModel}>
-							<GitBranch size={16} />
+						<Button icon={<GitBranch size={16} />} onClick={openNewVirtualModel}>
 							Add virtual model
-						</button>
-						<button className="button primary" type="button" onClick={openNewModel}>
-							<Plus size={16} />
+						</Button>
+						<Button type="primary" icon={<Plus size={16} />} onClick={openNewModel}>
 							Add model
-						</button>
+						</Button>
 					</div>
 				}
 			/>
@@ -341,186 +352,156 @@ function ModelsEditorPage() {
 						description="Create the first model to make LLM traffic available through the gateway."
 						action={
 							<div className="button-row">
-								<button className="button primary" type="button" onClick={openNewModel}>
-									<Plus size={16} />
+								<Button type="primary" icon={<Plus size={16} />} onClick={openNewModel}>
 									Add model
-								</button>
-								<button className="button" type="button" onClick={openNewVirtualModel}>
-									<GitBranch size={16} />
+								</Button>
+								<Button icon={<GitBranch size={16} />} onClick={openNewVirtualModel}>
 									Add virtual model
-								</button>
+								</Button>
 							</div>
 						}
 					/>
 				) : (
 					<div className="table-wrap">
-						<table>
-							<thead>
-								<tr>
-									<th>Name</th>
-									{hybrid ? <th>Source</th> : null}
-									<th>Provider</th>
-									<th>Outgoing model</th>
-									<th>Policy state</th>
-									<th />
-								</tr>
-							</thead>
-							<tbody>
-								{modelRows.map(row => {
-									if (row.kind === 'virtual') {
-										const model = row.model;
-										const databaseBacked = isDatabaseConfigResource(
-											resources,
-											'llm.virtualModel',
-											model.name
-										);
+						<Table<ModelRow>
+							size="middle"
+							rowKey={row =>
+								row.kind === 'virtual'
+									? `virtual:${row.model.name}`
+									: `model:${row.model.id ?? modelOptionValue(models, models.indexOf(row.model))}`
+							}
+							dataSource={modelRows}
+							pagination={tablePagination}
+							columns={[
+								{
+									title: 'Name',
+									key: 'name',
+									className: 'strong',
+									render: (_, row) => {
+										if (row.kind === 'virtual') return row.model.name;
+										const subtitle = modelSubtitle(row.model);
 										return (
-											<tr key={`virtual:${model.name}`}>
-												<td className="strong">{model.name}</td>
-												{hybrid ? (
-													<td>
-														<span className="badge">{databaseBacked ? 'Database' : 'File'}</span>
-													</td>
-												) : null}
-												<td>
-													<span className="badge">
-														<GitBranch size={14} /> Virtual
-													</span>
-												</td>
-												<td>{virtualModelSummary(model)}</td>
-												<td>
-													<span className="badge ok">{virtualModelStrategy(model)}</span>
-												</td>
-												<td className="row-actions">
-													<Tooltip content="Open in playground">
-														<Link
-															className="icon-button"
-															aria-label="Open in playground"
-															to="/llm/playground"
-															search={{ model: model.name }}
-														>
-															<Play size={16} />
-														</Link>
-													</Tooltip>
-													<Tooltip content="Edit model">
-														<button
-															className="icon-button"
-															aria-label="Edit model"
-															type="button"
-															onClick={() =>
-																setEditingVirtual({
-																	previousName: model.name,
-																	model: structuredClone(model)
-																})
-															}
-														>
-															<Pencil size={16} />
-														</button>
-													</Tooltip>
-													<Tooltip
-														content={
-															hybrid && !databaseBacked
-																? 'File-owned models cannot be deleted here'
-																: 'Delete model'
-														}
-													>
-														<button
-															className="icon-button danger"
-															aria-label="Delete model"
-															type="button"
-															disabled={saving || (hybrid && !databaseBacked)}
-															onClick={() =>
-																setDeleting({
-																	kind: 'virtual model',
-																	id: model.name,
-																	name: model.name
-																})
-															}
-														>
-															<Trash2 size={16} />
-														</button>
-													</Tooltip>
-												</td>
-											</tr>
+											<>
+												{modelLabel(row.model)}
+												{subtitle ? <div className="model-name-pattern">{subtitle}</div> : null}
+											</>
 										);
 									}
-									const model = row.model;
-									const optionValue = modelOptionValue(models, models.indexOf(model));
-									const subtitle = modelSubtitle(model);
-									const warnings = modelWarnings(model);
-									const databaseBacked = isDatabaseConfigResource(
-										resources,
-										'llm.model',
-										modelIdentity(model)
-									);
-									return (
-										<tr key={`model:${model.id ?? optionValue}`}>
-											<td className="strong">
-												{modelLabel(model)}
-												{subtitle ? <div className="model-name-pattern">{subtitle}</div> : null}
-											</td>
-											{hybrid ? (
-												<td>
-													<span className="badge">{databaseBacked ? 'Database' : 'File'}</span>
-												</td>
-											) : null}
-											<td>
-												<ModelProviderBadge model={model} providers={providers} />
-											</td>
-											<td>{model.params?.model || 'Incoming model'}</td>
-											<td>
-												<ModelPolicyState model={model} warnings={warnings.length} />
-											</td>
-											<td className="row-actions">
+								},
+								...(hybrid
+									? [
+											{
+												title: 'Source',
+												key: 'source',
+												render: (_: unknown, row: ModelRow) => (
+													<Tag>{rowDatabaseBacked(row) ? 'Database' : 'File'}</Tag>
+												)
+											}
+										]
+									: []),
+								{
+									title: 'Provider',
+									key: 'provider',
+									render: (_, row) =>
+										row.kind === 'virtual' ? (
+											<Tag className="provider-badge" icon={<GitBranch size={14} />}>
+												Virtual
+											</Tag>
+										) : (
+											<ModelProviderBadge model={row.model} providers={providers} />
+										)
+								},
+								{
+									title: 'Outgoing model',
+									key: 'outgoing',
+									render: (_, row) =>
+										row.kind === 'virtual'
+											? virtualModelSummary(row.model)
+											: row.model.params?.model || 'Incoming model'
+								},
+								{
+									title: 'Policy state',
+									key: 'policy',
+									render: (_, row) =>
+										row.kind === 'virtual' ? (
+											<Tag color="success">{virtualModelStrategy(row.model)}</Tag>
+										) : (
+											<ModelPolicyState
+												model={row.model}
+												warnings={modelWarnings(row.model).length}
+											/>
+										)
+								},
+								{
+									key: 'actions',
+									align: 'right',
+									onHeaderCell: () => ({ 'aria-label': 'Actions' }),
+									render: (_, row) => {
+										const fileOwned = hybrid && !rowDatabaseBacked(row);
+										return (
+											<div className="row-actions">
 												<Tooltip content="Open in playground">
-													<Link
-														className="icon-button"
+													<ButtonLink
+														color="default"
+														variant="outlined"
 														aria-label="Open in playground"
+														icon={<Play size={16} />}
 														to="/llm/playground"
-														search={{ model: optionValue }}
-													>
-														<Play size={16} />
-													</Link>
+														search={{
+															model:
+																row.kind === 'virtual'
+																	? row.model.name
+																	: modelOptionValue(models, models.indexOf(row.model))
+														}}
+													/>
 												</Tooltip>
 												<Tooltip content="Edit model">
-													<button
-														className="icon-button"
+													<Button
 														aria-label="Edit model"
-														type="button"
-														onClick={() => openModelEditor(model)}
-													>
-														<Pencil size={16} />
-													</button>
+														icon={<Pencil size={16} />}
+														onClick={() =>
+															row.kind === 'virtual'
+																? setEditingVirtual({
+																		previousName: row.model.name,
+																		model: structuredClone(row.model)
+																	})
+																: openModelEditor(row.model)
+														}
+													/>
 												</Tooltip>
 												<Tooltip
 													content={
-														hybrid && !databaseBacked
-															? 'File-owned models cannot be deleted here'
-															: 'Delete model'
+														fileOwned ? 'File-owned models cannot be deleted here' : 'Delete model'
 													}
 												>
-													<button
-														className="icon-button danger"
+													<Button
+														danger
 														aria-label="Delete model"
-														type="button"
-														disabled={saving || (hybrid && !databaseBacked)}
+														icon={<Trash2 size={16} />}
+														disabled={saving || fileOwned}
 														onClick={() =>
-															setDeleting({
-																kind: 'model',
-																id: modelIdentity(model),
-																name: model.name
-															})
+															setDeleting(
+																row.kind === 'virtual'
+																	? {
+																			kind: 'virtual model',
+																			id: row.model.name,
+																			name: row.model.name
+																		}
+																	: {
+																			kind: 'model',
+																			id: modelIdentity(row.model),
+																			name: row.model.name
+																		}
+															)
 														}
-													>
-														<Trash2 size={16} />
-													</button>
+													/>
 												</Tooltip>
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
+											</div>
+										);
+									}
+								}
+							]}
+						/>
 					</div>
 				)}
 			</Panel>
@@ -781,7 +762,7 @@ function ModelEditor(props: {
 						'The model name matched from incoming requests. Use an exact name like gpt-4.1-mini or a wildcard like openai/*.'
 					)}
 				>
-					<input
+					<Input
 						value={model.name}
 						onChange={event => {
 							const name = event.target.value;
@@ -802,7 +783,7 @@ function ModelEditor(props: {
 						'Optional label for lists and pickers. Matching still uses the incoming model match.'
 					)}
 				>
-					<input
+					<Input
 						value={model.displayName ?? ''}
 						onChange={event =>
 							update({ model: { ...model, displayName: event.target.value || undefined } })
@@ -947,38 +928,17 @@ function UpstreamModelFields(props: {
 				label="Outgoing model"
 				tooltip={props.help.field<LocalLLMParams>('LocalLLMParams', 'model')}
 			>
-				<div className="segmented-control upstream-model-control">
-					<button
-						className={mode === 'incoming' ? 'active' : ''}
-						type="button"
-						onClick={() => props.setMode('incoming')}
-					>
-						Incoming model
-					</button>
-					<button
-						className={mode === 'explicit' ? 'active' : ''}
-						type="button"
-						onClick={() => props.setMode('explicit')}
-					>
-						Explicit
-					</button>
-					{prefix ? (
-						<button
-							className={mode === 'strip' ? 'active' : ''}
-							type="button"
-							onClick={() => props.setMode('strip')}
-						>
-							{stripLabel}
-						</button>
-					) : null}
-					<button
-						className={mode === 'custom' ? 'active' : ''}
-						type="button"
-						onClick={() => props.setMode('custom')}
-					>
-						Custom
-					</button>
-				</div>
+				<SegmentedControl<UpstreamModelMode>
+					ariaLabel="Outgoing model"
+					value={mode}
+					options={[
+						{ value: 'incoming', label: 'Incoming model' },
+						{ value: 'explicit', label: 'Explicit' },
+						...(prefix ? [{ value: 'strip' as const, label: stripLabel }] : []),
+						{ value: 'custom', label: 'Custom' }
+					]}
+					onChange={props.setMode}
+				/>
 			</FieldGroup>
 
 			{mode === 'explicit' ? (
@@ -1165,9 +1125,7 @@ function ModelPoliciesInline(props: {
 							onSave={props.setAuthorization}
 						/>
 						{props.authorization ? (
-							<button className="button" type="button" onClick={() => props.setAuthorization(null)}>
-								Clear authorization
-							</button>
+							<Button onClick={() => props.setAuthorization(null)}>Clear authorization</Button>
 						) : null}
 					</div>
 				</CollapsiblePolicySection>
@@ -1462,7 +1420,7 @@ function VirtualModelEditor(props: {
 				path="name"
 				tooltip={props.help.field<LlmVirtualModel>('LocalLLMVirtualModel', 'name')}
 			>
-				<input
+				<Input
 					value={model.name}
 					onChange={event => setModel({ ...model, name: event.target.value })}
 					placeholder="resilient"
@@ -1473,29 +1431,16 @@ function VirtualModelEditor(props: {
 				label="Routing strategy"
 				tooltip={props.help.field<LlmVirtualModel>('LocalLLMVirtualModel', 'routing')}
 			>
-				<div className="segmented-control">
-					<button
-						className={strategy === 'weighted' ? 'active' : ''}
-						type="button"
-						onClick={() => setStrategy('weighted')}
-					>
-						Weighted
-					</button>
-					<button
-						className={strategy === 'failover' ? 'active' : ''}
-						type="button"
-						onClick={() => setStrategy('failover')}
-					>
-						Failover
-					</button>
-					<button
-						className={strategy === 'conditional' ? 'active' : ''}
-						type="button"
-						onClick={() => setStrategy('conditional')}
-					>
-						Conditional
-					</button>
-				</div>
+				<SegmentedControl<VirtualRoutingStrategy | ''>
+					ariaLabel="Routing strategy"
+					value={strategy ?? ''}
+					options={[
+						{ value: 'weighted', label: 'Weighted' },
+						{ value: 'failover', label: 'Failover' },
+						{ value: 'conditional', label: 'Conditional' }
+					]}
+					onChange={next => next && setStrategy(next)}
+				/>
 			</FieldGroup>
 
 			{strategy === 'weighted' ? (
@@ -1516,23 +1461,17 @@ function VirtualModelEditor(props: {
 									providers={props.providers}
 									onChange={value => updateWeighted(index, { model: value })}
 								/>
-								<label className="target-field">
+								<div className="target-field">
 									<span className="target-label">Weight</span>
-									<input
+									<InputNumber
 										aria-label="Weight"
 										value={target.weight ?? 1}
-										onChange={event =>
-											updateWeighted(index, {
-												weight: Number(event.target.value) || 1
-											})
-										}
-										type="number"
+										onChange={weight => updateWeighted(index, { weight: weight || 1 })}
 										min={1}
 									/>
-								</label>
-								<button
-									className="icon-button danger"
-									type="button"
+								</div>
+								<Button
+									danger
 									aria-label="Remove target"
 									onClick={() =>
 										setModel(current => ({
@@ -1546,15 +1485,13 @@ function VirtualModelEditor(props: {
 											}
 										}))
 									}
-								>
-									<Trash2 size={16} />
-								</button>
+									icon={<Trash2 size={16} />}
+								/>
 							</div>
 						))}
 					</div>
-					<button
-						className="button"
-						type="button"
+					<Button
+						icon={<Plus size={16} />}
 						onClick={() =>
 							setModel(current => ({
 								...current,
@@ -1569,9 +1506,8 @@ function VirtualModelEditor(props: {
 							}))
 						}
 					>
-						<Plus size={16} />
 						Add target
-					</button>
+					</Button>
 				</FieldGroup>
 			) : strategy === 'failover' ? (
 				<FieldGroup
@@ -1587,18 +1523,16 @@ function VirtualModelEditor(props: {
 										{groupIndex === 0 ? 'First attempt' : `Fallback group ${groupIndex + 1}`}
 									</strong>
 									<Tooltip content="Remove group">
-										<button
-											className="icon-button danger"
-											type="button"
+										<Button
+											danger
 											aria-label={`Remove failover group ${groupIndex + 1}`}
 											onClick={() =>
 												updateFailoverGroups(
 													failoverGroups.filter((_, itemIndex) => itemIndex !== groupIndex)
 												)
 											}
-										>
-											<Trash2 size={15} />
-										</button>
+											icon={<Trash2 size={15} />}
+										/>
 									</Tooltip>
 								</div>
 								<div className="match-card-body">
@@ -1626,9 +1560,8 @@ function VirtualModelEditor(props: {
 														)
 													}
 												/>
-												<button
-													className="icon-button danger"
-													type="button"
+												<Button
+													danger
 													aria-label="Remove target"
 													onClick={() =>
 														updateFailoverGroups(
@@ -1643,15 +1576,14 @@ function VirtualModelEditor(props: {
 																.filter(item => item.length > 0)
 														)
 													}
-												>
-													<Trash2 size={16} />
-												</button>
+													icon={<Trash2 size={16} />}
+												/>
 											</div>
 										))}
 									</div>
-									<button
-										className="button small"
-										type="button"
+									<Button
+										size="small"
+										icon={<Plus size={16} />}
 										onClick={() =>
 											updateFailoverGroups(
 												failoverGroups.map((item, itemIndex) =>
@@ -1662,16 +1594,14 @@ function VirtualModelEditor(props: {
 											)
 										}
 									>
-										<Plus size={16} />
 										Add target
-									</button>
+									</Button>
 								</div>
 							</section>
 						))}
 					</div>
-					<button
-						className="button"
-						type="button"
+					<Button
+						icon={<Plus size={16} />}
 						onClick={() =>
 							updateFailoverGroups([
 								...failoverGroups,
@@ -1679,9 +1609,8 @@ function VirtualModelEditor(props: {
 							])
 						}
 					>
-						<Plus size={16} />
 						Add fallback group
-					</button>
+					</Button>
 				</FieldGroup>
 			) : (
 				<FieldGroup
@@ -1700,9 +1629,8 @@ function VirtualModelEditor(props: {
 									<div className="match-card-header">
 										<strong>{isFallback ? 'Fallback' : `Rule ${index + 1}`}</strong>
 										<Tooltip content="Remove rule">
-											<button
-												className="icon-button danger"
-												type="button"
+											<Button
+												danger
 												aria-label="Remove conditional target"
 												onClick={() =>
 													setModel(current => ({
@@ -1716,9 +1644,8 @@ function VirtualModelEditor(props: {
 														}
 													}))
 												}
-											>
-												<Trash2 size={15} />
-											</button>
+												icon={<Trash2 size={15} />}
+											/>
 										</Tooltip>
 									</div>
 									<div className="conditional-target-body">
@@ -1765,9 +1692,8 @@ function VirtualModelEditor(props: {
 						/>
 					) : null}
 					<div className="button-row">
-						<button
-							className="button"
-							type="button"
+						<Button
+							icon={<Plus size={16} />}
 							onClick={() =>
 								setModel(current => ({
 									...current,
@@ -1785,12 +1711,10 @@ function VirtualModelEditor(props: {
 								}))
 							}
 						>
-							<Plus size={16} />
 							Add rule
-						</button>
-						<button
-							className="button"
-							type="button"
+						</Button>
+						<Button
+							icon={<Plus size={16} />}
 							onClick={() =>
 								setModel(current => ({
 									...current,
@@ -1807,9 +1731,8 @@ function VirtualModelEditor(props: {
 								}))
 							}
 						>
-							<Plus size={16} />
 							Add fallback
-						</button>
+						</Button>
 					</div>
 				</FieldGroup>
 			)}
@@ -1869,10 +1792,9 @@ function VirtualTargetSelector(props: {
 
 function ProviderBadge(props: { provider: ProviderName }) {
 	return (
-		<span className="badge provider-badge">
-			<ProviderIcon provider={props.provider} />
+		<Tag className="provider-badge" icon={<ProviderIcon provider={props.provider} />}>
 			{providerDisplayName(props.provider)}
-		</span>
+		</Tag>
 	);
 }
 
@@ -1882,15 +1804,14 @@ function ModelProviderBadge(props: { model: LlmModel; providers: LlmProvider[] }
 		const shared = props.providers.find(provider => provider.name === reference);
 		const provider = shared ? providerLabel(shared.provider) : 'custom';
 		return (
-			<Link
-				className="badge provider-badge badge-link"
+			<TagLink
+				className="provider-badge badge-link"
+				icon={<ProviderIcon provider={provider as ProviderName} />}
 				to="/llm/providers"
 				search={{ provider: reference }}
 			>
-				<ProviderIcon provider={provider as ProviderName} />
-				{reference}
-				<span className="muted">reference</span>
-			</Link>
+				{reference} <span className="muted">reference</span>
+			</TagLink>
 		);
 	}
 	return <ProviderBadge provider={providerLabel(props.model.provider) as ProviderName} />;
@@ -1912,15 +1833,15 @@ function ModelPolicyState(props: { model: LlmModel; warnings: number }) {
 		props.model.authorization ? 'authorization' : null,
 		props.model.promptCaching ? 'promptCaching' : null
 	].filter(Boolean);
-	if (props.warnings > 0) return <span className="badge warn">{props.warnings} warnings</span>;
-	if (props.model.auth) return <span className="badge">Custom auth detected</span>;
+	if (props.warnings > 0) return <Tag color="warning">{props.warnings} warnings</Tag>;
+	if (props.model.auth) return <Tag>Custom auth detected</Tag>;
 	if (policies.length > 0)
 		return (
-			<span className="badge ok">
+			<Tag color="success">
 				{policies.length} {policies.length === 1 ? 'policy' : 'policies'}
-			</span>
+			</Tag>
 		);
-	return <span className="badge">none</span>;
+	return <Tag>none</Tag>;
 }
 
 function parseOptionalYamlMapping(text: string) {

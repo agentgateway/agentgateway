@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { Alert, Button, Table, Tag } from 'antd';
 import { Eye } from 'lucide-react';
 
 import {
@@ -7,6 +8,7 @@ import {
 	Panel,
 	StatusBanner,
 	Tooltip,
+	tablePagination,
 	YamlBlock
 } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
@@ -53,13 +55,19 @@ export type DumpRouteRow = {
 
 export function ReadonlyModeBanner() {
 	return (
-		<div className="readonly-mode-banner">
-			<strong>Readonly mode</strong>
-			<span>
-				Configuration is managed by XDS. This view reflects the active runtime dump; editing is
-				disabled.
-			</span>
-		</div>
+		<Alert
+			className="readonly-mode-banner"
+			type="info"
+			title={
+				<>
+					<strong>Readonly mode</strong>
+					<span>
+						Configuration is managed by XDS. This view reflects the active runtime dump; editing is
+						disabled.
+					</span>
+				</>
+			}
+		/>
 	);
 }
 
@@ -141,12 +149,10 @@ export function TrafficDumpListenersView(props: {
 										</p>
 									</div>
 									<div className="button-row">
-										<span className="badge">{bind.tunnelProtocol ?? 'direct'}</span>
-										<span className="badge">{bindProtocolLabel(bind.protocol)}</span>
+										<Tag>{bind.tunnelProtocol ?? 'direct'}</Tag>
+										<Tag>{bindProtocolLabel(bind.protocol)}</Tag>
 										{conflictCount ? (
-											<span className="badge bad">
-												{conflictCount} listeners involved in port conflicts
-											</span>
+											<Tag color="error">{conflictCount} listeners involved in port conflicts</Tag>
 										) : null}
 									</div>
 								</div>
@@ -195,53 +201,52 @@ export function TrafficDumpRoutesView(props: {
 					description="No routes are present in the active gateway dump."
 				/>
 			) : (
-				<div className="table-wrap">
-					<table>
-						<thead>
-							<tr>
-								<th>Name</th>
-								<th>Type</th>
-								<th>Listener</th>
-								<th>Match</th>
-								<th>Backends</th>
-								<th>Policies</th>
-								<th aria-label="Actions" />
-							</tr>
-						</thead>
-						<tbody>
-							{inventory.routes.map(row => {
+				<Table<DumpRouteRow>
+					size="middle"
+					rowKey={row => `${row.source}-${row.type}-${row.route.key}`}
+					dataSource={inventory.routes}
+					pagination={tablePagination}
+					columns={[
+						{
+							title: 'Name',
+							key: 'name',
+							render: (_, row) => <strong>{routeDisplayName(row.route)}</strong>
+						},
+						{ title: 'Type', key: 'type', render: (_, row) => <Tag>{row.type}</Tag> },
+						{ title: 'Listener', key: 'listener', render: (_, row) => routeListenerCell(row) },
+						{ title: 'Match', key: 'match', render: (_, row) => routeMatchSummary(row) },
+						{
+							title: 'Backends',
+							key: 'backends',
+							render: (_, row) => backendListSummary(row.route.backends ?? [])
+						},
+						{
+							title: 'Policies',
+							key: 'policies',
+							render: (_, row) => {
 								const backends = row.route.backends ?? [];
-								const policies = routeInlinePolicies(row.route);
-								const backendPolicies = backends.flatMap(backend => backend.inlinePolicies ?? []);
-								const targetedPolicies = routeTargetedPolicies(row.route, inventory.policies);
 								return (
-									<tr key={`${row.source}-${row.type}-${row.route.key}`}>
-										<td className="strong">{routeDisplayName(row.route)}</td>
-										<td>
-											<span className="badge">{row.type}</span>
-										</td>
-										<td>{routeListenerCell(row)}</td>
-										<td>{routeMatchSummary(row)}</td>
-										<td>{backendListSummary(backends)}</td>
-										<td>{policies.length + backendPolicies.length + targetedPolicies.length}</td>
-										<td className="row-actions">
-											<Tooltip content="View route">
-												<button
-													className="icon-button"
-													type="button"
-													aria-label={`View ${routeDisplayName(row.route)}`}
-													onClick={() => setSelectedRouteKey(row.route.key)}
-												>
-													<Eye size={16} />
-												</button>
-											</Tooltip>
-										</td>
-									</tr>
+									routeInlinePolicies(row.route).length +
+									backends.flatMap(backend => backend.inlinePolicies ?? []).length +
+									routeTargetedPolicies(row.route, inventory.policies).length
 								);
-							})}
-						</tbody>
-					</table>
-				</div>
+							}
+						},
+						{
+							key: 'actions',
+							align: 'right',
+							render: (_, row) => (
+								<Tooltip content="View route">
+									<Button
+										aria-label={`View ${routeDisplayName(row.route)}`}
+										icon={<Eye size={16} />}
+										onClick={() => setSelectedRouteKey(row.route.key)}
+									/>
+								</Tooltip>
+							)
+						}
+					]}
+				/>
 			)}
 			{selectedRoute ? (
 				<RouteDumpDrawer
@@ -261,52 +266,58 @@ function RuntimeListenerTable(props: {
 	onSelect: (listener: DumpListener) => void;
 }) {
 	return (
-		<div className="table-wrap">
-			<table>
-				<thead>
-					<tr>
-						<th>Name</th>
-						<th>Port conflict</th>
-						<th>Hostname</th>
-						<th>Protocol</th>
-						<th>Routes</th>
-						<th>Backends</th>
-						<th aria-label="Actions" />
-					</tr>
-				</thead>
-				<tbody>
-					{props.rows.map(({ listener, conflicted }) => (
-						<tr key={listener.key}>
-							<td>
-								<div className="resource-name-cell">
-									<strong>{listenerDisplayName(listener)}</strong>
-									<small>{listenerSourceDisplayName(listener)}</small>
-								</div>
-							</td>
-							<td>{conflicted ? <span className="badge bad">Conflict</span> : '—'}</td>
-							<td>{listenerHostname(listener)}</td>
-							<td>
-								<span className="badge">{listenerProtocolLabel(listener.protocol)}</span>
-							</td>
-							<td>{listenerRouteObjectCount(listener)}</td>
-							<td>{listenerBackendCount(listener)}</td>
-							<td className="row-actions">
-								<Tooltip content="View listener">
-									<button
-										className="icon-button"
-										type="button"
-										aria-label={`View ${qualifiedListenerDisplayName(listener)}`}
-										onClick={() => props.onSelect(listener)}
-									>
-										<Eye size={16} />
-									</button>
-								</Tooltip>
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
+		<Table<RuntimeDumpListenerRow>
+			size="middle"
+			rowKey={row => row.listener.key}
+			dataSource={props.rows}
+			pagination={false}
+			columns={[
+				{
+					title: 'Name',
+					key: 'name',
+					render: (_, { listener }) => (
+						<div className="resource-name-cell">
+							<strong>{listenerDisplayName(listener)}</strong>
+							<small>{listenerSourceDisplayName(listener)}</small>
+						</div>
+					)
+				},
+				{
+					title: 'Port conflict',
+					key: 'conflict',
+					render: (_, row) => (row.conflicted ? <Tag color="error">Conflict</Tag> : '—')
+				},
+				{ title: 'Hostname', key: 'hostname', render: (_, row) => listenerHostname(row.listener) },
+				{
+					title: 'Protocol',
+					key: 'protocol',
+					render: (_, row) => <Tag>{listenerProtocolLabel(row.listener.protocol)}</Tag>
+				},
+				{
+					title: 'Routes',
+					key: 'routes',
+					render: (_, row) => listenerRouteObjectCount(row.listener)
+				},
+				{
+					title: 'Backends',
+					key: 'backends',
+					render: (_, row) => listenerBackendCount(row.listener)
+				},
+				{
+					key: 'actions',
+					align: 'right',
+					render: (_, { listener }) => (
+						<Tooltip content="View listener">
+							<Button
+								aria-label={`View ${qualifiedListenerDisplayName(listener)}`}
+								icon={<Eye size={16} />}
+								onClick={() => props.onSelect(listener)}
+							/>
+						</Tooltip>
+					)
+				}
+			]}
+		/>
 	);
 }
 

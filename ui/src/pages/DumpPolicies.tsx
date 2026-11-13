@@ -1,3 +1,4 @@
+import { Button, Table, Tag } from 'antd';
 import { Eye, ShieldCheck } from 'lucide-react';
 
 import {
@@ -7,6 +8,7 @@ import {
 	Panel,
 	StatusBanner,
 	Tooltip,
+	tablePagination,
 	YamlBlock
 } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
@@ -55,48 +57,54 @@ export function DumpPoliciesPage() {
 						description="No top-level policies are present in the active gateway dump."
 					/>
 				) : (
-					<div className="table-wrap">
-						<table className="dump-policies-table">
-							<thead>
-								<tr>
-									<th>Name</th>
-									<th>Target</th>
-									<th>Type</th>
-									<th>Inheritance</th>
-									<th aria-label="Actions" />
-								</tr>
-							</thead>
-							<tbody>
-								{policies.map(policy => (
-									<tr key={policy.key}>
-										<td>
-											<div className="resource-name-cell">
-												<strong>{policyName(policy)}</strong>
-												<small>{policy.name?.kind ?? 'Policy'}</small>
-											</div>
-										</td>
-										<td>{policyTargetLabel(policy.target)}</td>
-										<td>
-											<span className="badge">{policyTypeLabel(policy.policy)}</span>
-										</td>
-										<td>{policyInheritanceLabel(policy.inheritance)}</td>
-										<td className="row-actions">
-											<Tooltip content="View policy">
-												<button
-													className="icon-button"
-													type="button"
-													aria-label={`View ${policyName(policy)}`}
-													onClick={() => setSelectedKey(policy.key)}
-												>
-													<Eye size={16} />
-												</button>
-											</Tooltip>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+					<Table<TargetedPolicy>
+						rowKey="key"
+						scroll={{ x: 860 }}
+						locale={{ emptyText: 'No top-level policies' }}
+						dataSource={policies}
+						pagination={tablePagination}
+						columns={[
+							{
+								title: 'Name',
+								key: 'name',
+								render: (_, policy) => (
+									<div className="resource-name-cell">
+										<strong>{policyName(policy)}</strong>
+										<small>{policy.name?.kind ?? 'Policy'}</small>
+									</div>
+								)
+							},
+							{
+								title: 'Target',
+								key: 'target',
+								render: (_, policy) => policyTargetLabel(policy.target)
+							},
+							{
+								title: 'Type',
+								key: 'type',
+								render: (_, policy) => <Tag>{policyTypeLabel(policy.policy)}</Tag>
+							},
+							{
+								title: 'Inheritance',
+								key: 'inheritance',
+								render: (_, policy) => policyInheritanceLabel(policy.inheritance)
+							},
+							{
+								key: 'actions',
+								onHeaderCell: () => ({ 'aria-label': 'Actions' }),
+								align: 'right',
+								render: (_, policy) => (
+									<Tooltip content="View policy">
+										<Button
+											aria-label={`View ${policyName(policy)}`}
+											icon={<Eye size={16} />}
+											onClick={() => setSelectedKey(policy.key)}
+										/>
+									</Tooltip>
+								)
+							}
+						]}
+					/>
 				)}
 			</Panel>
 
@@ -104,9 +112,7 @@ export function DumpPoliciesPage() {
 				<Drawer
 					title={policyName(selectedPolicy)}
 					headerActions={
-						<span className="badge">
-							<ShieldCheck size={14} /> {policyTypeLabel(selectedPolicy.policy)}
-						</span>
+						<Tag icon={<ShieldCheck size={14} />}>{policyTypeLabel(selectedPolicy.policy)}</Tag>
 					}
 					onClose={() => setSelectedKey(null)}
 				>

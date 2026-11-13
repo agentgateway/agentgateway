@@ -1,4 +1,5 @@
-import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useRouterState } from '@tanstack/react-router';
+import { Breadcrumb, Button, Dropdown, Layout, Menu, type MenuProps } from 'antd';
 import {
 	BarChart3,
 	Bolt,
@@ -15,7 +16,7 @@ import {
 	Home,
 	KeyRound,
 	LogOut,
-	Menu,
+	Menu as MenuIcon,
 	MessageSquarePlus,
 	Moon,
 	Network,
@@ -29,7 +30,7 @@ import {
 	Sun,
 	UserRound
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { apiBase } from '@/api/base';
 import type { RuntimeUser } from '@/api/runtimeApi';
@@ -43,6 +44,7 @@ import {
 	useRuntimeInfo,
 	useTrafficConfigData
 } from '@/hooks';
+import { useTheme } from '@/theme';
 
 type NavItemConfig = {
 	to: string;
@@ -85,20 +87,7 @@ export function Shell() {
 	const trafficData = useTrafficConfigData({
 		enabled: Boolean(mode.data && mode.data.mode !== 'dump')
 	});
-	const [theme, setTheme] = useState(
-		() =>
-			localStorage.getItem('theme') ??
-			(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-	);
-	const [mobileNavOpen, setMobileNavOpen] = useState(false);
-	const [mobileNavPathname, setMobileNavPathname] = useState(router.location.pathname);
-	if (mobileNavPathname !== router.location.pathname) {
-		setMobileNavPathname(router.location.pathname);
-		setMobileNavOpen(false);
-	}
-	const mobileNavRef = useDismissiblePopover<HTMLDivElement>(mobileNavOpen, () =>
-		setMobileNavOpen(false)
-	);
+	const { theme, toggleTheme } = useTheme();
 	const hasLlm = dumpMode ? false : config.data ? Boolean(config.data.llm) : true;
 	const hasMcp = dumpMode ? false : mcpData.data ? Boolean(mcpData.data.mcp) : true;
 	const hasTraffic = dumpMode
@@ -124,14 +113,25 @@ export function Shell() {
 	const currentNav = matchedNav ?? nav[0];
 	const currentGroup = navGroups.find(group => group.items.includes(currentNav));
 	const CurrentIcon = currentNav.icon;
-
-	useEffect(() => {
-		document.documentElement.dataset.theme = theme;
-	}, [theme]);
+	const selectedKeys = matchedNav && !matchedNav.placeholder ? [matchedNav.to] : [];
+	const menuItems: MenuProps['items'] = navGroups.map(group => ({
+		type: 'group',
+		key: group.title,
+		label: group.title,
+		children: group.items.map(item => {
+			const Icon = item.icon;
+			return {
+				key: item.to,
+				icon: <Icon size={16} />,
+				label: <Link to={item.to}>{item.label}</Link>,
+				className: item.groupStart ? 'nav-group-start' : undefined
+			};
+		})
+	}));
 
 	return (
-		<div className="app-shell">
-			<aside className="sidebar">
+		<Layout className="app-shell" hasSider>
+			<Layout.Sider className="sidebar" width={220}>
 				<Link to="/" className="brand" aria-label="agentgateway home">
 					<img className="brand-logo brand-logo-light" src={logoLight} alt="agentgateway" />
 					<img className="brand-logo brand-logo-dark" src={logoDark} alt="agentgateway" />
@@ -140,88 +140,62 @@ export function Shell() {
 					)}
 				</Link>
 				<nav className="nav-list" aria-label="Primary">
-					{navGroups.map(group => (
-						<NavSection
-							key={group.title}
-							title={group.title}
-							items={group.items}
-							currentPath={router.location.pathname}
-						/>
-					))}
+					<Menu mode="inline" inlineIndent={9} items={menuItems} selectedKeys={selectedKeys} />
 				</nav>
 				<div className="sidebar-links">
 					{projectLinks.map(link => {
 						const Icon = link.icon;
 						return (
 							<Tooltip content={link.label} key={link.href} side="top">
-								<a
-									className="sidebar-link"
+								<Button
+									type="text"
 									href={link.href}
 									target="_blank"
 									rel="noreferrer"
 									aria-label={link.label}
-								>
-									<Icon size={17} />
-								</a>
+									icon={<Icon size={17} />}
+								/>
 							</Tooltip>
 						);
 					})}
 				</div>
-			</aside>
-			<div className="main-area">
-				<header className="topbar">
+			</Layout.Sider>
+			<Layout className="main-area">
+				<Layout.Header className="topbar">
 					<div className="topbar-left">
-						<div className="mobile-nav" ref={mobileNavRef}>
-							<button
-								className="mobile-nav-trigger"
-								type="button"
-								aria-expanded={mobileNavOpen}
-								onClick={() => setMobileNavOpen(open => !open)}
+						<div className="mobile-nav">
+							<Dropdown
+								trigger={['click']}
+								menu={{ items: menuItems, selectedKeys }}
+								classNames={{ root: 'mobile-nav-menu' }}
 							>
-								<Menu size={17} />
-								<CurrentIcon size={16} />
-								<span>{currentNav.label}</span>
-							</button>
-							{mobileNavOpen ? (
-								<nav className="mobile-nav-menu" aria-label="Primary">
-									{navGroups.map(group => (
-										<MobileNavSection
-											key={group.title}
-											title={group.title}
-											items={group.items}
-											currentPath={router.location.pathname}
-										/>
-									))}
-								</nav>
-							) : null}
+								<Button className="mobile-nav-trigger" icon={<MenuIcon size={17} />}>
+									<CurrentIcon size={16} />
+									<span>{currentNav.label}</span>
+								</Button>
+							</Dropdown>
 						</div>
 						{matchedNav && currentGroup && (
-							<nav className="breadcrumb" aria-label="Breadcrumb">
-								<span>{currentGroup.title}</span>
-								<ChevronRight size={14} />
-								<span aria-current="page">{matchedNav.label}</span>
-							</nav>
+							<Breadcrumb
+								className="breadcrumb"
+								aria-label="Breadcrumb"
+								separator={<ChevronRight size={14} />}
+								items={[{ title: currentGroup.title }, { title: matchedNav.label }]}
+							/>
 						)}
 					</div>
 					<div className="topbar-controls">
 						{runtime.data?.user && <UserMenu user={runtime.data.user} />}
 						<Tooltip content="Toggle theme">
-							<button
-								className="icon-button"
-								type="button"
+							<Button
 								aria-label="Toggle theme"
-								onClick={() => {
-									const next = theme === 'dark' ? 'light' : 'dark';
-									localStorage.setItem('theme', next);
-									setTheme(next);
-								}}
-							>
-								{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-							</button>
+								onClick={toggleTheme}
+								icon={theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+							/>
 						</Tooltip>
 					</div>
-				</header>
-				<main className="content">
+				</Layout.Header>
+				<Layout.Content className="content">
 					{runtime.data?.configReload && !runtime.data.configReload.synchronized && (
 						<StatusBanner state="warn" title="Configuration reload failed">
 							The last configuration reload was rejected, so the gateway is still running the
@@ -234,9 +208,9 @@ export function Shell() {
 						</StatusBanner>
 					)}
 					<Outlet />
-				</main>
-			</div>
-		</div>
+				</Layout.Content>
+			</Layout>
+		</Layout>
 	);
 }
 
@@ -262,10 +236,10 @@ function UserMenu({ user }: { user: RuntimeUser }) {
 
 	return (
 		<div className="user-menu" ref={ref}>
-			<button
+			<Button
 				ref={trigger}
+				type="text"
 				className="user-menu-trigger"
-				type="button"
 				aria-label={`Account: ${label}`}
 				aria-expanded={open}
 				aria-controls="user-menu-panel"
@@ -276,7 +250,7 @@ function UserMenu({ user }: { user: RuntimeUser }) {
 				</span>
 				<span className="user-menu-name">{label}</span>
 				<ChevronDown size={14} aria-hidden="true" />
-			</button>
+			</Button>
 			{open && (
 				<section id="user-menu-panel" className="user-menu-panel" aria-label="Your account">
 					<div className="user-menu-identity">
@@ -286,10 +260,9 @@ function UserMenu({ user }: { user: RuntimeUser }) {
 					</div>
 					{user.canLogout && (
 						<form action={`${apiBase}/api/auth/logout`} method="post">
-							<button className="user-menu-signout" type="submit">
-								<LogOut size={16} aria-hidden="true" />
+							<Button type="text" block htmlType="submit" icon={<LogOut size={16} />}>
 								Sign out
-							</button>
+							</Button>
 						</form>
 					)}
 				</section>
@@ -431,106 +404,6 @@ function navigationGroups(options: {
 				]
 	});
 	return groups;
-}
-
-function NavSection(props: {
-	title: string;
-	items: readonly NavItemConfig[];
-	currentPath: string;
-}) {
-	return (
-		<>
-			<div className="nav-section">{props.title}</div>
-			{props.items.map(item => (
-				<NavItem key={item.to} {...item} currentPath={props.currentPath} />
-			))}
-		</>
-	);
-}
-
-function MobileNavSection(props: {
-	title: string;
-	items: readonly NavItemConfig[];
-	currentPath: string;
-}) {
-	return (
-		<>
-			<div className="mobile-nav-section">{props.title}</div>
-			{props.items.map(item => (
-				<MobileNavItem key={item.to} {...item} currentPath={props.currentPath} />
-			))}
-		</>
-	);
-}
-
-function MobileNavItem(props: {
-	to: string;
-	label: string;
-	icon: React.ComponentType<{ size?: number }>;
-	currentPath: string;
-	placeholder?: boolean;
-	groupStart?: boolean;
-	exact?: boolean;
-}) {
-	const Icon = props.icon;
-	const navigate = useNavigate();
-	const active = props.placeholder ? false : navItemActive(props, props.currentPath);
-	if (props.placeholder) {
-		return (
-			<button
-				type="button"
-				className={props.groupStart ? 'mobile-nav-item nav-group-start' : 'mobile-nav-item'}
-				onClick={() => void navigate({ to: props.to })}
-			>
-				<Icon size={16} />
-				<span>{props.label}</span>
-			</button>
-		);
-	}
-	return (
-		<Link
-			to={props.to}
-			className={`${active ? 'mobile-nav-item active' : 'mobile-nav-item'}${props.groupStart ? ' nav-group-start' : ''}`}
-		>
-			<Icon size={16} />
-			<span>{props.label}</span>
-		</Link>
-	);
-}
-
-function NavItem(props: {
-	to: string;
-	label: string;
-	icon: React.ComponentType<{ size?: number }>;
-	currentPath: string;
-	placeholder?: boolean;
-	groupStart?: boolean;
-	exact?: boolean;
-}) {
-	const Icon = props.icon;
-	const navigate = useNavigate();
-	const active = props.placeholder ? false : navItemActive(props, props.currentPath);
-	if (props.placeholder) {
-		return (
-			<button
-				type="button"
-				className={props.groupStart ? 'nav-item nav-group-start' : 'nav-item'}
-				onClick={() => void navigate({ to: props.to })}
-			>
-				<Icon size={17} />
-				<span>{props.label}</span>
-			</button>
-		);
-	}
-	return (
-		<Link
-			to={props.to}
-			className={`${active ? 'nav-item active' : 'nav-item'}${props.groupStart ? ' nav-group-start' : ''}`}
-		>
-			<Icon size={17} />
-			<span>{props.label}</span>
-		</Link>
-	);
 }
 
 function navItemActive(item: { to: string; exact?: boolean }, path: string) {

@@ -1,3 +1,4 @@
+import { Input, InputNumber } from 'antd';
 import { useState } from 'react';
 
 import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
@@ -75,7 +76,7 @@ export function LocalRateLimitPolicyEditor(props: {
 					label="Fill interval"
 					tooltip={props.help.field<RateLimitSpec>('RateLimitSpec', 'fillInterval')}
 				>
-					<input
+					<Input
 						value={fillInterval}
 						onChange={event => setFillInterval(event.target.value)}
 						placeholder="60s"
@@ -85,20 +86,18 @@ export function LocalRateLimitPolicyEditor(props: {
 					label="Max tokens"
 					tooltip={props.help.field<RateLimitSpec>('RateLimitSpec', 'maxTokens')}
 				>
-					<input
-						type="number"
-						value={maxTokens}
-						onChange={event => setMaxTokens(event.target.value)}
+					<InputNumber
+						value={maxTokens === '' ? null : Number(maxTokens)}
+						onChange={value => setMaxTokens(value == null ? '' : String(value))}
 					/>
 				</Field>
 				<Field
 					label="Tokens per fill"
 					tooltip={props.help.field<RateLimitSpec>('RateLimitSpec', 'tokensPerFill')}
 				>
-					<input
-						type="number"
-						value={tokensPerFill}
-						onChange={event => setTokensPerFill(event.target.value)}
+					<InputNumber
+						value={tokensPerFill === '' ? null : Number(tokensPerFill)}
+						onChange={value => setTokensPerFill(value == null ? '' : String(value))}
 					/>
 				</Field>
 			</div>

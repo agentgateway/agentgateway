@@ -1,3 +1,4 @@
+import { Checkbox, Input } from 'antd';
 import type { Dispatch, SetStateAction } from 'react';
 
 import type { ProviderFormatConfig } from '@/gateway-config';
@@ -79,16 +80,14 @@ export function CustomFormats(props: {
 				);
 				return (
 					<div className="format-row" key={type}>
-						<label className={selected ? 'format-toggle selected' : 'format-toggle'}>
-							<input
-								type="checkbox"
-								checked={Boolean(selected)}
-								onChange={event => toggle(type, event.target.checked)}
-							/>
-							<span className="format-toggle-box" aria-hidden="true" />
-							<span>{formatLabels[type]}</span>
-						</label>
-						<input
+						<Checkbox
+							className={selected ? 'format-toggle selected' : 'format-toggle'}
+							checked={Boolean(selected)}
+							onChange={event => toggle(type, event.target.checked)}
+						>
+							{formatLabels[type]}
+						</Checkbox>
+						<Input
 							aria-label={`${formatLabels[type]} path override`}
 							disabled={!selected}
 							value={selected?.path ?? ''}

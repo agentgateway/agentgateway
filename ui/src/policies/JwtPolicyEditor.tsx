@@ -1,3 +1,4 @@
+import { Button, Input } from 'antd';
 import { DatabaseZap, FileKey2, Globe2, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
@@ -11,6 +12,7 @@ import {
 	CredentialLocationSetting
 } from '@/policies/AuthorizationLocation';
 import { ListEditor } from '@/policies/ListEditor';
+import { OptionCards } from '@/policies/PolicyFormControls';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, toText } from '@/policies/policyUtils';
 import type { JwtPolicy } from '@/policies/types';
@@ -167,19 +169,7 @@ export function JwtPolicyEditor(props: {
 					label="Validation mode"
 					tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'mode')}
 				>
-					<div className="option-card-grid">
-						{modeOptions.map(option => (
-							<button
-								className={mode === option.value ? 'option-card active' : 'option-card'}
-								type="button"
-								key={option.value}
-								onClick={() => setMode(option.value)}
-							>
-								<strong>{option.label}</strong>
-								<span>{option.description}</span>
-							</button>
-						))}
-					</div>
+					<OptionCards value={mode} options={modeOptions} onChange={setMode} />
 				</FieldGroup>
 			</PolicySection>
 
@@ -192,19 +182,7 @@ export function JwtPolicyEditor(props: {
 					label="JWKS source"
 					tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'jwks')}
 				>
-					<div className="option-card-grid">
-						{jwksOptions.map(option => (
-							<button
-								className={jwksMode === option.value ? 'option-card active' : 'option-card'}
-								type="button"
-								key={option.value}
-								onClick={() => setJwksMode(option.value)}
-							>
-								<strong>{option.label}</strong>
-								<span>{option.description}</span>
-							</button>
-						))}
-					</div>
+					<OptionCards value={jwksMode} options={jwksOptions} onChange={setJwksMode} />
 				</FieldGroup>
 				{jwksMode === 'file' ? (
 					<Field
@@ -212,7 +190,7 @@ export function JwtPolicyEditor(props: {
 						tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'jwks')}
 						path="jwks.file"
 					>
-						<input
+						<Input
 							value={jwksFile}
 							onChange={event => setJwksFile(event.target.value)}
 							placeholder="./manifests/jwt/pub-key"
@@ -224,7 +202,7 @@ export function JwtPolicyEditor(props: {
 						tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'jwks')}
 						path="jwks.url"
 					>
-						<input
+						<Input
 							value={jwksUrl}
 							onChange={event => setJwksUrl(event.target.value)}
 							placeholder="https://issuer.example.com/.well-known/jwks.json"
@@ -261,7 +239,7 @@ export function JwtPolicyEditor(props: {
 					tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'issuer')}
 					path="issuer"
 				>
-					<input
+					<Input
 						value={issuer}
 						onChange={event => setIssuer(event.target.value)}
 						placeholder="https://issuer.example.com"
@@ -283,14 +261,15 @@ export function JwtPolicyEditor(props: {
 				>
 					<div className="method-grid">
 						{commonClaims.map(claim => (
-							<button
-								className={requiredClaims.has(claim) ? 'choice-pill active' : 'choice-pill'}
-								type="button"
+							<Button
+								shape="round"
+								type={requiredClaims.has(claim) ? 'primary' : 'default'}
+								aria-pressed={requiredClaims.has(claim)}
 								key={claim}
 								onClick={() => setRequiredClaims(current => toggleClaim(current, claim))}
 							>
 								{claim}
-							</button>
+							</Button>
 						))}
 					</div>
 				</FieldGroup>

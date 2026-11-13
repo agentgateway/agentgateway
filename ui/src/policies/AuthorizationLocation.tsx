@@ -1,3 +1,4 @@
+import { Button, Input } from 'antd';
 import { KeyRound, SlidersHorizontal, X } from 'lucide-react';
 
 import { EnumSelector } from '@/components/EnumSelector';
@@ -106,14 +107,13 @@ export function CredentialLocationSetting(props: {
 					props.defaultDescription ?? 'By default, callers send Authorization: Bearer token.'
 				}
 				action={
-					<button
-						className="button compact-action"
-						type="button"
+					<Button
+						className="compact-action"
+						icon={<SlidersHorizontal size={15} />}
 						onClick={() => props.onChange({ ...props.value, mode: 'header' })}
 					>
-						<SlidersHorizontal size={15} />
 						Customize
-					</button>
+					</Button>
 				}
 			/>
 		);
@@ -125,14 +125,12 @@ export function CredentialLocationSetting(props: {
 			title="Credential location"
 			description={props.description ?? 'Override where this policy reads the credential.'}
 			action={
-				<button
-					className="button"
-					type="button"
+				<Button
+					icon={<X size={15} />}
 					onClick={() => props.onChange({ ...props.value, mode: 'default' })}
 				>
-					<X size={15} />
 					Use default
-				</button>
+				</Button>
 			}
 		>
 			<div className="location-override-panel">
@@ -167,7 +165,7 @@ export function CredentialLocationSetting(props: {
 								'header.name'
 							)}
 						>
-							<input
+							<Input
 								value={props.value.headerName}
 								onChange={event =>
 									props.onChange({
@@ -185,7 +183,7 @@ export function CredentialLocationSetting(props: {
 								'header.prefix'
 							)}
 						>
-							<input
+							<Input
 								value={props.value.headerPrefix}
 								onChange={event =>
 									props.onChange({
@@ -206,7 +204,7 @@ export function CredentialLocationSetting(props: {
 							'queryParameter.name'
 						)}
 					>
-						<input
+						<Input
 							value={props.value.queryName}
 							onChange={event =>
 								props.onChange({
@@ -226,7 +224,7 @@ export function CredentialLocationSetting(props: {
 							'cookie.name'
 						)}
 					>
-						<input
+						<Input
 							value={props.value.cookieName}
 							onChange={event =>
 								props.onChange({

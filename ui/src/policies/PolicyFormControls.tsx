@@ -1,5 +1,6 @@
+import { Button, Checkbox, Input, type InputRef, Radio } from 'antd';
 import { Plus } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 
 import { Field, FieldGroup, StatusBanner } from '@/components/Primitives';
 import { parseSchemaYamlEditorValue, SchemaYamlEditor } from '@/components/SchemaYamlEditor';
@@ -40,7 +41,7 @@ export function TargetEditor(props: {
 			</div>
 			<div className="policy-form-section-body">
 				<Field label="Host" tooltip={props.tooltip} path="host">
-					<input
+					<Input
 						value={props.value.host}
 						onChange={event => props.onChange({ ...props.value, host: event.target.value })}
 						placeholder="host:port or unix:/path/to/socket"
@@ -68,7 +69,7 @@ export function KeyValueEditor(props: {
 }) {
 	const [keyDraft, setKeyDraft] = useState('');
 	const [valueDraft, setValueDraft] = useState('');
-	const valueRef = useRef<HTMLInputElement>(null);
+	const valueRef = useRef<InputRef>(null);
 	const entries = Object.entries(props.values);
 
 	function add() {
@@ -87,9 +88,10 @@ export function KeyValueEditor(props: {
 						<div className="kv-row" key={key}>
 							<code>{key}</code>
 							<span>{value}</span>
-							<button
-								className="table-action danger"
-								type="button"
+							<Button
+								size="small"
+								danger
+								type="text"
 								onClick={() => {
 									const next = { ...props.values };
 									delete next[key];
@@ -97,7 +99,7 @@ export function KeyValueEditor(props: {
 								}}
 							>
 								Remove
-							</button>
+							</Button>
 						</div>
 					))}
 				</div>
@@ -107,9 +109,9 @@ export function KeyValueEditor(props: {
 			{props.quickKeys?.length ? (
 				<div className="kv-quick-row">
 					{props.quickKeys.map(key => (
-						<button
-							className="choice-pill compact"
-							type="button"
+						<Button
+							size="small"
+							shape="round"
 							key={key}
 							disabled={key in props.values}
 							onClick={() => {
@@ -118,17 +120,17 @@ export function KeyValueEditor(props: {
 							}}
 						>
 							{key}
-						</button>
+						</Button>
 					))}
 				</div>
 			) : null}
 			<div className="kv-add-row">
-				<input
+				<Input
 					value={keyDraft}
 					onChange={event => setKeyDraft(event.target.value)}
 					placeholder={props.keyPlaceholder ?? 'name'}
 				/>
-				<input
+				<Input
 					ref={valueRef}
 					className={props.valueKind === 'cel' ? 'mono-input' : undefined}
 					value={valueDraft}
@@ -143,9 +145,7 @@ export function KeyValueEditor(props: {
 						props.valuePlaceholder ?? (props.valueKind === 'cel' ? 'request.path' : 'value')
 					}
 				/>
-				<button className="button" type="button" onClick={add}>
-					Add
-				</button>
+				<Button onClick={add}>Add</Button>
 			</div>
 		</div>
 	);
@@ -212,5 +212,46 @@ export function BackendPoliciesField(props: {
 				onChange={update}
 			/>
 		</FieldGroup>
+	);
+}
+
+// A bordered checkbox row with a bold title and an optional muted description.
+export function OptionCheckbox(props: {
+	checked: boolean;
+	onChange: (checked: boolean) => void;
+	title: string;
+	description?: ReactNode;
+}) {
+	return (
+		<Checkbox
+			className="config-option-row"
+			checked={props.checked}
+			onChange={event => props.onChange(event.target.checked)}
+		>
+			<strong>{props.title}</strong>
+			{props.description ? <small>{props.description}</small> : null}
+		</Checkbox>
+	);
+}
+
+// A radio group drawn as cards, each with a title and description.
+export function OptionCards<T extends string>(props: {
+	value: T;
+	options: Array<{ value: T; label: string; description: string }>;
+	onChange: (value: T) => void;
+}) {
+	return (
+		<Radio.Group
+			className="option-card-grid"
+			value={props.value}
+			onChange={event => props.onChange(event.target.value as T)}
+		>
+			{props.options.map(option => (
+				<Radio className="option-card" value={option.value} key={option.value}>
+					<strong>{option.label}</strong>
+					<small>{option.description}</small>
+				</Radio>
+			))}
+		</Radio.Group>
 	);
 }

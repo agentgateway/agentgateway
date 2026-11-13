@@ -1,3 +1,5 @@
+import { Button, Input, Tag } from 'antd';
+import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -29,49 +31,40 @@ export function ListEditor(props: {
 				{props.values.length > 0 ? (
 					<div className="chip-list">
 						{props.values.map(value => (
-							<span className="config-chip" key={value}>
+							<Tag className="config-chip" key={value}>
 								<span>{value}</span>
-								<button
-									type="button"
+								<Button
+									type="text"
+									size="small"
 									aria-label={`Remove ${value}`}
+									icon={<X size={12} />}
 									onClick={() => props.onChange(props.values.filter(item => item !== value))}
-								>
-									x
-								</button>
-							</span>
+								/>
+							</Tag>
 						))}
 					</div>
 				) : (
 					<div className="empty-inline">{props.emptyText ?? 'No values configured.'}</div>
 				)}
 				<div className="list-editor-row">
-					<input
+					<Input
 						value={draft}
 						onChange={event => setDraft(event.target.value)}
-						onKeyDown={event => {
-							if (event.key === 'Enter') {
-								event.preventDefault();
-								add(draft);
-							}
+						onPressEnter={event => {
+							event.preventDefault();
+							add(draft);
 						}}
 						placeholder={props.placeholder}
 					/>
-					<button className="button" type="button" onClick={() => add(draft)}>
-						Add
-					</button>
+					<Button onClick={() => add(draft)}>Add</Button>
 					{props.actions}
 				</div>
 				{props.suggestions?.length ? (
 					<div className="suggestion-row">
 						{props.suggestions.map(suggestion => (
-							<button
-								className="table-action"
-								type="button"
-								key={suggestion}
-								onClick={() => add(suggestion)}
-							>
+							<Button size="small" key={suggestion} onClick={() => add(suggestion)}>
 								{suggestion}
-							</button>
+							</Button>
 						))}
 					</div>
 				) : null}

@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Button, Checkbox, Input, Tag } from 'antd';
 import {
 	Bot,
 	Braces,
@@ -18,6 +18,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { sendChatCompletion, sendMcpJsonRpc } from '@/api/playgroundApi';
 import { claudeSubscriptionWarning } from '@/claudeSubscription';
 import {
+	ButtonLink,
 	Dropdown,
 	Field,
 	FieldGroup,
@@ -511,13 +512,13 @@ export function PlaygroundPage() {
 					title="Browser access is not allowed"
 					action={
 						hybrid && fileCorsOwned ? (
-							<Link className="button" to="/llm/policies" hash="cors">
+							<ButtonLink to="/llm/policies" hash="cors">
 								Configure CORS
-							</Link>
+							</ButtonLink>
 						) : (
-							<button className="button" type="button" disabled={corsSaving} onClick={applyLlmCors}>
+							<Button disabled={corsSaving} onClick={applyLlmCors}>
 								Apply CORS
-							</button>
+							</Button>
 						)
 					}
 				>
@@ -531,13 +532,13 @@ export function PlaygroundPage() {
 					title="MCP browser access is not allowed"
 					action={
 						hybrid && fileMcpCorsOwned ? (
-							<Link className="button" to="/mcp/policies" hash="cors">
+							<ButtonLink to="/mcp/policies" hash="cors">
 								Configure CORS
-							</Link>
+							</ButtonLink>
 						) : (
-							<button className="button" type="button" disabled={corsSaving} onClick={applyMcpCors}>
+							<Button disabled={corsSaving} onClick={applyMcpCors}>
 								Apply MCP CORS
-							</button>
+							</Button>
 						)
 					}
 				>
@@ -645,9 +646,8 @@ export function PlaygroundPage() {
 							</FieldGroup>
 							{apiKeyMode === 'raw' || rawVirtualKeys.length === 0 ? (
 								<Field label="Raw API key">
-									<input
+									<Input
 										value={apiKey}
-										type="text"
 										className="masked-secret-input"
 										autoComplete="off"
 										autoCorrect="off"
@@ -667,12 +667,11 @@ export function PlaygroundPage() {
 						</div>
 						{mcpServerCount > 0 ? (
 							<div className="playground-tool-cell">
-								<label className="config-option-row">
-									<input
-										type="checkbox"
-										checked={mcpEnabled}
-										onChange={event => setMcpEnabled(event.target.checked)}
-									/>
+								<Checkbox
+									className="option-checkbox"
+									checked={mcpEnabled}
+									onChange={event => setMcpEnabled(event.target.checked)}
+								>
 									<span>
 										<strong>
 											Include MCP tools ({mcpServerCount}{' '}
@@ -680,7 +679,7 @@ export function PlaygroundPage() {
 										</strong>
 										<small>Let the model call tools exposed by the MCP gateway.</small>
 									</span>
-								</label>
+								</Checkbox>
 							</div>
 						) : null}
 					</div>
@@ -695,7 +694,11 @@ export function PlaygroundPage() {
 							<ChevronDown size={16} />
 						</summary>
 						<Field label="System prompt">
-							<textarea rows={4} value={system} onChange={event => setSystem(event.target.value)} />
+							<Input.TextArea
+								rows={4}
+								value={system}
+								onChange={event => setSystem(event.target.value)}
+							/>
 						</Field>
 					</details>
 				</Panel>
@@ -728,7 +731,7 @@ export function PlaygroundPage() {
 						) : null}
 					</div>
 					<Field label="User message">
-						<textarea
+						<Input.TextArea
 							rows={6}
 							value={prompt}
 							onChange={event => setPrompt(event.target.value)}
@@ -742,18 +745,15 @@ export function PlaygroundPage() {
 						/>
 					</Field>
 					<div className="button-row">
-						<button
-							className="button primary"
-							type="button"
+						<Button
+							type="primary"
+							icon={<Send size={16} />}
 							disabled={sendBlockers.length > 0}
 							onClick={send}
 						>
-							<Send size={16} />
 							Send
-						</button>
-						<button
-							className="button"
-							type="button"
+						</Button>
+						<Button
 							disabled={loading || messages.length === 0}
 							onClick={() => {
 								setMessages([]);
@@ -762,7 +762,7 @@ export function PlaygroundPage() {
 							}}
 						>
 							Clear
-						</button>
+						</Button>
 					</div>
 					{sendBlockers.length ? (
 						<div className="playground-send-blockers">
@@ -887,10 +887,9 @@ function MessageMetaChips(props: { meta: MessageMeta }) {
 	return (
 		<div className="message-meta-chips">
 			{chips.map(chip => (
-				<span className="message-meta-chip" key={chip.key}>
-					{chip.icon}
+				<Tag key={chip.key} icon={chip.icon}>
 					{chip.label}
-				</span>
+				</Tag>
 			))}
 		</div>
 	);
@@ -923,7 +922,7 @@ function ToolCallSummary(props: { message: ChatMessage }) {
 			{props.message.content.trim() ? <p>{props.message.content}</p> : null}
 			{props.message.tool_calls?.map(call => (
 				<div className="tool-call-row" key={call.id}>
-					<span className="tool-pill">Tool call</span>
+					<Tag>Tool call</Tag>
 					<strong>{call.function?.name || 'unknown'}</strong>
 					<small>{summarizeValue(parseToolArguments(call.function?.arguments))}</small>
 				</div>
@@ -936,7 +935,7 @@ function ToolResultSummary(props: { message: ChatMessage }) {
 	return (
 		<div className="tool-call-summary">
 			<div className="tool-call-row">
-				<span className="tool-pill">Tool result</span>
+				<Tag>Tool result</Tag>
 				<strong>{props.message.name || 'unknown'}</strong>
 				<small>{summarizeToolResult(props.message.content)}</small>
 			</div>

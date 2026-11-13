@@ -1,5 +1,5 @@
-import '@/monacoWorkers';
 import { DiffEditor } from '@monaco-editor/react';
+import { Button } from 'antd';
 import { FileText, Save } from 'lucide-react';
 import { type ReactNode, useContext, useId, useState } from 'react';
 
@@ -7,7 +7,9 @@ import { Drawer, DrawerCheckContext, Tooltip } from '@/components/Primitives';
 import { cloneConfig } from '@/config';
 import { configureConfigYamlMonaco } from '@/configMonaco';
 import { allowNextHybridFileWrite, useHybridFileWriteOverrideKeys, useRuntimeInfo } from '@/hooks';
+import { monacoTheme } from '@/monacoWorkers';
 import { toYamlText } from '@/policies/policyUtils';
+import { useTheme } from '@/theme';
 import type { GatewayConfig } from '@/types';
 
 const hybridFileWriteMessage =
@@ -27,9 +29,13 @@ export function ConfigSaveButton(props: {
 	const fileWriteDisabled =
 		runtime.data?.ui.configStoreMode === 'hybrid' && !props.allowHybridWrite;
 	const button = (
-		<button
-			className={`button primary${fileWriteDisabled ? ' hybrid-write-disabled' : ''}${fileWriteDisabled && overrideKeysActive ? ' hybrid-write-override' : ''}`}
-			type="button"
+		<Button
+			type="primary"
+			className={
+				fileWriteDisabled
+					? `hybrid-write-disabled${overrideKeysActive ? ' hybrid-write-override' : ''}`
+					: undefined
+			}
 			disabled={props.disabled}
 			aria-disabled={fileWriteDisabled}
 			onClick={event => {
@@ -41,7 +47,7 @@ export function ConfigSaveButton(props: {
 			}}
 		>
 			{props.children}
-		</button>
+		</Button>
 	);
 	if (!fileWriteDisabled) return button;
 	return (
@@ -83,6 +89,7 @@ export function ConfigDiffDrawer(props: {
 	onSave?: () => void;
 }) {
 	const modelId = useId();
+	const { theme } = useTheme();
 	const modelPath = `inmemory://config-diff/${encodeURIComponent(props.title)}/${encodeURIComponent(modelId)}`;
 	const saveButton = props.onSave ? (
 		<ConfigSaveButton
@@ -101,9 +108,7 @@ export function ConfigDiffDrawer(props: {
 			onClose={props.onClose}
 			footer={
 				<div className="button-row">
-					<button className="button" type="button" onClick={props.onClose}>
-						Close
-					</button>
+					<Button onClick={props.onClose}>Close</Button>
 					{saveButton}
 				</div>
 			}
@@ -118,7 +123,7 @@ export function ConfigDiffDrawer(props: {
 					modifiedModelPath={`${modelPath}/modified.yaml`}
 					keepCurrentOriginalModel
 					keepCurrentModifiedModel
-					theme={document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'}
+					theme={monacoTheme(theme)}
 					options={{
 						automaticLayout: true,
 						copyWithSyntaxHighlighting: false,
@@ -192,9 +197,8 @@ export function ConfigDiffSaveActions(props: {
 	}
 
 	const diffButton = (
-		<button
-			className="button"
-			type="button"
+		<Button
+			icon={<FileText size={16} />}
 			disabled={
 				props.saving ||
 				(!props.config && !props.resourceDiff) ||
@@ -203,19 +207,14 @@ export function ConfigDiffSaveActions(props: {
 			}
 			onClick={viewDiff}
 		>
-			<FileText size={16} />
 			View diff
-		</button>
+		</Button>
 	);
 
 	return (
 		<>
 			<div className="button-row">
-				{props.onCancel ? (
-					<button className="button" type="button" onClick={props.onCancel}>
-						Cancel
-					</button>
-				) : null}
+				{props.onCancel ? <Button onClick={props.onCancel}>Cancel</Button> : null}
 				{props.diffDisabled ? <Tooltip content="No diff">{diffButton}</Tooltip> : diffButton}
 				<ConfigSaveButton
 					disabled={props.saving || props.saveDisabled}

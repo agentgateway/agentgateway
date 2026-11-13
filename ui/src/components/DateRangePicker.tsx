@@ -1,8 +1,11 @@
+import { DatePicker, type GetRef } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { CalendarDays, ChevronDown } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
-import { FieldGroup, useDismissiblePopover } from '@/components/Primitives';
 import type { TimeRange } from '@/types';
+
+const { RangePicker } = DatePicker;
 
 export type PresetRange = '1h' | '12h' | '24h' | '7d' | '14d' | '30d';
 export type LogTimeRange =
@@ -26,96 +29,66 @@ export function DateRangePicker(props: {
 	value: LogTimeRange;
 	onChange: (value: LogTimeRange) => void;
 }) {
-	const [open, setOpen] = useState(false);
-	const [draft, setDraft] = useState<LogTimeRange>(props.value);
-	const ref = useDismissiblePopover<HTMLDivElement>(open, () => setOpen(false));
+	const absolute =
+		props.value.mode === 'absolute' ? props.value : presetAbsoluteRange(props.value.preset);
+	const from = dayjs(absolute.fromLocal);
+	const to = dayjs(absolute.toLocal);
+	const presetLabel = props.value.mode === 'preset' ? logTimeRangeLabel(props.value) : undefined;
+	const pickerRef = useRef<GetRef<typeof RangePicker>>(null);
 
+	// A preset hides the end input; keep it out of the tab order while it's hidden.
 	useEffect(() => {
-		if (open) setDraft(props.value);
-	}, [open, props.value]);
+		const end = pickerRef.current?.nativeElement?.querySelector<HTMLInputElement>(
+			'.ant-picker-input-end input'
+		);
+		if (end) end.tabIndex = presetLabel ? -1 : 0;
+	}, [presetLabel]);
 
-	const absoluteDraft = draft.mode === 'absolute' ? draft : presetAbsoluteRange(draft.preset);
 	return (
-		<div className="date-range-picker" ref={ref}>
-			<button
-				className="button date-range-trigger"
-				type="button"
-				onClick={() => setOpen(current => !current)}
-				aria-expanded={open}
-			>
-				<CalendarDays size={16} />
-				{logTimeRangeLabel(props.value)}
-				<ChevronDown size={15} />
-			</button>
-			{open ? (
-				<div className="date-range-popover">
-					<div className="date-range-presets">
-						{RANGE_PRESETS.map(preset => (
-							<button
-								className={draft.mode === 'preset' && draft.preset === preset.value ? 'active' : ''}
-								type="button"
-								key={preset.value}
-								onClick={() => setDraft({ mode: 'preset', preset: preset.value })}
-							>
-								{preset.label}
-							</button>
-						))}
-					</div>
-					<div className="date-range-custom">
-						<div className="date-range-field-grid">
-							<FieldGroup label="From">
-								<input
-									type="datetime-local"
-									value={absoluteDraft.fromLocal}
-									onChange={event =>
-										setDraft({
-											mode: 'absolute',
-											fromLocal: event.target.value,
-											toLocal: absoluteDraft.toLocal
-										})
-									}
-								/>
-							</FieldGroup>
-							<FieldGroup label="To">
-								<input
-									type="datetime-local"
-									value={absoluteDraft.toLocal}
-									onChange={event =>
-										setDraft({
-											mode: 'absolute',
-											fromLocal: absoluteDraft.fromLocal,
-											toLocal: event.target.value
-										})
-									}
-								/>
-							</FieldGroup>
-						</div>
-						<FieldGroup label="Interval">
-							<input value={formatBucketDuration(bucketSecondsForRange(draft))} disabled readOnly />
-						</FieldGroup>
-						<div className="date-range-footer">
-							<span>{timezoneLabel()}</span>
-							<div className="button-row compact">
-								<button className="button secondary" type="button" onClick={() => setOpen(false)}>
-									Cancel
-								</button>
-								<button
-									className="button primary"
-									type="button"
-									disabled={!isValidLogTimeRange(draft)}
-									onClick={() => {
-										props.onChange(draft);
-										setOpen(false);
-									}}
-								>
-									Apply
-								</button>
-							</div>
-						</div>
-					</div>
-				</div>
-			) : null}
-		</div>
+		<RangePicker
+			ref={pickerRef}
+			className={presetLabel ? 'date-range-picker is-preset' : 'date-range-picker'}
+			aria-label="Time range"
+			suffixIcon={<ChevronDown size={15} />}
+			value={[from, to]}
+			showTime={{ format: 'HH:mm' }}
+			allowClear={false}
+			format={
+				presetLabel ? (date: Dayjs) => (date.isSame(to) ? 'Now' : presetLabel) : 'MMM D, HH:mm'
+			}
+			prefix={<CalendarDays size={16} />}
+			presets={RANGE_PRESETS.map(preset => ({
+				label: preset.label,
+				value: () => {
+					const range = presetAbsoluteRange(preset.value);
+					return [dayjs(range.fromLocal), dayjs(range.toLocal)];
+				}
+			}))}
+			renderExtraFooter={() => (
+				<span className="date-range-footer">
+					Interval: {formatBucketDuration(bucketSecondsForRange(props.value))} · {timezoneLabel()}
+				</span>
+			)}
+			onChange={dates => {
+				if (!dates?.[0] || !dates[1]) return;
+				const fromLocal = toDateTimeLocal(dates[0].toDate());
+				const toLocal = toDateTimeLocal(dates[1].toDate());
+				// antd submits a preset as plain dates; keep it rolling when they match one exactly.
+				const preset = RANGE_PRESETS.find(item => {
+					const range = presetAbsoluteRange(item.value);
+					return range.fromLocal === fromLocal && range.toLocal === toLocal;
+				});
+				if (preset) {
+					props.onChange({ mode: 'preset', preset: preset.value });
+					return;
+				}
+				props.onChange({
+					mode: 'absolute',
+					fromLocal,
+					toLocal
+				});
+			}}
+		/>
 	);
 }
 
@@ -184,13 +157,6 @@ export function formatBucketDuration(seconds: number) {
 	const days = hours / 24;
 	const rounded = Math.round(days);
 	return `${rounded} ${rounded === 1 ? 'day' : 'days'}`;
-}
-
-function isValidLogTimeRange(value: LogTimeRange) {
-	if (value.mode === 'preset') return true;
-	const from = dateFromLocal(value.fromLocal)?.getTime();
-	const to = dateFromLocal(value.toLocal)?.getTime();
-	return from !== undefined && to !== undefined && from < to;
 }
 
 function presetAbsoluteRange(

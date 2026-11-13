@@ -1,10 +1,11 @@
+import { Button, Input } from 'antd';
 import { Eye, EyeOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { CloudRegionCombobox } from '@/components/CloudRegionCombobox';
 import { UnsupportedInForm } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
-import { Dropdown, Field, FieldGroup } from '@/components/Primitives';
+import { Dropdown, Field, FieldGroup, SegmentedControl } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import {
 	providerDisplayName,
@@ -160,7 +161,7 @@ export function ProviderConfigEditor(props: {
 									'Google Cloud project used for Vertex AI requests.'
 								)}
 							>
-								<input
+								<Input
 									value={props.params?.vertexProject ?? ''}
 									onChange={event => patchParams({ vertexProject: event.target.value || null })}
 								/>
@@ -234,7 +235,7 @@ export function ProviderConfigEditor(props: {
 							)}
 							hint="Optional. Defaults to http://localhost:11434/v1."
 						>
-							<input
+							<Input
 								value={props.params?.baseUrl ?? ''}
 								onChange={event => patchParams({ baseUrl: event.target.value || null })}
 								placeholder="http://localhost:11434/v1"
@@ -247,7 +248,7 @@ export function ProviderConfigEditor(props: {
 								label="Azure resource name"
 								tooltip={props.help.field<LlmParams>('LocalLLMParams', 'azureResourceName')}
 							>
-								<input
+								<Input
 									value={props.params?.azureResourceName ?? ''}
 									onChange={event =>
 										patchParams({
@@ -261,7 +262,7 @@ export function ProviderConfigEditor(props: {
 								tooltip={props.help.field<LlmParams>('LocalLLMParams', 'azureApiVersion')}
 								hint="Optional. Leave unset to use the gateway default."
 							>
-								<input
+								<Input
 									value={props.params?.azureApiVersion ?? ''}
 									onChange={event => patchParams({ azureApiVersion: event.target.value || null })}
 								/>
@@ -291,7 +292,7 @@ export function ProviderConfigEditor(props: {
 									label="Azure project name"
 									tooltip={props.help.field<LlmParams>('LocalLLMParams', 'azureProjectName')}
 								>
-									<input
+									<Input
 										value={props.params?.azureProjectName ?? ''}
 										onChange={event =>
 											patchParams({
@@ -352,7 +353,7 @@ function CustomProviderSettings(props: {
 			</div>
 			<div className="policy-form-section-body">
 				<Field label="Base URL" tooltip={props.help.field<LlmParams>('LocalLLMParams', 'baseUrl')}>
-					<input
+					<Input
 						value={props.params?.baseUrl ?? ''}
 						onChange={event =>
 							props.onParamsChange({
@@ -465,49 +466,50 @@ function AwsCredentials(props: {
 			tooltip="Use ambient AWS credentials or static access keys for Bedrock signing."
 		>
 			<div className="credential-row">
-				<div className="segmented-control compact">
-					<button className={mode === 'ambient' ? 'active' : ''} type="button" onClick={setAmbient}>
-						Ambient
-					</button>
-					<button
-						className={mode === 'static' ? 'active' : ''}
-						type="button"
-						onClick={() => {
-							setMode('static');
-							saveStatic({});
-						}}
-					>
-						Static
-					</button>
-				</div>
+				<SegmentedControl<AwsCredentialMode>
+					ariaLabel="AWS credentials"
+					value={mode}
+					options={[
+						{ value: 'ambient', label: 'Ambient' },
+						{ value: 'static', label: 'Static' }
+					]}
+					onChange={next => {
+						if (next === 'ambient') {
+							setAmbient();
+							return;
+						}
+						setMode('static');
+						saveStatic({});
+					}}
+				/>
 				{mode === 'static' ? (
 					<div className="credential-grid">
-						<input
+						<Input
 							value={accessKeyId}
 							onChange={event => saveStatic({ accessKeyId: event.target.value })}
 							placeholder="AWS access key ID"
 						/>
-						<div className="api-key-value-wrap">
-							<input
-								value={secretAccessKey}
-								type="text"
-								className={showSecret ? undefined : 'masked-secret-input'}
-								onChange={event => saveStatic({ secretAccessKey: event.target.value })}
-								placeholder="AWS secret access key"
-								autoComplete="off"
-								autoCorrect="off"
-								autoCapitalize="none"
-								data-1p-ignore="true"
-								data-lpignore="true"
-								data-form-type="other"
-								name="agw-aws-secret-access-key"
-							/>
-							<VisibilityButton
-								visible={showSecret}
-								onClick={() => setShowSecret(current => !current)}
-							/>
-						</div>
-						<input
+						<Input
+							value={secretAccessKey}
+							type="text"
+							className={showSecret ? undefined : 'masked-secret-input'}
+							onChange={event => saveStatic({ secretAccessKey: event.target.value })}
+							placeholder="AWS secret access key"
+							autoComplete="off"
+							autoCorrect="off"
+							autoCapitalize="none"
+							data-1p-ignore="true"
+							data-lpignore="true"
+							data-form-type="other"
+							name="agw-aws-secret-access-key"
+							suffix={
+								<VisibilityButton
+									visible={showSecret}
+									onClick={() => setShowSecret(current => !current)}
+								/>
+							}
+						/>
+						<Input
 							value={sessionToken}
 							onChange={event => saveStatic({ sessionToken: event.target.value || null })}
 							placeholder="Session token (optional)"
@@ -555,30 +557,21 @@ function GcpCredentials(props: {
 			tooltip="Use Application Default Credentials or a service account JSON file for Vertex."
 		>
 			<div className="credential-row">
-				<div className="segmented-control compact">
-					<button
-						className={mode === 'ambient' ? 'active' : ''}
-						type="button"
-						onClick={() => {
-							setMode('ambient');
-							setCredential(null);
-						}}
-					>
-						ADC
-					</button>
-					<button
-						className={mode === 'file' ? 'active' : ''}
-						type="button"
-						onClick={() => {
-							setMode('file');
-							setFile(file);
-						}}
-					>
-						File
-					</button>
-				</div>
+				<SegmentedControl<GcpCredentialMode>
+					ariaLabel="Google credentials"
+					value={mode}
+					options={[
+						{ value: 'ambient', label: 'ADC' },
+						{ value: 'file', label: 'File' }
+					]}
+					onChange={next => {
+						setMode(next);
+						if (next === 'ambient') setCredential(null);
+						else setFile(file);
+					}}
+				/>
 				{mode === 'file' ? (
-					<input
+					<Input
 						value={file}
 						onChange={event => setFile(event.target.value)}
 						placeholder="$HOME/.secrets/gcp-sa.json"
@@ -646,27 +639,20 @@ function AzureCredentials(props: {
 			tooltip="Use Azure default credentials, managed identity, or an Azure API key."
 		>
 			<div className="credential-row">
-				<div className="segmented-control compact">
-					<button className={mode === 'default' ? 'active' : ''} type="button" onClick={setDefault}>
-						Default
-					</button>
-					<button
-						className={mode === 'managedIdentity' ? 'active' : ''}
-						type="button"
-						onClick={() => setManaged()}
-					>
-						Managed
-					</button>
-					<button
-						className={mode === 'apiKey' ? 'active' : ''}
-						type="button"
-						onClick={setApiKeyMode}
-					>
-						API key
-					</button>
-				</div>
+				<SegmentedControl<AzureCredentialMode>
+					ariaLabel="Azure credentials"
+					value={mode}
+					options={[
+						{ value: 'default', label: 'Default' },
+						{ value: 'managedIdentity', label: 'Managed' },
+						{ value: 'apiKey', label: 'API key' }
+					]}
+					onChange={next =>
+						next === 'default' ? setDefault() : next === 'apiKey' ? setApiKeyMode() : setManaged()
+					}
+				/>
 				{mode === 'managedIdentity' ? (
-					<input
+					<Input
 						value={clientId}
 						onChange={event => setManaged(event.target.value)}
 						placeholder="Client ID (optional)"
@@ -706,65 +692,42 @@ function ApiKeyInput(props: {
 
 	return (
 		<div className="api-key-input-row">
-			<div className="segmented-control compact api-key-mode-control">
-				<button
-					className={mode === 'unset' ? 'active' : ''}
-					type="button"
-					onClick={() => setNextMode('unset')}
-				>
-					Unset
-				</button>
-				<button
-					className={mode === 'env' ? 'active' : ''}
-					type="button"
-					onClick={() => setNextMode('env')}
-				>
-					Env var
-				</button>
-				<button
-					className={mode === 'key' ? 'active' : ''}
-					type="button"
-					onClick={() => setNextMode('key')}
-				>
-					API key
-				</button>
-				<button
-					className={mode === 'file' ? 'active' : ''}
-					type="button"
-					onClick={() => setNextMode('file')}
-				>
-					File
-				</button>
-			</div>
+			<SegmentedControl<ApiKeyMode>
+				ariaLabel="API key source"
+				value={mode}
+				options={[
+					{ value: 'unset', label: 'Unset' },
+					{ value: 'env', label: 'Env var' },
+					{ value: 'key', label: 'API key' },
+					{ value: 'file', label: 'File' }
+				]}
+				onChange={setNextMode}
+			/>
 			{mode === 'unset' ? (
 				<span className="api-key-unset-copy">No provider credential configured.</span>
 			) : (
-				<div className="api-key-value-wrap">
-					<input
-						value={inputValue}
-						type="text"
-						className={mode === 'key' && !showKey ? 'masked-secret-input' : undefined}
-						autoComplete="off"
-						autoCorrect="off"
-						autoCapitalize="none"
-						data-1p-ignore="true"
-						data-lpignore="true"
-						data-form-type="other"
-						name={`agw-provider-${mode}`}
-						spellCheck={false}
-						onChange={event => props.onChange(apiKeyFromInput(event.target.value, mode))}
-						placeholder={
-							mode === 'env'
-								? 'ENV_VAR_NAME'
-								: mode === 'file'
-									? '$HOME/.secrets/provider'
-									: 'sk-...'
-						}
-					/>
-					{mode === 'key' ? (
-						<VisibilityButton visible={showKey} onClick={() => setShowKey(current => !current)} />
-					) : null}
-				</div>
+				<Input
+					value={inputValue}
+					type="text"
+					className={mode === 'key' && !showKey ? 'masked-secret-input' : undefined}
+					autoComplete="off"
+					autoCorrect="off"
+					autoCapitalize="none"
+					data-1p-ignore="true"
+					data-lpignore="true"
+					data-form-type="other"
+					name={`agw-provider-${mode}`}
+					spellCheck={false}
+					onChange={event => props.onChange(apiKeyFromInput(event.target.value, mode))}
+					placeholder={
+						mode === 'env' ? 'ENV_VAR_NAME' : mode === 'file' ? '$HOME/.secrets/provider' : 'sk-...'
+					}
+					suffix={
+						mode === 'key' ? (
+							<VisibilityButton visible={showKey} onClick={() => setShowKey(current => !current)} />
+						) : undefined
+					}
+				/>
 			)}
 		</div>
 	);
@@ -779,14 +742,13 @@ function azureManagedIdentityClientId(value: unknown) {
 
 function VisibilityButton(props: { visible: boolean; onClick: () => void }) {
 	return (
-		<button
-			className="icon-button api-key-visibility"
-			type="button"
+		<Button
+			type="text"
+			size="small"
 			aria-label={props.visible ? 'Hide secret' : 'Show secret'}
+			icon={props.visible ? <EyeOff size={16} /> : <Eye size={16} />}
 			onClick={props.onClick}
-		>
-			{props.visible ? <EyeOff size={16} /> : <Eye size={16} />}
-		</button>
+		/>
 	);
 }
 

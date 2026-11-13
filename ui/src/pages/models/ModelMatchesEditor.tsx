@@ -1,3 +1,4 @@
+import { Button, Checkbox, Input } from 'antd';
 import { Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 
 import { Tooltip } from '@/components/Primitives';
@@ -46,16 +47,14 @@ export function ModelMatchesEditor(props: {
 				<div className="empty-inline">No additional match conditions.</div>
 			)}
 			<div className="button-row">
-				<button
-					className="button"
-					type="button"
+				<Button
+					icon={<Plus size={16} />}
 					onClick={() =>
 						props.onChange([...matches, { headers: [{ name: '', value: { exact: '' } }] }])
 					}
 				>
-					<Plus size={16} />
 					Add match
-				</button>
+				</Button>
 			</div>
 		</CollapsiblePolicySection>
 	);
@@ -98,14 +97,12 @@ function MatchCard(props: {
 			<div className="match-card-header">
 				<span />
 				<Tooltip content="Remove match">
-					<button
-						className="icon-button danger"
-						type="button"
+					<Button
+						danger
 						aria-label={`Remove match ${props.index + 1}`}
+						icon={<Trash2 size={15} />}
 						onClick={props.onRemove}
-					>
-						<Trash2 size={15} />
-					</button>
+					/>
 				</Tooltip>
 			</div>
 			<div className="match-card-body">
@@ -124,9 +121,9 @@ function MatchCard(props: {
 				) : (
 					<div className="empty-inline">No header conditions.</div>
 				)}
-				<button
-					className="button small"
-					type="button"
+				<Button
+					size="small"
+					icon={<Plus size={16} />}
 					onClick={() =>
 						props.onChange({
 							...props.match,
@@ -134,9 +131,8 @@ function MatchCard(props: {
 						})
 					}
 				>
-					<Plus size={16} />
 					Add header
-				</button>
+				</Button>
 			</div>
 		</section>
 	);
@@ -170,35 +166,28 @@ function HeaderMatchRow(props: {
 
 	return (
 		<div className="header-match-row">
-			<input
+			<Input
 				aria-label="Header name"
 				value={props.header.name}
 				onChange={event => props.onChange({ ...props.header, name: event.target.value })}
 				placeholder="Header name"
 			/>
-			<input
+			<Input
 				aria-label="Header value"
 				value={text}
 				onChange={event => setText(event.target.value)}
 				placeholder={mode === 'regex' ? 'Regex value' : 'Exact value'}
 			/>
-			<label className={mode === 'regex' ? 'regex-toggle selected' : 'regex-toggle'}>
-				<input
-					type="checkbox"
-					checked={mode === 'regex'}
-					onChange={event => setMode(event.target.checked)}
-				/>
+			<Checkbox checked={mode === 'regex'} onChange={event => setMode(event.target.checked)}>
 				Regex
-			</label>
+			</Checkbox>
 			<Tooltip content="Remove header condition">
-				<button
-					className="icon-button danger"
-					type="button"
+				<Button
+					danger
 					aria-label="Remove header condition"
+					icon={<Trash2 size={15} />}
 					onClick={props.onRemove}
-				>
-					<Trash2 size={15} />
-				</button>
+				/>
 			</Tooltip>
 		</div>
 	);

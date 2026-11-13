@@ -1,4 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router';
+import { Button, Checkbox, Input, InputNumber, Table, Tag } from 'antd';
 import { Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -6,6 +7,7 @@ import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import {
+	ButtonLink,
 	ConfirmDialog,
 	Drawer,
 	Dropdown,
@@ -15,7 +17,8 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip
+	Tooltip,
+	tablePagination
 } from '@/components/Primitives';
 import { isDatabaseConfigResource } from '@/config';
 import type {
@@ -211,17 +214,16 @@ function TrafficRoutesEditorPage() {
 				description="Match incoming HTTP and TCP traffic and attach inline backends."
 				actions={
 					listeners.length ? (
-						<button
-							className="button primary"
-							type="button"
+						<Button
+							type="primary"
+							icon={<Plus size={16} />}
 							onClick={() => {
 								const first = listeners[0];
 								openAddRoute(first.bindIndex, first.listenerIndex, first.listener);
 							}}
 						>
-							<Plus size={16} />
 							Add route
-						</button>
+						</Button>
 					) : undefined
 				}
 			/>
@@ -255,93 +257,103 @@ function TrafficRoutesEditorPage() {
 						}
 						action={
 							hasLegacyBinds ? (
-								<button
-									className="button primary"
-									type="button"
+								<Button
+									type="primary"
+									icon={<RouteIcon size={16} />}
 									onClick={() => {
 										const first = listeners[0];
 										if (!first) return;
 										openAddRoute(first.bindIndex, first.listenerIndex, first.listener);
 									}}
 								>
-									<RouteIcon size={16} />
 									Add route
-								</button>
+								</Button>
 							) : (
-								<Link className="button primary" to="/traffic/gateways">
-									<RouteIcon size={16} />
+								<ButtonLink
+									color="primary"
+									variant="solid"
+									icon={<RouteIcon size={16} />}
+									to="/traffic/gateways"
+								>
 									Manage gateways
-								</Link>
+								</ButtonLink>
 							)
 						}
 					/>
 				) : (
-					<div className="table-wrap">
-						<table>
-							<thead>
-								<tr>
-									<th>Name</th>
-									<th>Type</th>
-									<th>Bind</th>
-									<th>Listener</th>
-									<th>Match</th>
-									<th>Backends</th>
-									<th />
-								</tr>
-							</thead>
-							<tbody>
-								{routes.map(context => (
-									<tr
-										key={`${context.bindIndex}-${context.listenerIndex}-${context.kind}-${context.routeIndex}`}
+					<Table<RouteContext>
+						size="middle"
+						rowKey={context =>
+							`${context.bindIndex}-${context.listenerIndex}-${context.kind}-${context.routeIndex}`
+						}
+						dataSource={routes}
+						pagination={tablePagination}
+						columns={[
+							{
+								title: 'Name',
+								key: 'name',
+								render: (_, context) => (
+									<strong>{routeDisplayName(context.route, context.routeIndex)}</strong>
+								)
+							},
+							{
+								title: 'Type',
+								key: 'type',
+								render: (_, context) => <Tag>{context.kind.toUpperCase()}</Tag>
+							},
+							{ title: 'Bind', key: 'bind', render: (_, context) => context.bind.port ?? '*' },
+							{
+								title: 'Listener',
+								key: 'listener',
+								render: (_, context) => (
+									<Link
+										className="table-link"
+										to="/traffic/listeners"
+										search={{
+											drawer: `listener:${context.bindIndex}:${context.listenerIndex}`
+										}}
 									>
-										<td className="strong">
-											{routeDisplayName(context.route, context.routeIndex)}
-										</td>
-										<td>
-											<span className="badge">{context.kind.toUpperCase()}</span>
-										</td>
-										<td>{context.bind.port ?? '*'}</td>
-										<td>
-											<Link
-												className="table-link"
-												to="/traffic/listeners"
-												search={{
-													drawer: `listener:${context.bindIndex}:${context.listenerIndex}`
-												}}
-											>
-												{listenerDisplayName(context.listener, context.listenerIndex)}
-											</Link>
-										</td>
-										<td>{context.kind === 'http' ? httpPathSummary(context.route) : 'TCP'}</td>
-										<td>{backendListSummary(context.route.backends)}</td>
-										<td className="row-actions">
-											<Tooltip content="Edit route">
-												<button
-													className="icon-button"
-													type="button"
-													aria-label="Edit route"
-													onClick={() => openEditRoute(context)}
-												>
-													<Pencil size={16} />
-												</button>
-											</Tooltip>
-											<Tooltip content="Delete route">
-												<button
-													className="icon-button danger"
-													type="button"
-													aria-label="Delete route"
-													disabled={update.isPending}
-													onClick={() => setDeletingRoute(context)}
-												>
-													<Trash2 size={16} />
-												</button>
-											</Tooltip>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+										{listenerDisplayName(context.listener, context.listenerIndex)}
+									</Link>
+								)
+							},
+							{
+								title: 'Match',
+								key: 'match',
+								render: (_, context) =>
+									context.kind === 'http' ? httpPathSummary(context.route) : 'TCP'
+							},
+							{
+								title: 'Backends',
+								key: 'backends',
+								render: (_, context) => backendListSummary(context.route.backends)
+							},
+							{
+								key: 'actions',
+								align: 'right',
+								render: (_, context) => (
+									<div className="row-actions">
+										<Tooltip content="Edit route">
+											<Button
+												aria-label="Edit route"
+												icon={<Pencil size={16} />}
+												onClick={() => openEditRoute(context)}
+											/>
+										</Tooltip>
+										<Tooltip content="Delete route">
+											<Button
+												danger
+												aria-label="Delete route"
+												icon={<Trash2 size={16} />}
+												disabled={update.isPending}
+												onClick={() => setDeletingRoute(context)}
+											/>
+										</Tooltip>
+									</div>
+								)
+							}
+						]}
+					/>
 				)}
 			</Panel>
 
@@ -486,15 +498,14 @@ function GatewayRoutesEditorPage() {
 				title="Traffic Routes"
 				description="Attach HTTP and TCP routes to traffic gateways."
 				actions={
-					<button
-						className="button primary"
-						type="button"
+					<Button
+						type="primary"
+						icon={<Plus size={16} />}
 						disabled={!hasGatewayOptions}
 						onClick={() => openAddRoute(httpGatewayOptions.length ? 'http' : 'tcp')}
 					>
-						<Plus size={16} />
 						Add route
-					</button>
+					</Button>
 				}
 			/>
 
@@ -517,10 +528,14 @@ function GatewayRoutesEditorPage() {
 						title="No traffic gateways configured"
 						description="Add a gateway before attaching routes."
 						action={
-							<Link className="button primary" to="/traffic/gateways">
-								<RouteIcon size={16} />
+							<ButtonLink
+								color="primary"
+								variant="solid"
+								icon={<RouteIcon size={16} />}
+								to="/traffic/gateways"
+							>
 								Manage gateways
-							</Link>
+							</ButtonLink>
 						}
 					/>
 				) : !routes.length ? (
@@ -528,97 +543,106 @@ function GatewayRoutesEditorPage() {
 						title="No traffic routes configured"
 						description="Attach a route to a gateway."
 						action={
-							<button
-								className="button primary"
-								type="button"
+							<Button
+								type="primary"
+								icon={<RouteIcon size={16} />}
 								onClick={() => openAddRoute(httpGatewayOptions.length ? 'http' : 'tcp')}
 							>
-								<RouteIcon size={16} />
 								Add route
-							</button>
+							</Button>
 						}
 					/>
 				) : (
-					<div className="table-wrap">
-						<table>
-							<thead>
-								<tr>
-									<th>Name</th>
-									<th>Kind</th>
-									<th>Gateway</th>
-									<th>Match</th>
-									<th>Backends</th>
-									<th />
-								</tr>
-							</thead>
-							<tbody>
-								{routes.map(({ kind, route, routeIndex, resourceId }) => (
-									<tr key={`${kind}-${resourceId ?? routeIndex}`}>
-										<td className="strong">{routeDisplayName(route, routeIndex ?? 0)}</td>
-										<td>
-											<span className="badge">{kind.toUpperCase()}</span>
-										</td>
-										<td>{effectiveGatewayRouteRef(route, config.data, kind) || 'Unassigned'}</td>
-										<td>{kind === 'http' ? httpPathSummary(route) : 'TCP'}</td>
-										<td>{backendListSummary(route.backends)}</td>
-										<td className="row-actions">
-											<Tooltip
-												content={
-													resourceId
-														? 'Edit route'
-														: 'Unnamed routes must be edited in raw configuration'
+					<Table<GatewayRouteRow>
+						size="middle"
+						rowKey={row => `${row.kind}-${row.resourceId ?? row.routeIndex}`}
+						dataSource={routes}
+						pagination={tablePagination}
+						columns={[
+							{
+								title: 'Name',
+								key: 'name',
+								render: (_, row) => (
+									<strong>{routeDisplayName(row.route, row.routeIndex ?? 0)}</strong>
+								)
+							},
+							{
+								title: 'Kind',
+								key: 'kind',
+								render: (_, row) => <Tag>{row.kind.toUpperCase()}</Tag>
+							},
+							{
+								title: 'Gateway',
+								key: 'gateway',
+								render: (_, row) =>
+									effectiveGatewayRouteRef(row.route, config.data, row.kind) || 'Unassigned'
+							},
+							{
+								title: 'Match',
+								key: 'match',
+								render: (_, row) => (row.kind === 'http' ? httpPathSummary(row.route) : 'TCP')
+							},
+							{
+								title: 'Backends',
+								key: 'backends',
+								render: (_, row) => backendListSummary(row.route.backends)
+							},
+							{
+								key: 'actions',
+								align: 'right',
+								render: (_, { kind, route, routeIndex, resourceId }) => (
+									<div className="row-actions">
+										<Tooltip
+											content={
+												resourceId
+													? 'Edit route'
+													: 'Unnamed routes must be edited in raw configuration'
+											}
+										>
+											<Button
+												aria-label="Edit route"
+												icon={<Pencil size={16} />}
+												disabled={!resourceId}
+												onClick={() =>
+													setEditing({
+														kind,
+														routeIndex,
+														resourceId,
+														route: structuredClone(route)
+													})
 												}
-											>
-												<button
-													className="icon-button"
-													type="button"
-													aria-label="Edit route"
-													disabled={!resourceId}
-													onClick={() =>
-														setEditing({
-															kind,
-															routeIndex,
-															resourceId,
-															route: structuredClone(route)
-														})
-													}
-												>
-													<Pencil size={16} />
-												</button>
-											</Tooltip>
-											<Tooltip
-												content={
-													!resourceId
-														? 'Unnamed routes must be deleted in raw configuration'
-														: traffic.hybrid && !databaseRoute(kind, resourceId)
-															? 'File-owned routes cannot be deleted here'
-															: 'Delete route'
+											/>
+										</Tooltip>
+										<Tooltip
+											content={
+												!resourceId
+													? 'Unnamed routes must be deleted in raw configuration'
+													: traffic.hybrid && !databaseRoute(kind, resourceId)
+														? 'File-owned routes cannot be deleted here'
+														: 'Delete route'
+											}
+										>
+											<Button
+												danger
+												aria-label="Delete route"
+												icon={<Trash2 size={16} />}
+												disabled={
+													!resourceId || (traffic.hybrid && !databaseRoute(kind, resourceId))
 												}
-											>
-												<button
-													className="icon-button danger"
-													type="button"
-													aria-label="Delete route"
-													disabled={
-														!resourceId || (traffic.hybrid && !databaseRoute(kind, resourceId))
-													}
-													onClick={() => {
-														if (!resourceId) return;
-														deleteResource.mutate({
-															kind: kind === 'http' ? 'traffic.route' : 'traffic.tcpRoute',
-															id: resourceId
-														});
-													}}
-												>
-													<Trash2 size={16} />
-												</button>
-											</Tooltip>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+												onClick={() => {
+													if (!resourceId) return;
+													deleteResource.mutate({
+														kind: kind === 'http' ? 'traffic.route' : 'traffic.tcpRoute',
+														id: resourceId
+													});
+												}}
+											/>
+										</Tooltip>
+									</div>
+								)
+							}
+						]}
+					/>
 				)}
 			</Panel>
 
@@ -830,7 +854,7 @@ function GatewayRouteEditor(props: {
 								: props.help.field<TrafficTcpRoute>('LocalTCPRoute', 'name')
 						}
 					>
-						<input
+						<Input
 							value={route.name ?? ''}
 							onChange={event => setRoute({ ...route, name: event.target.value })}
 							placeholder="api"
@@ -853,7 +877,7 @@ function GatewayRouteEditor(props: {
 									)
 						}
 					>
-						<input
+						<Input
 							value={(route.hostnames ?? []).join(', ')}
 							onChange={event => setRoute({ ...route, hostnames: splitList(event.target.value) })}
 							placeholder="example.com, *.example.com"
@@ -1020,7 +1044,7 @@ function RouteEditor(props: {
 								: props.help.field<TrafficTcpRoute>('LocalTCPRoute', 'name')
 						}
 					>
-						<input
+						<Input
 							value={route.name ?? ''}
 							onChange={event => setRoute({ ...route, name: event.target.value })}
 							placeholder="api"
@@ -1035,7 +1059,7 @@ function RouteEditor(props: {
 							'Comma-separated hostnames. Wildcards are allowed.'
 						)}
 					>
-						<input
+						<Input
 							value={(route.hostnames ?? []).join(', ')}
 							onChange={event => setRoute({ ...route, hostnames: splitList(event.target.value) })}
 							placeholder="example.com, *.example.com"
@@ -1109,7 +1133,7 @@ function HttpMatchEditor(props: {
 					path="matches.0.path"
 					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}
 				>
-					<input
+					<Input
 						value={pathValue}
 						onChange={event =>
 							updateFirst({
@@ -1125,7 +1149,7 @@ function HttpMatchEditor(props: {
 					path="matches.0.method"
 					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'method')}
 				>
-					<input
+					<Input
 						value={first.method ?? ''}
 						onChange={event => updateFirst({ ...first, method: event.target.value || undefined })}
 						placeholder="GET"
@@ -1157,14 +1181,13 @@ function HeaderConditionsEditor(props: {
 					<h4>Headers</h4>
 					<p>Every listed header condition must match.</p>
 				</div>
-				<button
-					className="button small"
-					type="button"
+				<Button
+					size="small"
+					icon={<Plus size={16} />}
 					onClick={() => props.onChange([...props.headers, { name: '', value: { exact: '' } }])}
 				>
-					<Plus size={16} />
 					Add header
-				</button>
+				</Button>
 			</div>
 			{props.headers.length ? (
 				<div className="match-header-list">
@@ -1211,13 +1234,13 @@ function HeaderConditionRow(props: {
 	return (
 		<div className="header-match-row">
 			<div className="condition-inputs">
-				<input
+				<Input
 					aria-label="Header name"
 					value={props.header.name}
 					onChange={event => props.onChange({ ...props.header, name: event.target.value })}
 					placeholder="Header name"
 				/>
-				<input
+				<Input
 					aria-label="Header value"
 					value={text}
 					onChange={event => setText(event.target.value)}
@@ -1225,23 +1248,16 @@ function HeaderConditionRow(props: {
 				/>
 			</div>
 			<div className="condition-actions">
-				<label className={mode === 'regex' ? 'regex-toggle selected' : 'regex-toggle'}>
-					<input
-						type="checkbox"
-						checked={mode === 'regex'}
-						onChange={event => setMode(event.target.checked)}
-					/>
+				<Checkbox checked={mode === 'regex'} onChange={event => setMode(event.target.checked)}>
 					Regex
-				</label>
+				</Checkbox>
 				<Tooltip content="Remove header condition">
-					<button
-						className="icon-button danger"
-						type="button"
+					<Button
+						danger
 						aria-label="Remove header condition"
+						icon={<Trash2 size={15} />}
 						onClick={props.onRemove}
-					>
-						<Trash2 size={15} />
-					</button>
+					/>
 				</Tooltip>
 			</div>
 		</div>
@@ -1259,14 +1275,13 @@ function QueryConditionsEditor(props: {
 					<h4>Query</h4>
 					<p>Every listed query condition must match.</p>
 				</div>
-				<button
-					className="button small"
-					type="button"
+				<Button
+					size="small"
+					icon={<Plus size={16} />}
 					onClick={() => props.onChange([...props.query, { name: '', value: { exact: '' } }])}
 				>
-					<Plus size={16} />
 					Add query
-				</button>
+				</Button>
 			</div>
 			{props.query.length ? (
 				<div className="match-header-list">
@@ -1313,13 +1328,13 @@ function QueryConditionRow(props: {
 	return (
 		<div className="header-match-row">
 			<div className="condition-inputs">
-				<input
+				<Input
 					aria-label="Query name"
 					value={props.query.name}
 					onChange={event => props.onChange({ ...props.query, name: event.target.value })}
 					placeholder="Query name"
 				/>
-				<input
+				<Input
 					aria-label="Query value"
 					value={text}
 					onChange={event => setText(event.target.value)}
@@ -1327,23 +1342,16 @@ function QueryConditionRow(props: {
 				/>
 			</div>
 			<div className="condition-actions">
-				<label className={mode === 'regex' ? 'regex-toggle selected' : 'regex-toggle'}>
-					<input
-						type="checkbox"
-						checked={mode === 'regex'}
-						onChange={event => setMode(event.target.checked)}
-					/>
+				<Checkbox checked={mode === 'regex'} onChange={event => setMode(event.target.checked)}>
 					Regex
-				</label>
+				</Checkbox>
 				<Tooltip content="Remove query condition">
-					<button
-						className="icon-button danger"
-						type="button"
+					<Button
+						danger
 						aria-label="Remove query condition"
+						icon={<Trash2 size={15} />}
 						onClick={props.onRemove}
-					>
-						<Trash2 size={15} />
-					</button>
+					/>
 				</Tooltip>
 			</div>
 		</div>
@@ -1372,14 +1380,13 @@ function RouteBackendsEditor(props: {
 					<h4>Backends</h4>
 					<p>Traffic that matches this route is forwarded to these targets.</p>
 				</div>
-				<button
-					className="button small"
-					type="button"
+				<Button
+					size="small"
+					icon={<Plus size={16} />}
 					onClick={() => props.onChange([...props.backends, makeBackend(props.kind, 'host')])}
 				>
-					<Plus size={16} />
 					Add backend
-				</button>
+				</Button>
 			</div>
 			{props.backends.length ? (
 				<div className="route-backend-list">
@@ -1456,15 +1463,14 @@ function RouteBackendRow(props: {
 								: props.help.field<TrafficTcpRouteBackend>('LocalTCPRouteBackend', 'weight')
 						}
 					>
-						<input
+						<InputNumber
 							min={1}
-							type="number"
 							value={weight}
-							onChange={event =>
+							onChange={value =>
 								props.onChange(
 									cleanBackendCommon({
 										...backend,
-										weight: Number(event.target.value) || 1
+										weight: Number(value) || 1
 									} as TrafficBackend)
 								)
 							}
@@ -1489,14 +1495,12 @@ function RouteBackendRow(props: {
 				/>
 			</div>
 			<Tooltip content="Remove backend">
-				<button
-					className="icon-button danger"
-					type="button"
+				<Button
+					danger
 					aria-label="Remove backend"
+					icon={<Trash2 size={15} />}
 					onClick={props.onRemove}
-				>
-					<Trash2 size={15} />
-				</button>
+				/>
 			</Tooltip>
 		</div>
 	);
@@ -1522,7 +1526,7 @@ function BackendTargetFields(props: {
 							: props.help.field<TrafficTcpRouteBackend>('LocalTCPRouteBackend', 'host')
 					}
 				>
-					<input
+					<Input
 						value={props.backend.host}
 						onChange={event =>
 							props.onChange(
@@ -1551,7 +1555,7 @@ function BackendTargetFields(props: {
 							: props.help.field<TrafficTcpRouteBackend>('LocalTCPRouteBackend', 'backend')
 					}
 				>
-					<input
+					<Input
 						value={props.backend.backend}
 						onChange={event =>
 							props.onChange(
@@ -1574,7 +1578,7 @@ function BackendTargetFields(props: {
 		return (
 			<div className="route-backend-target-grid service">
 				<Field label="Namespace" path={`${props.path}.service.name`}>
-					<input
+					<Input
 						value={serviceName.namespace}
 						onChange={event =>
 							props.onChange(
@@ -1591,7 +1595,7 @@ function BackendTargetFields(props: {
 					/>
 				</Field>
 				<Field label="Hostname" path={`${props.path}.service.name`}>
-					<input
+					<Input
 						value={serviceName.hostname}
 						onChange={event =>
 							props.onChange(
@@ -1608,18 +1612,17 @@ function BackendTargetFields(props: {
 					/>
 				</Field>
 				<Field label="Port" path={`${props.path}.service.port`}>
-					<input
-						type="number"
+					<InputNumber
 						min={1}
 						max={65535}
 						value={service.port}
-						onChange={event =>
+						onChange={value =>
 							props.onChange(
 								cleanBackendCommon({
 									...props.backend,
 									service: {
 										...service,
-										port: Number(event.target.value) || 80
+										port: Number(value) || 80
 									}
 								})
 							)
@@ -1634,7 +1637,7 @@ function BackendTargetFields(props: {
 		return (
 			<div className="route-backend-target-grid single">
 				<Field label="Route group" path={`${props.path}.routeGroup`}>
-					<input
+					<Input
 						value={props.backend.routeGroup}
 						onChange={event =>
 							props.onChange(

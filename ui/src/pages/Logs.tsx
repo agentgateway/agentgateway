@@ -1,4 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
+import { Dropdown as AntDropdown, Button, Checkbox, Table, type TableColumnsType, Tag } from 'antd';
 import DOMPurify from 'dompurify';
 import {
 	ArrowRight,
@@ -19,7 +20,7 @@ import {
 	Wrench
 } from 'lucide-react';
 import { marked } from 'marked';
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { analyticsSummary, getLog, searchLogs, streamLogs } from '@/api/logsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
@@ -47,8 +48,7 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip,
-	useDismissiblePopover
+	Tooltip
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import {
@@ -313,14 +313,16 @@ export function LogsPage() {
 				description="Inspect recent LLM calls and request/response payloads."
 				actions={
 					<div className="button-row">
-						<button className="button" type="button" onClick={() => setSettings('logs')}>
-							<Settings size={16} />
+						<Button icon={<Settings size={16} />} onClick={() => setSettings('logs')}>
 							Settings
-						</button>
-						<button className="button" type="button" disabled={loading} onClick={load}>
-							<RefreshCw size={16} className={loading ? 'spin' : undefined} />
+						</Button>
+						<Button
+							icon={<RefreshCw size={16} className={loading ? 'spin' : undefined} />}
+							disabled={loading}
+							onClick={load}
+						>
 							Refresh
-						</button>
+						</Button>
 					</div>
 				}
 			/>
@@ -381,18 +383,15 @@ export function LogsPage() {
 						allLabel="Any status"
 						onChange={values => setStatus(values.at(-1) ?? '')}
 					/>
-					<label className="toggle-row logs-stream-toggle">
-						<input
-							type="checkbox"
-							checked={stream}
-							onChange={event => setStream(event.target.checked)}
-						/>
+					<Checkbox
+						className="logs-stream-toggle"
+						checked={stream}
+						onChange={event => setStream(event.target.checked)}
+					>
 						Stream
-					</label>
+					</Checkbox>
 					{hasAnalyticsFilters(logFilters) || status ? (
-						<button
-							className="button"
-							type="button"
+						<Button
 							onClick={() => {
 								setLogFilters(current =>
 									hasAnalyticsFilters(current) ? emptyAnalyticsFilterOptions() : current
@@ -401,7 +400,7 @@ export function LogsPage() {
 							}}
 						>
 							Clear filters
-						</button>
+						</Button>
 					) : null}
 				</div>
 			</Panel>
@@ -415,55 +414,54 @@ export function LogsPage() {
 						}
 					/>
 				) : (
-					<div className="log-table-wrap">
-						<table className="log-table">
-							<colgroup>
-								<col className="col-time" />
-								<col className="col-status" />
-								<col className="col-model" />
-								<col className="col-prompt" />
-								<col className="col-turn" />
-								<col className="col-duration" />
-								<col className="col-in" />
-								<col className="col-out" />
-								<col className="col-cache" />
-								<col className="col-cost" />
-								<col className="col-chevron" />
-							</colgroup>
-							<thead>
-								<tr>
-									<th>Time</th>
-									<th className="center">Status</th>
-									<th>Model</th>
-									<th>Prompt</th>
-									<th>Turn</th>
-									<th className="num">Duration</th>
-									<th className="num">In</th>
-									<th className="num">Out</th>
-									<th className="num">Cache</th>
-									<th className="num">Cost</th>
-									<th aria-label="Expand" />
-								</tr>
-							</thead>
-							{visibleLogs.map(entry => (
-								<LogCallRow
-									key={entry.id}
-									entry={entry}
-									detail={expandedId === entry.id ? (expanded ?? entry) : entry}
-									expanded={expandedId === entry.id}
-									promptLoggingEnabled={promptLoggingEnabled}
-									loading={expandedId === entry.id && expandedLoading}
-									onToggle={() => void expand(entry)}
-									onOpenSettings={() => setSettings('logs')}
+					<Table<LogEntry>
+						className="log-table"
+						rowKey="id"
+						size="small"
+						tableLayout="fixed"
+						pagination={false}
+						scroll={{ x: 860 }}
+						dataSource={visibleLogs}
+						columns={[...LOG_COLUMNS, Table.EXPAND_COLUMN]}
+						rowClassName={entry =>
+							`log-row${expandedId === entry.id ? ' expanded' : ''}${logStatusBad(entry) ? ' bad' : ''}`
+						}
+						onRow={entry => ({ onClick: () => void expand(entry) })}
+						expandable={{
+							expandedRowKeys: expandedId ? [expandedId] : [],
+							columnWidth: 44,
+							expandIcon: ({ expanded: open, record }) => (
+								<Button
+									type="text"
+									size="small"
+									aria-expanded={open}
+									aria-label={open ? 'Collapse log' : 'Expand log'}
+									icon={<ChevronDown className="log-call-chevron" size={16} />}
+									onClick={event => {
+										event.stopPropagation();
+										void expand(record);
+									}}
 								/>
-							))}
-						</table>
-						<div className="log-table-footer">
-							{loading
-								? 'Refreshing...'
-								: `Showing ${formatNumber(visibleLogs.length)} recent calls`}
-						</div>
-					</div>
+							),
+							// rc-table keeps collapsed rows' content mounted, so render only the open one.
+							expandedRowRender: entry =>
+								entry.id !== expandedId ? null : (
+									<div className="expanded-log">
+										{expandedLoading ? (
+											<StatusBanner state="loading" title="Loading log payload" />
+										) : null}
+										<LogDetailView
+											entry={expanded ?? entry}
+											promptLoggingEnabled={promptLoggingEnabled}
+											onOpenSettings={() => setSettings('logs')}
+										/>
+									</div>
+								)
+						}}
+						footer={() =>
+							loading ? 'Refreshing...' : `Showing ${formatNumber(visibleLogs.length)} recent calls`
+						}
+					/>
 				)}
 			</Panel>
 
@@ -538,20 +536,19 @@ function LogsSettingsDrawer(props: {
 				/>
 			)}
 		>
-			<label className="config-option-row">
-				<input
-					type="checkbox"
-					checked={enabled}
-					onChange={event => setEnabled(event.target.checked)}
-				/>
-				<span>
+			<Checkbox
+				className="log-prompt-option"
+				checked={enabled}
+				onChange={event => setEnabled(event.target.checked)}
+			>
+				<span className="log-prompt-option-text">
 					<strong>Include prompts and completions in logs</strong>
 					<small>
 						Stores prompt and completion content in the database payload. Metadata, usage, timing,
 						and cost are always logged.
 					</small>
 				</span>
-			</label>
+			</Checkbox>
 			<section className="policy-form-section log-attribute-settings">
 				<div className="policy-form-section-header">
 					<span className="policy-form-section-icon compact">
@@ -948,37 +945,20 @@ function AnalyticsExportDropdown(props: {
 	groupBy: AnalyticsDimension[];
 	disabled?: boolean;
 }) {
-	const [open, setOpen] = useState(false);
-	const ref = useDismissiblePopover<HTMLDivElement>(open, () => setOpen(false));
 	return (
-		<div className="export-dropdown" ref={ref}>
-			<button
-				className="button"
-				type="button"
-				aria-haspopup="menu"
-				aria-expanded={open}
-				disabled={props.disabled}
-				onClick={() => setOpen(current => !current)}
-			>
-				<Download size={16} />
+		<AntDropdown
+			disabled={props.disabled}
+			trigger={['click']}
+			menu={{
+				items: [{ key: 'csv', label: 'CSV' }],
+				onClick: () => downloadAnalyticsCsv(props.buckets, props.groupBy)
+			}}
+		>
+			<Button disabled={props.disabled} icon={<Download size={16} />}>
 				Export
 				<ChevronDown size={15} />
-			</button>
-			{open ? (
-				<div className="export-dropdown-menu" role="menu">
-					<button
-						type="button"
-						role="menuitem"
-						onClick={() => {
-							downloadAnalyticsCsv(props.buckets, props.groupBy);
-							setOpen(false);
-						}}
-					>
-						CSV
-					</button>
-				</div>
-			) : null}
-		</div>
+			</Button>
+		</AntDropdown>
 	);
 }
 
@@ -1142,8 +1122,8 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 		(output === 'assistant' || output === 'toolCall');
 	return (
 		<Tooltip content={label}>
-			<button
-				type="button"
+			<Button
+				size="small"
 				className={`log-turn-badge ${common ? variant : 'other'}`}
 				aria-label={label}
 			>
@@ -1156,7 +1136,7 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 				) : (
 					<Ellipsis size={15} />
 				)}
-			</button>
+			</Button>
 		</Tooltip>
 	);
 }
@@ -1289,14 +1269,20 @@ function LogGuardrailDetails(props: { entry: LogEntry }) {
 							<div className="log-guardrail-context">
 								<div className="log-guardrail-heading">
 									<strong>{String(guard.guard ?? 'Guardrail')}</strong>
-									<span className="log-op-chip">
+									<Tag className="log-op-chip">
 										{guard.phase === 'request'
 											? 'Request'
 											: guard.phase === 'response'
 												? 'Response'
 												: String(guard.phase ?? 'Unknown phase')}
-									</span>
-									<span className={`log-guardrail-badge ${state}`}>{outcome?.label ?? action}</span>
+									</Tag>
+									<Tag
+										color={
+											action === 'reject' ? 'error' : action === 'allow' ? 'success' : 'warning'
+										}
+									>
+										{outcome?.label ?? action}
+									</Tag>
 								</div>
 								{outcome ? <p>{outcome.description}</p> : null}
 								{typeof guard.guardrailId === 'string' ? (
@@ -1313,18 +1299,12 @@ function LogGuardrailDetails(props: { entry: LogEntry }) {
 	);
 }
 
-function LogCallRow(props: {
-	entry: LogEntry;
-	detail: LogEntry;
-	expanded: boolean;
-	promptLoggingEnabled: boolean;
-	loading: boolean;
-	onToggle: () => void;
-	onOpenSettings?: () => void;
-}) {
+function logStatusBad(entry: LogEntry) {
+	return Boolean(entry.error || (entry.httpStatus ?? 0) >= 400);
+}
+
+function LogModelCell(props: { entry: LogEntry }) {
 	const originalModel = originalModelForLog(props.entry);
-	const statusBad = Boolean(props.entry.error || (props.entry.httpStatus ?? 0) >= 400);
-	const preview = logMessagePreview(props.entry);
 	const requestModel = props.entry.genAi.requestModel ?? null;
 	const responseModel = props.entry.genAi.responseModel ?? null;
 	const primaryModel = originalModel ?? requestModel ?? 'unknown model';
@@ -1332,122 +1312,149 @@ function LogCallRow(props: {
 	const showResolved = Boolean(resolvedModel && resolvedModel !== primaryModel);
 	const operation = props.entry.genAi.operationName ?? 'chat';
 	const provider = props.entry.genAi.providerName ?? null;
-	const summaryId = useId();
-	const toggleRef = useRef<HTMLButtonElement>(null);
 	return (
-		<tbody
-			className={
-				props.expanded
-					? `log-row expanded ${statusBad ? 'bad' : 'ok'}`
-					: `log-row ${statusBad ? 'bad' : 'ok'}`
-			}
-		>
-			<tr
-				id={summaryId}
-				className="log-row-summary"
-				onClick={event => {
-					const toggle = toggleRef.current;
-					// Another button in the row, like the turn badge, keeps focus.
-					const button = (event.target as Element).closest('button');
-					if (toggle && (!button || button === toggle)) {
-						// Pointer clicks leave keyboard mode, like the old focusable row.
-						if (event.detail > 0) delete toggle.dataset.keyboard;
-						if (document.activeElement !== toggle) {
-							toggle.focus({ focusVisible: false, preventScroll: true });
-						}
-					}
-					props.onToggle();
-				}}
-			>
-				<td className="log-td-time">
-					<button
-						aria-expanded={props.expanded}
-						aria-labelledby={summaryId}
-						className="log-row-toggle"
-						ref={toggleRef}
-						type="button"
-						onBlur={event => {
-							delete event.currentTarget.dataset.keyboard;
-						}}
-						onKeyDown={event => {
-							// Show the row ring after a key press, as the focused row did before.
-							event.currentTarget.dataset.keyboard = '';
-							if (event.key === ' ') {
-								event.preventDefault();
-								props.onToggle();
-							}
-						}}
-					>
-						<span className="log-cell-lines">
-							<span className="log-cell-primary">
-								{formatRelativeTime(props.entry.completedAt)}
-							</span>
-							<span className="log-cell-secondary">{formatDate(props.entry.completedAt)}</span>
-						</span>
-					</button>
-				</td>
-				<td className="log-td-status">
-					<span className="log-status-indicators">
-						<span className={statusBad ? 'log-status-pill bad' : 'log-status-pill ok'}>
-							{props.entry.httpStatus ?? 'err'}
-						</span>
-						<LogGuardrailBadge entry={props.entry} />
+		<span className="log-model-cell">
+			<ProviderIcon provider={providerIconName(provider)} />
+			<span className="log-cell-lines">
+				<span className="log-cell-primary log-model-name">{primaryModel}</span>
+				<span className="log-cell-secondary">
+					{operation !== 'chat' ? <Tag className="log-op-chip">{operation}</Tag> : null}
+					<span className="log-meta-item log-provider-label">
+						{providerDisplayName(provider ?? 'unknown')}
 					</span>
-				</td>
-				<td className="log-td-model">
-					<span className="log-model-cell">
-						<ProviderIcon provider={providerIconName(provider)} />
-						<span className="log-cell-lines">
-							<span className="log-cell-primary log-model-name">{primaryModel}</span>
-							<span className="log-cell-secondary">
-								{operation !== 'chat' ? <span className="log-op-chip">{operation}</span> : null}
-								<span className="log-meta-item log-provider-label">
-									{providerDisplayName(provider ?? 'unknown')}
-								</span>
-								{showResolved ? (
-									<span className="log-meta-item log-model-resolved">
-										<ArrowRight size={11} />
-										{resolvedModel}
-									</span>
-								) : null}
-							</span>
+					{showResolved ? (
+						<span className="log-meta-item log-model-resolved">
+							<ArrowRight size={11} />
+							{resolvedModel}
 						</span>
-					</span>
-				</td>
-				<td className="log-td-prompt">
-					<span className={preview ? 'log-call-preview' : 'log-call-preview empty'}>
-						{preview || '—'}
-					</span>
-				</td>
-				<td className="log-td-turn">
-					<LogTurnBadge entry={props.entry} />
-				</td>
-				<td className="log-td-num">{formatDuration(props.entry.durationMs)}</td>
-				<TokenCells entry={props.entry} />
-				<td className="log-td-num">
-					<CostSummary entry={props.entry} />
-				</td>
-				<td className="log-td-chevron">
-					<ChevronDown className="log-call-chevron" size={16} />
-				</td>
-			</tr>
-			{props.expanded ? (
-				<tr className="log-row-detail">
-					<td colSpan={11}>
-						<div className="expanded-log">
-							{props.loading ? <StatusBanner state="loading" title="Loading log payload" /> : null}
-							<LogDetailView
-								entry={props.detail}
-								promptLoggingEnabled={props.promptLoggingEnabled}
-								onOpenSettings={props.onOpenSettings}
-							/>
-						</div>
-					</td>
-				</tr>
-			) : null}
-		</tbody>
+					) : null}
+				</span>
+			</span>
+		</span>
 	);
 }
+
+function logCacheReadTokens(entry: LogEntry) {
+	return attributeNumber(entry.attributes, [
+		'gen_ai.usage.cache_read.input_tokens',
+		'cacheTokens',
+		'cachedTokens',
+		'cache_tokens',
+		'cached_tokens'
+	]);
+}
+
+const LOG_COLUMNS: TableColumnsType<LogEntry> = [
+	{
+		title: 'Time',
+		key: 'time',
+		onCell: () => ({ className: 'log-td-time' }),
+		width: 132,
+		render: (_, entry) => (
+			<span className="log-cell-lines">
+				<span className="log-cell-primary">{formatRelativeTime(entry.completedAt)}</span>
+				<span className="log-cell-secondary">{formatDate(entry.completedAt)}</span>
+			</span>
+		)
+	},
+	{
+		title: 'Status',
+		key: 'status',
+		width: 88,
+		align: 'center',
+		render: (_, entry) => (
+			<span className="log-status-indicators">
+				<Tag className="log-status-pill" color={logStatusBad(entry) ? 'error' : 'success'}>
+					{entry.httpStatus ?? 'err'}
+				</Tag>
+				<LogGuardrailBadge entry={entry} />
+			</span>
+		)
+	},
+	{
+		title: 'Model',
+		key: 'model',
+		width: 300,
+		render: (_, entry) => <LogModelCell entry={entry} />
+	},
+	{
+		title: 'Prompt',
+		key: 'prompt',
+		render: (_, entry) => {
+			const preview = logMessagePreview(entry);
+			return (
+				<span className={preview ? 'log-call-preview' : 'log-call-preview empty'}>
+					{preview || '—'}
+				</span>
+			);
+		}
+	},
+	{ title: 'Turn', key: 'turn', width: 78, render: (_, entry) => <LogTurnBadge entry={entry} /> },
+	{
+		title: 'Duration',
+		key: 'duration',
+		width: 84,
+		align: 'right',
+		className: 'log-td-num',
+		render: (_, entry) => formatDuration(entry.durationMs)
+	},
+	{
+		title: 'In',
+		key: 'in',
+		width: 60,
+		align: 'right',
+		className: 'log-td-num',
+		onCell: entry => ({
+			title:
+				entry.usage.inputTokens != null
+					? `${formatNumber(entry.usage.inputTokens)} input tokens`
+					: undefined
+		}),
+		render: (_, entry) => formatCompactNumber(entry.usage.inputTokens)
+	},
+	{
+		title: 'Out',
+		key: 'out',
+		width: 60,
+		align: 'right',
+		className: 'log-td-num',
+		onCell: entry => ({
+			title:
+				entry.usage.outputTokens != null
+					? `${formatNumber(entry.usage.outputTokens)} output tokens`
+					: undefined
+		}),
+		render: (_, entry) => formatCompactNumber(entry.usage.outputTokens)
+	},
+	{
+		title: 'Cache',
+		key: 'cache',
+		width: 68,
+		align: 'right',
+		className: 'log-td-num',
+		onCell: entry => {
+			const cacheRead = logCacheReadTokens(entry);
+			return {
+				title: cacheRead != null ? `${formatNumber(cacheRead)} cached input tokens` : undefined
+			};
+		},
+		render: (_, entry) => {
+			const cacheRead = logCacheReadTokens(entry);
+			const input = entry.usage.inputTokens;
+			return cacheRead != null && cacheRead > 0 && input != null && input > 0
+				? `${Math.min(Math.round((cacheRead / input) * 100), 100)}%`
+				: '—';
+		}
+	},
+	{
+		title: 'Cost',
+		key: 'cost',
+		width: 86,
+		align: 'right',
+		className: 'log-td-num',
+		render: (_, entry) => <CostSummary entry={entry} />
+	}
+];
 type LogUsageDetail = {
 	inputTokens?: number;
 	outputTokens?: number;
@@ -1574,10 +1581,9 @@ function LogDetailView(props: {
 						</div>
 					</div>
 				</div>
-				<button className="button" type="button" onClick={() => downloadJson(props.entry)}>
-					<Download size={15} />
+				<Button icon={<Download size={15} />} onClick={() => downloadJson(props.entry)}>
 					JSON
-				</button>
+				</Button>
 			</div>
 
 			{props.entry.error ? (
@@ -1682,9 +1688,9 @@ function LogDetailView(props: {
 				<StatusBanner state="info" title="Prompt logging is off">
 					Enable "Include prompts and completions in logs" in{' '}
 					{props.onOpenSettings ? (
-						<button className="link-button" type="button" onClick={props.onOpenSettings}>
+						<Button type="link" className="inline-link-button" onClick={props.onOpenSettings}>
 							log settings
-						</button>
+						</Button>
 					) : (
 						'log settings'
 					)}{' '}
@@ -1749,7 +1755,8 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 							<div className="log-trajectory-track" style={trackStyle}>
 								{props.events.map((event, index) =>
 									event.lane === lane ? (
-										<button
+										<Button
+											type="text"
 											aria-label={`Step ${index + 1}: ${event.label}`}
 											aria-pressed={selected === index}
 											className={`log-trajectory-bar ${lane}${event.system ? ' system' : ''}${selected === index ? ' selected' : ''}`}
@@ -1757,8 +1764,11 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 												// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 												index
 											}`}
+											// Inline so antd's text-button hover fill can't replace the lane colour.
+											style={{
+												background: `var(--log-step-${event.system ? 'system' : lane})`
+											}}
 											title={`Step ${index + 1}: ${event.label}`}
-											type="button"
 											onClick={() => setSelected(current => (current === index ? null : index))}
 											onDoubleClick={() => {
 												setSelected(index);
@@ -2148,6 +2158,17 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 	const toolCallEvents = props.events.filter(
 		event => event.partIndex == null && event.lane === 'tool-call'
 	);
+	const collapseToggle = collapsible ? (
+		<Button
+			type="text"
+			size="small"
+			className="log-msg-toggle"
+			icon={collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+			onClick={() => setCollapsed(current => !current)}
+		>
+			{collapsed ? `Show all (${formatNumber(content.length)} chars)` : 'Collapse'}
+		</Button>
+	) : null;
 
 	return (
 		<article className={`log-msg ${message.role}`} id={messageAnchor}>
@@ -2175,32 +2196,14 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								}`}
 							/>
 						))}
-						{collapsible ? (
-							<button
-								className="log-msg-toggle"
-								type="button"
-								onClick={() => setCollapsed(current => !current)}
-							>
-								{collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-								{collapsed ? `Show all (${formatNumber(content.length)} chars)` : 'Collapse'}
-							</button>
-						) : null}
+						{collapseToggle}
 					</>
 				) : message.role === 'tool' && !hasToolResults ? (
 					<LogToolBlock kind="result" name={message.name ?? 'unknown'} value={content} />
 				) : content ? (
 					<>
 						<LogMarkdown content={content} collapsed={collapsed} />
-						{collapsible ? (
-							<button
-								className="log-msg-toggle"
-								type="button"
-								onClick={() => setCollapsed(current => !current)}
-							>
-								{collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-								{collapsed ? `Show all (${formatNumber(content.length)} chars)` : 'Collapse'}
-							</button>
-						) : null}
+						{collapseToggle}
 					</>
 				) : null}
 				{!message.parts && hasToolCalls
@@ -2448,9 +2451,9 @@ function LogToolBlock(props: {
 			id={props.anchorId}
 		>
 			<div className="log-tool-head">
-				<button
+				<Button
+					type="text"
 					className="log-tool-toggle"
-					type="button"
 					aria-expanded={open}
 					onClick={() => setOpen(current => !current)}
 				>
@@ -2465,7 +2468,7 @@ function LogToolBlock(props: {
 						</span>
 					) : null}
 					<ChevronDown className="log-tool-chevron" size={14} />
-				</button>
+				</Button>
 				{copyValue ? <CopyButton value={copyValue} /> : null}
 			</div>
 			{open ? (
@@ -2703,44 +2706,6 @@ function downloadJson(value: unknown) {
 	URL.revokeObjectURL(url);
 }
 
-function TokenCells(props: { entry: LogEntry }) {
-	const input = props.entry.usage.inputTokens;
-	const output = props.entry.usage.outputTokens;
-	const cacheRead = attributeNumber(props.entry.attributes, [
-		'gen_ai.usage.cache_read.input_tokens',
-		'cacheTokens',
-		'cachedTokens',
-		'cache_tokens',
-		'cached_tokens'
-	]);
-	const cachePercent =
-		cacheRead != null && cacheRead > 0 && input != null && input > 0
-			? Math.min(Math.round((cacheRead / input) * 100), 100)
-			: null;
-	return (
-		<>
-			<td
-				className="log-td-num"
-				title={input != null ? `${formatNumber(input)} input tokens` : undefined}
-			>
-				{input == null ? '—' : formatCompactNumber(input)}
-			</td>
-			<td
-				className="log-td-num"
-				title={output != null ? `${formatNumber(output)} output tokens` : undefined}
-			>
-				{output == null ? '—' : formatCompactNumber(output)}
-			</td>
-			<td
-				className="log-td-num"
-				title={cacheRead != null ? `${formatNumber(cacheRead)} cached input tokens` : undefined}
-			>
-				{cachePercent == null ? '—' : `${cachePercent}%`}
-			</td>
-		</>
-	);
-}
-
 function CostSummary(props: { entry: LogEntry }) {
 	if (props.entry.cost == null) return <span className="log-cost-summary empty">—</span>;
 	return <span className="log-cost-summary">{formatCost(props.entry.cost)}</span>;
@@ -2766,14 +2731,14 @@ function CopyButton(props: { value: string }) {
 		});
 	}
 	return (
-		<button
+		<Button
+			type="text"
+			size="small"
 			className={`copy-button${copied ? ' copied' : ''}`}
-			type="button"
 			aria-label="Copy to clipboard"
+			icon={copied ? <Check size={11} /> : <Copy size={11} />}
 			onClick={handleCopy}
-		>
-			{copied ? <Check size={11} /> : <Copy size={11} />}
-		</button>
+		/>
 	);
 }
 
