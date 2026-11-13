@@ -944,6 +944,20 @@ test('region composite describes its focused input and label focuses it', async 
 	await expect(region).toBeFocused();
 });
 
+test('provider editor selects a provider set by its openAI alias', async ({ page }) => {
+	const config = populatedConfig();
+	(config.llm as { providers: Array<{ provider: string }> }).providers[0].provider = 'openAI';
+	await mockGateway(page, config);
+	await page.goto('/llm/providers');
+	await page
+		.getByRole('row', { name: /openai-shared/ })
+		.getByRole('button', { name: 'Edit provider' })
+		.click();
+
+	const provider = page.getByRole('combobox', { name: 'Provider', exact: true });
+	await expect(page.locator('.custom-select').filter({ has: provider })).toContainText('OpenAI');
+});
+
 test('Playground Specific model hint describes the wildcard input', async ({ page }) => {
 	await mockGateway(page);
 	await page.goto('/llm/playground');
