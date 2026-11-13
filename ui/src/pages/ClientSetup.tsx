@@ -1,3 +1,4 @@
+import { Button, Input } from 'antd';
 import { Check, Clipboard, Code2, GitBranch, KeyRound, Terminal } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
@@ -205,7 +206,7 @@ export function ClientSetupPage() {
 								: 'SDK snippets use this URL with /v1 appended.'
 						}
 					>
-						<input
+						<Input
 							value={effectiveBaseUrl}
 							onChange={event => {
 								setBaseUrlTouched(true);
@@ -264,7 +265,7 @@ export function ClientSetupPage() {
 									{wildcardModelPrefix(selectedModel) ? (
 										<span className="target-prefix">{wildcardModelPrefix(selectedModel)}</span>
 									) : null}
-									<input
+									<Input
 										id={id}
 										aria-label="Specific model"
 										aria-describedby={hintId}
@@ -322,7 +323,7 @@ export function ClientSetupPage() {
 					</FieldGroup>
 					{apiKeyMode === 'raw' || rawVirtualKeys.length === 0 ? (
 						<Field label="Raw API key">
-							<input
+							<Input
 								value={rawKey}
 								onChange={event => setRawKey(event.target.value)}
 								placeholder="agw_sk_..."
@@ -447,18 +448,16 @@ function ClientRecipeCard(props: {
 function CopyButton(props: { value: string }) {
 	const [copied, setCopied] = useState(false);
 	return (
-		<button
-			className="button"
-			type="button"
+		<Button
+			icon={copied ? <Check size={16} /> : <Clipboard size={16} />}
 			onClick={async () => {
 				await navigator.clipboard.writeText(props.value);
 				setCopied(true);
 				window.setTimeout(() => setCopied(false), 1200);
 			}}
 		>
-			{copied ? <Check size={16} /> : <Clipboard size={16} />}
 			{copied ? 'Copied' : 'Copy'}
-		</button>
+		</Button>
 	);
 }
 

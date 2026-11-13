@@ -9,6 +9,7 @@ import type { ExtProc, ProcessingOptions } from '@/gateway-config';
 import {
 	hasUnsupportedTarget,
 	KeyValueEditor,
+	OptionCheckbox,
 	TargetEditor,
 	targetFrom
 } from '@/policies/PolicyFormControls';
@@ -202,19 +203,15 @@ export function ExtProcPolicyEditor(props: {
 						onChange={setResponseTrailerMode}
 					/>
 				</div>
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={allowModeOverride}
-						onChange={event => setAllowModeOverride(event.target.checked)}
-					/>
-					<span>
-						<strong>Allow mode override</strong>
-						<small>
-							{props.help.field<ProcessingOptions>('ProcessingOptions', 'allowModeOverride')}
-						</small>
-					</span>
-				</label>
+				<OptionCheckbox
+					checked={allowModeOverride}
+					onChange={setAllowModeOverride}
+					title="Allow mode override"
+					description={props.help.field<ProcessingOptions>(
+						'ProcessingOptions',
+						'allowModeOverride'
+					)}
+				/>
 			</PolicySection>
 			<PolicySection
 				icon={<SlidersHorizontal size={17} />}

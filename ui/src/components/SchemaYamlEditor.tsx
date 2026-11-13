@@ -8,8 +8,9 @@ import {
 	installYamlKeySuggest,
 	registerConfigYamlSchema
 } from '@/configMonaco';
-import { configureConfigMonacoWorkers } from '@/monacoWorkers';
+import { configureConfigMonacoWorkers, monacoTheme } from '@/monacoWorkers';
 import { parseYamlText } from '@/policies/policyUtils';
+import { useTheme } from '@/theme';
 
 configureConfigMonacoWorkers();
 
@@ -24,6 +25,7 @@ export function SchemaYamlEditor(props: {
 	value: string;
 }) {
 	const saveRef = useRef(props.onSave);
+	const { theme } = useTheme();
 	const schemaRef = useRef(props.schema);
 	const monacoRef = useRef<typeof Monaco | null>(null);
 
@@ -60,7 +62,7 @@ export function SchemaYamlEditor(props: {
 				beforeMount={beforeMount}
 				language="yaml"
 				path={props.path}
-				theme={document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'}
+				theme={monacoTheme(theme)}
 				value={props.value}
 				onChange={nextValue => props.onChange(nextValue ?? '')}
 				onMount={onMount}

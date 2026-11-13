@@ -1,8 +1,10 @@
+import { Button, Input } from 'antd';
 import { useState } from 'react';
 
 import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import { Field, FieldGroup } from '@/components/Primitives';
 import { ListEditor } from '@/policies/ListEditor';
+import { OptionCheckbox } from '@/policies/PolicyFormControls';
 import { appendUnique, cleanEmpty, toggleStringSet } from '@/policies/policyUtils';
 import type { SchemaHelp } from '@/schemaHelp';
 import type { CorsPolicy } from '@/types';
@@ -61,13 +63,11 @@ export function CorsPolicyEditor(props: {
 				placeholder="http://localhost:19000"
 				onChange={setOrigins}
 				actions={
-					<button
-						className="button"
-						type="button"
+					<Button
 						onClick={() => setOrigins(current => appendUnique(current, window.location.origin))}
 					>
 						Add current origin
-					</button>
+					</Button>
 				}
 			/>
 			<FieldGroup
@@ -75,41 +75,41 @@ export function CorsPolicyEditor(props: {
 				tooltip={props.help.field<CorsPolicy>('CorsSerde', 'allowMethods')}
 			>
 				<div className="method-grid">
-					<button
-						className={allMethods ? 'choice-pill active' : 'choice-pill'}
-						type="button"
+					<Button
+						shape="round"
+						type={allMethods ? 'primary' : 'default'}
+						aria-pressed={allMethods}
 						onClick={() => setAllMethods(current => !current)}
 					>
 						ALL
-					</button>
-					{corsMethods.map(method => (
-						<button
-							className={!allMethods && methods.has(method) ? 'choice-pill active' : 'choice-pill'}
-							type="button"
-							disabled={allMethods}
-							key={method}
-							onClick={() => setMethods(current => toggleStringSet(current, method))}
-						>
-							{method}
-						</button>
-					))}
+					</Button>
+					{corsMethods.map(method => {
+						const active = !allMethods && methods.has(method);
+						return (
+							<Button
+								shape="round"
+								type={active ? 'primary' : 'default'}
+								aria-pressed={active}
+								disabled={allMethods}
+								key={method}
+								onClick={() => setMethods(current => toggleStringSet(current, method))}
+							>
+								{method}
+							</Button>
+						);
+					})}
 				</div>
 			</FieldGroup>
 			<FieldGroup
 				label="Allowed headers"
 				tooltip={props.help.field<CorsPolicy>('CorsSerde', 'allowHeaders')}
 			>
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={allHeaders}
-						onChange={event => setAllHeaders(event.target.checked)}
-					/>
-					<span>
-						<strong>Allow all request headers</strong>
-						<small>Accept any request header in browser preflight checks</small>
-					</span>
-				</label>
+				<OptionCheckbox
+					checked={allHeaders}
+					onChange={setAllHeaders}
+					title="Allow all request headers"
+					description="Accept any request header in browser preflight checks"
+				/>
 			</FieldGroup>
 			{!allHeaders ? (
 				<ListEditor
@@ -133,24 +133,19 @@ export function CorsPolicyEditor(props: {
 					label="Credentials"
 					tooltip={props.help.field<CorsPolicy>('CorsSerde', 'allowCredentials')}
 				>
-					<label className="config-option-row">
-						<input
-							type="checkbox"
-							checked={allowCredentials}
-							onChange={event => setAllowCredentials(event.target.checked)}
-						/>
-						<span>
-							<strong>Allow credentials</strong>
-							<small>Permit browser credentials on CORS requests</small>
-						</span>
-					</label>
+					<OptionCheckbox
+						checked={allowCredentials}
+						onChange={setAllowCredentials}
+						title="Allow credentials"
+						description="Permit browser credentials on CORS requests"
+					/>
 				</FieldGroup>
 				<Field
 					label="Max age"
 					path="maxAge"
 					tooltip={props.help.field<CorsPolicy>('CorsSerde', 'maxAge')}
 				>
-					<input
+					<Input
 						value={maxAge}
 						onChange={event => setMaxAge(event.target.value)}
 						placeholder="24h"

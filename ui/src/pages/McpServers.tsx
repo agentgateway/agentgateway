@@ -1,3 +1,4 @@
+import { Button, Checkbox, Input, Table, Tag } from 'antd';
 import { Info, Pencil, Plus, Server, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -17,7 +18,8 @@ import {
 	Panel,
 	SegmentedControl,
 	StatusBanner,
-	Tooltip
+	Tooltip,
+	tablePagination
 } from '@/components/Primitives';
 import {
 	ensureMcp,
@@ -108,14 +110,15 @@ export function McpServersPage() {
 				description="Configure MCP targets served by the gateway."
 				actions={
 					<div className="button-row">
-						<button className="button" type="button" onClick={() => setServerDrawer('settings')}>
-							<SlidersHorizontal size={16} />
+						<Button
+							icon={<SlidersHorizontal size={16} />}
+							onClick={() => setServerDrawer('settings')}
+						>
 							Settings
-						</button>
-						<button className="button primary" type="button" onClick={openNewServer}>
-							<Plus size={16} />
+						</Button>
+						<Button type="primary" icon={<Plus size={16} />} onClick={openNewServer}>
 							Add server
-						</button>
+						</Button>
 					</div>
 				}
 			/>
@@ -141,84 +144,80 @@ export function McpServersPage() {
 						title="No MCP servers configured"
 						description="Add a target so the gateway can expose MCP traffic."
 						action={
-							<button className="button primary" type="button" onClick={openNewServer}>
-								<Server size={16} />
+							<Button type="primary" icon={<Server size={16} />} onClick={openNewServer}>
 								Add server
-							</button>
+							</Button>
 						}
 					/>
 				) : (
-					<div className="table-wrap">
-						<table>
-							<thead>
-								<tr>
-									<th>Name</th>
-									<th>Type</th>
-									<th>Endpoint</th>
-									<th>State</th>
-									<th />
-								</tr>
-							</thead>
-							<tbody>
-								{targets.map(target => {
-									const kind = targetKind(target);
+					<Table<McpTarget>
+						rowKey="name"
+						dataSource={targets}
+						pagination={tablePagination}
+						columns={[
+							{ title: 'Name', dataIndex: 'name', className: 'strong' },
+							{
+								title: 'Type',
+								key: 'type',
+								render: (_, target) => <Tag>{transportLabel(targetKind(target))}</Tag>
+							},
+							{
+								title: 'Endpoint',
+								key: 'endpoint',
+								render: (_, target) => <code>{targetEndpoint(target)}</code>
+							},
+							{
+								title: 'State',
+								key: 'state',
+								render: (_, target) => {
 									const warnings = targetWarnings(target);
+									return warnings.length ? (
+										<Tag color="warning">{warnings.length} warnings</Tag>
+									) : (
+										<Tag color="success">ready</Tag>
+									);
+								}
+							},
+							{
+								key: 'actions',
+								align: 'right',
+								onHeaderCell: () => ({ 'aria-label': 'Actions' }),
+								render: (_, target) => {
 									const databaseBacked = isDatabaseConfigResource(
 										resources,
 										'mcp.target',
 										target.name
 									);
 									return (
-										<tr key={target.name}>
-											<td className="strong">{target.name}</td>
-											<td>
-												<span className="badge">{transportLabel(kind)}</span>
-											</td>
-											<td>
-												<code>{targetEndpoint(target)}</code>
-											</td>
-											<td>
-												{warnings.length ? (
-													<span className="badge warn">{warnings.length} warnings</span>
-												) : (
-													<span className="badge ok">ready</span>
-												)}
-											</td>
-											<td className="row-actions">
-												<Tooltip content="Edit server">
-													<button
-														className="icon-button"
-														aria-label="Edit server"
-														type="button"
-														onClick={() => openEditServer(target)}
-													>
-														<Pencil size={16} />
-													</button>
-												</Tooltip>
-												<Tooltip
-													content={
-														hybrid && !databaseBacked
-															? 'File-owned servers cannot be deleted here'
-															: 'Delete server'
-													}
-												>
-													<button
-														className="icon-button danger"
-														aria-label="Delete server"
-														type="button"
-														disabled={saving || (hybrid && !databaseBacked)}
-														onClick={() => setDeletingServer(target.name)}
-													>
-														<Trash2 size={16} />
-													</button>
-												</Tooltip>
-											</td>
-										</tr>
+										<div className="row-actions">
+											<Tooltip content="Edit server">
+												<Button
+													aria-label="Edit server"
+													icon={<Pencil size={16} />}
+													onClick={() => openEditServer(target)}
+												/>
+											</Tooltip>
+											<Tooltip
+												content={
+													hybrid && !databaseBacked
+														? 'File-owned servers cannot be deleted here'
+														: 'Delete server'
+												}
+											>
+												<Button
+													danger
+													aria-label="Delete server"
+													icon={<Trash2 size={16} />}
+													disabled={saving || (hybrid && !databaseBacked)}
+													onClick={() => setDeletingServer(target.name)}
+												/>
+											</Tooltip>
+										</div>
 									);
-								})}
-							</tbody>
-						</table>
-					</div>
+								}
+							}
+						]}
+					/>
 				)}
 			</Panel>
 
@@ -527,7 +526,7 @@ function McpSettings(props: {
 						label="SSE keep-alive"
 						tooltip={props.help.field<McpConfig>('LocalSimpleMcpConfig', 'sseKeepAlive')}
 					>
-						<input
+						<Input
 							value={sseKeepAlive}
 							disabled={props.readOnlyFields?.has('sseKeepAlive')}
 							onChange={event => setSseKeepAlive(event.target.value)}
@@ -549,7 +548,7 @@ function McpSettings(props: {
 							'name'
 						)}
 					>
-						<input
+						<Input
 							value={server.name}
 							disabled={serverReadOnly}
 							onChange={event => setServer({ ...server, name: event.target.value })}
@@ -563,7 +562,7 @@ function McpSettings(props: {
 							'version'
 						)}
 					>
-						<input
+						<Input
 							value={server.version}
 							disabled={serverReadOnly}
 							onChange={event => setServer({ ...server, version: event.target.value })}
@@ -576,7 +575,7 @@ function McpSettings(props: {
 							'title'
 						)}
 					>
-						<input
+						<Input
 							value={server.title}
 							disabled={serverReadOnly}
 							onChange={event => setServer({ ...server, title: event.target.value })}
@@ -590,7 +589,7 @@ function McpSettings(props: {
 						'instructions'
 					)}
 				>
-					<textarea
+					<Input.TextArea
 						value={server.instructions}
 						disabled={serverReadOnly}
 						onChange={event => setServer({ ...server, instructions: event.target.value })}
@@ -795,7 +794,7 @@ function McpServerEditor(props: {
 						'Name used to identify this MCP target.'
 					)}
 				>
-					<input
+					<Input
 						value={name}
 						onChange={event => update({ name: event.target.value })}
 						placeholder="weather"
@@ -833,7 +832,7 @@ function McpServerEditor(props: {
 							'Command to launch for command-line MCP servers.'
 						)}
 					>
-						<input
+						<Input
 							value={cmd}
 							onChange={event => update({ cmd: event.target.value })}
 							placeholder="npx"
@@ -847,7 +846,7 @@ function McpServerEditor(props: {
 							'Command arguments passed to the MCP server process.'
 						)}
 					>
-						<input
+						<Input
 							value={args}
 							onChange={event => update({ args: event.target.value })}
 							placeholder="-y @modelcontextprotocol/server-filesystem /tmp"
@@ -867,14 +866,13 @@ function McpServerEditor(props: {
 							onChange={value => update({ envText: value })}
 						/>
 					</FieldGroup>
-					<label className="toggle-row">
-						<input
-							type="checkbox"
-							checked={clearEnv}
-							onChange={event => update({ clearEnv: event.target.checked })}
-						/>
+					<Checkbox
+						className="toggle-row"
+						checked={clearEnv}
+						onChange={event => update({ clearEnv: event.target.checked })}
+					>
 						Clear environment
-					</label>
+					</Checkbox>
 				</>
 			) : (
 				<>
@@ -901,7 +899,7 @@ function McpServerEditor(props: {
 										)
 						}
 					>
-						<input
+						<Input
 							value={url}
 							onChange={event => update({ url: event.target.value })}
 							placeholder={
@@ -958,7 +956,7 @@ function McpServerEditor(props: {
 											: 'URL to fetch the OpenAPI schema document from.'
 									)}
 								>
-									<input
+									<Input
 										value={schemaValue}
 										onChange={event => update({ schemaValue: event.target.value })}
 										placeholder={

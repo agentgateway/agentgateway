@@ -1,3 +1,5 @@
+import { Checkbox, Input, InputNumber } from 'antd';
+
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type {
@@ -46,7 +48,7 @@ export function HealthPolicyEditor(props: {
 					label="Eviction duration"
 					tooltip={props.help.field<LocalEviction>('LocalEviction', 'duration')}
 				>
-					<input
+					<Input
 						value={eviction.duration ?? ''}
 						onChange={event => patchEviction({ duration: event.target.value || null })}
 						placeholder="30s"
@@ -56,15 +58,10 @@ export function HealthPolicyEditor(props: {
 					label="Consecutive failures"
 					tooltip={props.help.field<LocalEviction>('LocalEviction', 'consecutiveFailures')}
 				>
-					<input
-						type="number"
-						min="1"
-						value={eviction.consecutiveFailures ?? ''}
-						onChange={event =>
-							patchEviction({
-								consecutiveFailures: optionalNumber(event.target.value)
-							})
-						}
+					<InputNumber
+						min={1}
+						value={eviction.consecutiveFailures ?? null}
+						onChange={value => patchEviction({ consecutiveFailures: value })}
 						placeholder="3"
 					/>
 				</Field>
@@ -72,14 +69,9 @@ export function HealthPolicyEditor(props: {
 					label="Health threshold"
 					tooltip={props.help.field<LocalEviction>('LocalEviction', 'healthThreshold')}
 				>
-					<input
-						type="number"
-						value={eviction.healthThreshold ?? ''}
-						onChange={event =>
-							patchEviction({
-								healthThreshold: optionalNumber(event.target.value)
-							})
-						}
+					<InputNumber
+						value={eviction.healthThreshold ?? null}
+						onChange={value => patchEviction({ healthThreshold: value })}
 						placeholder="0.5"
 					/>
 				</Field>
@@ -87,14 +79,9 @@ export function HealthPolicyEditor(props: {
 					label="Restore health"
 					tooltip={props.help.field<LocalEviction>('LocalEviction', 'restoreHealth')}
 				>
-					<input
-						type="number"
-						value={eviction.restoreHealth ?? ''}
-						onChange={event =>
-							patchEviction({
-								restoreHealth: optionalNumber(event.target.value)
-							})
-						}
+					<InputNumber
+						value={eviction.restoreHealth ?? null}
+						onChange={value => patchEviction({ restoreHealth: value })}
 						placeholder="1"
 					/>
 				</Field>
@@ -171,55 +158,32 @@ export function PromptCachingEditor(props: {
 	return (
 		<div className="policy-editor-stack compact">
 			<div className="form-grid">
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={Boolean(value.cacheSystem)}
-						onChange={event => patch({ cacheSystem: event.target.checked || undefined })}
-					/>
-					<span>
-						<strong>System prompt</strong>
-						<small>
-							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheSystem')}
-						</small>
-					</span>
-				</label>
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={Boolean(value.cacheMessages)}
-						onChange={event => patch({ cacheMessages: event.target.checked || undefined })}
-					/>
-					<span>
-						<strong>Messages</strong>
-						<small>
-							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheMessages')}
-						</small>
-					</span>
-				</label>
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={Boolean(value.cacheTools)}
-						onChange={event => patch({ cacheTools: event.target.checked || undefined })}
-					/>
-					<span>
-						<strong>Tools</strong>
-						<small>
-							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheTools')}
-						</small>
-					</span>
-				</label>
+				{(
+					[
+						['cacheSystem', 'System prompt'],
+						['cacheMessages', 'Messages'],
+						['cacheTools', 'Tools']
+					] as const
+				).map(([key, label]) => (
+					<Checkbox
+						key={key}
+						className="prompt-cache-option"
+						checked={Boolean(value[key])}
+						onChange={event => patch({ [key]: event.target.checked || undefined })}
+					>
+						<strong>{label}</strong>
+						<small>{props.help.field<PromptCachingConfig>('PromptCachingConfig', key)}</small>
+					</Checkbox>
+				))}
 			</div>
 			<div className="form-grid">
 				<Field
 					label="Minimum tokens"
 					tooltip={props.help.field<PromptCachingConfig>('PromptCachingConfig', 'minTokens')}
 				>
-					<input
-						type="number"
-						value={value.minTokens ?? ''}
-						onChange={event => patch({ minTokens: optionalNumber(event.target.value) })}
+					<InputNumber
+						value={value.minTokens ?? null}
+						onChange={minTokens => patch({ minTokens })}
 						placeholder="1024"
 					/>
 				</Field>
@@ -230,14 +194,9 @@ export function PromptCachingEditor(props: {
 						'cacheMessageOffset'
 					)}
 				>
-					<input
-						type="number"
-						value={value.cacheMessageOffset ?? ''}
-						onChange={event =>
-							patch({
-								cacheMessageOffset: optionalNumber(event.target.value) ?? undefined
-							})
-						}
+					<InputNumber
+						value={value.cacheMessageOffset ?? null}
+						onChange={offset => patch({ cacheMessageOffset: offset ?? undefined })}
 						placeholder="0"
 					/>
 				</Field>
@@ -276,8 +235,4 @@ export function promptCachingSummary(value: LlmModel['promptCaching'] | null | u
 		value.cacheTools ? 'tools' : null
 	].filter(Boolean);
 	return scopes.length ? `Cache ${scopes.join(', ')}` : 'Prompt caching configured';
-}
-
-function optionalNumber(value: string) {
-	return value === '' ? null : Number(value);
 }

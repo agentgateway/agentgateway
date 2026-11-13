@@ -1,5 +1,5 @@
-import '@/monacoWorkers';
 import Editor from '@monaco-editor/react';
+import { Button } from 'antd';
 import { dump, load } from 'js-yaml';
 import { ExternalLink, Play } from 'lucide-react';
 import type * as Monaco from 'monaco-editor';
@@ -9,10 +9,13 @@ import { evaluateCel } from '@/api/celApi';
 import { celEditorOptions, celLanguage, configureCelMonaco } from '@/celMonaco';
 import { FieldGroup, PageHeader, Panel, StatusBanner, YamlBlock } from '@/components/Primitives';
 import { configureConfigYamlMonaco } from '@/configMonaco';
+import { monacoTheme } from '@/monacoWorkers';
 import sampleContext from '@/pages/celSampleContext.json';
 import { pendingCelExpression } from '@/policies/AuthorizationPolicyEditor';
+import { useTheme } from '@/theme';
 
 export function CelPage() {
+	const { theme } = useTheme();
 	const [expression, setExpression] = useState(
 		() => pendingCelExpression() ?? 'request.path.startsWith("/v1/") && metadata.tier == "prod"'
 	);
@@ -57,18 +60,17 @@ export function CelPage() {
 				description="Evaluate policy expressions against a sample or custom request."
 				actions={
 					<>
-						<a
-							className="button"
+						<Button
 							href="https://agentgateway.dev/docs/standalone/latest/reference/cel/"
 							rel="noreferrer"
 							target="_blank"
+							icon={<ExternalLink size={16} />}
 						>
-							<ExternalLink size={16} /> CEL reference
-						</a>
-						<button className="button primary" type="button" disabled={loading} onClick={run}>
-							<Play size={16} />
+							CEL reference
+						</Button>
+						<Button type="primary" loading={loading} icon={<Play size={16} />} onClick={run}>
 							Evaluate
-						</button>
+						</Button>
 					</>
 				}
 			/>
@@ -84,7 +86,7 @@ export function CelPage() {
 							<Editor
 								beforeMount={configureCelMonaco}
 								language={celLanguage}
-								theme={document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'}
+								theme={monacoTheme(theme)}
 								value={expression}
 								onChange={value => setExpression(value ?? '')}
 								onMount={registerRunShortcut}
@@ -101,7 +103,7 @@ export function CelPage() {
 								beforeMount={configureConfigYamlMonaco}
 								language="yaml"
 								path="cel-request-context.yaml"
-								theme={document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'}
+								theme={monacoTheme(theme)}
 								value={context}
 								onChange={value => setContext(value ?? '')}
 								onMount={registerRunShortcut}

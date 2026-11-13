@@ -10,8 +10,9 @@ import {
 } from '@/configMonaco';
 import { getGatewayConfigValidationErrors } from '@/configValidation';
 import type { LineEnding } from '@/lineEnding';
-import { configureConfigMonacoWorkers } from '@/monacoWorkers';
+import { configureConfigMonacoWorkers, monacoTheme } from '@/monacoWorkers';
 import { parseYamlText } from '@/policies/policyUtils';
+import { useTheme } from '@/theme';
 import type { GatewayConfig } from '@/types';
 
 interface RawConfigEditorProps {
@@ -32,6 +33,7 @@ export function RawConfigEditor({
 	value
 }: RawConfigEditorProps) {
 	const saveRef = useRef(onSave);
+	const { theme } = useTheme();
 	// onMount runs once, so read the latest line ending from a ref
 	const lineEndingRef = useRef(lineEnding);
 	lineEndingRef.current = lineEnding;
@@ -90,7 +92,7 @@ export function RawConfigEditor({
 				beforeMount={configureConfigYamlMonaco}
 				language="yaml"
 				path={rawConfigModelPath}
-				theme={document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'}
+				theme={monacoTheme(theme)}
 				value={value}
 				onChange={nextValue => onChange(nextValue ?? '')}
 				onMount={mountEditor}

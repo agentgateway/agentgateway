@@ -1,6 +1,14 @@
+import { Button, Table, Tag } from 'antd';
 import { Eye } from 'lucide-react';
 
-import { Drawer, EmptyState, Panel, Tooltip, YamlBlock } from '@/components/Primitives';
+import {
+	Drawer,
+	EmptyState,
+	Panel,
+	Tooltip,
+	tablePagination,
+	YamlBlock
+} from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import type { DumpModel, VirtualModelRouting } from '@/gateway-admin';
 import { routeBackendLabel } from '@/pages/traffic/TrafficConfigDumpPanel';
@@ -19,56 +27,63 @@ export function DumpModelsView(props: { models: DumpModel[] }) {
 					/>
 				) : (
 					<div className="table-wrap">
-						<table className="dump-models-table">
-							<thead>
-								<tr>
-									<th>Name</th>
-									<th>Type</th>
-									<th>Visibility</th>
-									<th>Target</th>
-									<th>Listener</th>
-									<th aria-label="Actions" />
-								</tr>
-							</thead>
-							<tbody>
-								{props.models.map(model => {
-									const target = modelTarget(model);
-									return (
-										<tr key={model.key}>
-											<td>
-												<div className="resource-name-cell">
-													<strong>{model.name}</strong>
-													<small>{model.key}</small>
-												</div>
-											</td>
-											<td>
-												<span className="badge">{modelTypeLabel(model)}</span>
-											</td>
-											<td>{modelVisibilityLabel(model)}</td>
-											<td>
-												<div className="resource-name-cell">
-													<strong>{target.summary}</strong>
-													{target.detail ? <small>{target.detail}</small> : null}
-												</div>
-											</td>
-											<td>{model.listenerKey}</td>
-											<td className="row-actions">
-												<Tooltip content="View model">
-													<button
-														className="icon-button"
-														type="button"
-														aria-label={`View ${model.name}`}
-														onClick={() => setSelectedKey(model.key)}
-													>
-														<Eye size={16} />
-													</button>
-												</Tooltip>
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
+						<Table
+							size="middle"
+							className="dump-models-table"
+							rowKey="key"
+							dataSource={props.models}
+							pagination={tablePagination}
+							columns={[
+								{
+									title: 'Name',
+									key: 'name',
+									render: (_, model) => (
+										<div className="resource-name-cell">
+											<strong>{model.name}</strong>
+											<small>{model.key}</small>
+										</div>
+									)
+								},
+								{
+									title: 'Type',
+									key: 'type',
+									render: (_, model) => <Tag>{modelTypeLabel(model)}</Tag>
+								},
+								{
+									title: 'Visibility',
+									key: 'visibility',
+									render: (_, model) => modelVisibilityLabel(model)
+								},
+								{
+									title: 'Target',
+									key: 'target',
+									render: (_, model) => {
+										const target = modelTarget(model);
+										return (
+											<div className="resource-name-cell">
+												<strong>{target.summary}</strong>
+												{target.detail ? <small>{target.detail}</small> : null}
+											</div>
+										);
+									}
+								},
+								{ title: 'Listener', dataIndex: 'listenerKey' },
+								{
+									key: 'actions',
+									onHeaderCell: () => ({ 'aria-label': 'Actions' }),
+									align: 'right',
+									render: (_, model) => (
+										<Tooltip content="View model">
+											<Button
+												aria-label={`View ${model.name}`}
+												icon={<Eye size={16} />}
+												onClick={() => setSelectedKey(model.key)}
+											/>
+										</Tooltip>
+									)
+								}
+							]}
+						/>
 					</div>
 				)}
 			</Panel>
@@ -76,7 +91,7 @@ export function DumpModelsView(props: { models: DumpModel[] }) {
 			{selectedModel ? (
 				<Drawer
 					title={selectedModel.name}
-					headerActions={<span className="badge">{modelTypeLabel(selectedModel)}</span>}
+					headerActions={<Tag>{modelTypeLabel(selectedModel)}</Tag>}
 					onClose={() => setSelectedKey(null)}
 				>
 					<div className="drawer-summary-list">

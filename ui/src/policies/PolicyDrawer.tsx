@@ -1,3 +1,4 @@
+import { Button } from 'antd';
 import { Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
@@ -116,14 +117,7 @@ export function PolicyDrawer(props: {
 						</ConfigSaveButton>
 					) : (
 						<Tooltip content="Policy is not enabled">
-							<button
-								className="icon-button danger"
-								type="button"
-								aria-label="Delete policy"
-								disabled
-							>
-								<Trash2 size={17} />
-							</button>
+							<Button danger aria-label="Delete policy" icon={<Trash2 size={17} />} disabled />
 						</Tooltip>
 					)
 				}

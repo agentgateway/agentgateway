@@ -1,3 +1,4 @@
+import { Input } from 'antd';
 import { Gauge, Send, Tags } from 'lucide-react';
 import { useState } from 'react';
 
@@ -101,7 +102,7 @@ export function TracingPolicyEditor(props: {
 					</FieldGroup>
 					{protocol === 'http' ? (
 						<Field label="Path" tooltip={props.help.field<TracingConfig>('TracingConfig', 'path')}>
-							<input
+							<Input
 								value={path}
 								onChange={event => setPath(event.target.value)}
 								placeholder="/v1/traces"
@@ -120,7 +121,7 @@ export function TracingPolicyEditor(props: {
 						label="Random sampling"
 						tooltip={props.help.field<TracingConfig>('TracingConfig', 'randomSampling')}
 					>
-						<input
+						<Input
 							className="mono-input"
 							value={randomSampling}
 							onChange={event => setRandomSampling(event.target.value)}
@@ -131,7 +132,7 @@ export function TracingPolicyEditor(props: {
 						label="Client sampling"
 						tooltip={props.help.field<TracingConfig>('TracingConfig', 'clientSampling')}
 					>
-						<input
+						<Input
 							className="mono-input"
 							value={clientSampling}
 							onChange={event => setClientSampling(event.target.value)}
@@ -142,7 +143,7 @@ export function TracingPolicyEditor(props: {
 						label="Parent not sampled"
 						tooltip={props.help.field<TracingConfig>('TracingConfig', 'parentNotSampled')}
 					>
-						<input
+						<Input
 							className="mono-input"
 							value={parentNotSampled}
 							onChange={event => setParentNotSampled(event.target.value)}

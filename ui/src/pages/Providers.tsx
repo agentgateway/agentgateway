@@ -1,10 +1,11 @@
-import { Link } from '@tanstack/react-router';
+import { Button, Input, Table, Tag } from 'antd';
 import { Bot, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import {
+	ButtonLink,
 	ConfirmDialog,
 	Drawer,
 	EmptyState,
@@ -12,7 +13,8 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip
+	Tooltip,
+	tablePagination
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import {
@@ -93,6 +95,10 @@ export function ProvidersPage() {
 		resetFinishedSaves(upsertResource, deleteResource);
 	}
 
+	function databaseBacked(provider: LlmProvider) {
+		return isDatabaseConfigResource(resources, 'llm.provider', provider.name);
+	}
+
 	function saveProvider(provider: LlmProvider, previousName?: string) {
 		upsertResource.mutate(
 			{ kind: 'llm.provider', value: provider, previousId: previousName },
@@ -115,10 +121,9 @@ export function ProvidersPage() {
 				title="LLM Providers"
 				description="Define reusable provider credentials and connection settings for models."
 				actions={
-					<button className="button primary" type="button" onClick={openNewProvider}>
-						<Plus size={16} />
+					<Button type="primary" icon={<Plus size={16} />} onClick={openNewProvider}>
 						Add provider
-					</button>
+					</Button>
 				}
 			/>
 
@@ -141,102 +146,106 @@ export function ProvidersPage() {
 						title="No shared providers configured"
 						description="Add a provider when multiple models should share the same credentials or upstream connection settings."
 						action={
-							<button className="button primary" type="button" onClick={openNewProvider}>
-								<Plus size={16} />
+							<Button type="primary" icon={<Plus size={16} />} onClick={openNewProvider}>
 								Add provider
-							</button>
+							</Button>
 						}
 					/>
 				) : (
 					<div className="table-wrap">
-						<table>
-							<thead>
-								<tr>
-									<th>Name</th>
-									{hybrid ? <th>Source</th> : null}
-									<th>Provider</th>
-									<th>Upstream model</th>
-									<th>Used by</th>
-									<th />
-								</tr>
-							</thead>
-							<tbody>
-								{providers.map(provider => {
-									const usage = providerUsage(provider.name, models);
-									const databaseBacked = isDatabaseConfigResource(
-										resources,
-										'llm.provider',
-										provider.name
-									);
-									return (
-										<tr key={provider.name}>
-											<td className="strong">{provider.name}</td>
-											{hybrid ? (
-												<td>
-													<span className="badge">{databaseBacked ? 'Database' : 'File'}</span>
-												</td>
-											) : null}
-											<td>
-												<ProviderBadge
-													provider={providerLabel(provider.provider) as ProviderName}
-												/>
-											</td>
-											<td>{provider.params?.model || 'Incoming model'}</td>
-											<td>
-												{usage.length ? (
-													<span className="badge ok">
-														{usage.length} {usage.length === 1 ? 'model' : 'models'}
-													</span>
-												) : (
-													<span className="badge">unused</span>
-												)}
-											</td>
-											<td className="row-actions">
+						<Table<LlmProvider>
+							size="middle"
+							rowKey="name"
+							dataSource={providers}
+							pagination={tablePagination}
+							columns={[
+								{ title: 'Name', dataIndex: 'name', className: 'strong' },
+								...(hybrid
+									? [
+											{
+												title: 'Source',
+												key: 'source',
+												render: (_: unknown, provider: LlmProvider) => (
+													<Tag>{databaseBacked(provider) ? 'Database' : 'File'}</Tag>
+												)
+											}
+										]
+									: []),
+								{
+									title: 'Provider',
+									key: 'provider',
+									render: (_, provider) => (
+										<ProviderBadge provider={providerLabel(provider.provider) as ProviderName} />
+									)
+								},
+								{
+									title: 'Upstream model',
+									key: 'model',
+									render: (_, provider) => provider.params?.model || 'Incoming model'
+								},
+								{
+									title: 'Used by',
+									key: 'usage',
+									render: (_, provider) => {
+										const usage = providerUsage(provider.name, models).length;
+										return usage ? (
+											<Tag color="success">
+												{usage} {usage === 1 ? 'model' : 'models'}
+											</Tag>
+										) : (
+											<Tag>unused</Tag>
+										);
+									}
+								},
+								{
+									key: 'actions',
+									align: 'right',
+									onHeaderCell: () => ({ 'aria-label': 'Actions' }),
+									render: (_, provider) => {
+										const used = providerUsage(provider.name, models).length > 0;
+										const fileOwned = hybrid && !databaseBacked(provider);
+										return (
+											<div className="row-actions">
 												<Tooltip content="Add model using this provider">
-													<Link
-														className="icon-button"
+													<ButtonLink
+														color="default"
+														variant="outlined"
 														aria-label="Add model using provider"
+														icon={<Bot size={16} />}
 														to="/llm/models"
 														search={{ provider: provider.name }}
-													>
-														<Bot size={16} />
-													</Link>
+													/>
 												</Tooltip>
 												<Tooltip content="Edit provider">
-													<button
-														className="icon-button"
+													<Button
 														aria-label="Edit provider"
-														type="button"
+														icon={<Pencil size={16} />}
 														onClick={() => openEditProvider(provider)}
-													>
-														<Pencil size={16} />
-													</button>
+													/>
 												</Tooltip>
 												<Tooltip
 													content={
-														usage.length
+														used
 															? 'Provider is referenced by models'
-															: hybrid && !databaseBacked
+															: fileOwned
 																? 'File-owned providers cannot be deleted here'
 																: 'Delete provider'
 													}
 												>
-													<button
-														className="icon-button danger"
+													<Button
+														danger
 														aria-label="Delete provider"
-														type="button"
-														disabled={usage.length > 0 || saving || (hybrid && !databaseBacked)}
+														icon={<Trash2 size={16} />}
+														disabled={used || saving || fileOwned}
 														onClick={() => setDeletingProvider(provider.name)}
-													>
-														<Trash2 size={16} />
-													</button>
+													/>
 												</Tooltip>
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
+											</div>
+										);
+									}
+								}
+							]}
+						/>
 					</div>
 				)}
 			</Panel>
@@ -358,7 +367,7 @@ function ProviderEditor(props: {
 						'Models reference this name from their provider field.'
 					)}
 				>
-					<input
+					<Input
 						value={provider.name}
 						onChange={event => setProvider({ ...provider, name: event.target.value })}
 						placeholder="openai-prod"
@@ -401,10 +410,9 @@ function removeProviderAuth(defaults: LlmProvider['defaults']) {
 
 function ProviderBadge(props: { provider: ProviderName }) {
 	return (
-		<span className="badge provider-badge">
-			<ProviderIcon provider={props.provider} />
+		<Tag className="provider-badge" icon={<ProviderIcon provider={props.provider} />}>
 			{providerDisplayName(props.provider)}
-		</span>
+		</Tag>
 	);
 }
 

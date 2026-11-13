@@ -1,3 +1,4 @@
+import { Button, Input, Tag } from 'antd';
 import { Plus, Server, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -110,10 +111,9 @@ export function McpGuardrailsPolicyEditor(props: {
 					</strong>
 					<small>Processors run in order; the first rejection stops the request.</small>
 				</div>
-				<button className="button" type="button" onClick={addProcessor}>
-					<Plus size={16} />
+				<Button icon={<Plus size={16} />} onClick={addProcessor}>
 					Add processor
-				</button>
+				</Button>
 			</div>
 
 			{processors.length === 0 ? (
@@ -121,10 +121,9 @@ export function McpGuardrailsPolicyEditor(props: {
 					title="No MCP guardrail processors"
 					description="Add a remote policy processor to inspect MCP requests and responses."
 					action={
-						<button className="button primary" type="button" onClick={addProcessor}>
-							<Plus size={16} />
+						<Button type="primary" icon={<Plus size={16} />} onClick={addProcessor}>
 							Add processor
-						</button>
+						</Button>
 					}
 				/>
 			) : (
@@ -143,22 +142,23 @@ export function McpGuardrailsPolicyEditor(props: {
 									<strong>Processor {index + 1}</strong>
 									<code>{processor.host || 'No host configured'}</code>
 								</div>
-								<span className={processor.failureMode === 'failOpen' ? 'badge warn' : 'badge'}>
+								<Tag color={processor.failureMode === 'failOpen' ? 'warning' : undefined}>
 									{processor.failureMode === 'failOpen' ? 'Fail open' : 'Fail closed'}
-								</span>
-								<button
-									className="table-action danger"
-									type="button"
+								</Tag>
+								<Button
+									type="text"
+									size="small"
+									danger
+									icon={<Trash2 size={14} />}
 									onClick={() => removeProcessor(index)}
 								>
-									<Trash2 size={14} />
 									Delete
-								</button>
+								</Button>
 							</div>
 
 							<div className="mcp-processor-controls">
 								<Field label="Host" tooltip={props.help.field<Processor>('Processor', 'host')}>
-									<input
+									<Input
 										value={processor.host}
 										onChange={event => updateProcessor(index, { host: event.target.value })}
 										placeholder="guardrails.example.com:9000"
@@ -237,10 +237,11 @@ function MethodPhaseEditor(props: {
 						{entries.map(([key, value]) => (
 							<div className="mcp-method-row" key={key}>
 								<code>{key}</code>
-								<span className={`badge mcp-phase ${value}`}>{phaseLabel(value)}</span>
-								<button
-									className="table-action danger"
-									type="button"
+								<Tag color={phaseColor[value]}>{phaseLabel(value)}</Tag>
+								<Button
+									type="text"
+									size="small"
+									danger
 									onClick={() => {
 										const next = { ...props.methods };
 										delete next[key];
@@ -248,7 +249,7 @@ function MethodPhaseEditor(props: {
 									}}
 								>
 									Remove
-								</button>
+								</Button>
 							</div>
 						))}
 					</div>
@@ -256,7 +257,7 @@ function MethodPhaseEditor(props: {
 					<div className="empty-inline">No MCP methods configured.</div>
 				)}
 				<div className="mcp-method-add-row">
-					<input
+					<Input
 						value={method}
 						onChange={event => setMethod(event.target.value)}
 						placeholder="tools/call, prompts/*, or *"
@@ -268,9 +269,7 @@ function MethodPhaseEditor(props: {
 						schema={props.help.node(['$defs', 'Phase'])}
 						onChange={value => setPhase(value as Phase)}
 					/>
-					<button className="button" type="button" onClick={add}>
-						Add
-					</button>
+					<Button onClick={add}>Add</Button>
 				</div>
 			</div>
 		</FieldGroup>
@@ -338,6 +337,13 @@ function stringMap(value: unknown): Record<string, string> {
 	});
 	return next;
 }
+
+const phaseColor: Record<Phase, string | undefined> = {
+	off: undefined,
+	request: undefined,
+	response: 'success',
+	full: 'warning'
+};
 
 function phaseLabel(value: Phase) {
 	return phaseOptions.find(option => option.value === value)?.label ?? value;

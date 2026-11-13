@@ -1,8 +1,18 @@
+import { createLink } from '@tanstack/react-router';
+import {
+	Alert,
+	Drawer as AntDrawer,
+	Tooltip as AntTooltip,
+	Button,
+	Empty,
+	Modal,
+	Segmented,
+	Select
+} from 'antd';
 import { dump } from 'js-yaml';
 import {
 	AlertTriangle,
 	CheckCircle2,
-	ChevronDown,
 	Code,
 	HelpCircle,
 	Info,
@@ -11,7 +21,6 @@ import {
 	XCircle
 } from 'lucide-react';
 import type {
-	CSSProperties,
 	ReactElement,
 	KeyboardEvent as ReactKeyboardEvent,
 	MouseEvent as ReactMouseEvent,
@@ -41,7 +50,15 @@ import {
 } from '@/configValidation';
 import { useSchemaHelp } from '@/schemaHelp';
 
-const drawerStack: symbol[] = [];
+// Router link styled as an antd Button. It drops `type`, so use `color="primary" variant="solid"`.
+export const ButtonLink = createLink(Button);
+
+// Shared Table pagination: fixed page size with a "from–to of count" total.
+export const tablePagination = {
+	pageSize: 20,
+	hideOnSinglePage: true,
+	showTotal: (total: number, [from, to]: [number, number]) => `${from}–${to} of ${total}`
+};
 
 // Lets a drawer's form edit its value as raw YAML instead.
 export type DrawerRaw = {
@@ -75,16 +92,15 @@ export function DrawerSaveButton(props: {
 }) {
 	const check = useContext(DrawerCheckContext);
 	return (
-		<button
-			className="button primary"
-			type="button"
+		<Button
+			type="primary"
 			disabled={props.disabled}
 			onClick={() => {
 				if (!check || check()) props.onClick();
 			}}
 		>
 			{props.children}
-		</button>
+		</Button>
 	);
 }
 
@@ -181,51 +197,17 @@ export function useDismissiblePopover<T extends HTMLElement>(open: boolean, onCl
 	return ref;
 }
 
-// Horizontal space a menu can use: the viewport, narrowed by any ancestor that clips it.
-function dropdownMenuBounds(menu: HTMLElement) {
-	const margin = 8;
-	let left = margin;
-	let right = document.documentElement.clientWidth - margin;
-	for (
-		let element = menu.parentElement;
-		element && element !== document.body;
-		element = element.parentElement
-	) {
-		const style = getComputedStyle(element);
-		if (style.overflowX !== 'visible') {
-			const start = element.getBoundingClientRect().left + element.clientLeft;
-			left = Math.max(left, start + margin);
-			right = Math.min(right, start + element.clientWidth - margin);
-		}
-		// Ancestors of a fixed element don't clip it.
-		if (style.position === 'fixed') break;
-	}
-	return { left, right };
-}
-
-// Fits the menu to its longest option and keeps it in bounds. The width only grows, so the menu
-// doesn't resize as a search narrows the options.
-function fitDropdownMenu(menu: HTMLElement) {
-	const currentWidth = Number.parseFloat(menu.style.width) || 0;
-	menu.style.width = '';
-	menu.style.left = '';
-	const bounds = dropdownMenuBounds(menu);
-	const width = Math.max(menu.getBoundingClientRect().width, currentWidth);
-	menu.style.width = `${Math.ceil(Math.min(width, bounds.right - bounds.left))}px`;
-	const rect = menu.getBoundingClientRect();
-	const shift = Math.min(0, Math.max(bounds.right - rect.right, bounds.left - rect.left));
-	if (shift) menu.style.left = `${shift}px`;
-}
+type DropdownOption = {
+	value: string;
+	label: ReactNode;
+	description?: ReactNode;
+	icon?: ReactNode;
+	searchText?: string;
+};
 
 export function Dropdown(props: {
 	value: string;
-	options: Array<{
-		value: string;
-		label: ReactNode;
-		description?: ReactNode;
-		icon?: ReactNode;
-		searchText?: string;
-	}>;
+	options: DropdownOption[];
 	onChange: (value: string) => void;
 	id?: string;
 	ariaLabel: string;
@@ -235,258 +217,45 @@ export function Dropdown(props: {
 	allowEmpty?: boolean;
 	disabled?: boolean;
 }) {
-	const id = useId();
-	const [open, setOpen] = useState(false);
-	const [query, setQuery] = useState('');
-	const [activeIndex, setActiveIndex] = useState(0);
-	const containerRef = useRef<HTMLDivElement>(null);
-	const triggerRef = useRef<HTMLButtonElement>(null);
-	const menuRef = useRef<HTMLDivElement>(null);
-	const searchRef = useRef<HTMLInputElement>(null);
-	const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-	const typeaheadRef = useRef('');
-	const typeaheadTimerRef = useRef<number | null>(null);
 	const selected =
 		props.options.find(option => option.value === props.value) ??
 		(props.allowEmpty ? undefined : props.options[0]);
-	const filteredOptions = useMemo(() => {
-		if (!props.searchable || !query.trim()) return props.options;
-		const normalized = query.trim().toLowerCase();
-		return props.options.filter(option => optionSearchText(option).includes(normalized));
-	}, [props.options, props.searchable, query]);
-	const activeOption = open ? filteredOptions[activeIndex] : undefined;
-	const activeOptionId = activeOption ? `${id}-option-${activeIndex}` : undefined;
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: refit when the rendered options change.
-	useLayoutEffect(() => {
-		if (open && menuRef.current) fitDropdownMenu(menuRef.current);
-	}, [open, filteredOptions]);
-
-	useEffect(() => {
-		if (open && props.searchable) searchRef.current?.focus();
-		if (!open) setQuery('');
-	}, [open, props.searchable]);
-
-	useEffect(
-		() => () => {
-			if (typeaheadTimerRef.current) window.clearTimeout(typeaheadTimerRef.current);
-		},
-		[]
+	const byValue = useMemo(
+		() => new Map(props.options.map(option => [option.value, option])),
+		[props.options]
 	);
-
-	useEffect(() => {
-		const selectedIndex = filteredOptions.findIndex(option => option.value === selected?.value);
-		setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
-	}, [filteredOptions, selected?.value]);
-
-	useEffect(() => {
-		if (!open) return;
-		optionRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' });
-	}, [activeIndex, open]);
-
-	function selectOption(option: { value: string } | undefined) {
-		if (!option) return;
-		props.onChange(option.value);
-		setOpen(false);
-		window.requestAnimationFrame(() => triggerRef.current?.focus());
-	}
-
-	function openAtSelected() {
-		const selectedIndex = filteredOptions.findIndex(option => option.value === selected?.value);
-		setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
-		setOpen(true);
-	}
-
-	function moveActive(delta: number) {
-		setActiveIndex(current => {
-			if (!filteredOptions.length) return 0;
-			return (current + delta + filteredOptions.length) % filteredOptions.length;
-		});
-	}
-
-	function setActiveBoundary(position: 'first' | 'last') {
-		setActiveIndex(position === 'first' ? 0 : Math.max(filteredOptions.length - 1, 0));
-	}
-
-	function clearTypeaheadLater() {
-		if (typeaheadTimerRef.current) window.clearTimeout(typeaheadTimerRef.current);
-		typeaheadTimerRef.current = window.setTimeout(() => {
-			typeaheadRef.current = '';
-		}, 700);
-	}
-
-	function runTypeahead(key: string) {
-		if (!key.trim()) return;
-		const nextQuery = `${typeaheadRef.current}${key}`.toLowerCase();
-		typeaheadRef.current = nextQuery;
-		clearTypeaheadLater();
-		const options = props.searchable ? filteredOptions : props.options;
-		if (!options.length) return;
-		const current = open
-			? activeIndex
-			: options.findIndex(option => option.value === selected?.value);
-		const start = current >= 0 ? current + 1 : 0;
-		const ordered = [...options.slice(start), ...options.slice(0, start)];
-		const match = ordered.find(
-			option =>
-				optionSearchText(option).startsWith(nextQuery) ||
-				optionSearchText(option).includes(` ${nextQuery}`)
-		);
-		if (!match) return;
-		const index = options.findIndex(option => option.value === match.value);
-		if (index >= 0) {
-			setActiveIndex(index);
-			setOpen(true);
-		}
-	}
-
-	function onComboboxKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
-		if (event.altKey || event.ctrlKey || event.metaKey) return;
-		if (event.key === 'ArrowDown') {
-			event.preventDefault();
-			if (!open) openAtSelected();
-			else moveActive(1);
-			return;
-		}
-		if (event.key === 'ArrowUp') {
-			event.preventDefault();
-			if (!open) openAtSelected();
-			else moveActive(-1);
-			return;
-		}
-		if (event.key === 'Home' && open) {
-			event.preventDefault();
-			setActiveBoundary('first');
-			return;
-		}
-		if (event.key === 'End' && open) {
-			event.preventDefault();
-			setActiveBoundary('last');
-			return;
-		}
-		if (event.key === 'Enter') {
-			event.preventDefault();
-			if (open) selectOption(filteredOptions[activeIndex]);
-			else openAtSelected();
-			return;
-		}
-		if (event.key === ' ') {
-			if (props.searchable && document.activeElement === searchRef.current) return;
-			event.preventDefault();
-			if (open) selectOption(filteredOptions[activeIndex]);
-			else openAtSelected();
-			return;
-		}
-		if (event.key === 'Escape') {
-			if (!open) return;
-			event.preventDefault();
-			setOpen(false);
-			triggerRef.current?.focus();
-			return;
-		}
-		if (
-			event.key.length === 1 &&
-			props.searchable &&
-			document.activeElement !== searchRef.current
-		) {
-			event.preventDefault();
-			typeaheadRef.current = '';
-			setQuery(event.key);
-			setOpen(true);
-			return;
-		}
-		if (event.key.length === 1 && !props.searchable) {
-			runTypeahead(event.key);
-		}
-	}
-
 	return (
-		<div
+		<Select
 			className={['custom-select', props.className].filter(Boolean).join(' ')}
-			ref={containerRef}
-		>
-			<button
-				className="custom-select-trigger"
-				type="button"
-				role="combobox"
-				ref={triggerRef}
-				id={props.id}
-				aria-haspopup="listbox"
-				aria-expanded={open}
-				aria-controls={`${id}-listbox`}
-				aria-activedescendant={activeOptionId}
-				aria-label={props.ariaLabel}
-				disabled={props.disabled}
-				onBlur={event => {
-					if (!containerRef.current?.contains(event.relatedTarget)) setOpen(false);
-				}}
-				onClick={() => setOpen(current => !current)}
-				onKeyDown={onComboboxKeyDown}
-			>
-				{selected ? (
-					<DropdownOptionContent option={selected} />
-				) : (
-					<span className="muted">{props.placeholder ?? 'No options'}</span>
-				)}
-				<ChevronDown size={16} />
-			</button>
-			{open ? (
-				<div
-					className="custom-select-menu"
-					ref={menuRef}
-					role="listbox"
-					id={`${id}-listbox`}
-					aria-label={props.ariaLabel}
-				>
-					{props.searchable ? (
-						<input
-							className="custom-select-search"
-							ref={searchRef}
-							role="combobox"
-							aria-expanded={open}
-							aria-controls={`${id}-listbox`}
-							aria-activedescendant={activeOptionId}
-							aria-label={`Search ${props.ariaLabel}`}
-							value={query}
-							onBlur={event => {
-								if (!containerRef.current?.contains(event.relatedTarget)) setOpen(false);
-							}}
-							onChange={event => setQuery(event.target.value)}
-							onKeyDown={onComboboxKeyDown}
-							placeholder={`Search ${props.ariaLabel.toLowerCase()}...`}
-						/>
-					) : null}
-					{filteredOptions.map((option, index) => (
-						<button
-							type="button"
-							className={[
-								'custom-select-option',
-								index === activeIndex ? 'active' : null,
-								option.value === selected?.value ? 'selected' : null
-							]
-								.filter(Boolean)
-								.join(' ')}
-							role="option"
-							aria-selected={option.value === selected?.value}
-							id={`${id}-option-${index}`}
-							key={option.value}
-							ref={node => {
-								optionRefs.current[index] = node;
-							}}
-							tabIndex={-1}
-							onMouseEnter={() => setActiveIndex(index)}
-							onMouseDown={event => event.preventDefault()}
-							onClick={() => selectOption(option)}
-						>
-							<DropdownOptionContent option={option} showDescription />
-						</button>
-					))}
-					{filteredOptions.length === 0 ? (
-						<div className="custom-select-empty">No matches</div>
-					) : null}
-				</div>
-			) : null}
-		</div>
+			id={props.id}
+			aria-label={props.ariaLabel}
+			value={selected?.value}
+			disabled={props.disabled}
+			placeholder={props.placeholder ?? 'No options'}
+			options={props.options.map(option => ({ value: option.value, label: option.label }))}
+			showSearch={
+				props.searchable
+					? {
+							filterOption: (input, option) =>
+								optionSearchText(
+									byValue.get(String(option?.value)) ?? { value: '', label: '' }
+								).includes(input.trim().toLowerCase())
+						}
+					: false
+			}
+			classNames={{ popup: { root: 'custom-select-menu' } }}
+			popupMatchSelectWidth={false}
+			labelRender={item => {
+				const option = byValue.get(String(item.value));
+				return option ? <DropdownOptionContent option={option} /> : item.label;
+			}}
+			optionRender={item => {
+				const option = byValue.get(String(item.value));
+				return option ? <DropdownOptionContent option={option} showDescription /> : item.label;
+			}}
+			notFoundContent="No matches"
+			onChange={value => props.onChange(value)}
+		/>
 	);
 }
 
@@ -532,23 +301,21 @@ export function SegmentedControl<T extends string>(props: {
 	className?: string;
 }) {
 	return (
-		<fieldset
-			className={['segmented-control', props.className].filter(Boolean).join(' ')}
+		<Segmented<T>
+			className={props.className}
 			aria-label={props.ariaLabel}
-		>
-			{props.options.map(option => (
-				<button
-					className={option.value === props.value ? 'active' : ''}
-					type="button"
-					aria-pressed={option.value === props.value}
-					key={option.value}
-					onClick={() => props.onChange(option.value)}
-				>
-					<span>{option.label}</span>
-					{option.description ? <small>{option.description}</small> : null}
-				</button>
-			))}
-		</fieldset>
+			value={props.value}
+			onChange={props.onChange}
+			options={props.options.map(option => ({
+				value: option.value,
+				label: (
+					<span className="segmented-option">
+						<span>{option.label}</span>
+						{option.description ? <small>{option.description}</small> : null}
+					</span>
+				)
+			}))}
+		/>
 	);
 }
 
@@ -557,105 +324,18 @@ export function Tooltip(props: {
 	children: ReactNode;
 	side?: 'top' | 'right' | 'bottom' | 'left';
 }) {
-	const id = useId();
-	const anchorRef = useRef<HTMLSpanElement>(null);
-	const popoverRef = useRef<HTMLSpanElement>(null);
-	const [open, setOpen] = useState(false);
-	const [style, setStyle] = useState<CSSProperties>({
-		left: 0,
-		top: 0,
-		visibility: 'hidden'
-	});
-
-	useLayoutEffect(() => {
-		if (!open) return;
-
-		function updatePosition() {
-			const anchor = anchorRef.current;
-			const popover = popoverRef.current;
-			if (!anchor || !popover) return;
-
-			const anchorRect = anchor.getBoundingClientRect();
-			const popoverRect = popover.getBoundingClientRect();
-			const gap = 8;
-			const margin = 8;
-			const viewportWidth = window.innerWidth;
-			const viewportHeight = window.innerHeight;
-
-			const candidates = orderedSides(props.side ?? 'top').map(side => {
-				if (side === 'top') {
-					return {
-						side,
-						left: anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2,
-						top: anchorRect.top - popoverRect.height - gap
-					};
-				}
-				if (side === 'bottom') {
-					return {
-						side,
-						left: anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2,
-						top: anchorRect.bottom + gap
-					};
-				}
-				if (side === 'right') {
-					return {
-						side,
-						left: anchorRect.right + gap,
-						top: anchorRect.top + anchorRect.height / 2 - popoverRect.height / 2
-					};
-				}
-				return {
-					side,
-					left: anchorRect.left - popoverRect.width - gap,
-					top: anchorRect.top + anchorRect.height / 2 - popoverRect.height / 2
-				};
-			});
-
-			const fitting =
-				candidates.find(
-					candidate =>
-						candidate.left >= margin &&
-						candidate.top >= margin &&
-						candidate.left + popoverRect.width <= viewportWidth - margin &&
-						candidate.top + popoverRect.height <= viewportHeight - margin
-				) ?? candidates[0];
-
-			setStyle({
-				left: clamp(fitting.left, margin, viewportWidth - popoverRect.width - margin),
-				top: clamp(fitting.top, margin, viewportHeight - popoverRect.height - margin),
-				visibility: 'visible'
-			});
-		}
-
-		updatePosition();
-		window.addEventListener('resize', updatePosition);
-		window.addEventListener('scroll', updatePosition, true);
-		return () => {
-			window.removeEventListener('resize', updatePosition);
-			window.removeEventListener('scroll', updatePosition, true);
-		};
-	}, [open, props.side]);
-
+	// A zero focus/blur delay makes the trigger call flushSync from inside focus events that
+	// React fires mid-commit (a drawer focusing itself or restoring focus); a tiny delay defers it.
+	const focusDelays = { focusDelay: 0.01, blurDelay: 0.01 };
 	return (
-		<span
-			className="tooltip-wrap"
-			role="none"
-			onMouseEnter={() => setOpen(true)}
-			onMouseLeave={() => setOpen(false)}
-			onFocus={() => setOpen(true)}
-			onBlur={event => {
-				if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-			}}
+		<AntTooltip
+			title={formatTooltipContent(props.content)}
+			placement={props.side ?? 'top'}
+			trigger={['hover', 'focus']}
+			{...focusDelays}
 		>
-			<span className="tooltip-anchor" aria-describedby={open ? id : undefined} ref={anchorRef}>
-				{props.children}
-			</span>
-			{open ? (
-				<span className="tooltip-popover" role="tooltip" id={id} ref={popoverRef} style={style}>
-					{formatTooltipContent(props.content)}
-				</span>
-			) : null}
-		</span>
+			<span className="tooltip-wrap">{props.children}</span>
+		</AntTooltip>
 	);
 }
 
@@ -670,15 +350,6 @@ function formatTooltipContent(content: ReactNode) {
 		// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 		return <span key={index}>{part}</span>;
 	});
-}
-
-function orderedSides(preferred: 'top' | 'right' | 'bottom' | 'left') {
-	const all = ['top', 'bottom', 'right', 'left'] as const;
-	return [preferred, ...all.filter(side => side !== preferred)];
-}
-
-function clamp(value: number, min: number, max: number) {
-	return Math.min(Math.max(value, min), max);
 }
 
 function checkRaw(text: string, raw: DrawerRaw): { value?: unknown; error: string | null } {
@@ -704,7 +375,6 @@ export function Drawer(props: {
 	// Save errors, shown in form and raw mode alike.
 	error?: string | null;
 }) {
-	const drawerRef = useRef<HTMLElement>(null);
 	const [rawText, setRawText] = useState<string | null>(null);
 	const [rawPinned, setRawPinned] = useState<string | null>(null);
 	// Raw mode was asked for while the form had no value to show.
@@ -803,48 +473,14 @@ export function Drawer(props: {
 		setRawPinned(null);
 		props.raw.onChange(checked.value);
 	}
-	const drawerId = useRef(Symbol('drawer'));
 	const [formChanged, setFormChanged] = useState(false);
 	const [confirmClose, setConfirmClose] = useState(false);
 	const dirty = (props.dirty ?? formChanged) || rawEdited;
-	const closeStateRef = useRef({
-		dirty,
-		saving: props.saving,
-		confirmClose,
-		onClose: props.onClose
-	});
-	closeStateRef.current = {
-		dirty,
-		saving: props.saving,
-		confirmClose,
-		onClose: props.onClose
-	};
 
 	function requestClose() {
-		const state = closeStateRef.current;
-		if (state.dirty && !state.saving) setConfirmClose(true);
-		else state.onClose();
+		if (dirty && !props.saving) setConfirmClose(true);
+		else props.onClose();
 	}
-
-	useEffect(() => {
-		const id = drawerId.current;
-		drawerStack.push(id);
-		function closeOnEscape(event: KeyboardEvent) {
-			if (event.key !== 'Escape') return;
-			if (drawerStack.at(-1) !== id) return;
-			const state = closeStateRef.current;
-			if (state.confirmClose) return;
-			event.preventDefault();
-			if (state.dirty && !state.saving) setConfirmClose(true);
-			else state.onClose();
-		}
-		document.addEventListener('keydown', closeOnEscape);
-		return () => {
-			document.removeEventListener('keydown', closeOnEscape);
-			const index = drawerStack.indexOf(id);
-			if (index >= 0) drawerStack.splice(index, 1);
-		};
-	}, []);
 
 	useEffect(() => {
 		if (!dirty || props.saving) return;
@@ -858,14 +494,26 @@ export function Drawer(props: {
 
 	function trackButtonChange(event: ReactMouseEvent<HTMLElement>) {
 		const target = event.target as HTMLElement;
-		if (target.closest('[role="option"], .segmented-control button, .choice-pill'))
+		// Select options, toggle buttons and number steppers change values without a change event.
+		if (target.closest('[role="option"], [aria-pressed], .ant-input-number-action')) {
 			setFormChanged(true);
+		}
 	}
 
+	function trackKeyChange(event: ReactKeyboardEvent<HTMLElement>) {
+		const target = event.target as HTMLElement;
+		if (
+			(event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+			target.closest('.ant-input-number')
+		) {
+			setFormChanged(true);
+		}
+	}
+
+	// Drawers unmount instead of closing, so return focus to where it was.
 	useEffect(() => {
 		const previousFocus =
 			document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		drawerRef.current?.focus({ preventScroll: true });
 		return () => {
 			const scrollX = window.scrollX;
 			const scrollY = window.scrollY;
@@ -874,143 +522,115 @@ export function Drawer(props: {
 		};
 	}, []);
 
-	function trapFocus(event: ReactKeyboardEvent<HTMLElement>) {
-		if (event.key !== 'Tab') return;
-		const drawer = drawerRef.current;
-		if (!drawer) return;
-		const focusable = Array.from(
-			drawer.querySelectorAll<HTMLElement>(
-				'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-			)
-		).filter(element => !element.hasAttribute('disabled') && element.offsetParent !== null);
-		if (!focusable.length) return;
-		const first = focusable[0];
-		const last = focusable[focusable.length - 1];
-		if (event.shiftKey && document.activeElement === first) {
-			event.preventDefault();
-			last.focus();
-		} else if (!event.shiftKey && document.activeElement === last) {
-			event.preventDefault();
-			first.focus();
-		}
-	}
-
+	const nested = props.variant === 'nested';
 	return (
 		<>
-			<div
-				className={props.variant === 'nested' ? 'drawer-backdrop nested' : 'drawer-backdrop'}
-				role="presentation"
+			<AntDrawer
+				open
+				placement="right"
+				size={760}
+				push={false}
+				mask={nested ? false : { closable: true }}
+				keyboard={!confirmClose}
+				closable={false}
+				title={<h3>{props.title}</h3>}
+				onClose={requestClose}
+				classNames={{
+					section: nested ? 'drawer nested' : 'drawer',
+					header: 'drawer-header',
+					body: 'drawer-body',
+					footer: 'drawer-footer'
+				}}
+				extra={
+					<div className="drawer-header-actions">
+						{props.headerActions}
+						{props.raw ? (
+							<Tooltip content={rawPinned ?? 'Raw'}>
+								<Button
+									type={rawText === null ? 'default' : 'primary'}
+									ghost={rawText !== null}
+									aria-label="Raw"
+									aria-pressed={rawText !== null}
+									disabled={Boolean(rawPinned)}
+									onClick={toggleRaw}
+									icon={<Code size={17} />}
+								/>
+							</Tooltip>
+						) : null}
+						<Tooltip content="Close">
+							<Button aria-label="Close" onClick={requestClose} icon={<X size={17} />} />
+						</Tooltip>
+					</div>
+				}
+				footer={
+					props.footer ? (
+						// Invalid raw text has not reached the form, so saving now would save stale values.
+						<fieldset className="drawer-footer-actions" disabled={Boolean(rawError)}>
+							<DrawerCheckContext.Provider value={props.raw ? check : null}>
+								{typeof props.footer === 'function'
+									? props.footer(requestClose, dirty)
+									: props.footer}
+							</DrawerCheckContext.Provider>
+						</fieldset>
+					) : null
+				}
 			>
-				<div className="dismiss-overlay" aria-hidden="true" onMouseDown={requestClose} />
-				<aside
-					className={props.variant === 'nested' ? 'drawer nested' : 'drawer'}
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="drawer-title"
-					tabIndex={-1}
-					ref={drawerRef}
-					onKeyDown={trapFocus}
+				<div
+					className="drawer-content"
 					onChangeCapture={() => setFormChanged(true)}
 					onClickCapture={trackButtonChange}
-					onMouseDown={event => event.stopPropagation()}
+					onKeyDownCapture={trackKeyChange}
 				>
-					<div className="drawer-header">
-						<h3 id="drawer-title">{props.title}</h3>
-						<div className="drawer-header-actions">
-							{props.headerActions}
-							{props.raw ? (
-								<Tooltip content={rawPinned ?? 'Raw'}>
-									<button
-										className={rawText === null ? 'icon-button' : 'icon-button active'}
-										type="button"
-										aria-label="Raw"
-										aria-pressed={rawText !== null}
-										disabled={Boolean(rawPinned)}
-										onClick={toggleRaw}
-									>
-										<Code size={17} />
-									</button>
-								</Tooltip>
-							) : null}
-							<Tooltip content="Close">
-								<button
-									className="icon-button"
-									type="button"
-									aria-label="Close"
-									onClick={requestClose}
-								>
-									<X size={17} />
-								</button>
-							</Tooltip>
-						</div>
-					</div>
-					<div className="drawer-body">
-						{props.raw && rawText !== null ? (
-							<div className="policy-yaml-fallback">
-								<SchemaHelpPanel
-									schema={configSchemaNode(props.raw.schemaPath)}
-									help={schemaHelp}
-								/>
-								{rawError ? (
-									<StatusBanner state="bad" title="Invalid configuration">
-										{rawError}
-									</StatusBanner>
-								) : null}
-								<SchemaYamlEditor
-									className="policy-yaml-editor"
-									invalid={Boolean(rawError)}
-									path="agentgateway-drawer-raw.yaml"
-									schema={configSchemaNode(props.raw.schemaPath) ?? {}}
-									showLineNumbers={false}
-									value={rawText}
-									onChange={editRaw}
-								/>
-							</div>
-						) : (
-							<PinRawContext.Provider value={props.raw ? pinRaw : null}>
-								<FieldErrorsContext.Provider value={fieldErrors}>
-									{props.children}
-								</FieldErrorsContext.Provider>
-							</PinRawContext.Provider>
-						)}
-						{rawBlocked && rawText === null ? (
-							<StatusBanner state="warn" title="Raw mode is unavailable">
-								Part of the form is not valid yet. Fix it to edit as raw YAML.
-							</StatusBanner>
-						) : null}
-						{unshownErrors.length ? (
-							<StatusBanner state="bad" title="Invalid configuration">
-								{unshownErrors.map(error => (
-									<div key={error.path}>
-										{error.path ? <code>{error.path}</code> : null}
-										{error.path ? ': ' : null}
-										{error.message}
-									</div>
-								))}
-							</StatusBanner>
-						) : null}
-						{props.error ? (
-							<div className="drawer-save-error">
-								<StatusBanner state="bad" title="Save failed">
-									{props.error}
+					{props.raw && rawText !== null ? (
+						<div className="policy-yaml-fallback">
+							<SchemaHelpPanel schema={configSchemaNode(props.raw.schemaPath)} help={schemaHelp} />
+							{rawError ? (
+								<StatusBanner state="bad" title="Invalid configuration">
+									{rawError}
 								</StatusBanner>
-							</div>
-						) : null}
-					</div>
-					{props.footer ? (
-						<div className="drawer-footer">
-							{/* Invalid raw text has not reached the form, so saving now would save stale values. */}
-							<fieldset className="drawer-footer-actions" disabled={Boolean(rawError)}>
-								<DrawerCheckContext.Provider value={props.raw ? check : null}>
-									{typeof props.footer === 'function'
-										? props.footer(requestClose, dirty)
-										: props.footer}
-								</DrawerCheckContext.Provider>
-							</fieldset>
+							) : null}
+							<SchemaYamlEditor
+								className="policy-yaml-editor"
+								invalid={Boolean(rawError)}
+								path="agentgateway-drawer-raw.yaml"
+								schema={configSchemaNode(props.raw.schemaPath) ?? {}}
+								showLineNumbers={false}
+								value={rawText}
+								onChange={editRaw}
+							/>
+						</div>
+					) : (
+						<PinRawContext.Provider value={props.raw ? pinRaw : null}>
+							<FieldErrorsContext.Provider value={fieldErrors}>
+								{props.children}
+							</FieldErrorsContext.Provider>
+						</PinRawContext.Provider>
+					)}
+					{rawBlocked && rawText === null ? (
+						<StatusBanner state="warn" title="Raw mode is unavailable">
+							Part of the form is not valid yet. Fix it to edit as raw YAML.
+						</StatusBanner>
+					) : null}
+					{unshownErrors.length ? (
+						<StatusBanner state="bad" title="Invalid configuration">
+							{unshownErrors.map(error => (
+								<div key={error.path}>
+									{error.path ? <code>{error.path}</code> : null}
+									{error.path ? ': ' : null}
+									{error.message}
+								</div>
+							))}
+						</StatusBanner>
+					) : null}
+					{props.error ? (
+						<div className="drawer-save-error">
+							<StatusBanner state="bad" title="Save failed">
+								{props.error}
+							</StatusBanner>
 						</div>
 					) : null}
-				</aside>
-			</div>
+				</div>
+			</AntDrawer>
 			{confirmClose ? (
 				<ConfirmDialog
 					title="Discard unsaved changes?"
@@ -1039,82 +659,41 @@ export function ConfirmDialog(props: {
 	onCancel: () => void;
 	onConfirm: () => void;
 }) {
-	const dialogRef = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		const previousFocus =
-			document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		dialogRef.current?.focus({ preventScroll: true });
-		return () => previousFocus?.focus({ preventScroll: true });
-	}, []);
-
-	useEffect(() => {
-		function closeOnEscape(event: KeyboardEvent) {
-			if (event.key !== 'Escape') return;
-			event.preventDefault();
-			props.onCancel();
-		}
-		document.addEventListener('keydown', closeOnEscape);
-		return () => document.removeEventListener('keydown', closeOnEscape);
-	}, [props]);
-
-	function trapFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
-		if (event.key !== 'Tab') return;
-		const dialog = dialogRef.current;
-		if (!dialog) return;
-		const focusable = Array.from(
-			dialog.querySelectorAll<HTMLElement>(
-				'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
-			)
-		).filter(element => element.offsetParent !== null);
-		if (!focusable.length) return;
-		const first = focusable[0];
-		const last = focusable[focusable.length - 1];
-		if (event.shiftKey && document.activeElement === first) {
-			event.preventDefault();
-			last.focus();
-		} else if (!event.shiftKey && document.activeElement === last) {
-			event.preventDefault();
-			first.focus();
-		}
-	}
-
 	return (
-		<div className="confirm-backdrop" role="presentation">
-			<div className="dismiss-overlay" aria-hidden="true" onMouseDown={props.onCancel} />
-			<div
-				className="confirm-dialog"
-				role="alertdialog"
-				aria-modal="true"
-				aria-labelledby="confirm-dialog-title"
-				tabIndex={-1}
-				ref={dialogRef}
-				onKeyDown={trapFocus}
-				onMouseDown={event => event.stopPropagation()}
-			>
-				<div className="confirm-dialog-header">
-					<h3 id="confirm-dialog-title">{props.title}</h3>
-				</div>
-				{props.children ? <div className="confirm-dialog-body">{props.children}</div> : null}
-				<div className="confirm-dialog-footer">
+		<Modal
+			open
+			width={420}
+			title={props.title}
+			onCancel={props.onCancel}
+			classNames={{ body: 'confirm-dialog-body' }}
+			footer={
+				<>
 					{props.cancelLabel === null ? null : (
-						<button className="button" type="button" onClick={props.onCancel}>
-							{props.cancelLabel ?? 'Cancel'}
-						</button>
+						<Button onClick={props.onCancel}>{props.cancelLabel ?? 'Cancel'}</Button>
 					)}
-					<button
-						className={props.destructive ? 'button danger' : 'button primary'}
-						type="button"
+					<Button
+						type="primary"
+						danger={props.destructive}
 						disabled={props.confirmDisabled}
 						onClick={props.onConfirm}
 					>
 						{props.confirmLabel ?? 'Confirm'}
-					</button>
-				</div>
-			</div>
-		</div>
+					</Button>
+				</>
+			}
+		>
+			{props.children}
+		</Modal>
 	);
 }
+
+const bannerTypes = {
+	ok: ['success', CheckCircle2],
+	warn: ['warning', AlertTriangle],
+	bad: ['error', XCircle],
+	info: ['info', Info],
+	loading: ['info', Loader2]
+} as const;
 
 export function StatusBanner(props: {
 	state: 'ok' | 'warn' | 'bad' | 'loading' | 'info';
@@ -1122,35 +701,35 @@ export function StatusBanner(props: {
 	children?: ReactNode;
 	action?: ReactNode;
 }) {
-	const Icon =
-		props.state === 'loading'
-			? Loader2
-			: props.state === 'ok'
-				? CheckCircle2
-				: props.state === 'warn'
-					? AlertTriangle
-					: props.state === 'info'
-						? Info
-						: XCircle;
+	const [type, Icon] = bannerTypes[props.state];
 	return (
-		<div className={`status-banner ${props.state}`}>
-			<Icon size={18} className={props.state === 'loading' ? 'spin' : undefined} />
-			<div>
-				<strong>{props.title}</strong>
-				{props.children ? <div>{props.children}</div> : null}
-			</div>
-			{props.action ? <div className="status-banner-action">{props.action}</div> : null}
-		</div>
+		<Alert
+			className={`status-banner ${props.state}`}
+			type={type}
+			showIcon
+			icon={<Icon size={18} className={props.state === 'loading' ? 'spin' : undefined} />}
+			title={props.title}
+			description={props.children}
+			action={props.action}
+		/>
 	);
 }
 
 export function EmptyState(props: { title: string; description: string; action?: ReactNode }) {
 	return (
-		<div className="empty-state">
-			<h3>{props.title}</h3>
-			<p>{props.description}</p>
+		<Empty
+			className="empty-state"
+			image={false}
+			styles={{ root: { margin: 0, lineHeight: 'normal' }, image: { display: 'none' } }}
+			description={
+				<>
+					<h3>{props.title}</h3>
+					<p>{props.description}</p>
+				</>
+			}
+		>
 			{props.action}
-		</div>
+		</Empty>
 	);
 }
 
@@ -1204,12 +783,22 @@ export function Field(props: {
 	return (
 		<div className={`${className} field-with-help`}>
 			<Tooltip content={props.tooltip} side="right">
-				<button className="help-icon" type="button" aria-label={props.tooltip}>
-					<HelpCircle size={13} aria-hidden="true" />
-				</button>
+				<HelpButton label={props.tooltip} />
 			</Tooltip>
 			{control}
 		</div>
+	);
+}
+
+function HelpButton(props: { label: string }) {
+	return (
+		<Button
+			className="help-icon"
+			type="text"
+			size="small"
+			aria-label={props.label}
+			icon={<HelpCircle size={13} aria-hidden="true" />}
+		/>
 	);
 }
 
@@ -1235,9 +824,7 @@ export function FieldGroup(props: {
 				{field.required ? <span className="field-required">{props.label}</span> : props.label}
 				{props.tooltip ? (
 					<Tooltip content={props.tooltip} side="right">
-						<button className="help-icon" type="button" aria-label={props.tooltip}>
-							<HelpCircle size={13} aria-hidden="true" />
-						</button>
+						<HelpButton label={props.tooltip} />
 					</Tooltip>
 				) : null}
 			</span>

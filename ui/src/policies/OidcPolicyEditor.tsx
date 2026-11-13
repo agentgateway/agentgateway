@@ -1,3 +1,4 @@
+import { Button, Input } from 'antd';
 import { Fingerprint, Globe2, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 
@@ -7,6 +8,7 @@ import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type { LocalOidcConfig } from '@/gateway-config';
 import { ListEditor } from '@/policies/ListEditor';
+import { OptionCards } from '@/policies/PolicyFormControls';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, isRecord } from '@/policies/policyUtils';
 import type { OidcDraft } from '@/policies/types';
@@ -147,7 +149,7 @@ export function OidcPolicyEditor(props: {
 				>
 					{(id, hintId, invalid) => (
 						<>
-							<input
+							<Input
 								id={id}
 								aria-describedby={hintId}
 								aria-invalid={invalid}
@@ -157,14 +159,13 @@ export function OidcPolicyEditor(props: {
 							/>
 							<div className="suggestion-row">
 								{issuerSuggestions.map(suggestion => (
-									<button
-										className="table-action"
-										type="button"
+									<Button
+										size="small"
 										key={suggestion.label}
 										onClick={() => setIssuer(suggestion.value)}
 									>
 										{suggestion.label}
-									</button>
+									</Button>
 								))}
 							</div>
 						</>
@@ -179,19 +180,7 @@ export function OidcPolicyEditor(props: {
 						'OIDC provider endpoints can be discovered from the issuer or supplied explicitly.'
 					)}
 				>
-					<div className="option-card-grid">
-						{providerModes.map(mode => (
-							<button
-								className={providerMode === mode.value ? 'option-card active' : 'option-card'}
-								type="button"
-								key={mode.value}
-								onClick={() => setProviderMode(mode.value)}
-							>
-								<strong>{mode.label}</strong>
-								<span>{mode.description}</span>
-							</button>
-						))}
-					</div>
+					<OptionCards value={providerMode} options={providerModes} onChange={setProviderMode} />
 				</FieldGroup>
 
 				{providerMode === 'discovery' ? (
@@ -213,7 +202,7 @@ export function OidcPolicyEditor(props: {
 							)}
 							missing={!authorizationEndpoint.trim()}
 						>
-							<input
+							<Input
 								value={authorizationEndpoint}
 								onChange={event => setAuthorizationEndpoint(event.target.value)}
 								placeholder="https://issuer.example.com/oauth2/v1/authorize"
@@ -224,7 +213,7 @@ export function OidcPolicyEditor(props: {
 							tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'tokenEndpoint')}
 							missing={!tokenEndpoint.trim()}
 						>
-							<input
+							<Input
 								value={tokenEndpoint}
 								onChange={event => setTokenEndpoint(event.target.value)}
 								placeholder="https://issuer.example.com/oauth2/v1/token"
@@ -266,7 +255,7 @@ export function OidcPolicyEditor(props: {
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'clientId')}
 					path="clientId"
 				>
-					<input
+					<Input
 						value={clientId}
 						onChange={event => setClientId(event.target.value)}
 						placeholder="agentgateway-browser"
@@ -277,7 +266,7 @@ export function OidcPolicyEditor(props: {
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'clientSecret')}
 					path="clientSecret"
 				>
-					<input
+					<Input
 						type="text"
 						className="masked-secret-input"
 						autoComplete="off"
@@ -298,7 +287,7 @@ export function OidcPolicyEditor(props: {
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'redirectURI')}
 					path="redirectURI"
 				>
-					<input
+					<Input
 						value={redirectURI}
 						onChange={event => setRedirectURI(event.target.value)}
 						placeholder="http://localhost:4000/oauth/callback"
@@ -366,7 +355,7 @@ function SourceEditor(props: {
 						placeholder={placeholder}
 					/>
 				) : (
-					<input
+					<Input
 						value={props.value.value}
 						onChange={event => props.onChange({ ...props.value, value: event.target.value })}
 						placeholder={placeholder}

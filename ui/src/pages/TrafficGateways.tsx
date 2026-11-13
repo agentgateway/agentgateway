@@ -1,3 +1,4 @@
+import { Button, Checkbox, Input, Table, Tag } from 'antd';
 import { GitBranch, Network, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -163,10 +164,9 @@ export function TrafficGatewaysPage() {
 				title="Traffic Gateways"
 				description="Configure named gateway listeners that LLM, MCP, UI, and routes can attach to."
 				actions={
-					<button className="button primary" type="button" onClick={() => setDrawer('new')}>
-						<Plus size={16} />
+					<Button type="primary" icon={<Plus size={16} />} onClick={() => setDrawer('new')}>
 						Add gateway
-					</button>
+					</Button>
 				}
 			/>
 
@@ -182,10 +182,9 @@ export function TrafficGatewaysPage() {
 					title="Detected legacy binds config"
 					action={
 						migration ? (
-							<button className="button" type="button" onClick={() => setMigrationOpen(true)}>
-								<GitBranch size={16} />
+							<Button icon={<GitBranch size={16} />} onClick={() => setMigrationOpen(true)}>
 								Review migration
-							</button>
+							</Button>
 						) : null
 					}
 				>
@@ -206,10 +205,9 @@ export function TrafficGatewaysPage() {
 						title="No gateways configured"
 						description="Add a named gateway before attaching LLM, MCP, UI, or routes."
 						action={
-							<button className="button primary" type="button" onClick={() => setDrawer('new')}>
-								<Network size={16} />
+							<Button type="primary" icon={<Network size={16} />} onClick={() => setDrawer('new')}>
 								Add gateway
-							</button>
+							</Button>
 						}
 					/>
 				) : (
@@ -228,21 +226,18 @@ export function TrafficGatewaysPage() {
 										</p>
 									</div>
 									<div className="button-row">
-										<span className="badge">{gatewayProtocolLabel(gateway)}</span>
-										<span className={gatewayHasTls(gateway) ? 'badge ok' : 'badge'}>
+										<Tag>{gatewayProtocolLabel(gateway)}</Tag>
+										<Tag color={gatewayHasTls(gateway) ? 'success' : undefined}>
 											{gatewayHasTls(gateway) ? 'TLS' : 'Plain'}
-										</span>
+										</Tag>
 										{gateway.listeners?.length ? (
 											<Tooltip content="Add listener">
-												<button
-													className="icon-button"
-													type="button"
+												<Button
 													aria-label="Add listener"
+													icon={<Plus size={16} />}
 													disabled={traffic.hybrid && !databaseGateway(name)}
 													onClick={() => setDrawer(`listener:new:${name}`)}
-												>
-													<Plus size={16} />
-												</button>
+												/>
 											</Tooltip>
 										) : null}
 										<Tooltip
@@ -252,15 +247,12 @@ export function TrafficGatewaysPage() {
 													: 'Edit gateway'
 											}
 										>
-											<button
-												className="icon-button"
-												type="button"
+											<Button
 												aria-label="Edit gateway"
+												icon={<Pencil size={16} />}
 												disabled={traffic.hybrid && !databaseGateway(name)}
 												onClick={() => setDrawer(name)}
-											>
-												<Pencil size={16} />
-											</button>
+											/>
 										</Tooltip>
 										<Tooltip
 											content={
@@ -269,101 +261,101 @@ export function TrafficGatewaysPage() {
 													: 'Delete gateway'
 											}
 										>
-											<button
-												className="icon-button danger"
-												type="button"
+											<Button
+												danger
 												aria-label="Delete gateway"
+												icon={<Trash2 size={16} />}
 												disabled={traffic.hybrid && !databaseGateway(name)}
 												onClick={() => deleteGateway(name)}
-											>
-												<Trash2 size={16} />
-											</button>
+											/>
 										</Tooltip>
 									</div>
 								</div>
 								{gateway.listeners?.length ? (
-									<div className="table-wrap">
-										<table>
-											<thead>
-												<tr>
-													<th>Name</th>
-													<th>Hostname</th>
-													<th>Protocol</th>
-													<th>TLS</th>
-													<th>Policies</th>
-													<th />
-												</tr>
-											</thead>
-											<tbody>
-												{gateway.listeners.map((listener, listenerIndex) => (
-													<tr
-														key={`${listener.name}-${
-															// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-															listenerIndex
-														}`}
-													>
-														<td className="strong">
-															{gatewayListenerName(listener, listenerIndex)}
-														</td>
-														<td>{listener.hostname || '*'}</td>
-														<td>{gatewayProtocolLabel(listener)}</td>
-														<td>
-															<span className={listener.tls ? 'badge ok' : 'badge'}>
-																{listener.tls ? 'TLS' : 'Plain'}
-															</span>
-														</td>
-														<td>{gatewayListenerPolicyCount(listener)}</td>
-														<td className="row-actions">
-															<Tooltip
-																content={
-																	traffic.hybrid && !databaseGateway(name)
-																		? 'File-owned listeners must be edited in raw configuration'
-																		: 'Edit listener'
+									<Table<TrafficGatewayListener>
+										size="middle"
+										rowKey={listener => gateway.listeners?.indexOf(listener) ?? 0}
+										dataSource={gateway.listeners}
+										pagination={false}
+										columns={[
+											{
+												title: 'Name',
+												key: 'name',
+												render: (_, listener, listenerIndex) => (
+													<strong>{gatewayListenerName(listener, listenerIndex)}</strong>
+												)
+											},
+											{
+												title: 'Hostname',
+												key: 'hostname',
+												render: (_, listener) => listener.hostname || '*'
+											},
+											{
+												title: 'Protocol',
+												key: 'protocol',
+												render: (_, listener) => gatewayProtocolLabel(listener)
+											},
+											{
+												title: 'TLS',
+												key: 'tls',
+												render: (_, listener) => (
+													<Tag color={listener.tls ? 'success' : undefined}>
+														{listener.tls ? 'TLS' : 'Plain'}
+													</Tag>
+												)
+											},
+											{
+												title: 'Policies',
+												key: 'policies',
+												render: (_, listener) => gatewayListenerPolicyCount(listener)
+											},
+											{
+												key: 'actions',
+												align: 'right',
+												render: (_, _listener, listenerIndex) => (
+													<div className="row-actions">
+														<Tooltip
+															content={
+																traffic.hybrid && !databaseGateway(name)
+																	? 'File-owned listeners must be edited in raw configuration'
+																	: 'Edit listener'
+															}
+														>
+															<Button
+																aria-label="Edit listener"
+																icon={<Pencil size={16} />}
+																disabled={traffic.hybrid && !databaseGateway(name)}
+																onClick={() => setDrawer(`listener:edit:${name}:${listenerIndex}`)}
+															/>
+														</Tooltip>
+														<Tooltip
+															content={
+																traffic.hybrid && !databaseGateway(name)
+																	? 'File-owned listeners cannot be deleted here'
+																	: 'Delete listener'
+															}
+														>
+															<Button
+																danger
+																aria-label="Delete listener"
+																icon={<Trash2 size={16} />}
+																disabled={traffic.hybrid && !databaseGateway(name)}
+																onClick={() =>
+																	saveGatewayListeners(name, gateway => {
+																		if (!gateway.listeners) return;
+																		gateway.listeners = gateway.listeners.filter(
+																			(_, index) => index !== listenerIndex
+																		);
+																		if (gateway.listeners.length === 0) delete gateway.listeners;
+																	})
 																}
-															>
-																<button
-																	className="icon-button"
-																	type="button"
-																	aria-label="Edit listener"
-																	disabled={traffic.hybrid && !databaseGateway(name)}
-																	onClick={() =>
-																		setDrawer(`listener:edit:${name}:${listenerIndex}`)
-																	}
-																>
-																	<Pencil size={16} />
-																</button>
-															</Tooltip>
-															<Tooltip
-																content={
-																	traffic.hybrid && !databaseGateway(name)
-																		? 'File-owned listeners cannot be deleted here'
-																		: 'Delete listener'
-																}
-															>
-																<button
-																	className="icon-button danger"
-																	type="button"
-																	aria-label="Delete listener"
-																	disabled={traffic.hybrid && !databaseGateway(name)}
-																	onClick={() =>
-																		saveGatewayListeners(name, gateway => {
-																			if (!gateway.listeners) return;
-																			gateway.listeners = gateway.listeners.filter(
-																				(_, index) => index !== listenerIndex
-																			);
-																			if (gateway.listeners.length === 0) delete gateway.listeners;
-																		})
-																	}
-																>
-																	<Trash2 size={16} />
-																</button>
-															</Tooltip>
-														</td>
-													</tr>
-												))}
-											</tbody>
-										</table>
-									</div>
+															/>
+														</Tooltip>
+													</div>
+												)
+											}
+										]}
+									/>
 								) : null}
 							</section>
 						))}
@@ -561,7 +553,7 @@ function GatewayEditor(props: {
 					missing={!name.trim()}
 					tooltip="Features and routes reference this gateway by name."
 				>
-					<input
+					<Input
 						value={name}
 						disabled={defaultGateway}
 						onChange={event => setName(event.target.value)}
@@ -573,7 +565,7 @@ function GatewayEditor(props: {
 					path="port"
 					tooltip={props.help.field<TrafficGateway>('LocalGateway', 'port')}
 				>
-					<input
+					<Input
 						value={gateway.port?.toString() ?? ''}
 						onChange={event =>
 							setGateway({
@@ -587,30 +579,27 @@ function GatewayEditor(props: {
 			</div>
 
 			<div className="gateway-default-option">
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={defaultGateway}
-						disabled={anotherDefaultGateway}
-						onChange={event => {
-							const checked = event.target.checked;
-							setDefaultGateway(checked);
-							setName(
-								checked
-									? 'default'
-									: availableGatewayName(props.config?.gateways, props.initial.previousName)
-							);
-						}}
-					/>
-					<span>
-						<strong>Default gateway</strong>
-						<small>
-							{anotherDefaultGateway
-								? 'Another gateway is already the default gateway.'
-								: 'Use this gateway for enabled traffic without an explicit gateway selection.'}
-						</small>
-					</span>
-				</label>
+				<Checkbox
+					className="config-option-row"
+					checked={defaultGateway}
+					disabled={anotherDefaultGateway}
+					onChange={event => {
+						const checked = event.target.checked;
+						setDefaultGateway(checked);
+						setName(
+							checked
+								? 'default'
+								: availableGatewayName(props.config?.gateways, props.initial.previousName)
+						);
+					}}
+				>
+					<strong>Default gateway</strong>
+					<small>
+						{anotherDefaultGateway
+							? 'Another gateway is already the default gateway.'
+							: 'Use this gateway for enabled traffic without an explicit gateway selection.'}
+					</small>
+				</Checkbox>
 
 				{invalidDefaultName ? (
 					<StatusBanner state="bad" title="Default name is reserved">
@@ -659,37 +648,34 @@ function GatewayEditor(props: {
 			) : null}
 
 			<div className="form-grid">
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={multipleListeners}
-						disabled={!multipleListeners && !canEnableMultipleListeners}
-						onChange={event => {
-							const enabled = event.target.checked;
-							setMultipleListeners(enabled);
-							if (enabled) {
-								setGateway(current => ({
-									...withoutGatewayPolicies(current),
-									protocol: null,
-									tls: null,
-									listeners: current.listeners?.length ? current.listeners : [{ name: 'listener1' }]
-								}));
-								setCert('');
-								setKey('');
-							} else {
-								setGateway(current => ({ ...current, listeners: [] }));
-							}
-						}}
-					/>
-					<span>
-						<strong>Multiple listeners</strong>
-						<small>
-							{!multipleListeners && !canEnableMultipleListeners
-								? 'Unavailable while gateway TLS or policies are configured.'
-								: 'Use named listeners for per-hostname TLS and policies.'}
-						</small>
-					</span>
-				</label>
+				<Checkbox
+					className="config-option-row"
+					checked={multipleListeners}
+					disabled={!multipleListeners && !canEnableMultipleListeners}
+					onChange={event => {
+						const enabled = event.target.checked;
+						setMultipleListeners(enabled);
+						if (enabled) {
+							setGateway(current => ({
+								...withoutGatewayPolicies(current),
+								protocol: null,
+								tls: null,
+								listeners: current.listeners?.length ? current.listeners : [{ name: 'listener1' }]
+							}));
+							setCert('');
+							setKey('');
+						} else {
+							setGateway(current => ({ ...current, listeners: [] }));
+						}
+					}}
+				>
+					<strong>Multiple listeners</strong>
+					<small>
+						{!multipleListeners && !canEnableMultipleListeners
+							? 'Unavailable while gateway TLS or policies are configured.'
+							: 'Use named listeners for per-hostname TLS and policies.'}
+					</small>
+				</Checkbox>
 			</div>
 
 			{!multipleListeners ? (
@@ -754,7 +740,7 @@ function GatewayTLSFields(props: {
 					path="tls.cert"
 					tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'cert')}
 				>
-					<input
+					<Input
 						value={props.cert}
 						onChange={event => props.onCertChange(event.target.value)}
 						placeholder="/etc/certs/tls.crt"
@@ -765,7 +751,7 @@ function GatewayTLSFields(props: {
 					path="tls.key"
 					tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'key')}
 				>
-					<input
+					<Input
 						value={props.keyValue}
 						onChange={event => props.onKeyChange(event.target.value)}
 						placeholder="/etc/certs/tls.key"
@@ -878,7 +864,7 @@ function GatewayListenerEditor(props: {
 					path="name"
 					tooltip={props.help.field<TrafficGatewayListener>('LocalGatewayListener', 'name')}
 				>
-					<input
+					<Input
 						value={listener.name ?? ''}
 						onChange={event => setListener({ ...listener, name: event.target.value || null })}
 						placeholder="listener1"
@@ -916,7 +902,7 @@ function GatewayListenerEditor(props: {
 						'Can be an exact hostname or wildcard. Leave blank to match all hostnames.'
 					)}
 				>
-					<input
+					<Input
 						value={listener.hostname ?? ''}
 						onChange={event => setListener({ ...listener, hostname: event.target.value || null })}
 						placeholder="*"

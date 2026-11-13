@@ -1,3 +1,4 @@
+import { Button, Checkbox, Input, InputNumber, Table, Tag } from 'antd';
 import {
 	Bot,
 	Check,
@@ -33,7 +34,8 @@ import {
 	Panel,
 	SegmentedControl,
 	StatusBanner,
-	Tooltip
+	Tooltip,
+	tablePagination
 } from '@/components/Primitives';
 import { getApiKeyPolicy, isDatabaseConfigResource, upsertVirtualKey } from '@/config';
 import { hasKeyValue, keyDisplay, keyHintMetadata, keyValue } from '@/credentialDisplay';
@@ -179,35 +181,31 @@ export function KeysPage() {
 					<div className="button-row">
 						{policy ? (
 							<>
-								<button
-									className="button"
-									type="button"
+								<Button
+									icon={<SlidersHorizontal size={16} />}
 									disabled={unavailable || saving}
 									onClick={() => setKeyDrawer('settings')}
 								>
-									<SlidersHorizontal size={16} />
 									Settings
-								</button>
-								<button
-									className="button primary"
-									type="button"
+								</Button>
+								<Button
+									type="primary"
+									icon={<Plus size={16} />}
 									disabled={unavailable || saving}
 									onClick={openNewKey}
 								>
-									<Plus size={16} />
 									New key
-								</button>
+								</Button>
 							</>
 						) : (
-							<button
-								className="button primary"
-								type="button"
+							<Button
+								type="primary"
+								icon={<KeyRound size={16} />}
 								disabled={unavailable || saving}
 								onClick={() => setKeyDrawer('settings')}
 							>
-								<KeyRound size={16} />
 								Enable API key auth
-							</button>
+							</Button>
 						)}
 					</div>
 				}
@@ -236,15 +234,14 @@ export function KeysPage() {
 						title="API key authentication is disabled"
 						description="Enable API key authentication before provisioning virtual keys."
 						action={
-							<button
-								className="button primary"
-								type="button"
+							<Button
+								type="primary"
+								icon={<KeyRound size={16} />}
 								disabled={saving}
 								onClick={() => setKeyDrawer('settings')}
 							>
-								<KeyRound size={16} />
 								Enable API key auth
-							</button>
+							</Button>
 						}
 					/>
 				) : keys.length === 0 ? (
@@ -256,101 +253,113 @@ export function KeysPage() {
 								<Tooltip
 									content={policyReadOnly ? fileOwnedPolicyMessage : 'Disable API key policy'}
 								>
-									<button
-										className="button danger"
-										type="button"
+									<Button
+										danger
+										icon={<X size={16} />}
 										disabled={saving || policyReadOnly}
 										onClick={() => setDisablePolicyOpen(true)}
 									>
-										<X size={16} />
 										Disable API Key Policy
-									</button>
+									</Button>
 								</Tooltip>
-								<button
-									className="button primary"
-									type="button"
+								<Button
+									type="primary"
+									icon={<Plus size={16} />}
 									disabled={saving}
 									onClick={openNewKey}
 								>
-									<Plus size={16} />
 									New key
-								</button>
+								</Button>
 							</div>
 						}
 					/>
 				) : (
-					<div className="table-wrap">
-						<table className="keys-table">
-							<thead>
-								<tr>
-									<th>Name</th>
-									<th>Key</th>
-									<th>Models</th>
-									<th>Metadata</th>
-									<th>Budgets</th>
-									<th />
-								</tr>
-							</thead>
-							<tbody>
-								{keys.map((item, index) => (
-									<tr key={keyValue(item)}>
-										<td className="strong key-name-cell">
-											{keyName(item) || <span className="muted">Unnamed key</span>}
-										</td>
-										<td className="key-cell">
-											<VirtualKeyValue apiKey={item} />
-										</td>
-										<td>
-											<AllowedModelsSummary value={item.allowedModels} />
-										</td>
-										<td>
-											<MetadataSummary value={item.metadata} />
-										</td>
-										<td>
-											<BudgetSummary
-												apiKeyName={keyName(item)}
-												value={item.budgets}
-												status={budgetStatus.data}
-											/>
-										</td>
-										<td className="key-action-cell">
-											<div className="key-actions">
-												<Tooltip content="Edit key">
-													<button
-														className="table-action"
-														type="button"
-														aria-label="Edit key"
-														onClick={() => openEditKey(item, index)}
-													>
-														<Pencil size={14} />
-														Edit
-													</button>
-												</Tooltip>
-												<Tooltip
-													content={
-														hybrid && !databaseKeyId(item)
-															? 'File-owned keys cannot be deleted here'
-															: 'Delete key'
-													}
-												>
-													<button
-														className="table-action danger"
-														type="button"
-														aria-label="Delete key"
-														disabled={saving || (hybrid && !databaseKeyId(item))}
-														onClick={() => setDeleteKey(item)}
-													>
-														<Trash2 size={14} />
-														Delete
-													</button>
-												</Tooltip>
-											</div>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+					<Table<VirtualApiKey>
+						rowKey={item => keyValue(item)}
+						dataSource={keys}
+						tableLayout="fixed"
+						size="middle"
+						scroll={{ x: 980 }}
+						pagination={tablePagination}
+						columns={[
+							{
+								title: 'Name',
+								key: 'name',
+								width: '12%',
+								className: 'strong key-name-cell',
+								render: (_, item) => keyName(item) || <span className="muted">Unnamed key</span>
+							},
+							{
+								title: 'Key',
+								key: 'key',
+								width: '27%',
+								className: 'key-cell',
+								render: (_, item) => <VirtualKeyValue apiKey={item} />
+							},
+							{
+								title: 'Models',
+								key: 'models',
+								width: '11%',
+								render: (_, item) => <AllowedModelsSummary value={item.allowedModels} />
+							},
+							{
+								title: 'Metadata',
+								key: 'metadata',
+								width: '13%',
+								render: (_, item) => <MetadataSummary value={item.metadata} />
+							},
+							{
+								title: 'Budgets',
+								key: 'budgets',
+								width: '21%',
+								render: (_, item) => (
+									<BudgetSummary
+										apiKeyName={keyName(item)}
+										value={item.budgets}
+										status={budgetStatus.data}
+									/>
+								)
+							},
+							{
+								key: 'actions',
+								width: '16%',
+								align: 'right',
+								onHeaderCell: () => ({ 'aria-label': 'Actions' }),
+								render: (_, item) => (
+									<div className="row-actions">
+										<Tooltip content="Edit key">
+											<Button
+												size="small"
+												aria-label="Edit key"
+												icon={<Pencil size={14} />}
+												onClick={() => openEditKey(item, keys.indexOf(item))}
+											>
+												Edit
+											</Button>
+										</Tooltip>
+										<Tooltip
+											content={
+												hybrid && !databaseKeyId(item)
+													? 'File-owned keys cannot be deleted here'
+													: 'Delete key'
+											}
+										>
+											<Button
+												size="small"
+												danger
+												aria-label="Delete key"
+												icon={<Trash2 size={14} />}
+												disabled={saving || (hybrid && !databaseKeyId(item))}
+												onClick={() => setDeleteKey(item)}
+											>
+												Delete
+											</Button>
+										</Tooltip>
+									</div>
+								)
+							}
+						]}
+					/>
 				)}
 			</Panel>
 
@@ -538,14 +547,9 @@ function PolicyControls(props: {
 					description="Remove the API key policy entirely. Requests will not be validated against virtual API keys."
 					action={
 						<Tooltip content={props.readOnly ? fileOwnedPolicyMessage : 'Disable API key policy'}>
-							<button
-								className="button danger compact-action"
-								type="button"
-								disabled={props.saving || props.readOnly}
-								onClick={props.onDisable}
-							>
+							<Button danger disabled={props.saving || props.readOnly} onClick={props.onDisable}>
 								Disable
-							</button>
+							</Button>
 						</Tooltip>
 					}
 				/>
@@ -748,9 +752,8 @@ function KeyEditor(props: {
 	}
 
 	const keyInput = (
-		<input
+		<Input
 			value={key}
-			type="text"
 			className="masked-secret-input"
 			autoComplete="off"
 			autoCorrect="off"
@@ -815,7 +818,7 @@ function KeyEditor(props: {
 		>
 			<LostFieldsWarning lost={merged.lost} />
 			<Field label="Name">
-				<input
+				<Input
 					value={name}
 					onChange={event => update({ name: event.target.value })}
 					placeholder="Platform team"
@@ -862,29 +865,27 @@ function KeyEditor(props: {
 						{generatedFormat ? (
 							<>
 								<VirtualKeyValue apiKey={replaceKey ? { key } : props.initial} />
-								<button
-									className="table-action"
-									type="button"
+								<Button
+									size="small"
+									icon={<RefreshCw size={14} />}
 									onClick={() => {
 										setKey(newGeneratedKey());
 										setReplaceKey(true);
 									}}
 								>
-									<RefreshCw size={14} />
 									Regenerate
-								</button>
+								</Button>
 							</>
 						) : (
 							<>
 								{replaceKey ? keyInput : <VirtualKeyValue apiKey={props.initial} />}
-								<button
-									className="table-action"
-									type="button"
+								<Button
+									size="small"
+									icon={replaceKey ? <X size={14} /> : <Pencil size={14} />}
 									onClick={() => setReplaceKey(current => !current)}
 								>
-									{replaceKey ? <X size={14} /> : <Pencil size={14} />}
 									{replaceKey ? 'Keep existing' : 'Edit'}
-								</button>
+								</Button>
 							</>
 						)}
 					</div>
@@ -900,22 +901,19 @@ function KeyEditor(props: {
 				</Field>
 			) : null}
 			{replacing ? (
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={storeRaw}
-						disabled={!keyHashSupported}
-						onChange={event => setStoreRaw(event.target.checked)}
-					/>
-					<span>
-						<strong>Store raw key</strong>
-						<small>
-							{keyHashSupported
-								? 'If unchecked, the key will not be shown again after saving.'
-								: 'The raw key must be stored unless this page is served over HTTPS or localhost.'}
-						</small>
-					</span>
-				</label>
+				<Checkbox
+					className="config-option-row"
+					checked={storeRaw}
+					disabled={!keyHashSupported}
+					onChange={event => setStoreRaw(event.target.checked)}
+				>
+					<strong>Store raw key</strong>
+					<small>
+						{keyHashSupported
+							? 'If unchecked, the key will not be shown again after saving.'
+							: 'The raw key must be stored unless this page is served over HTTPS or localhost.'}
+					</small>
+				</Checkbox>
 			) : null}
 			<CollapsiblePolicySection
 				icon={<CircleDollarSign size={17} />}
@@ -923,7 +921,7 @@ function KeyEditor(props: {
 				description="Cap how much this key can spend or consume, per rolling window or in total."
 				summary={
 					submitted && invalidBudgets ? (
-						<span className="badge bad">Invalid</span>
+						<Tag color="error">Invalid</Tag>
 					) : budgets.length ? (
 						`${budgets.length} ${budgets.length === 1 ? 'budget' : 'budgets'}`
 					) : (
@@ -953,11 +951,11 @@ function KeyEditor(props: {
 				description="Limit which requested model names this key can use."
 				summary={
 					submitted && modelError ? (
-						<span className="badge bad">Invalid</span>
+						<Tag color="error">Invalid</Tag>
 					) : modelAccess === 'unrestricted' ? (
 						'Unrestricted'
 					) : modelAccess === 'deny' ? (
-						<span className="badge bad">Deny all</span>
+						<Tag color="error">Deny all</Tag>
 					) : (
 						`${allowedModels.length} ${allowedModels.length === 1 ? 'pattern' : 'patterns'}`
 					)
@@ -1078,32 +1076,31 @@ function BudgetEditor(props: {
 								<header className="api-key-budget-card-header">
 									<div className="api-key-budget-card-title">
 										<strong>{budget.name.trim() || 'Untitled budget'}</strong>
-										{live?.usage.exceeded ? <span className="badge bad">Exceeded</span> : null}
+										{live?.usage.exceeded ? <Tag color="error">Exceeded</Tag> : null}
 									</div>
 									<div className="button-row compact">
-										<button
-											className="table-action"
-											type="button"
+										<Button
+											size="small"
+											icon={editing ? <Check size={14} /> : <Pencil size={14} />}
 											onClick={() => setEditingIndex(editing ? null : index)}
 										>
-											{editing ? <Check size={14} /> : <Pencil size={14} />}
 											{editing ? 'Done' : 'Edit'}
-										</button>
-										<button
-											className="table-action danger"
-											type="button"
+										</Button>
+										<Button
+											size="small"
+											danger
 											aria-label={`Remove budget ${index + 1}`}
+											icon={<Trash2 size={14} />}
 											onClick={() => removeBudget(index)}
 										>
-											<Trash2 size={14} />
 											Remove
-										</button>
+										</Button>
 									</div>
 								</header>
 								{editing ? (
 									<div className="api-key-budget-form">
 										<Field label="Name" hint="Stable identifier used for accounting.">
-											<input
+											<Input
 												value={budget.name}
 												onChange={event =>
 													updateBudget(index, { ...budget, name: event.target.value })
@@ -1115,7 +1112,7 @@ function BudgetEditor(props: {
 											label="Rolling window"
 											hint="Examples: 24h, 7d, or 30d. Leave empty for a budget that never resets."
 										>
-											<input
+											<Input
 												value={budget.window?.rolling ?? ''}
 												onChange={event =>
 													updateBudget(index, {
@@ -1129,16 +1126,16 @@ function BudgetEditor(props: {
 											/>
 										</Field>
 										<Field label="Limit amount">
-											<input
-												type="number"
-												min="0"
-												step={budget.limit.unit === 'USD' ? 'any' : '1'}
+											<InputNumber
+												style={{ width: '100%' }}
+												min={0}
+												step={budget.limit.unit === 'USD' ? 0.01 : 1}
 												aria-label={`Budget ${index + 1} amount`}
-												value={Number.isFinite(budget.limit.amount) ? budget.limit.amount : ''}
-												onChange={event =>
+												value={Number.isFinite(budget.limit.amount) ? budget.limit.amount : null}
+												onChange={value =>
 													updateBudget(index, {
 														...budget,
-														limit: { ...budget.limit, amount: event.target.valueAsNumber }
+														limit: { ...budget.limit, amount: value ?? Number.NaN }
 													})
 												}
 											/>
@@ -1187,10 +1184,9 @@ function BudgetEditor(props: {
 				</div>
 			)}
 			<div className="button-row">
-				<button className="button small" type="button" onClick={addBudget}>
-					<Plus size={15} />
+				<Button size="small" icon={<Plus size={15} />} onClick={addBudget}>
 					Add budget
-				</button>
+				</Button>
 			</div>
 		</div>
 	);
@@ -1374,7 +1370,7 @@ function VirtualKeyValue(props: { apiKey: VirtualApiKey; revealed?: boolean }) {
 			<div className="virtual-key-value">
 				<code>{keyDisplay(props.apiKey)}</code>
 				<Tooltip content="This key cannot be shown again">
-					<span className="badge">hashed</span>
+					<Tag>hashed</Tag>
 				</Tooltip>
 			</div>
 		);
@@ -1385,21 +1381,24 @@ function VirtualKeyValue(props: { apiKey: VirtualApiKey; revealed?: boolean }) {
 			<code>{shown ? value : keyDisplay(props.apiKey)}</code>
 			<div className="virtual-key-value-actions">
 				<Tooltip content={shown ? 'Hide full key' : 'Show full key'}>
-					<button
-						className="table-action"
-						type="button"
+					<Button
+						size="small"
+						type="text"
 						aria-label={shown ? 'Hide full key' : 'Show full key'}
+						icon={shown ? <EyeOff size={14} /> : <Eye size={14} />}
 						onClick={() => setShown(current => !current)}
 					>
-						{shown ? <EyeOff size={14} /> : <Eye size={14} />}
 						{shown ? 'Hide' : 'Show'}
-					</button>
+					</Button>
 				</Tooltip>
 				<Tooltip content={copied ? 'Copied' : 'Copy key'}>
-					<button
-						className={copied ? 'table-action copied' : 'table-action'}
-						type="button"
+					<Button
+						size="small"
+						type="text"
+						color={copied ? 'green' : 'default'}
+						variant="text"
 						aria-label="Copy key"
+						icon={copied ? <Check size={14} /> : <Copy size={14} />}
 						onClick={() => {
 							void copyVirtualKey(value).then(success => {
 								if (success) {
@@ -1409,9 +1408,8 @@ function VirtualKeyValue(props: { apiKey: VirtualApiKey; revealed?: boolean }) {
 							});
 						}}
 					>
-						{copied ? <Check size={14} /> : <Copy size={14} />}
 						Copy
-					</button>
+					</Button>
 				</Tooltip>
 			</div>
 		</div>
@@ -1420,11 +1418,11 @@ function VirtualKeyValue(props: { apiKey: VirtualApiKey; revealed?: boolean }) {
 
 function AllowedModelsSummary(props: { value?: string[] | null }) {
 	if (props.value == null) return <span className="muted">unrestricted</span>;
-	if (props.value.length === 0) return <span className="badge bad">deny all</span>;
+	if (props.value.length === 0) return <Tag color="error">deny all</Tag>;
 	if (props.value.length === 1) {
-		return <span className="badge">{props.value[0] === '*' ? 'all models' : props.value[0]}</span>;
+		return <Tag>{props.value[0] === '*' ? 'all models' : props.value[0]}</Tag>;
 	}
-	return <span className="badge">{props.value.length} patterns</span>;
+	return <Tag>{props.value.length} patterns</Tag>;
 }
 
 function BudgetSummary(props: {
@@ -1473,9 +1471,9 @@ function MetadataSummary(props: { value: unknown }) {
 	return (
 		<div className="metadata-summary">
 			{entries.slice(0, 3).map(([key, value]) => (
-				<span className="badge" key={key}>
+				<Tag key={key}>
 					{key}: {String(value)}
-				</span>
+				</Tag>
 			))}
 			{entries.length > 3 ? <span className="muted">+{entries.length - 3}</span> : null}
 		</div>

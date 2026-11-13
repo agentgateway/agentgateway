@@ -1,10 +1,10 @@
-import { Link } from '@tanstack/react-router';
+import { Button, Modal } from 'antd';
 import { Bot, Network, Server, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import type { LlmSettingsResource, McpSettingsResource } from '@/api/configResourcesApi';
-import { PageHeader, StatusBanner } from '@/components/Primitives';
+import { ButtonLink, PageHeader, StatusBanner } from '@/components/Primitives';
 import { ensureLlm, fileOwnedLlmSettingFields, fileOwnedMcpSettingFields } from '@/config';
 import {
 	useConfigDumpMode,
@@ -23,7 +23,6 @@ import { trafficStats } from '@/traffic';
 import type { GatewayConfig } from '@/types';
 
 const uiAuthPolicyKeys = ['oidc', 'jwtAuth', 'extAuthz', 'basicAuth', 'apiKey', 'authorization'];
-
 export function HomePage() {
 	const mode = useConfigDumpMode();
 	const dumpMode = mode.data?.mode === 'dump';
@@ -81,15 +80,6 @@ export function HomePage() {
 	const anySurfaceEnabled = hasLlm || hasMcp || hasTraffic || locallyEnabled.size > 0;
 
 	useEffect(() => {
-		if (!showStartup) return;
-		function onKeyDown(event: KeyboardEvent) {
-			if (event.key === 'Escape') setStartupFlow(false);
-		}
-		document.addEventListener('keydown', onKeyDown);
-		return () => document.removeEventListener('keydown', onKeyDown);
-	}, [showStartup]);
-
-	useEffect(() => {
 		if (!config.data || pageDataLoading || pageDataError || startupEvaluated) return;
 		setStartupFlow(!hasLlm && !hasMcp && (!hasTraffic || isDefaultUiGatewayScaffold(config.data)));
 		setStartupEvaluated(true);
@@ -126,81 +116,65 @@ export function HomePage() {
 
 	if (showStartup) {
 		return (
-			<div
-				className="startup-shell"
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby="startup-title"
-				onClick={event => {
-					if (event.target === event.currentTarget) setStartupFlow(false);
-				}}
-				onKeyDown={event => {
-					if (event.key === 'Escape') setStartupFlow(false);
-				}}
-			>
-				<section className="startup-panel">
-					<div className="startup-copy">
-						<h2 id="startup-title">Welcome to Agentgateway</h2>
-						<p>Choose what this gateway will serve. Anything skipped can be enabled later.</p>
-					</div>
-
-					{pageDataError ? (
-						<StatusBanner state="bad" title="Configuration API unavailable">
-							{pageDataError.message}
-						</StatusBanner>
-					) : null}
-					{enable.isError || update.isError ? (
-						<StatusBanner state="bad" title="Save failed">
-							{enable.error?.message ?? update.error?.message}
-						</StatusBanner>
-					) : null}
-
-					<div className="startup-chip-grid">
-						<StartupChip
-							label="LLM"
-							description="Models, providers, and API keys."
-							enabled={hasLlm || locallyEnabled.has('llm')}
-							disabled={enable.isPending || update.isPending}
-							icon={<Bot size={24} />}
-							onClick={() => void enableSurface('llm')}
-						/>
-						<StartupChip
-							label="MCP"
-							description="MCP servers and tools."
-							enabled={hasMcp || locallyEnabled.has('mcp')}
-							disabled={enable.isPending || update.isPending}
-							icon={<Server size={24} />}
-							onClick={() => void enableSurface('mcp')}
-						/>
-						<StartupChip
-							label="Traffic"
-							description="HTTP and TCP routes and backends."
-							enabled={hasTraffic || locallyEnabled.has('apis')}
-							disabled={enable.isPending || update.isPending}
-							icon={<Network size={24} />}
-							onClick={() => void enableSurface('apis')}
-						/>
-					</div>
-
-					{anySurfaceEnabled ? (
-						<div className="startup-actions">
-							<button
-								className="button primary"
-								type="button"
-								onClick={() => setStartupFlow(false)}
-							>
-								Continue
-							</button>
-						</div>
+			<Modal
+				open
+				className="startup-modal"
+				width={560}
+				closable={false}
+				title={<h2>Welcome to Agentgateway</h2>}
+				onCancel={() => setStartupFlow(false)}
+				footer={
+					anySurfaceEnabled ? (
+						<Button type="primary" onClick={() => setStartupFlow(false)}>
+							Continue
+						</Button>
 					) : (
-						<div className="startup-actions">
-							<button className="button" type="button" onClick={() => setStartupFlow(false)}>
-								Skip setup
-							</button>
-						</div>
-					)}
-				</section>
-			</div>
+						<Button onClick={() => setStartupFlow(false)}>Skip setup</Button>
+					)
+				}
+			>
+				<p className="startup-intro">
+					Choose what this gateway will serve. Anything skipped can be enabled later.
+				</p>
+
+				{pageDataError ? (
+					<StatusBanner state="bad" title="Configuration API unavailable">
+						{pageDataError.message}
+					</StatusBanner>
+				) : null}
+				{enable.isError || update.isError ? (
+					<StatusBanner state="bad" title="Save failed">
+						{enable.error?.message ?? update.error?.message}
+					</StatusBanner>
+				) : null}
+
+				<div className="startup-chip-grid">
+					<StartupChip
+						label="LLM"
+						description="Models, providers, and API keys."
+						enabled={hasLlm || locallyEnabled.has('llm')}
+						disabled={enable.isPending || update.isPending}
+						icon={<Bot size={24} />}
+						onClick={() => void enableSurface('llm')}
+					/>
+					<StartupChip
+						label="MCP"
+						description="MCP servers and tools."
+						enabled={hasMcp || locallyEnabled.has('mcp')}
+						disabled={enable.isPending || update.isPending}
+						icon={<Server size={24} />}
+						onClick={() => void enableSurface('mcp')}
+					/>
+					<StartupChip
+						label="Traffic"
+						description="HTTP and TCP routes and backends."
+						enabled={hasTraffic || locallyEnabled.has('apis')}
+						disabled={enable.isPending || update.isPending}
+						icon={<Network size={24} />}
+						onClick={() => void enableSurface('apis')}
+					/>
+				</div>
+			</Modal>
 		);
 	}
 
@@ -236,11 +210,7 @@ export function HomePage() {
 				<StatusBanner
 					state="warn"
 					title="UI is exposed without authentication"
-					action={
-						<Link className="button" to="/settings/ui">
-							Configure UI policies
-						</Link>
-					}
+					action={<ButtonLink to="/settings/ui">Configure UI policies</ButtonLink>}
 				>
 					Unauthenticated users can access the UI; consider adding authentication or authorization
 					policies to secure the UI.
@@ -266,15 +236,13 @@ export function HomePage() {
 						surfaceEndpointLabel(config.data?.llm?.gateways, config.data?.llm?.port ?? 4000)
 					]}
 					actions={
-						<button
-							className="button"
-							type="button"
+						<Button
+							icon={<Settings size={16} />}
 							disabled={enable.isPending || update.isPending}
 							onClick={() => setLlmSettingsOpen(true)}
 						>
-							<Settings size={16} />
 							Settings
-						</button>
+						</Button>
 					}
 				/>
 				<SurfaceRow
@@ -292,15 +260,13 @@ export function HomePage() {
 						surfaceEndpointLabel(mcpData.data?.mcp?.gateways, mcpData.data?.mcp?.port ?? 3000)
 					]}
 					actions={
-						<button
-							className="button"
-							type="button"
+						<Button
+							icon={<Settings size={16} />}
 							disabled={enable.isPending || update.isPending}
 							onClick={() => setMcpSettingsOpen(true)}
 						>
-							<Settings size={16} />
 							Settings
-						</button>
+						</Button>
 					}
 				/>
 				<SurfaceRow
@@ -422,16 +388,15 @@ function StartupChip(props: {
 	onClick: () => void;
 }) {
 	return (
-		<button
+		<Button
 			className={props.enabled ? 'startup-chip enabled' : 'startup-chip'}
-			type="button"
 			disabled={props.disabled || props.enabled}
 			onClick={props.onClick}
 		>
 			{props.icon}
 			<strong>{props.enabled ? `${props.label} enabled` : `Enable ${props.label}`}</strong>
 			<span>{props.description}</span>
-		</button>
+		</Button>
 	);
 }
 
@@ -440,7 +405,6 @@ function SurfaceRow(props: {
 	enabled: boolean;
 	icon: ReactNode;
 	actions?: ReactNode;
-	links?: Array<{ label: string; to: string }>;
 	onEnable: () => void;
 	overview: string[];
 	setupLabel: string;
@@ -457,9 +421,9 @@ function SurfaceRow(props: {
 					{props.icon}
 					<strong>{props.title}</strong>
 				</div>
-				<button className="button" type="button" disabled={props.disabled} onClick={props.onEnable}>
+				<Button disabled={props.disabled} onClick={props.onEnable}>
 					Enable {props.title}
-				</button>
+				</Button>
 			</div>
 		);
 	}
@@ -482,17 +446,10 @@ function SurfaceRow(props: {
 				)}
 			</div>
 			<div className="surface-row-actions">
-				{!props.setupNeeded
-					? (props.actions ??
-						props.links?.map(link => (
-							<Link key={link.to} className="button" to={link.to}>
-								{link.label}
-							</Link>
-						)))
-					: null}
-				<Link className="button primary" to={props.setupTo} hash={props.setupHash}>
+				{props.setupNeeded ? null : props.actions}
+				<ButtonLink color="primary" variant="solid" to={props.setupTo} hash={props.setupHash}>
 					{props.setupLabel}
-				</Link>
+				</ButtonLink>
 			</div>
 		</div>
 	);

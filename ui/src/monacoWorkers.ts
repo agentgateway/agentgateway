@@ -25,3 +25,33 @@ export function configureConfigMonacoWorkers() {
 
 loader.config({ monaco: localMonaco });
 configureConfigMonacoWorkers();
+
+// Editor themes on the app's surface colours (styles.css --surface / --surface-2 / --line).
+localMonaco.editor.defineTheme('agw-light', {
+	base: 'vs',
+	inherit: true,
+	rules: [],
+	colors: {
+		'editor.background': '#ffffff',
+		'editorGutter.background': '#ffffff',
+		'editor.lineHighlightBackground': '#f3f4f6',
+		'editor.lineHighlightBorder': '#00000000',
+		'editorWidget.background': '#ffffff',
+		'editorWidget.border': '#e5e7eb'
+	}
+});
+localMonaco.editor.defineTheme('agw-dark', {
+	base: 'vs-dark',
+	inherit: true,
+	rules: [],
+	colors: {
+		'editor.background': '#10141f',
+		'editorGutter.background': '#10141f',
+		'editor.lineHighlightBackground': '#1c2029',
+		'editor.lineHighlightBorder': '#00000000',
+		'editorWidget.background': '#1c2029',
+		'editorWidget.border': '#1f2937'
+	}
+});
+
+export const monacoTheme = (mode: 'light' | 'dark') => (mode === 'dark' ? 'agw-dark' : 'agw-light');
