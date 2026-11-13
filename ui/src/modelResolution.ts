@@ -31,6 +31,17 @@ export function resolvedProviderLabel(
 	return resolvedProviderLabel(shared.provider, providers, seen);
 }
 
+/** The model catalog provider key the gateway uses for a model, mirroring its provider resolution. */
+export function catalogProviderName(provider: ModelProvider, providers: LlmProvider[] = []) {
+	const reference = providerReferenceName(provider);
+	const shared = reference ? providers.find(item => item.name === reference) : undefined;
+	const resolved = shared?.provider ?? provider;
+	if (typeof resolved === 'object' && 'custom' in resolved) {
+		return resolved.custom.providerOverride ?? shared?.name ?? 'custom';
+	}
+	return resolvedProviderLabel(provider, providers);
+}
+
 export function isWildcardModelName(name: string) {
 	return name.includes('*');
 }
