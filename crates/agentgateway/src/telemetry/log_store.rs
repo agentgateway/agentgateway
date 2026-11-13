@@ -5,9 +5,10 @@ use std::time::Instant;
 use std::{env, thread};
 
 use chrono::{DateTime, Duration, Utc};
-use crossbeam::channel::{Receiver, Sender, TryRecvError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::mpsc::error::TryRecvError;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
@@ -21,7 +22,7 @@ static REQUEST_LOG_STORE_BACKLOG: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone)]
 pub struct RequestLogStore {
-	tx: Sender<LogStoreMsg>,
+	tx: UnboundedSender<LogStoreMsg>,
 }
 
 impl RequestLogStore {
@@ -55,7 +56,7 @@ pub async fn setup_with_pool(
 	cfg: &DatabaseConfig,
 	pool: Option<crate::database::DatabasePool>,
 ) -> anyhow::Result<RequestLogStoreGuard> {
-	let (tx, rx) = crossbeam::channel::unbounded();
+	let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 	let (ready_tx, ready_rx) = oneshot::channel();
 	let writer = LogStoreWorker::new(rx, cfg.clone(), pool, ready_tx)
 		.worker_thread("request-log-db-writer".to_string())?;
@@ -119,7 +120,7 @@ pub async fn tail(request: TailRequest) -> anyhow::Result<TailResponse> {
 }
 
 pub struct RequestLogStoreGuard {
-	tx: Sender<LogStoreMsg>,
+	tx: UnboundedSender<LogStoreMsg>,
 	writer: Option<thread::JoinHandle<()>>,
 }
 
@@ -175,7 +176,7 @@ enum LogStoreMsg {
 type QueryResponse<T> = oneshot::Sender<anyhow::Result<T>>;
 
 struct LogStoreWorker {
-	receiver: Receiver<LogStoreMsg>,
+	receiver: UnboundedReceiver<LogStoreMsg>,
 	cfg: DatabaseConfig,
 	pool: Option<crate::database::DatabasePool>,
 	ready_tx: Option<oneshot::Sender<anyhow::Result<()>>>,
@@ -183,7 +184,7 @@ struct LogStoreWorker {
 
 impl LogStoreWorker {
 	fn new(
-		receiver: Receiver<LogStoreMsg>,
+		receiver: UnboundedReceiver<LogStoreMsg>,
 		cfg: DatabaseConfig,
 		pool: Option<crate::database::DatabasePool>,
 		ready_tx: oneshot::Sender<anyhow::Result<()>>,
@@ -243,14 +244,14 @@ impl LogStoreWorker {
 		self.notify_ready(Ok(()));
 		let mut batch = Vec::with_capacity(batch_size);
 		loop {
-			match self.receiver.recv() {
-				Ok(msg) => {
+			match self.receiver.recv().await {
+				Some(msg) => {
 					if process_log_store_msg(&backend, &mut batch, msg).await {
 						self.drain_available_messages(&backend, &mut batch).await;
 						break;
 					}
 				},
-				Err(_) => {
+				None => {
 					self.drain_available_messages(&backend, &mut batch).await;
 					break;
 				},
@@ -280,7 +281,11 @@ impl LogStoreWorker {
 		}
 	}
 
-	async fn drain_available_messages(&self, backend: &Backend, batch: &mut Vec<StoredRequestLog>) {
+	async fn drain_available_messages(
+		&mut self,
+		backend: &Backend,
+		batch: &mut Vec<StoredRequestLog>,
+	) {
 		loop {
 			match self.receiver.try_recv() {
 				Ok(msg) => {
