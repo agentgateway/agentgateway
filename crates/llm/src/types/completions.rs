@@ -363,6 +363,7 @@ impl ResponseType for Response {
 			}),
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
+			served_model: None,
 			response_id: self.response_id(),
 			finish_reasons: self.finish_reasons(),
 			completion: if log_content.completion {

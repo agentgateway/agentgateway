@@ -744,6 +744,7 @@ impl ResponseType for Response {
 				.or_else(|| self.lookup(lookups::SERVICE_TIER, |v| v.as_str()))
 				.map(Into::into),
 			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
+			served_model: None,
 			response_id: None,
 			finish_reasons: None,
 			completion: None,

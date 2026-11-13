@@ -1326,6 +1326,7 @@ impl ResponseType for Response {
 			}),
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
+			served_model: None,
 			response_id: Some(strng::new(&self.id)),
 			finish_reasons: self.finish_reason().map(|r| vec![r]),
 			completion: if log_content.completion {
