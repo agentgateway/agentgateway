@@ -36,6 +36,7 @@ import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from '@/gatewayUrls';
 import {
 	useLlmConfigData,
 	useMcpConfigData,
+	useRuntimeInfo,
 	useStoredStringState,
 	useUpsertPolicyResource
 } from '@/hooks';
@@ -126,6 +127,7 @@ export function PlaygroundPage() {
 		error: configDataError
 	} = useLlmConfigData();
 	const mcpData = useMcpConfigData();
+	const servedByAdmin = useRuntimeInfo().data?.ui.servedByAdmin ?? false;
 	const upsertPolicy = useUpsertPolicyResource();
 	const modelOptions = useMemo(
 		() => [
@@ -153,7 +155,7 @@ export function PlaygroundPage() {
 	const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
 	const [storedModel, setStoredModel] = useStoredStringState(storageKeys.model, '');
 	const [model, setModel] = useState(() => queryModel() ?? storedModel);
-	const llmEndpoint = llmPlaygroundEndpoint(config.data);
+	const llmEndpoint = llmPlaygroundEndpoint(config.data, servedByAdmin);
 	const llmBaseUrl = llmEndpoint.baseUrl;
 	const [specificModel, setSpecificModel] = useStoredStringState(storageKeys.specificModel, '');
 	const [apiKeyMode, setApiKeyMode] = useState<'saved' | 'raw'>(() => storedApiKeyMode());
@@ -166,7 +168,7 @@ export function PlaygroundPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [runSteps, setRunSteps] = useState<RunStep[]>([]);
-	const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data);
+	const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data, servedByAdmin);
 	const derivedMcpBaseUrl = mcpEndpoint.baseUrl;
 	const [mcpEnabled, setMcpEnabled] = useState(false);
 	const [mcpSessionId, setMcpSessionId] = useState('');
