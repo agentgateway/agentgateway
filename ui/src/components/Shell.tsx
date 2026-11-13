@@ -36,6 +36,7 @@ import type { RuntimeUser } from '@/api/runtimeApi';
 import logoDark from '@/assets/agw-dark.svg';
 import logoLight from '@/assets/agw-light.svg';
 import { StatusBanner, Tooltip, useDismissiblePopover } from '@/components/Primitives';
+import { uiGatewayUrl } from '@/gatewayUrls';
 import {
 	useConfigDumpMode,
 	useEffectiveGatewayConfig,
@@ -222,6 +223,7 @@ export function Shell() {
 					</div>
 				</header>
 				<main className="content">
+					{runtime.data?.ui.servedByAdmin && <AdminPortBanner url={uiGatewayUrl(config.data)} />}
 					{runtime.data?.configReload && !runtime.data.configReload.synchronized && (
 						<StatusBanner state="warn" title="Configuration reload failed">
 							The last configuration reload was rejected, so the gateway is still running the
@@ -237,6 +239,25 @@ export function Shell() {
 				</main>
 			</div>
 		</div>
+	);
+}
+
+function AdminPortBanner({ url }: { url: string | null }) {
+	return (
+		<StatusBanner state="warn" title="Use the gateway UI">
+			The admin port still serves this UI, but it's legacy. Some features, like the playgrounds,
+			don't work here.{' '}
+			{url ? (
+				<>
+					Open it at <a href={url}>{url}</a>.
+				</>
+			) : (
+				<>
+					To serve it on a gateway, add a <code>ui</code> section to your config. See the{' '}
+					<a href="https://agentgateway.dev/docs/standalone/latest/">docs</a>.
+				</>
+			)}
+		</StatusBanner>
 	);
 }
 

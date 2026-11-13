@@ -17,12 +17,7 @@ import {
 } from '@/components/Primitives';
 import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from '@/cors';
 import { mcpPlaygroundEndpoint } from '@/gatewayUrls';
-import {
-	useMcpConfigData,
-	useRuntimeInfo,
-	useStoredStringState,
-	useUpsertPolicyResource
-} from '@/hooks';
+import { useMcpConfigData, useStoredStringState, useUpsertPolicyResource } from '@/hooks';
 import { extractMcpTools, type McpTool, nextRpcId, sendInitializedNotification } from '@/mcp';
 
 type JsonSchema = {
@@ -50,8 +45,7 @@ export function McpPlaygroundPage() {
 	const effectiveConfig = mcpData.data;
 	const upsertPolicy = useUpsertPolicyResource();
 	const targets = useMemo(() => effectiveConfig?.mcp?.targets ?? [], [effectiveConfig]);
-	const servedByAdmin = useRuntimeInfo().data?.ui.servedByAdmin ?? false;
-	const mcpEndpoint = mcpPlaygroundEndpoint(effectiveConfig, servedByAdmin);
+	const mcpEndpoint = mcpPlaygroundEndpoint(effectiveConfig);
 	const derivedBaseUrl = mcpEndpoint.baseUrl;
 	const baseUrl = derivedBaseUrl;
 	const [initialized, setInitialized] = useState(false);

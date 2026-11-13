@@ -1880,8 +1880,22 @@ test('MCP playground displays empty tool execution errors', async ({ page }) => 
 	await expect(card.locator('.json-block')).toContainText('"isError": true');
 });
 
+test('MCP playground uses relative requests when UI shares the gateway', async ({ page }) => {
+	await mockGateway(page, sameOriginGatewayConfig());
+	await page.goto('/mcp/playground');
+
+	await expect(page.getByText('Browser access is not allowed')).toHaveCount(0);
+	const mcpRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/mcp');
+	await page.getByRole('button', { name: 'Initialize', exact: true }).click();
+
+	const pageOrigin = await page.evaluate(() => window.location.origin);
+	const requestUrl = new URL((await mcpRequest).url());
+	expect(requestUrl.origin).toBe(pageOrigin);
+	expect(requestUrl.pathname).toBe('/mcp');
+});
+
 for (const servedByAdmin of [false, true]) {
-	test(`MCP playground and Client Setup target the UI gateway (servedByAdmin=${servedByAdmin})`, async ({
+	test(`admin port banner points to the gateway UI (servedByAdmin=${servedByAdmin})`, async ({
 		page
 	}) => {
 		await mockGateway(page, sameOriginGatewayConfig());
@@ -1889,22 +1903,18 @@ for (const servedByAdmin of [false, true]) {
 			json(route, {
 				build: {},
 				ui: { gatewayMode: 'standalone', configStoreMode: 'file', servedByAdmin },
-				configReload: { synchronized: true, lastError: null }
+				// A failed reload banner renders from the same response, so its presence proves the page read it.
+				configReload: { synchronized: false, lastError: 'bad config' }
 			})
 		);
-		await page.goto('/mcp/playground');
+		await page.goto('/llm/playground');
 
-		const pageOrigin = await page.evaluate(() => window.location.origin);
-		const gatewayOrigin = servedByAdmin ? 'http://127.0.0.1:8080' : pageOrigin;
-		await expect(page.getByText('Browser access is not allowed')).toHaveCount(
-			servedByAdmin ? 1 : 0
-		);
-		const mcpRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/mcp');
-		await page.getByRole('button', { name: 'Initialize', exact: true }).click();
-		expect(new URL((await mcpRequest).url()).origin).toBe(gatewayOrigin);
-
-		await page.goto('/llm/client-setup');
-		await expect(page.getByLabel('Gateway base URL')).toHaveValue(gatewayOrigin);
+		await expect(page.getByText('Configuration reload failed')).toBeVisible();
+		const banner = page.locator('.status-banner', { hasText: 'Use the gateway UI' });
+		await expect(banner).toHaveCount(servedByAdmin ? 1 : 0);
+		if (servedByAdmin) {
+			await expect(banner.getByRole('link')).toHaveAttribute('href', 'http://127.0.0.1:8080/ui/');
+		}
 	});
 }
 
