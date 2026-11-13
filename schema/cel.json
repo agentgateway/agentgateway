@@ -1395,7 +1395,7 @@
           "description": "Current request parameters, with the same structure as the `params` object in an MCP request.\nAvailable only during request-phase CEL guardrails."
         },
         "result": {
-          "description": "Current response result, with the same structure as the `result` object in an MCP response.\nAvailable only during response-phase CEL guardrails."
+          "description": "Payload the response-phase guardrail is inspecting.\nJSON-RPC results use the `result` object, errors use the `error` object,\nand notifications or server-initiated requests use `params`.\nAvailable only during response-phase CEL guardrails."
         }
       },
       "additionalProperties": false

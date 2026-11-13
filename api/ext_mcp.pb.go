@@ -167,7 +167,10 @@ type McpResponse struct {
 	ServiceNames    []string         `protobuf:"bytes,1,rep,name=service_names,json=serviceNames,proto3" json:"service_names,omitempty"`
 	Method          string           `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
 	MetadataContext *structpb.Struct `protobuf:"bytes,3,opt,name=metadata_context,json=metadataContext,proto3" json:"metadata_context,omitempty"`
-	// JSON-RPC `result` from upstream as raw JSON bytes. Errors skip this hook.
+	// JSON payload inspected by the response-phase hook, as raw JSON bytes.
+	// A successful response sends the JSON-RPC `result`. An error sends the
+	// `error` object. A notification or server-initiated request sends `params`,
+	// which carries log lines and reverse-request content.
 	McpResponse   []byte `protobuf:"bytes,4,opt,name=mcp_response,json=mcpResponse,proto3" json:"mcp_response,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
