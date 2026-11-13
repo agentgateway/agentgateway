@@ -2116,24 +2116,18 @@ impl AIProvider {
 		// `/v1/messages/count_tokens`. For providers/models without a native
 		// count-tokens endpoint, we must still answer this route, so we fall
 		// back to local token estimation using the normalized messages payload.
-		let use_local = !self.supports_format(
-			custom::ProviderFormat::AnthropicTokenCount,
-			req
-				.model
-				.as_deref()
-				.ok_or_else(|| AIError::MissingField("model not specified".into()))?,
-		);
+		// Bedrock Runtime's CountTokens API only covers Claude 4.6 and older, so Runtime always
+		// counts locally; Mantle serves Anthropic's native count_tokens for current models.
+		let model = req
+			.model
+			.as_deref()
+			.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
+		let use_local = !self.supports_format(custom::ProviderFormat::AnthropicTokenCount, model)
+			|| matches!(self, AIProvider::Bedrock(p)
+				if p.resolve_endpoint(RouteType::AnthropicTokenCount, Some(model), catalog)
+					== bedrock::BedrockEndpoint::Runtime);
 		if use_local {
-			let count = num_tokens(
-				req.model.as_deref().unwrap_or_default(),
-				&req.get_messages_v2(),
-				req
-					.rest
-					.get("tools")
-					.and_then(serde_json::Value::as_array)
-					.into_iter()
-					.flatten(),
-			);
+			let count = local_token_count(&req);
 			let body = serde_json::to_vec(&types::count_tokens::Response {
 				input_tokens: count,
 			})
@@ -2156,8 +2150,8 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
-				move |provider, req, parts, llm| {
-					provider.render_count_tokens_request(req, &parts.headers, &llm.request_model, catalog)
+				move |provider, req, _parts, llm| {
+					provider.render_count_tokens_request(req, &llm.request_model)
 				},
 			)
 			.await
@@ -2355,26 +2349,12 @@ impl AIProvider {
 	fn render_count_tokens_request(
 		&self,
 		req: &types::count_tokens::Request,
-		headers: &HeaderMap,
 		request_model: &str,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
 		match self {
-			AIProvider::Anthropic(_) | AIProvider::Custom(_) => {
+			// Bedrock reaches here only for Mantle, which serves Anthropic's native count_tokens.
+			AIProvider::Anthropic(_) | AIProvider::Custom(_) | AIProvider::Bedrock(_) => {
 				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
-			},
-			// Mantle serves Anthropic's native count_tokens (passthrough); Runtime uses the Bedrock
-			// CountTokens API. This must match the endpoint `get_path_for_route` resolves for the path.
-			AIProvider::Bedrock(p)
-				if matches!(
-					p.resolve_endpoint(RouteType::AnthropicTokenCount, Some(request_model), catalog),
-					bedrock::BedrockEndpoint::Mantle
-				) =>
-			{
-				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
-			},
-			AIProvider::Bedrock(_) => {
-				conversion::bedrock::from_anthropic_token_count::translate(req, headers)
 			},
 			AIProvider::Vertex(provider) => {
 				let body = serde_json::to_vec(req).map_err(AIError::RequestMarshal)?;
@@ -3676,6 +3656,19 @@ fn namespace_tool_map(
 		) => Some(namespaces),
 		_ => None,
 	}
+}
+
+fn local_token_count(req: &types::count_tokens::Request) -> u64 {
+	num_tokens(
+		req.model.as_deref().unwrap_or_default(),
+		&req.get_messages_v2(),
+		req
+			.rest
+			.get("tools")
+			.and_then(serde_json::Value::as_array)
+			.into_iter()
+			.flatten(),
+	)
 }
 
 fn unsupported_encoding(headers: &::http::HeaderMap) -> AIError {

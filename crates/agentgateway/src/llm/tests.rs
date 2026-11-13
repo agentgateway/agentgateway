@@ -1699,6 +1699,87 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 	assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), body);
 }
 
+const BEDROCK_COUNT_TOKENS_BODY: &[u8] = br#"{
+	"model": "global.anthropic.claude-opus-5-5",
+	"system": "You are terse.",
+	"messages": [{"role": "user", "content": "Count the tokens in this sentence, please."}]
+}"#;
+
+async fn bedrock_count_tokens(
+	endpoint_preference: bedrock::BedrockEndpointPreference,
+) -> RequestResult {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference,
+	});
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages/count_tokens")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(bytes::Bytes::from_static(
+			BEDROCK_COUNT_TOKENS_BODY,
+		)))
+		.unwrap();
+	provider
+		.process_count_tokens_request(&backend_info, req, None, &mut None, None)
+		.await
+		.expect("count_tokens request should process")
+}
+
+#[tokio::test]
+async fn bedrock_runtime_count_tokens_answers_locally() {
+	let RequestResult::DirectResponse(resp) =
+		bedrock_count_tokens(bedrock::BedrockEndpointPreference::RuntimeOnly).await
+	else {
+		panic!("Runtime count_tokens must not go upstream");
+	};
+
+	assert_eq!(resp.status(), ::http::StatusCode::OK);
+	let json: Value = serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes())
+		.expect("response should be JSON");
+	let count = json["input_tokens"].as_u64().expect("input_tokens");
+	assert!(count > 0, "local count must be non-zero");
+	let req: types::count_tokens::Request =
+		serde_json::from_slice(BEDROCK_COUNT_TOKENS_BODY).expect("count_tokens body");
+	assert_eq!(count, local_token_count(&req));
+}
+
+#[tokio::test]
+async fn bedrock_mantle_count_tokens_forwards_native_request() {
+	let RequestResult::Success {
+		request,
+		upstream_route_type,
+		llm_request,
+		..
+	} = bedrock_count_tokens(bedrock::BedrockEndpointPreference::MantleOnly).await
+	else {
+		panic!("Mantle count_tokens must go upstream");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::AnthropicTokenCount);
+	assert_eq!(
+		llm_request.request_model,
+		"global.anthropic.claude-opus-5-5"
+	);
+	let body: Value = serde_json::from_slice(&request.collect().await.unwrap().to_bytes())
+		.expect("forwarded body should be JSON");
+	assert_eq!(
+		body,
+		serde_json::from_slice::<Value>(BEDROCK_COUNT_TOKENS_BODY).unwrap()
+	);
+}
+
 #[tokio::test]
 async fn vertex_anthropic_messages_prepares_vertex_body() {
 	use crate::http::auth::BackendInfo;

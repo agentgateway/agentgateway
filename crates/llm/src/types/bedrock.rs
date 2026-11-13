@@ -256,22 +256,6 @@ pub struct JsonSchemaDefinition {
 	pub description: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CountTokensRequest {
-	pub input: CountTokensInputInvokeModel,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CountTokensInputInvokeModel {
-	pub invoke_model: InvokeModelBody,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct InvokeModelBody {
-	pub body: String,
-}
-
 #[derive(Clone, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolConfiguration {
