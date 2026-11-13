@@ -1,0 +1,50 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-negative-spend-clamped.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: $LITELLM_MASTER_KEY
+            metadata:
+              name: master
+          - keyHash: "sha256:ffff6666ffff6666ffff6666ffff6666ffff6666ffff6666ffff6666ffff6666"
+            metadata:
+              name: pool-share
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 100
+                onBudgetExceeded: Block
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: "db_state.teams[team-1]"
+    status: approximate
+    message: "Split team \"team-1\"'s remaining budget pool ($100.00) equally across 1 key(s) with no budget of their own ($100.00 each); agentgateway has no team construct, so this is a one-time snapshot, not a live shared pool"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"pool-share\" to llm.policies.apiKey (hash-based, no plaintext)"

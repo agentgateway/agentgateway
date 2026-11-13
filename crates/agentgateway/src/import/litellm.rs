@@ -3200,7 +3200,9 @@ pub(super) fn import_litellm_db_state(
 		// team total: a key with its own budget keeps min(its own remaining, the team's), and
 		// whatever's left of the team cap is split equally across keys with no budget of their
 		// own (falling back to $0 rather than leaving them unbounded if the cap is already spent).
-		let team_cap = (team_max - team.spend.unwrap_or(0.0)).max(0.0);
+		// A negative spend value (malformed export data) is clamped to 0 rather than subtracted
+		// as-is, so it can never inflate the remaining cap beyond the real max_budget.
+		let team_cap = (team_max - team.spend.unwrap_or(0.0).max(0.0)).max(0.0);
 		let with_own: Vec<&DbStateKey> = team_keys
 			.iter()
 			.copied()
@@ -3218,7 +3220,7 @@ pub(super) fn import_litellm_db_state(
 			.map(|key| {
 				(
 					*key,
-					(key.max_budget.unwrap_or(0.0) - key.spend.unwrap_or(0.0)).max(0.0),
+					(key.max_budget.unwrap_or(0.0) - key.spend.unwrap_or(0.0).max(0.0)).max(0.0),
 				)
 			})
 			.collect();
@@ -3334,7 +3336,7 @@ pub(super) fn import_litellm_db_state(
 			let amount = if key_budget_windows.contains_key(key.key_hash.as_str()) {
 				max_budget
 			} else {
-				(max_budget - key.spend.unwrap_or(0.0)).max(0.0)
+				(max_budget - key.spend.unwrap_or(0.0).max(0.0)).max(0.0)
 			};
 			key_budgets.insert(key.key_hash.as_str(), amount);
 		}
@@ -4644,6 +4646,11 @@ router_settings:
 			"db-state-team-lifetime-pool-no-window",
 			"2026-01-01T00:00:00Z",
 		);
+	}
+
+	#[test]
+	fn clamps_a_negative_team_spend_instead_of_inflating_the_pool() {
+		assert_litellm_db_state_golden("db-state-negative-spend-clamped", "2026-01-01T00:00:00Z");
 	}
 
 	#[test]
