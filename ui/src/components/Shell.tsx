@@ -209,7 +209,9 @@ export function Shell() {
 					</div>
 				</Layout.Header>
 				<Layout.Content className="content">
-					{runtime.data?.ui.servedByAdmin && <AdminPortBanner url={uiGatewayUrl(config.data)} />}
+					{runtime.data?.ui.servedByAdmin && !dumpMode && !config.isPending && (
+						<AdminPortBanner url={uiGatewayUrl(config.data)} />
+					)}
 					{runtime.data?.configReload && !runtime.data.configReload.synchronized && (
 						<StatusBanner state="warn" title="Configuration reload failed">
 							The last configuration reload was rejected, so the gateway is still running the
