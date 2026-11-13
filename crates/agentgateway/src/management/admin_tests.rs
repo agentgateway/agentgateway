@@ -34,6 +34,7 @@ async fn spawn_admin(cfg: &str) -> (SocketAddr, agent_core::drain::DrainTrigger)
 
 #[tokio::test]
 async fn test_admin_config_dump_redacts_secrets() {
+	let _env = crate::config::TestEnv::set(&[("AGENTGATEWAY_LLM_IR_ENABLED", "true")]);
 	let cfg = r#"
 config:
   adminAddr: localhost:0
@@ -55,6 +56,7 @@ config:
 		!body.contains("super-secret-otlp-token"),
 		"config dump must not leak authorization header value: {body}"
 	);
+	assert!(body.contains(r#""llmIrEnabled": true"#), "{body}");
 	assert!(
 		body.contains("visible-value"),
 		"config dump should preserve non-sensitive header values: {body}"

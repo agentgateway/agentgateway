@@ -1,0 +1,39 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/reasoning.json
+info:
+  model: gpt-3.5-turbo
+  messages:
+    - role: user
+      content: How is the current weather in Columbus?
+  reasoning_effort: medium
+---
+{
+  "disposition": "changed: `reasoning_effort` is adaptive thinking at that effort, where legacy gives this model a token budget; and a client that sets it gets summarized thinking",
+  "request": {
+    "model": "gpt-3.5-turbo",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "How is the current weather in Columbus?",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ],
+    "thinking": {
+      "type": "adaptive",
+      "display": "summarized"
+    },
+    "output_config": {
+      "effort": "medium"
+    }
+  },
+  "dropped": []
+}

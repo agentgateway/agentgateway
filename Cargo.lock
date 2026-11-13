@@ -165,6 +165,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-llm-ir"
+version = "0.0.0"
+dependencies = [
+ "agent-core",
+ "agent-http",
+ "agent-llm",
+ "async-stream",
+ "base64 0.23.1",
+ "bytes",
+ "divan",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "insta",
+ "memchr",
+ "proptest",
+ "rstest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tokio_sse_codec",
+]
+
+[[package]]
 name = "agent-policy"
 version = "0.0.0"
 dependencies = [
@@ -256,6 +283,7 @@ dependencies = [
  "agent-hbone",
  "agent-http",
  "agent-llm",
+ "agent-llm-ir",
  "agent-policy",
  "agent-policy-cors",
  "agent-pool",
@@ -265,6 +293,7 @@ dependencies = [
  "assert_matches",
  "async-compression",
  "async-openai",
+ "async-stream",
  "async-trait",
  "atomic_float",
  "aws-config",

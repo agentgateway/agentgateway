@@ -1,0 +1,239 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/cache_control.json
+info:
+  model: gpt-5.6-terra
+  max_tokens: 1024
+  system:
+    - type: text
+      text: First system block
+    - type: text
+      text: Second system block
+      cache_control:
+        type: ephemeral
+        ttl: 1h
+  messages:
+    - role: assistant
+      content:
+        - type: text
+          text: First assistant block
+        - type: text
+          text: Second assistant block
+          cache_control:
+            type: ephemeral
+            ttl: 1h
+    - role: user
+      content:
+        - type: text
+          text: Cached user text
+          cache_control:
+            type: ephemeral
+            ttl: 5m
+        - type: image
+          source:
+            type: base64
+            media_type: image/png
+            data: aGVsbG8=
+          cache_control:
+            type: ephemeral
+            ttl: 5m
+    - role: assistant
+      content:
+        - type: tool_use
+          id: call_text
+          name: lookup
+          input: {}
+        - type: tool_use
+          id: call_array
+          name: lookup
+          input: {}
+        - type: tool_use
+          id: call_image
+          name: lookup
+          input: {}
+        - type: tool_use
+          id: call_mixed
+          name: lookup
+          input: {}
+          cache_control:
+            type: ephemeral
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: call_text
+          content: text result
+          cache_control:
+            type: ephemeral
+        - type: tool_result
+          tool_use_id: call_array
+          content:
+            - type: text
+              text: array result
+              cache_control:
+                type: ephemeral
+        - type: tool_result
+          tool_use_id: call_image
+          content:
+            - type: image
+              source:
+                type: base64
+                media_type: image/png
+                data: aGVsbG8=
+              cache_control:
+                type: ephemeral
+        - type: tool_result
+          tool_use_id: call_mixed
+          content:
+            - type: text
+              text: before image
+            - type: image
+              source:
+                type: base64
+                media_type: image/png
+                data: aGVsbG8=
+              cache_control:
+                type: ephemeral
+            - type: text
+              text: after image
+    - role: system
+      content:
+        - type: text
+          text: System-role block
+          cache_control:
+            type: ephemeral
+  tools:
+    - name: lookup
+      description: Look up information
+      input_schema:
+        type: object
+        properties: {}
+      cache_control:
+        type: ephemeral
+---
+{
+  "disposition": "changed: cache marks are dropped and recorded, where legacy sends `prompt_cache_breakpoint`; system and assistant text blocks are joined; a tool result's images follow the results in a user message; no effort is sent beside tools, where legacy sends `none`",
+  "request": {
+    "model": "gpt-5.6-terra",
+    "messages": [
+      {
+        "role": "system",
+        "content": "First system block\n\nSecond system block"
+      },
+      {
+        "role": "assistant",
+        "content": "First assistant blockSecond assistant block"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Cached user text"
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,aGVsbG8="
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_text",
+            "type": "function",
+            "function": {
+              "name": "lookup",
+              "arguments": "{}"
+            }
+          },
+          {
+            "id": "call_array",
+            "type": "function",
+            "function": {
+              "name": "lookup",
+              "arguments": "{}"
+            }
+          },
+          {
+            "id": "call_image",
+            "type": "function",
+            "function": {
+              "name": "lookup",
+              "arguments": "{}"
+            }
+          },
+          {
+            "id": "call_mixed",
+            "type": "function",
+            "function": {
+              "name": "lookup",
+              "arguments": "{}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_text",
+        "content": "text result"
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_array",
+        "content": "array result"
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_image",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_mixed",
+        "content": "before image\nafter image"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,aGVsbG8="
+            }
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,aGVsbG8="
+            }
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": "System-role block"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup",
+          "description": "Look up information",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      }
+    ],
+    "max_completion_tokens": 1024
+  },
+  "dropped": [
+    "cache_control"
+  ]
+}

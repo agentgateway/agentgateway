@@ -1,0 +1,32 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/unknown_content.json
+info:
+  model: gpt-5.6-luna
+  max_tokens: 64
+  messages:
+    - role: system
+      content:
+        - type: future_block
+          data: unrecognized
+        - type: text
+          text: Be concise.
+    - role: user
+      content:
+        - type: future_block
+          data: unrecognized
+        - type: text
+          text: hello
+    - role: assistant
+      content:
+        - type: future_block
+          data: unrecognized
+        - type: text
+          text: Hello!
+    - role: user
+      content: Continue.
+---
+{
+  "disposition": "unsupported: unknown block types, which legacy drops",
+  "refused": "unsupported request: `messages[0].content[0]` block type `future_block`; `messages[1].content[0]` block type `future_block`; `messages[2].content[0]` block type `future_block`"
+}

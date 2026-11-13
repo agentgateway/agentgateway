@@ -288,6 +288,14 @@ pub struct LLMRequest {
 	pub provider_state: Option<ProviderState>,
 }
 
+impl LLMRequest {
+	/// The request goes to a native Gemini `generateContent` endpoint, not the OpenAI-compatible
+	/// one.
+	pub fn native_gemini(&self) -> bool {
+		matches!(self.provider_state, Some(ProviderState::VertexGemini))
+	}
+}
+
 #[derive(Debug, Clone)]
 pub enum ProviderState {
 	Bedrock {
@@ -683,6 +691,8 @@ pub enum AIError {
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]
 	JoinError(#[from] tokio::task::JoinError),
+	#[error("unsupported request: {}", .problems.join("; "))]
+	RequestRefused { problems: Vec<String> },
 }
 
 #[apply(schema!)]

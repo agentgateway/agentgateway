@@ -1,0 +1,9 @@
+---
+source: crates/llm-ir/tests/reply_pairs.rs
+expression: sent
+---
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"test-model","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"test-model","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+
+data: {"error":{"message":"The provider failed.","type":"server_error","param":null,"code":"server_error"}}

@@ -1,0 +1,39 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/reasoning-adaptive.json
+info:
+  model: custom-adaptive-model
+  messages:
+    - role: user
+      content: Think carefully.
+  reasoning_effort: high
+---
+{
+  "disposition": "changed: a client that sets `reasoning_effort` gets summarized thinking, to show as `reasoning_content`",
+  "request": {
+    "model": "custom-adaptive-model",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Think carefully.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ],
+    "thinking": {
+      "type": "adaptive",
+      "display": "summarized"
+    },
+    "output_config": {
+      "effort": "high"
+    }
+  },
+  "dropped": []
+}

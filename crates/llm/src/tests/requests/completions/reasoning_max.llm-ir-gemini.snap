@@ -1,0 +1,32 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/reasoning_max.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: user
+      content: Deeply analyze quantum gravity
+  reasoning_effort: xhigh
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Deeply analyze quantum gravity"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "thinkingConfig": {
+        "includeThoughts": true,
+        "thinkingBudget": 8192
+      }
+    }
+  },
+  "dropped": []
+}

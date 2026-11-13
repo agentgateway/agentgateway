@@ -1,0 +1,167 @@
+---
+source: crates/llm/src/ir_tests/mod.rs
+description: src/tests/response/completions/stream-vllm_reasoning.json
+info: "data: {\"id\":\"chatcmpl-9f2c\",\"object\":\"chat.completion.chunk\",\"created\":1775595257,\"model\":\"Qwen/Qwen3-8B\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-9f2c\",\"object\":\"chat.completion.chunk\",\"created\":1775595257,\"model\":\"Qwen/Qwen3-8B\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"The user wants\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-9f2c\",\"object\":\"chat.completion.chunk\",\"created\":1775595257,\"model\":\"Qwen/Qwen3-8B\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" a sum.\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-9f2c\",\"object\":\"chat.completion.chunk\",\"created\":1775595257,\"model\":\"Qwen/Qwen3-8B\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"2 + 2 = 4.\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-9f2c\",\"object\":\"chat.completion.chunk\",\"created\":1775595257,\"model\":\"Qwen/Qwen3-8B\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"logprobs\":null,\"finish_reason\":\"stop\",\"stop_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-9f2c\",\"object\":\"chat.completion.chunk\",\"created\":1775595257,\"model\":\"Qwen/Qwen3-8B\",\"choices\":[],\"usage\":{\"prompt_tokens\":17,\"total_tokens\":40,\"completion_tokens\":23}}\n\ndata: [DONE]\n\n"
+---
+{
+  "disposition": "changed: reasoning text is shown only to a client that asked for summaries, where legacy always sends it",
+  "client": {
+    "events": [
+      {
+        "type": "response.created",
+        "response": {
+          "id": "resp_chatcmpl-9f2c",
+          "object": "response",
+          "created_at": 1,
+          "model": "Qwen/Qwen3-8B",
+          "status": "in_progress",
+          "output": []
+        },
+        "sequence_number": 0
+      },
+      {
+        "type": "response.output_item.added",
+        "output_index": 0,
+        "item": {
+          "type": "reasoning",
+          "id": "rs_0",
+          "summary": [],
+          "encrypted_content": "agentgateway.llm-ir.v1:YWdlbnRnYXRld2F5LmxsbS1pci52MToAAAAAAAAABmdvbGRlbgAAAAAAAAAGb3BlbmFpAAAAAAAAAAtpbnB1dC1tb2RlbAAAAAAAAAAbcmVzcG9uc2VzLWVuY3J5cHRlZC1jb250ZW50eyJyZWFzb25pbmciOiJUaGUgdXNlciB3YW50cyBhIHN1bS4ifQ"
+        },
+        "sequence_number": 1
+      },
+      {
+        "type": "response.output_item.done",
+        "output_index": 0,
+        "item": {
+          "type": "reasoning",
+          "id": "rs_0",
+          "summary": [],
+          "encrypted_content": "agentgateway.llm-ir.v1:YWdlbnRnYXRld2F5LmxsbS1pci52MToAAAAAAAAABmdvbGRlbgAAAAAAAAAGb3BlbmFpAAAAAAAAAAtpbnB1dC1tb2RlbAAAAAAAAAAbcmVzcG9uc2VzLWVuY3J5cHRlZC1jb250ZW50eyJyZWFzb25pbmciOiJUaGUgdXNlciB3YW50cyBhIHN1bS4ifQ"
+        },
+        "sequence_number": 2
+      },
+      {
+        "type": "response.output_item.added",
+        "output_index": 1,
+        "item": {
+          "type": "message",
+          "id": "msg_1",
+          "role": "assistant",
+          "status": "in_progress",
+          "content": []
+        },
+        "sequence_number": 3
+      },
+      {
+        "type": "response.content_part.added",
+        "item_id": "msg_1",
+        "output_index": 1,
+        "content_index": 0,
+        "part": {
+          "type": "output_text",
+          "text": "",
+          "annotations": []
+        },
+        "sequence_number": 4
+      },
+      {
+        "type": "response.output_text.delta",
+        "item_id": "msg_1",
+        "output_index": 1,
+        "content_index": 0,
+        "delta": "2 + 2 = 4.",
+        "sequence_number": 5
+      },
+      {
+        "type": "response.output_text.done",
+        "item_id": "msg_1",
+        "output_index": 1,
+        "content_index": 0,
+        "text": "2 + 2 = 4.",
+        "sequence_number": 6
+      },
+      {
+        "type": "response.content_part.done",
+        "item_id": "msg_1",
+        "output_index": 1,
+        "content_index": 0,
+        "part": {
+          "type": "output_text",
+          "text": "2 + 2 = 4.",
+          "annotations": []
+        },
+        "sequence_number": 7
+      },
+      {
+        "type": "response.output_item.done",
+        "output_index": 1,
+        "item": {
+          "type": "message",
+          "id": "msg_1",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "2 + 2 = 4.",
+              "annotations": []
+            }
+          ]
+        },
+        "sequence_number": 8
+      },
+      {
+        "type": "response.completed",
+        "response": {
+          "id": "resp_chatcmpl-9f2c",
+          "object": "response",
+          "created_at": 1,
+          "model": "Qwen/Qwen3-8B",
+          "status": "completed",
+          "output": [
+            {
+              "type": "reasoning",
+              "id": "rs_0",
+              "summary": [],
+              "encrypted_content": "agentgateway.llm-ir.v1:YWdlbnRnYXRld2F5LmxsbS1pci52MToAAAAAAAAABmdvbGRlbgAAAAAAAAAGb3BlbmFpAAAAAAAAAAtpbnB1dC1tb2RlbAAAAAAAAAAbcmVzcG9uc2VzLWVuY3J5cHRlZC1jb250ZW50eyJyZWFzb25pbmciOiJUaGUgdXNlciB3YW50cyBhIHN1bS4ifQ"
+            },
+            {
+              "type": "message",
+              "id": "msg_1",
+              "role": "assistant",
+              "status": "completed",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "2 + 2 = 4.",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 17,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 23,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 40
+          }
+        },
+        "sequence_number": 9
+      }
+    ]
+  },
+  "usage": {
+    "input_tokens": 17,
+    "output_tokens": 23,
+    "total_tokens": 40,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

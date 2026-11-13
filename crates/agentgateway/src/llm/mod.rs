@@ -42,6 +42,7 @@ pub const DEFAULT_BUFFER_LIMIT: usize = 32 * 1024 * 1024;
 
 pub mod catalog;
 pub mod discovery;
+pub mod ir;
 pub mod policy;
 
 use policy::streaming_guardrails::GuardedSseBody;
@@ -943,6 +944,7 @@ pub enum RequestResult {
 	Success {
 		request: Request,
 		llm_request: LLMRequest,
+		ir_reply: Option<ir::ReplyState>,
 		upstream_route_type: RouteType,
 	},
 	/// A response computed locally instead of calling the provider.
@@ -1429,8 +1431,7 @@ impl AIProvider {
 		// too and answers with SSE framing that `CountTokensResponse` cannot parse — so drop the
 		// client's `alt` on both native routes (same gate as the render below). Stripping it here
 		// rather than at parse time keeps `alt` intact on the paths above.
-		if route_type == RouteType::GeminiCountTokens
-			|| llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini)))
+		if route_type == RouteType::GeminiCountTokens || llm_request.is_some_and(|l| l.native_gemini())
 		{
 			strip_alt_query(req);
 		}
@@ -1481,10 +1482,7 @@ impl AIProvider {
 				// generateContent endpoint, and countTokens is only ever native; everything else
 				// uses the OpenAI-compat shim.
 				let native = llm_request
-					.filter(|l| {
-						route_type == RouteType::GeminiCountTokens
-							|| matches!(l.provider_state, Some(ProviderState::VertexGemini))
-					})
+					.filter(|l| route_type == RouteType::GeminiCountTokens || l.native_gemini())
 					.map(|l| gemini::native_gemini_path(route_type, l.request_model.as_str(), l.streaming));
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
@@ -1502,10 +1500,7 @@ impl AIProvider {
 				};
 				let request_model = llm_request.request_model.as_str();
 				let streaming = llm_request.streaming;
-				let native_gemini = llm_request
-					.provider_state
-					.as_ref()
-					.is_some_and(|s| matches!(s, ProviderState::VertexGemini));
+				let native_gemini = llm_request.native_gemini();
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						let path =
@@ -1696,8 +1691,7 @@ impl AIProvider {
 				if matches!(
 					route_type,
 					RouteType::GenerateContent | RouteType::GeminiCountTokens
-				) || llm_request
-					.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini))) =>
+				) || llm_request.is_some_and(|l| l.native_gemini()) =>
 			{
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
@@ -2617,6 +2611,7 @@ impl AIProvider {
 		Ok(RequestResult::Success {
 			request: req,
 			llm_request: llm_info,
+			ir_reply: None,
 			upstream_route_type: provider_format.route_type(),
 		})
 	}
@@ -2700,6 +2695,7 @@ impl AIProvider {
 		Ok(RequestResult::Success {
 			request: req,
 			llm_request: llm_info,
+			ir_reply: None,
 			upstream_route_type: match provider_format {
 				Some(format) => format.route_type(),
 				None => RouteType::Detect,
@@ -2712,12 +2708,41 @@ impl AIProvider {
 		&self,
 		client: PolicyClient,
 		mut req: LLMRequest,
+		ir_reply: Option<ir::ReplyState>,
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		logging: LLMLogging,
 		model_catalog: Option<&Arc<catalog::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		match ir_reply {
+			Some(ir::ReplyState::Convert(attempt)) => {
+				return Box::pin(ir::process_response(
+					client,
+					attempt,
+					req,
+					rate_limit,
+					req_snapshot,
+					logging,
+					model_catalog,
+					resp,
+				))
+				.await;
+			},
+			Some(ir::ReplyState::Passthrough(passthrough)) => {
+				return Box::pin(ir::process_passthrough_response(
+					passthrough,
+					req,
+					rate_limit,
+					req_snapshot,
+					logging,
+					model_catalog,
+					resp,
+				))
+				.await;
+			},
+			None => {},
+		}
 		// Detect requests are opaque, so the response decides how it is handled: event streams are
 		// inspected as they pass, JSON is buffered, and anything else (e.g. audio) has no usage to read.
 		if matches!(req.input_format, InputFormat::Detect(_))
@@ -3447,34 +3472,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 		path_model_wins: bool,
 	) -> Result<(Parts, Body, T), AIError> {
-		let buffer = http::buffer_limit(&hreq);
-		let (mut parts, mut managed_body) = hreq.into_parts();
-		let cached = managed_body.remove_extension::<json::ParsedJson>();
-		// Decode Content-Encoding (gzip/deflate/br/zstd) before parsing the body as
-		// JSON. Clients such as the Claude Code harness gzip-compress request bodies
-		// above a size threshold; without decoding, the reader would hand the
-		// compressed bytes straight to serde_json and fail with a misleading
-		// "LLM request body must be valid JSON" 400, even for tiny payloads. This
-		// mirrors the response path, which already decompresses via the same helper.
-		let ce = parts.headers.typed_get::<ContentEncoding>();
-		let (encoding, bytes) = match http::compression::to_bytes_with_decompression(
-			managed_body.take_content(),
-			ce.as_ref(),
-			buffer,
-		)
-		.await
-		{
-			Ok(v) => v,
-			Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
-			Err(e) => return Err(map_request_compression_error(e, &parts.headers)),
-		};
-		// Strip encoding headers now that the body is plaintext so downstream
-		// translation/marshalling and upstream forwarding see a consistent body.
-		if encoding.is_some() {
-			parts.headers.remove(header::CONTENT_ENCODING);
-			parts.headers.remove(header::TRANSFER_ENCODING);
-		}
-
+		let (mut parts, managed_body, bytes, cached) = read_decoded_body(hreq).await?;
 		if self.override_model().is_none()
 			&& types::detect::extract_model_from_path(parts.uri.path()).is_none()
 			&& !policies.is_some_and(Policy::has_request_body_mutations)
@@ -3685,6 +3683,42 @@ fn unsupported_encoding(headers: &::http::HeaderMap) -> AIError {
 			.and_then(|v| v.to_str().ok())
 			.unwrap_or("unknown"),
 	))
+}
+
+/// Reads the whole request body within its buffer limit, decoding any `Content-Encoding`. Also
+/// returns the JSON the model router already parsed, if it left any.
+async fn read_decoded_body(
+	hreq: Request,
+) -> Result<(Parts, Body, Bytes, Option<json::ParsedJson>), AIError> {
+	let buffer = http::buffer_limit(&hreq);
+	let (mut parts, mut managed_body) = hreq.into_parts();
+	// Taking the content takes the body's extensions with it.
+	let cached = managed_body.remove_extension::<json::ParsedJson>();
+	// Decode Content-Encoding (gzip/deflate/br/zstd) before parsing the body as
+	// JSON. Clients such as the Claude Code harness gzip-compress request bodies
+	// above a size threshold; without decoding, the reader would hand the
+	// compressed bytes straight to serde_json and fail with a misleading
+	// "LLM request body must be valid JSON" 400, even for tiny payloads. This
+	// mirrors the response path, which already decompresses via the same helper.
+	let ce = parts.headers.typed_get::<ContentEncoding>();
+	let (encoding, bytes) = match http::compression::to_bytes_with_decompression(
+		managed_body.take_content(),
+		ce.as_ref(),
+		buffer,
+	)
+	.await
+	{
+		Ok(v) => v,
+		Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
+		Err(e) => return Err(map_request_compression_error(e, &parts.headers)),
+	};
+	// Strip encoding headers now that the body is plaintext so downstream
+	// translation/marshalling and upstream forwarding see a consistent body.
+	if encoding.is_some() {
+		parts.headers.remove(header::CONTENT_ENCODING);
+		parts.headers.remove(header::TRANSFER_ENCODING);
+	}
+	Ok((parts, managed_body, bytes, cached))
 }
 
 fn map_request_compression_error(

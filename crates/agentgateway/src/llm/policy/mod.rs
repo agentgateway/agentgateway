@@ -32,7 +32,7 @@ fn guardrail_phase(phase: GuardrailPhase) -> Strng {
 	}
 }
 
-fn record_guardrail(
+pub(crate) fn record_guardrail(
 	log: Option<&GuardrailLog>,
 	phase: GuardrailPhase,
 	guard: &'static str,
@@ -477,8 +477,8 @@ pub trait StreamingEvaluator: Send {
 
 /// Outcome returned by a `StreamingEvaluator`.
 pub enum StreamingGuardrailOutcome {
-	/// Content was blocked; include the rejection body to encode for the stream.
-	Blocked(Bytes),
+	/// Content was blocked; keep the configured response for clients with no output yet.
+	Blocked(::http::Response<Bytes>),
 }
 
 struct TextResponse {
@@ -709,8 +709,11 @@ impl PromptGuard {
 		.await?;
 		let streaming = match rejection {
 			Some(rejected) => {
-				let body = rejected.into_body().collect().await?.to_bytes();
-				Some(StreamingGuardrailOutcome::Blocked(body))
+				let (parts, body) = rejected.into_parts();
+				let body = body.collect().await?.to_bytes();
+				Some(StreamingGuardrailOutcome::Blocked(
+					::http::Response::from_parts(parts, body),
+				))
 			},
 			None => None,
 		};
@@ -1840,7 +1843,7 @@ impl Policy {
 	// 	}
 	// }
 
-	fn apply_prompt_guard_regex(
+	pub(crate) fn apply_prompt_guard_regex(
 		original_content: &str,
 		rgx: &RegexRules,
 		phase: GuardrailPhase,
@@ -2053,7 +2056,7 @@ impl Policy {
 	}
 }
 
-enum RegexResult {
+pub(crate) enum RegexResult {
 	Mask(String),
 	Reject,
 	Audit,
@@ -2146,7 +2149,7 @@ pub enum RequestGuardKind {
 }
 
 impl RequestGuardKind {
-	fn name(&self) -> &'static str {
+	pub(crate) fn name(&self) -> &'static str {
 		match self {
 			RequestGuardKind::Regex(_) => "regex",
 			RequestGuardKind::Webhook(_) => "webhook",
@@ -2561,7 +2564,7 @@ pub enum ResponseGuardKind {
 }
 
 impl ResponseGuardKind {
-	fn name(&self) -> &'static str {
+	pub(crate) fn name(&self) -> &'static str {
 		match self {
 			ResponseGuardKind::Regex(_) => "regex",
 			ResponseGuardKind::Webhook(_) => "webhook",

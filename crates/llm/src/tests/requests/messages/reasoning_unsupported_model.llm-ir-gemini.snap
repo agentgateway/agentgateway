@@ -1,0 +1,65 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/reasoning_unsupported_model.json
+info:
+  model: gpt-4o
+  max_tokens: 64
+  thinking:
+    type: adaptive
+  tools:
+    - name: get_weather
+      description: Get the weather for a location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+  messages:
+    - role: user
+      content: Say hi
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Say hi"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "get_weather",
+            "description": "Get the weather for a location",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "location"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 64,
+      "thinkingConfig": {
+        "includeThoughts": true
+      }
+    }
+  },
+  "dropped": []
+}

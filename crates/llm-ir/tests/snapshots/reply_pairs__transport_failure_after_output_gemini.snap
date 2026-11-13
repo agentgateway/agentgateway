@@ -1,0 +1,7 @@
+---
+source: crates/llm-ir/tests/reply_pairs.rs
+expression: sent
+---
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello"}]},"index":0}],"modelVersion":"test-model","responseId":"msg_1"}
+
+data: {"error":{"code":500,"message":"The provider's reply could not be served.","status":"INTERNAL"}}

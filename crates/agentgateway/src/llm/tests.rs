@@ -407,6 +407,7 @@ async fn custom_provider_completions_inbound_renders_native_gemini() {
 		request: mut forwarded,
 		llm_request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_completions_request(
 			&openai_test_backend_info(),
@@ -2057,6 +2058,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		request: mut forwarded,
 		llm_request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
@@ -2120,6 +2122,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 		request: mut forwarded,
 		llm_request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
@@ -2270,6 +2273,7 @@ async fn copilot_anthropic_model_uses_messages_route() {
 		request: forwarded,
 		llm_request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
@@ -2509,6 +2513,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		.process_response(
 			client,
 			req,
+			None,
 			LLMResponsePolicies::default(),
 			None,
 			Default::default(),
@@ -2563,6 +2568,7 @@ async fn upstream_encoding_is_applied_after_messages_response_translation() {
 		.process_response(
 			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
 			req,
+			None,
 			LLMResponsePolicies::default(),
 			None,
 			Default::default(),
@@ -2679,6 +2685,7 @@ async fn context_overflow_reaches_messages_client_with_status_and_request_id() {
 				.process_response(
 					PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
 					req,
+					None,
 					LLMResponsePolicies::default(),
 					None,
 					Default::default(),
@@ -3513,6 +3520,7 @@ async fn azure_foundry_uses_systemone_with_deployment_alias() {
 		llm_request,
 		request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
 		.await
@@ -3540,6 +3548,7 @@ async fn azure_foundry_uses_systemone_with_deployment_alias() {
 		llm_request,
 		request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
 		.await
@@ -3683,6 +3692,7 @@ async fn copilot_uses_systemone_with_model_override() {
 		llm_request,
 		request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
 		.await
@@ -3709,6 +3719,7 @@ async fn copilot_uses_systemone_with_model_override() {
 		llm_request,
 		request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
 		.await

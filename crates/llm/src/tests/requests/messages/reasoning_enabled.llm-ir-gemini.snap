@@ -1,0 +1,37 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/reasoning_enabled.json
+info:
+  model: gpt-5.6-luna
+  max_tokens: 2048
+  messages:
+    - role: user
+      content: hello
+  thinking:
+    type: enabled
+    budget_tokens: 1024
+---
+{
+  "disposition": "changed: a thinking budget is dropped and recorded, leaving the model's default thinking, where legacy turns the budget into an effort",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "hello"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 2048,
+      "thinkingConfig": {
+        "includeThoughts": true
+      }
+    }
+  },
+  "dropped": [
+    "thinking.budget_tokens"
+  ]
+}

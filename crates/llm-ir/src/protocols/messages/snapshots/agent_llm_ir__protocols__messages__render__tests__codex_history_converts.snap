@@ -1,0 +1,68 @@
+---
+source: crates/llm-ir/src/protocols/messages/render_tests.rs
+expression: "json!({\"dropped\": converted.dropped, \"sent\": sent})"
+---
+{
+  "dropped": [
+    "access_programs",
+    "internal_chat_message_metadata_passthrough",
+    "logprobs"
+  ],
+  "sent": {
+    "model": "m",
+    "max_tokens": 9,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "hi"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok"
+          },
+          {
+            "type": "tool_use",
+            "id": "c",
+            "name": "exec",
+            "input": {
+              "input": "ls"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "c",
+            "content": [
+              {
+                "type": "text",
+                "text": "a"
+              }
+            ],
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ],
+    "thinking": {
+      "type": "adaptive",
+      "display": "omitted"
+    },
+    "output_config": {
+      "effort": "high"
+    }
+  }
+}

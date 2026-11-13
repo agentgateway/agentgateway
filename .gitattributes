@@ -5,9 +5,12 @@ api/*_json.gen.go linguist-generated=true
 controller/api/applyconfiguration/** linguist-generated=true
 controller/pkg/client/** linguist-generated=true
 controller/pkg/generated/** linguist-generated=true
-crates/agentgateway/src/llm/tests/** text eol=lf
-crates/agentgateway/src/llm/tests/**/*.bin -text
 schema/*.json linguist-generated=true
 schema/cel.md linguist-generated=true
 schema/config.md linguist-generated=true
+
+crates/llm/src/tests/** text eol=lf
+crates/llm/src/tests/**/*.bin -text
+crates/llm-ir/tests/** text eol=lf
+crates/llm-ir/src/tests/**/*.bin -text
 ui/** text=auto eol=lf

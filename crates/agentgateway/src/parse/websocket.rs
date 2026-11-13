@@ -500,7 +500,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 											pending_text.clear();
 											response_blocked = true;
 											let _ = client_tx
-												.send(guardrail_blocked_ws_event_bytes(blocked_body))
+												.send(guardrail_blocked_ws_event_bytes(blocked_body.into_body()))
 												.await;
 											let _ = server_tx
 												.send(response_cancel_event_bytes([0, 0, 0, 0]))
@@ -533,7 +533,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 										delta_hold.clear();
 										response_blocked = true;
 										let _ = client_tx
-											.send(guardrail_blocked_ws_event_bytes(blocked_body))
+											.send(guardrail_blocked_ws_event_bytes(blocked_body.into_body()))
 											.await;
 										let _ = server_tx
 											.send(response_cancel_event_bytes([0, 0, 0, 0]))

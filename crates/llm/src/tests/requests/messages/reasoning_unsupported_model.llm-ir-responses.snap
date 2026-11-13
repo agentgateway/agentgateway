@@ -1,0 +1,26 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/reasoning_unsupported_model.json
+info:
+  model: gpt-4o
+  max_tokens: 64
+  thinking:
+    type: adaptive
+  tools:
+    - name: get_weather
+      description: Get the weather for a location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+  messages:
+    - role: user
+      content: Say hi
+---
+{
+  "disposition": "unsupported: adaptive thinking without an effort, even on a model that takes none, where legacy sends no reasoning",
+  "refused": "unsupported request: adaptive `thinking` without an effort"
+}

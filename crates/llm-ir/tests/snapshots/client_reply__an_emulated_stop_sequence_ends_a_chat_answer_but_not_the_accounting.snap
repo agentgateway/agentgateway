@@ -1,0 +1,11 @@
+---
+source: crates/llm-ir/tests/client_reply.rs
+expression: sse(stream(&reply))
+---
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"claude-test","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"claude-test","choices":[{"index":0,"delta":{"content":"one "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"claude-test","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]

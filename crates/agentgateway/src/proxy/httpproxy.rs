@@ -115,13 +115,16 @@ async fn set_protocol_cel_context(
 	protocol: RequestProtocol,
 	backend: &Backend,
 	ctx: &cel::ContextBuilder,
+	model_read: model_router::ModelRead,
 ) -> Result<(), ProxyError> {
 	match (protocol, backend) {
 		(RequestProtocol::Mcp, Backend::MCP(_, backend)) if ctx.needs_mcp() => {
 			set_mcp_cel_context(req, backend).await;
 		},
 		(RequestProtocol::AI, _) if ctx.needs_llm_request_context() => {
-			if let Err(resp) = model_router::set_llm_cel_context(req, ctx.needs_llm_request()).await {
+			if let Err(resp) =
+				model_router::set_llm_cel_context(req, ctx.needs_llm_request(), model_read).await
+			{
 				return Err(ProxyError::direct_response_from(
 					ProxyResponseReason::InvalidRequest,
 					*resp,
@@ -1083,9 +1086,15 @@ impl HTTPProxy {
 					.backend_protocol()
 					.unwrap_or(cel::BackendProtocol::http),
 			});
-			set_protocol_cel_context(&mut req, request_protocol, backend, log.cel.ctx())
-				.await
-				.snapshot_on_err(log, &mut req)?;
+			set_protocol_cel_context(
+				&mut req,
+				request_protocol,
+				backend,
+				log.cel.ctx(),
+				model_router::ModelRead::for_config(&self.inputs.cfg),
+			)
+			.await
+			.snapshot_on_err(log, &mut req)?;
 		}
 
 		let policy_client = self.policy_client().with_parent(&req);
@@ -1126,6 +1135,7 @@ impl HTTPProxy {
 			request_protocol,
 			&selected_backend.backend.backend,
 			log.cel.ctx(),
+			model_router::ModelRead::for_config(&self.inputs.cfg),
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
@@ -2446,15 +2456,29 @@ fn resolve_llm_route_type(
 /// Kept out of `make_backend_call`: in debug builds each boxed provider future here takes several
 /// KB of the poll frame, and `make_backend_call` stays on the stack through nested backend calls
 /// (e.g. OAuth token exchange).
+#[allow(clippy::too_many_arguments)]
 async fn process_llm_request(
 	llm: &llm::NamedAIProvider,
 	route_type: RouteType,
+	llm_ir: Option<llm::ir::Selected>,
 	backend_info: &auth::BackendInfo,
 	policies: Option<&llm::Policy>,
 	req: Request,
 	log: &mut Option<&mut RequestLog>,
 	catalog: agent_llm::model_catalog::Catalog<'_>,
 ) -> Result<RequestResult, ProxyError> {
+	if let Some(selected) = llm_ir {
+		return Box::pin(llm.provider.process_request_ir(
+			selected,
+			backend_info,
+			policies,
+			req,
+			log,
+			catalog,
+		))
+		.await
+		.map_err(ProxyError::AIRequest);
+	}
 	Ok(match route_type {
 		RouteType::Completions => Box::pin(llm.provider.process_completions_request(
 			backend_info,
@@ -2890,6 +2914,7 @@ async fn make_backend_call(
 				RequestProtocol::AI,
 				backend,
 				log.cel.ctx(),
+				model_router::ModelRead::for_config(&inputs.cfg),
 			))
 			.await?;
 		}
@@ -2944,7 +2969,7 @@ async fn make_backend_call(
 		backend_call.static_target.then_some(&backend_call.target),
 	);
 
-	let (mut req, llm_response_policies, llm_request) =
+	let (mut req, llm_response_policies, llm_request, ir_reply) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
 			// LLM requires CEL execution after the snapshot so we do not clear extensions
 			let mut req = req.take_and_snapshot_without_clearing_extensions(log.as_mut())?;
@@ -2979,6 +3004,29 @@ async fn make_backend_call(
 			dtrace::trace(|trace| {
 				trace.llm_route_resolved(llm_provider.clone(), format!("{route_type:?}"))
 			});
+			let llm_ir = if inputs.cfg.llm_ir_enabled {
+				let (converter, selected) = match llm::ir::select(
+					route_type,
+					llm,
+					&llm_request_policies,
+					backend.name(),
+					log.as_deref(),
+				) {
+					Ok(llm::ir::Selection::Native) => (llm::ir::Converter::Native, None),
+					Ok(llm::ir::Selection::Ir(selected)) => (llm::ir::Converter::LlmIr, Some(selected)),
+					Err(reason) => {
+						debug!(
+							reason = reason.as_str(),
+							"llm-ir: request stays on the legacy converter"
+						);
+						(llm::ir::Converter::Legacy(reason), None)
+					},
+				};
+				log.add(|log| log.llm_converter = Some(converter));
+				selected
+			} else {
+				None
+			};
 			// First, we process the incoming request. This entails translating to the relevant provider,
 			// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like
 			// prompt enrichment, prompt guard, etc.
@@ -3001,6 +3049,7 @@ async fn make_backend_call(
 					let r = process_llm_request(
 						llm,
 						route_type,
+						llm_ir,
 						&backend_info,
 						llm_request_policies.llm.as_deref(),
 						req,
@@ -3008,12 +3057,13 @@ async fn make_backend_call(
 						Some(inputs.model_catalog.as_handle()),
 					)
 					.await?;
-					let (mut req, llm_request, upstream_route_type) = match r {
+					let (mut req, llm_request, upstream_route_type, ir_reply) = match r {
 						RequestResult::Success {
 							request,
 							llm_request,
+							ir_reply,
 							upstream_route_type,
-						} => (request, llm_request, upstream_route_type),
+						} => (request, llm_request, upstream_route_type, ir_reply),
 						RequestResult::DirectResponse(dr) => return Err(ProxyError::direct_response(dr)),
 						RequestResult::Rejected(dr) => {
 							return Err(ProxyError::direct_response_from(
@@ -3077,7 +3127,7 @@ async fn make_backend_call(
 						.await?
 					};
 					log.add(|l| l.llm_request = Some(llm_request.clone()));
-					(req, response_policies, Some(llm_request))
+					(req, response_policies, Some(llm_request), ir_reply)
 				},
 				RouteType::Models => {
 					return Ok(
@@ -3129,7 +3179,7 @@ async fn make_backend_call(
 							})
 						});
 					}
-					(req, LLMResponsePolicies::default(), None)
+					(req, LLMResponsePolicies::default(), None, None)
 				},
 			}
 		} else {
@@ -3152,6 +3202,7 @@ async fn make_backend_call(
 					req.take_and_snapshot_clearing_extensions(log.as_mut())?
 				},
 				LLMResponsePolicies::default(),
+				None,
 				None,
 			)
 		};
@@ -3348,6 +3399,7 @@ async fn make_backend_call(
 				.process_response(
 					policy_client.clone(),
 					llm_request,
+					ir_reply,
 					llm_response_policies,
 					log.as_ref().expect("must be set").request_snapshot.clone(),
 					llm_logging.expect("must be set"),
@@ -3361,6 +3413,9 @@ async fn make_backend_call(
 	} else {
 		resp
 	};
+	if let Some(llm::ir::ReplyFailed(error)) = resp.extensions_mut().remove() {
+		log.add(|l| l.error = Some(error));
+	}
 	if let Some(maybe_inference) = maybe_inference.as_mut() {
 		Box::pin(
 			maybe_inference

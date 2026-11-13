@@ -17,6 +17,7 @@ members = [
     "crates/cel-fork/cel-derive",
     "crates/celx",
     "crates/llm",
+    "crates/llm-ir",
     "crates/pool",
     "crates/core",
     "crates/http",
@@ -35,6 +36,7 @@ default-members = [
     "crates/cel-fork/cel-derive",
     "crates/celx",
     "crates/llm",
+    "crates/llm-ir",
     "crates/pool",
     "crates/core",
     "crates/http",
@@ -58,6 +60,7 @@ agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
 agent-http = { path = "crates/http" }
 agent-llm = { path = "crates/llm" }
+agent-llm-ir = { path = "crates/llm-ir" }
 agent-policy = { path = "crates/policy-core" }
 agent-policy-cors = { path = "crates/policies/cors" }
 agent-pool = { path = "crates/pool" }
@@ -186,8 +189,10 @@ reqwest = { version = "0.13", default-features = false, features = [
     "charset",
     "rustls",
 ] }
+proptest = { version = "1.12", default-features = false, features = ["std", "handle-panics"] }
 rstest = "0.28"
 rust_decimal = { version = "1", default-features = false }
+memchr = "2"
 mime_guess = "2.0"
 rustc_version = "0.4"
 rustls = { version = "0.23", default-features = false, features = ["tls12", "std", "logging"] }

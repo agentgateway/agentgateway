@@ -1,0 +1,30 @@
+---
+source: crates/llm-ir/tests/client_reply.rs
+expression: http(&reply)
+---
+{
+  "status": 200,
+  "body": {
+    "candidates": [
+      {
+        "content": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Hello"
+            }
+          ]
+        },
+        "finishReason": "STOP",
+        "index": 0
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 10,
+      "candidatesTokenCount": 5,
+      "totalTokenCount": 15
+    },
+    "modelVersion": "claude-test",
+    "responseId": "msg_1"
+  }
+}

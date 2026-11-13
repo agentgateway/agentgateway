@@ -1,0 +1,77 @@
+---
+source: crates/llm/src/ir_golden_chat_client_tests.rs
+description: src/tests/response/anthropic/tool.json
+info:
+  id: msg_01Aq9w938a90dw8q
+  type: message
+  model: claude-opus-4-6
+  stop_reason: tool_use
+  role: assistant
+  content:
+    - type: text
+      text: "<thinking>I need to call the get_weather function, and the user wants SF, which is likely San Francisco, CA.</thinking>"
+    - type: tool_use
+      id: toolu_01A09q90qw90lq917835lq9
+      name: get_weather
+      input:
+        location: "San Francisco, CA"
+        unit: celsius
+  usage:
+    input_tokens: 558
+    cache_creation_input_tokens: 1
+    cache_read_input_tokens: 2
+    output_tokens: 48
+    service_tier: standard
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "body": {
+      "id": "chatcmpl-msg_01Aq9w938a90dw8q",
+      "object": "chat.completion",
+      "created": 1700000000,
+      "model": "claude-opus-4-6",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "<thinking>I need to call the get_weather function, and the user wants SF, which is likely San Francisco, CA.</thinking>",
+            "refusal": null,
+            "tool_calls": [
+              {
+                "id": "toolu_01A09q90qw90lq917835lq9",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"location\": \"San Francisco, CA\", \"unit\": \"celsius\"}"
+                }
+              }
+            ]
+          },
+          "logprobs": null,
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 561,
+        "completion_tokens": 48,
+        "total_tokens": 609,
+        "prompt_tokens_details": {
+          "cached_tokens": 2
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 561,
+    "output_tokens": 48,
+    "total_tokens": 609,
+    "cached_tokens": 2,
+    "cache_write_tokens": 1,
+    "reasoning_tokens": null
+  }
+}

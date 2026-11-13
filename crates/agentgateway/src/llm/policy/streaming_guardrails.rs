@@ -60,11 +60,11 @@ pub fn tail_chars(s: &str, max_bytes: usize) -> &str {
 	&s[start..]
 }
 
-/// Run all evaluators against a window. Returns the rejection body if any evaluator blocked.
+/// Run all evaluators against a window. Returns the rejection response if any evaluator blocked.
 pub async fn evaluate_window(
 	evaluators: &mut [Box<dyn StreamingEvaluator>],
 	window: &str,
-) -> Option<Bytes> {
+) -> Option<::http::Response<Bytes>> {
 	for ev in evaluators.iter_mut() {
 		match ev.evaluate(window).await {
 			Ok(Some(StreamingGuardrailOutcome::Blocked(body))) => {
@@ -75,7 +75,12 @@ pub async fn evaluate_window(
 			Err(e) => match ev.failure_mode() {
 				FailureMode::FailClosed => {
 					warn!("streaming guardrail error, failing closed: {e}");
-					return Some(Bytes::from_static(b"Content blocked by guardrail policy"));
+					return Some(
+						::http::Response::builder()
+							.status(::http::StatusCode::FORBIDDEN)
+							.body(Bytes::from_static(b"Content blocked by guardrail policy"))
+							.expect("valid rejection response"),
+					);
 				},
 				FailureMode::FailOpen => {
 					warn!("streaming guardrail error, failing open: {e}");
@@ -93,7 +98,7 @@ async fn evaluate_windows(
 ) -> (Vec<Box<dyn StreamingEvaluator>>, Option<Bytes>) {
 	for window in windows {
 		if let Some(blocked) = evaluate_window(&mut evaluators, &window).await {
-			return (evaluators, Some(blocked));
+			return (evaluators, Some(blocked.into_body()));
 		}
 	}
 	(evaluators, None)
@@ -585,7 +590,7 @@ mod tests {
 		) -> BoxFuture<'a, anyhow::Result<Option<StreamingGuardrailOutcome>>> {
 			Box::pin(async move {
 				Ok(Some(StreamingGuardrailOutcome::Blocked(
-					Bytes::from_static(b"blocked"),
+					::http::Response::new(Bytes::from_static(b"blocked")),
 				)))
 			})
 		}
@@ -603,7 +608,7 @@ mod tests {
 			Box::pin(async move {
 				if self.pattern.is_match(window) {
 					return Ok(Some(StreamingGuardrailOutcome::Blocked(
-						Bytes::from_static(b"blocked"),
+						::http::Response::new(Bytes::from_static(b"blocked")),
 					)));
 				}
 				Ok(None)
@@ -672,7 +677,10 @@ mod tests {
 		let guarded = GuardedSseBody::new(body, vec![Box::new(BlockEvaluator)], 1024 * 1024, None);
 
 		let bytes = guarded.collect().await.unwrap().to_bytes();
-		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert_eq!(
+			bytes,
+			"data: {\"error\":{\"type\":\"guardrail_blocked\",\"code\":\"guardrail_intervention\",\"message\":\"blocked\"}}\n\n"
+		);
 		assert!(!contains(&bytes, b"bad content"));
 	}
 
@@ -1015,8 +1023,8 @@ mod tests {
 			mode: FailureMode::FailClosed,
 		})];
 		assert_eq!(
-			evaluate_window(&mut evs, "some text").await.as_deref(),
-			Some(&b"Content blocked by guardrail policy"[..])
+			evaluate_window(&mut evs, "some text").await.unwrap().body(),
+			&b"Content blocked by guardrail policy"[..]
 		);
 	}
 

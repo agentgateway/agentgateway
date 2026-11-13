@@ -1,0 +1,43 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/basic.json
+info:
+  model: replaceme
+  tools: []
+  messages:
+    - role: system
+      content: You are a helpful assistant.
+    - role: user
+      content: What is the name of the LLM provider?
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "model": "replaceme",
+    "max_tokens": 4096,
+    "system": [
+      {
+        "type": "text",
+        "text": "You are a helpful assistant.",
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    ],
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "What is the name of the LLM provider?",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": []
+}

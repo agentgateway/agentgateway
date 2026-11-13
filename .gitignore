@@ -46,3 +46,6 @@ cfg.yaml
 .beads/proxieddb/
 
 /tools/.bin/
+
+# Ignore for now
+**/*.proptest-regressions
