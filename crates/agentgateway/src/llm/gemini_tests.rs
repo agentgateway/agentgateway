@@ -1032,6 +1032,7 @@ async fn gemini_inbound_requires_a_gemini_upstream() {
 				guardrail_identifier: None,
 				guardrail_version: None,
 				endpoint_preference: Default::default(),
+				runtime_api: None,
 			})),
 			"bedrock-runtime.us-east-1.amazonaws.com",
 			"bedrock",
