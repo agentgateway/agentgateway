@@ -319,11 +319,11 @@ pub fn translate_anthropic_error(
 
 /// Translate a Google error response into an Anthropic Messages error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-	let res = super::completions::parse_google_error(bytes)?;
+	let res = super::gemini::parse_google_error(bytes)?;
 	let m = messages::MessagesErrorResponse {
 		r#type: "error".to_string(),
 		error: messages::MessagesError {
-			r#type: super::completions::google_error_type(&res.error).to_string(),
+			r#type: super::gemini::google_error_type(res.error.status.as_deref()).to_string(),
 			message: res.error.message.clone(),
 		},
 	};

@@ -2126,6 +2126,31 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn builtin_catalog_advertises_only_the_gemini_decision_model() {
+		let catalog = ModelCatalog::new(Vec::new()).await.unwrap();
+		let snapshot = catalog.snapshot();
+		let decision_model = snapshot
+			.model(gemini::Provider::NAME.as_str(), "gemini-decision-1")
+			.unwrap();
+		assert!(
+			decision_model
+				.endpoints
+				.as_ref()
+				.is_some_and(|endpoints| endpoints.iter().any(|endpoint| endpoint == "/decisions"))
+		);
+
+		let chat_model = snapshot
+			.model(gemini::Provider::NAME.as_str(), "gemini-2.5-flash")
+			.unwrap();
+		assert!(
+			chat_model
+				.endpoints
+				.as_ref()
+				.is_none_or(|endpoints| endpoints.iter().all(|endpoint| endpoint != "/decisions"))
+		);
+	}
+
+	#[tokio::test]
 	async fn file_catalog_reloads_after_in_place_and_rename_updates() {
 		let dir = tempfile::tempdir().unwrap();
 		let path = dir.path().join("catalog.json");

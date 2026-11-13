@@ -21021,6 +21021,26 @@
             ]
           }
         },
+        "gemini-decision-1": {
+          "name": "Gemini Decision 1",
+          "endpoints": [
+            "/decisions"
+          ],
+          "limits": {
+            "context": 262144,
+            "output": 0
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "pdf"
+            ],
+            "output": []
+          }
+        },
         "gemini-embedding-001": {
           "name": "Gemini Embedding 001",
           "released": "2025-05-20",

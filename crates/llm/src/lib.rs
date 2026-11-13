@@ -301,6 +301,8 @@ pub enum ProviderState {
 	VertexGemini,
 	SystemOneDecisions(Arc<conversion::systemone::from_decisions::State>),
 	DecisionsSystemOne(Arc<conversion::systemone::from_systemone::State>),
+	GeminiSystemOne(Arc<conversion::gemini::from_systemone::State>),
+	GeminiDecisions(Arc<conversion::gemini::from_decisions::State>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]

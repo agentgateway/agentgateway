@@ -19,6 +19,41 @@ pub(crate) fn estimate_tokens<'a>(texts: impl IntoIterator<Item = &'a str>) -> u
 	(word_count * 13) / 10
 }
 
+pub(crate) fn decisions_input_value(
+	input: async_openai::types::decisions::DecisionInput,
+) -> Result<serde_json::Value, crate::AIError> {
+	use async_openai::types::decisions as d;
+
+	match input {
+		d::DecisionInput::Text(text) => Ok(serde_json::Value::String(text)),
+		d::DecisionInput::Messages(items) => items
+			.into_iter()
+			.map(|d::DecisionInputItem::Message(message)| {
+				let content = match message.content {
+					d::DecisionInputContent::Text(text) => text,
+					d::DecisionInputContent::Parts(parts) => parts
+						.into_iter()
+						.map(|part| match part {
+							d::DecisionInputContentPart::InputText(text) => Ok(text.text),
+							d::DecisionInputContentPart::InputImage(_) => Err(crate::AIError::UnsupportedContent),
+						})
+						.collect::<Result<Vec<_>, _>>()?
+						.join("\n"),
+				};
+				Ok(serde_json::json!({"role": message.role, "content": content}))
+			})
+			.collect(),
+	}
+}
+
+/// Text for a JSON value: strings as-is, everything else as compact JSON.
+pub(crate) fn value_text(value: serde_json::Value) -> String {
+	match value {
+		serde_json::Value::String(s) => s,
+		value => value.to_string(),
+	}
+}
+
 #[derive(Default)]
 struct ProviderUsage {
 	input_tokens: u64,

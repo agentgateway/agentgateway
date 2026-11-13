@@ -1,0 +1,118 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/gemini/typed_values.json
+info:
+  answers:
+    q_3:
+      type: score
+      score: 1.8
+      probabilities:
+        "2": 0.85
+        "1": 0.1
+        "0": 0.05
+      confidence: 0.85
+    q_2:
+      type: choice
+      choice: o_002
+      probabilities:
+        o_002: 0.7
+        o_001: 0.1
+        o_000: 0.15
+        o_003: 0.05
+      confidence: 0.7
+    q_1:
+      type: noul
+      noul: 0.9
+      confidence: 0.9
+    q_0:
+      type: noul
+      noul: 0.99
+      confidence: 0.99
+  usage:
+    total_input_tokens: 200
+    total_output_tokens: 0
+---
+{
+  "response": {
+    "model": "gemini-decision-1",
+    "usage": {
+      "input_tokens": 200,
+      "output_tokens": 0,
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 200
+    },
+    "answers": [
+      {
+        "type": "predicate",
+        "name": "same",
+        "probability": 0.99
+      },
+      {
+        "type": "predicate",
+        "name": "same",
+        "probability": 0.9
+      },
+      {
+        "type": "choice",
+        "choice": "true_",
+        "probabilities": [
+          {
+            "value": true,
+            "probability": 0.15
+          },
+          {
+            "value": "true",
+            "probability": 0.1
+          },
+          {
+            "value": "true_",
+            "probability": 0.7
+          },
+          {
+            "value": false,
+            "probability": 0.05
+          }
+        ],
+        "confidence": 0.7
+      },
+      {
+        "type": "score",
+        "name": "resolution with spaces",
+        "score": 1.8,
+        "probabilities": [
+          {
+            "value": 0,
+            "label": "unresolved",
+            "probability": 0.05
+          },
+          {
+            "value": 1,
+            "label": "partial",
+            "probability": 0.1
+          },
+          {
+            "value": 2,
+            "label": "complete",
+            "probability": 0.85
+          }
+        ],
+        "confidence": 0.85
+      }
+    ]
+  },
+  "parsed": {
+    "input_tokens": 200,
+    "output_tokens": 0,
+    "total_tokens": 200,
+    "reasoning_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "gemini-decision-1"
+  }
+}

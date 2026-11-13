@@ -1,11 +1,11 @@
-//! Inbound native Gemini `generateContent`/`streamGenerateContent`/`countTokens` requests.
+//! Gemini wire types.
 //!
 //! References:
 //! - <https://ai.google.dev/api/generate-content>
 //! - <https://ai.google.dev/api/tokens>
 //! - <https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference>
 //!
-//! Inbound requests are passthrough, so the request types here are deliberately minimal:
+//! Native generation requests are passthrough, so those request types are deliberately minimal:
 //! only the fields the gateway reads are typed (prompt guard walks `contents` and
 //! `systemInstruction`; telemetry reads the `generationConfig` sampling params), and
 //! everything else rides a `rest` flatten untouched. A field shape we got slightly wrong
@@ -820,6 +820,101 @@ fn text_part(text: &str) -> vg::Part {
 		thought_signature: None,
 		rest: Default::default(),
 	})
+}
+
+/// Google's OpenAI-compatible shim (Gemini API and Vertex AI) return errors
+/// following the standard Google Cloud error model, but consistently wrap
+/// them in a JSON array when returned from the Vertex AI shim.
+///
+/// For the official Google Cloud error model, see:
+/// https://cloud.google.com/apis/design/errors#http_mapping
+///
+/// For the observed non-standard array-wrapping behavior in the OpenAI shim, see:
+/// https://github.com/openai/openai-node/issues/1734
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GoogleErrorResponse {
+	pub error: GoogleError,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GoogleError {
+	/// The numeric HTTP status or a provider-specific string such as `safety`.
+	pub code: serde_json::Value,
+	/// The human-readable error message.
+	pub message: String,
+	/// The programmatic error status (e.g. "INVALID_ARGUMENT", "RESOURCE_EXHAUSTED").
+	#[serde(default)]
+	pub status: Option<String>,
+}
+
+/// Provider-only Google `/v1beta/decisions` wire types.
+pub mod decisions {
+	use indexmap::IndexMap;
+	use serde::{Deserialize, Serialize};
+
+	#[derive(Debug, Serialize)]
+	pub struct Request {
+		pub model: String,
+		pub input: String,
+		pub questions: IndexMap<String, Question>,
+	}
+
+	#[derive(Debug, Serialize)]
+	#[serde(tag = "type", rename_all = "lowercase")]
+	pub enum Question {
+		Noul {
+			instructions: String,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			criteria: Option<NoulCriteria>,
+		},
+		Choice {
+			instructions: String,
+			criteria: IndexMap<String, String>,
+		},
+		Score {
+			instructions: String,
+			criteria: Vec<String>,
+		},
+	}
+
+	#[derive(Debug, Serialize)]
+	pub struct NoulCriteria {
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub true_description: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub false_description: Option<String>,
+	}
+
+	#[derive(Debug, Deserialize)]
+	pub struct Response {
+		pub answers: IndexMap<String, Answer>,
+		pub usage: Usage,
+	}
+
+	#[derive(Debug, Deserialize)]
+	pub struct Usage {
+		pub total_input_tokens: u32,
+		pub total_output_tokens: u32,
+	}
+
+	#[derive(Debug, Deserialize)]
+	#[serde(tag = "type", rename_all = "lowercase")]
+	pub enum Answer {
+		// Google's extra noul confidence is intentionally omitted from client responses.
+		Noul {
+			noul: f64,
+		},
+		Choice {
+			choice: String,
+			probabilities: IndexMap<String, f64>,
+			confidence: f64,
+		},
+		Score {
+			score: serde_json::Number,
+			probabilities: IndexMap<String, f64>,
+			confidence: f64,
+		},
+	}
 }
 
 #[cfg(test)]

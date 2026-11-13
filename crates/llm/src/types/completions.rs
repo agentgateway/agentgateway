@@ -1465,31 +1465,6 @@ pub mod typed {
 		pub event_id: Option<String>,
 	}
 
-	/// Google's OpenAI-compatible shim (Gemini API and Vertex AI) return errors
-	/// following the standard Google Cloud error model, but consistently wrap
-	/// them in a JSON array when returned from the Vertex AI shim.
-	///
-	/// For the official Google Cloud error model, see:
-	/// https://cloud.google.com/apis/design/errors#http_mapping
-	///
-	/// For the observed non-standard array-wrapping behavior in the OpenAI shim, see:
-	/// https://github.com/openai/openai-node/issues/1734
-	#[derive(Debug, Deserialize, Serialize)]
-	pub struct GoogleErrorResponse {
-		pub error: GoogleError,
-	}
-
-	#[derive(Debug, Deserialize, Serialize)]
-	pub struct GoogleError {
-		/// The numeric error code (e.g. 400).
-		pub code: i32,
-		/// The human-readable error message.
-		pub message: String,
-		/// The programmatic error status (e.g. "INVALID_ARGUMENT", "RESOURCE_EXHAUSTED").
-		#[serde(default)]
-		pub status: Option<String>,
-	}
-
 	#[allow(dead_code)]
 	pub fn message_text(msg: &RequestMessage) -> Option<&str> {
 		// All of these types support Vec<Text>... show we support those?
