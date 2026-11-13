@@ -870,11 +870,7 @@ async fn apply_treats_missing_or_invalid_stored_session_as_unauthenticated() {
 			&mut req,
 			format!("{}=opaque-ticket", policy.session.cookie_name),
 		);
-		let response = test_helpers::test_policy(&policy, &mut req)
-			.await
-			.expect(name)
-			.direct_response
-			.expect("login redirect");
+		let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 		assert_eq!(response.status(), ::http::StatusCode::FOUND, "{name}");
 		assert!(response.headers().contains_key(header::LOCATION), "{name}");
 		assert!(
@@ -894,11 +890,7 @@ async fn apply_does_not_load_store_without_browser_cookie() {
 		Some("text/html"),
 	);
 
-	let response = test_helpers::test_policy(&policy, &mut req)
-		.await
-		.expect("login begins without loading browser session")
-		.direct_response
-		.expect("login redirect");
+	let response = direct_response(test_helpers::test_policy(&policy, &mut req).await);
 	assert_eq!(response.status(), ::http::StatusCode::FOUND);
 }
 
