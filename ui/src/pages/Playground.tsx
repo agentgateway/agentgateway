@@ -225,7 +225,12 @@ export function PlaygroundPage() {
 		applyCors.isPending ||
 		applyCors.isError ||
 		(!configDataLoading && !configDataError && config.data && !llmEndpoint.sameOrigin
-			? corsNeedsUpdate(llmCors, 'llm')
+			? corsNeedsUpdate(
+					llmCors,
+					'llm',
+					currentOrigin(),
+					Object.keys(selectedModelConfig ? modelMatchHeaders(selectedModelConfig) : {})
+				)
 			: false);
 	const needsMcpCors =
 		mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin

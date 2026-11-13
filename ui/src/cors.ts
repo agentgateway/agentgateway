@@ -28,17 +28,26 @@ export async function waitForLlmCors(baseUrl: string) {
 	throw new Error('The CORS policy was saved, but the LLM listener is not reachable. Try again.');
 }
 
+// Non-safelisted headers sent by sendChatCompletion, sendMcpJsonRpc and waitForLlmCors.
+export const playgroundRequestHeaders: Record<CorsTarget, string[]> = {
+	llm: ['content-type', 'authorization'],
+	mcp: ['content-type', 'authorization', 'mcp-session-id']
+};
+
+// Mirrors the gateway's CORS policy: `*` allows any origin or header, otherwise each must be listed.
 export function corsNeedsUpdate(
 	cors: CorsPolicy | null | undefined,
 	target: CorsTarget,
-	origin = currentOrigin()
+	origin = currentOrigin(),
+	extraHeaders: string[] = []
 ) {
 	if (!cors) return true;
+	const headers = [...playgroundRequestHeaders[target], ...extraHeaders];
 	return (
-		!hasValue(cors.allowOrigins, origin) ||
+		!allows(cors.allowOrigins, [origin]) ||
 		!hasValue(cors.allowMethods, 'GET') ||
 		!hasValue(cors.allowMethods, 'POST') ||
-		!hasValue(cors.allowHeaders, '*') ||
+		!allows(cors.allowHeaders, headers) ||
 		(target === 'mcp' && !hasValue(cors.exposeHeaders, 'Mcp-Session-Id'))
 	);
 }
@@ -79,6 +88,10 @@ function appendUnique(values: string[] | undefined, value: string) {
 	const next = values ? [...values] : [];
 	if (!hasValue(next, value)) next.push(value);
 	return next;
+}
+
+function allows(values: string[] | undefined, required: string[]) {
+	return hasValue(values, '*') || required.every(value => hasValue(values, value));
 }
 
 function hasValue(values: string[] | undefined, value: string) {

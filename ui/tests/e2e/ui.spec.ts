@@ -1754,19 +1754,34 @@ test('LLM playground can retry when the CORS listener stays unavailable', async 
 	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 });
 
-test('LLM playground sends selected virtual model name', async ({ page }) => {
-	const gateway = await mockGateway(page);
-	await page.goto('/llm/playground');
+for (const [cors, allowOrigins, allowHeaders, warns] of [
+	['this origin and any header', ['http://127.0.0.1:19100'], ['*'], false],
+	['any origin and the sent headers', ['*'], ['Authorization', 'Content-Type'], false],
+	['a header list without Authorization', ['*'], ['content-type'], true]
+] as const) {
+	test(`LLM playground sends selected virtual model name (CORS allows ${cors})`, async ({
+		page
+	}) => {
+		const config = populatedConfig();
+		(config.llm as { policies: { cors?: unknown } }).policies.cors = {
+			allowOrigins,
+			allowHeaders,
+			allowMethods: ['GET', 'POST']
+		};
+		const gateway = await mockGateway(page, config);
+		await page.goto('/llm/playground');
 
-	await page.getByRole('combobox', { name: 'Model' }).click();
-	await page.getByRole('option', { name: /resilient/ }).click();
-	await page.getByLabel('User message').fill('ping');
-	await page.getByRole('button', { name: 'Send' }).click();
+		await page.getByRole('combobox', { name: 'Model' }).click();
+		await page.getByRole('option', { name: /resilient/ }).click();
+		await expect(page.getByText('Browser access is not allowed')).toHaveCount(warns ? 1 : 0);
+		await page.getByLabel('User message').fill('ping');
+		await page.getByRole('button', { name: 'Send' }).click();
 
-	await expect(page.locator('.chat-message.assistant .chat-bubble')).toContainText('pong');
-	await expect.poll(() => gateway.chatRequests.length).toBe(1);
-	expect(gateway.chatRequests[0].model).toBe('resilient');
-});
+		await expect(page.locator('.chat-message.assistant .chat-bubble')).toContainText('pong');
+		await expect.poll(() => gateway.chatRequests.length).toBe(1);
+		expect(gateway.chatRequests[0].model).toBe('resilient');
+	});
+}
 
 test('MCP playground initializes, lists tools, and calls a tool', async ({ page }) => {
 	const gateway = await mockGateway(page);
