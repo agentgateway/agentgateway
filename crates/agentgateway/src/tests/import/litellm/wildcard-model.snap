@@ -1,5 +1,5 @@
 ---
-source: crates/agentgateway/src/import.rs
+source: crates/agentgateway/src/import/litellm.rs
 description: src/tests/import/litellm/wildcard-model.yaml
 ---
 source: litellm

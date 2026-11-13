@@ -1,0 +1,23 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: sk-test-master-key
+mcp_servers:
+  fs_with_headers:
+    transport: "stdio"
+    command: "npx"
+    static_headers:
+      X-Trace: "on"
+    allow_all_keys: true
+  fs_bad_args:
+    transport: "stdio"
+    command: "npx"
+    args: "not-an-array"
+    allow_all_keys: true
+  fs_bad_env:
+    transport: "stdio"
+    command: "npx"
+    env: "not-an-object"
+    allow_all_keys: true

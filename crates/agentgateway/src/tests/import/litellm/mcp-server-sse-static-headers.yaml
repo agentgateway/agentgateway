@@ -1,0 +1,14 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: sk-test-master-key
+mcp_servers:
+  sse_tools:
+    url: "http://mcp-sse-server:9090/sse"
+    transport: "sse"
+    static_headers:
+      X-Team: "platform"
+      X-Secret: "os.environ/MCP_SSE_SECRET"
+    allow_all_keys: true

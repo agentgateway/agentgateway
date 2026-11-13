@@ -56,6 +56,8 @@ Running `agentgateway import --from litellm --file inbound-api-key.yaml` prints 
 exact: model_list[0]: Imported model deployment for chat
 approximate: general_settings.master_key: Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone.
 exact: general_settings.litellm_key_header_name: Mapped LiteLLM's custom API-key header name to the inbound API-key policy
+
+Import summary: 2 exact, 1 approximate, 0 manual, 0 unsupported
 ```
 
 and this config on stdout:
@@ -86,13 +88,13 @@ llm:
           name: x-litellm-key
 ```
 
-`os.environ/LITELLM_MASTER_KEY` is emitted as `$LITELLM_MASTER_KEY`. A literal `master_key` is copied as-is, though one containing `$` gets a `manual` finding instead, since agentgateway's config loader would try to expand it. With `--output agentgateway-config.yaml`, the config is written to that file and stdout is:
+`os.environ/LITELLM_MASTER_KEY` is emitted as `$LITELLM_MASTER_KEY`. A literal `master_key` is copied as-is. With `--output agentgateway-config.yaml`, the config is written to that file and stdout is:
 
 ```text
 Imported litellm config: agentgateway-config.yaml
 ```
 
-The SQLite URL is `sqlite://data.db` by default. With `--output <dir>/config.yaml` it becomes `sqlite://<dir>/data.db`, a path resolved against the gateway process's own working directory at runtime, not against the location of the config file on disk.
+The SQLite URL is `sqlite://data.db` by default. When `--output` points at a real file, the database is placed beside it (`sqlite://<dir>/data.db`).
 
 ## Findings
 
@@ -111,12 +113,37 @@ The statuses are:
 
 The command still writes a config when some fields cannot be mapped. It exits 0 in that case. Review every `manual` and `unsupported` line before using the result.
 
-A `master_key` or `litellm_key_header_name` shape the importer cannot safely interpret (not a string, an empty value, an `os.environ/` reference with no variable name, or a header name that is not valid HTTP) fails the whole import instead: it is never correct to write out a config with no inbound authentication at all because one setting among many could not be read.
+After the per-field lines, the command prints a summary of how many findings landed in each status. If any are `manual` or `unsupported`, it then lists those lines again under `Needs manual review:` so you do not have to scroll back through the full finding list. For example, a per-deployment timeout, which is not mapped, looks like this:
 
-If `general_settings.master_key` is absent entirely, the import still succeeds, but with a `manual` finding: this importer only reads config.yaml, so it cannot tell whether LiteLLM is instead authenticating from a `LITELLM_MASTER_KEY` environment variable set outside the file (a common Docker deployment pattern).
+```text
+manual: model_list[0].litellm_params.timeout: Per-deployment LiteLLM timeout was not mapped; agentgateway applies at most one router_settings.timeout across all models
+exact: model_list[0]: Imported model deployment for gpt-4o
+approximate: router_settings.timeout: Mapped LiteLLM router_settings.timeout to the single global llm.policies.timeout backendRequestTimeout; LiteLLM allows a per-deployment override that agentgateway cannot represent
+
+Import summary: 1 exact, 1 approximate, 1 manual, 0 unsupported
+Needs manual review:
+  - model_list[0].litellm_params.timeout: Per-deployment LiteLLM timeout was not mapped; agentgateway applies at most one router_settings.timeout across all models
+```
+
+For example, an invalid `litellm_key_header_name` does not emit an inbound API-key policy:
+
+```text
+exact: model_list[0]: Imported model deployment for chat
+manual: general_settings.master_key: LiteLLM master_key was not emitted because LiteLLM custom API-key header name is invalid
+unsupported: general_settings.litellm_key_header_name: LiteLLM custom API-key header name is invalid and the inbound policy was not emitted
+```
+
+## Other LiteLLM fields this command maps
+
+- `router_settings.timeout` becomes a single global `llm.policies.timeout`. A per-deployment `litellm_params.timeout` is reported and not mapped.
+- `litellm_params.order` becomes failover priority when every deployment in a model group sets an integer order and at least two distinct values exist. A partial setting (some deployments have no order) or every deployment sharing the same value leaves the existing routing in place; deployments that tie at a shared order value fall into the same priority tier with no weighting between them, since RPM-based weighting does not apply once any ordering is used.
+- `general_settings.pass_through_endpoints` become standalone routes. An endpoint with `auth: true` is omitted if there is no usable `master_key`, rather than left open.
+- Bedrock guardrails become `llm.policies.guardrails`. Other guardrail types, such as Presidio, are reported and not emitted.
+- `mcp_servers` become `mcp.targets`. Names are sanitized to the Gateway API section-name pattern. A restricted server (`allow_all_keys` set to false, omitted, or not a boolean) is not emitted from config.yaml alone, because the per-key grants that protect it live in LiteLLM's database. If MCP targets are emitted, the inbound API-key policy is also applied to the MCP gateway. If there is no inbound key, MCP targets are dropped rather than left unauthenticated.
 
 ## What is not migrated
 
 - LiteLLM database settings (`database_url` and similar) are not reused. The generated config always points at a new agentgateway SQLite database. Configure PostgreSQL yourself if you need it.
 - Unrecognized top-level fields, unused credentials, model metadata, and environment variables that are not part of a mapped value are reported and not emitted.
-- This command reads only config.yaml. Virtual keys, budgets, and per-key MCP grants that LiteLLM keeps in its own runtime database are out of scope here.
+- The importer does not read LiteLLM's runtime database. Virtual keys, budgets, and per-key MCP grants are not imported by this command. Restricted MCP servers therefore stay omitted.
+- Per-deployment timeouts, non-Bedrock guardrails, and pass-through endpoints that require auth without a usable `master_key` are not mapped, as in the findings above.

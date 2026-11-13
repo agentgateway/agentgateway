@@ -1,0 +1,69 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/pass-through-endpoint-https-and-fields.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: $LITELLM_MASTER_KEY
+        mode: strict
+  routes:
+    - matches:
+        - path:
+            exact: /cohere
+      backends:
+        - host: "api.cohere.com:443"
+      policies:
+        urlRewrite:
+          path:
+            full: /v1/chat
+        backendTLS: {}
+        apiKey:
+          keys:
+            - key: $LITELLM_MASTER_KEY
+          mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: "general_settings.pass_through_endpoints[0].auth"
+    status: manual
+    message: "LiteLLM pass-through auth String(\"true\") is not a boolean; treated as requiring auth rather than defaulting to open"
+  - sourcePath: "general_settings.pass_through_endpoints[0].auth"
+    status: approximate
+    message: "Required inbound auth using LiteLLM's master_key; pass-through auth also accepts any virtual key, which config.yaml alone cannot provide"
+  - sourcePath: "general_settings.pass_through_endpoints[0].forward_headers"
+    status: manual
+    message: "LiteLLM pass-through forward_headers String(\"yes\") is not a boolean and was treated as false"
+  - sourcePath: "general_settings.pass_through_endpoints[0].forward_headers"
+    status: manual
+    message: LiteLLM forward_headers is false or unset; agentgateway forwards all incoming headers by default and this could not be restricted automatically
+  - sourcePath: "general_settings.pass_through_endpoints[0].include_subpath"
+    status: manual
+    message: LiteLLM pass-through endpoint field requires manual review and was not emitted
+  - sourcePath: "general_settings.pass_through_endpoints[0].headers"
+    status: manual
+    message: LiteLLM pass-through endpoint field requires manual review and was not emitted
+  - sourcePath: "general_settings.pass_through_endpoints[0]"
+    status: approximate
+    message: "Mapped LiteLLM pass-through endpoint to a standalone route proxying to api.cohere.com:443"

@@ -1,0 +1,14 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  pass_through_endpoints:
+  - path: "/cohere"
+    target: "https://api.cohere.com/v1/chat"
+    auth: "true"
+    forward_headers: "yes"
+    headers:
+      Authorization: "bearer os.environ/COHERE_API_KEY"
+    include_subpath: true

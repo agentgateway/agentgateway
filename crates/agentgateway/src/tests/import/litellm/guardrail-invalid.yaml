@@ -1,0 +1,22 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+guardrails:
+- guardrail_name: no-mode
+  litellm_params:
+    guardrail: bedrock
+    guardrailIdentifier: "cqeb22nofuvu"
+    guardrailVersion: "DRAFT"
+    aws_region_name: eu-west-2
+- guardrail_name: missing-fields
+  litellm_params:
+    guardrail: bedrock
+    mode: ["pre_call"]
+- guardrail_name: bad-mode
+  litellm_params:
+    guardrail: bedrock
+    mode: ["during_call"]
+    guardrailIdentifier: "cqeb22nofuvu"
+    guardrailVersion: "DRAFT"
+    aws_region_name: eu-west-2

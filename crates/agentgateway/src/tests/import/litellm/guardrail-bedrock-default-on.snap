@@ -1,0 +1,38 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/guardrail-bedrock-default-on.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      guardrails:
+        request:
+          - bedrockGuardrails:
+              guardrailIdentifier: cqeb22nofuvu
+              guardrailVersion: DRAFT
+              region: eu-west-2
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "guardrails[0]"
+    status: approximate
+    message: "Mapped bedrock-pii-guard to run on every request against every configured model, matching LiteLLM's default_on: true"

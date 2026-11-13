@@ -1,0 +1,64 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/order-priority-with-fallbacks.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: imported/litellm/chat-primary/1
+        visibility: internal
+        provider: bedrock
+        params:
+          model: anthropic.claude-sonnet-5
+          awsRegion: eu-west-2
+      - name: imported/litellm/chat-primary/2
+        visibility: internal
+        provider: bedrock
+        params:
+          model: anthropic.claude-opus-5-5
+          awsRegion: eu-west-2
+      - name: chat-fallback
+        provider: bedrock
+        params:
+          model: anthropic.claude-sonnet-4-6
+          awsRegion: eu-west-2
+    virtualModels:
+      - name: chat-primary
+        routing:
+          failover:
+            targets:
+              - model: imported/litellm/chat-primary/1
+                priority: 0
+              - model: imported/litellm/chat-primary/2
+                priority: 1
+              - model: chat-fallback
+                priority: 2
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat-primary
+  - sourcePath: "model_list[1]"
+    status: exact
+    message: Imported model deployment for chat-primary
+  - sourcePath: "model_list[2]"
+    status: exact
+    message: Imported model deployment for chat-fallback
+  - sourcePath: litellm_settings.fallbacks
+    status: approximate
+    message: Mapped ordinary LiteLLM fallbacks to agentgateway priority-based failover
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "model_list[0], model_list[1]"
+    status: approximate
+    message: Mapped order to failover priority between these deployments; any RPM-based weighting between them no longer applies

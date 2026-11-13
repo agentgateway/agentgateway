@@ -1,0 +1,125 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/mcp-invalid.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://oauth-mcp:8080/mcp"
+        name: oauth-server
+      - mcp:
+          host: "http://first:8080/mcp"
+        name: test-tools
+      - mcp:
+          host: "http://example.com/mcp"
+        name: auth-type-not-a-string
+      - mcp:
+          host: "http://valid:8080/mcp"
+        name: stolen-name
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.no_url
+    status: approximate
+    message: "Renamed \"no_url\" to \"no-url\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.no_url
+    status: manual
+    message: LiteLLM remote MCP server requires a url and was not emitted
+  - sourcePath: mcp_servers.no_command
+    status: approximate
+    message: "Renamed \"no_command\" to \"no-command\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.no_command
+    status: manual
+    message: LiteLLM stdio MCP server requires command and was not emitted
+  - sourcePath: mcp_servers.bad_transport
+    status: approximate
+    message: "Renamed \"bad_transport\" to \"bad-transport\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.bad_transport
+    status: unsupported
+    message: "LiteLLM MCP transport \"websocket\" is not supported by this importer and was not emitted"
+  - sourcePath: mcp_servers.oauth_server
+    status: approximate
+    message: "Renamed \"oauth_server\" to \"oauth-server\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.oauth_server
+    status: manual
+    message: "LiteLLM MCP auth_type \"oauth2\" has no mapping; connections to this target will be unauthenticated until configured manually"
+  - sourcePath: mcp_servers.oauth_server.auth_value
+    status: manual
+    message: LiteLLM MCP server field requires manual review and was not emitted
+  - sourcePath: mcp_servers.oauth_server
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"oauth-server\""
+  - sourcePath: mcp_servers.___
+    status: manual
+    message: This server has no name that can be represented as an agentgateway MCP target name and was not emitted
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Renamed \"test_tools\" to \"test-tools\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"test-tools\""
+  - sourcePath: mcp_servers.test-tools
+    status: unsupported
+    message: "Sanitized target name \"test-tools\" collides with another server and was not emitted"
+  - sourcePath: mcp_servers.auth_type_not_a_string
+    status: approximate
+    message: "Renamed \"auth_type_not_a_string\" to \"auth-type-not-a-string\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.auth_type_not_a_string
+    status: manual
+    message: LiteLLM MCP auth_type must be a string; connections to this target will be unauthenticated until configured manually
+  - sourcePath: mcp_servers.auth_type_not_a_string
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"auth-type-not-a-string\""
+  - sourcePath: mcp_servers.stolen_name
+    status: approximate
+    message: "Renamed \"stolen_name\" to \"stolen-name\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.stolen_name
+    status: manual
+    message: LiteLLM remote MCP server requires a url and was not emitted
+  - sourcePath: mcp_servers.stolen-name
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"stolen-name\""
+  - sourcePath: mcp_servers.bad_url
+    status: approximate
+    message: "Renamed \"bad_url\" to \"bad-url\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.bad_url
+    status: manual
+    message: LiteLLM MCP server url could not be resolved to a valid host and was not emitted
+  - sourcePath: mcp_servers
+    status: manual
+    message: "Multiple MCP servers are multiplexed behind one endpoint; agentgateway's default conditional tool-name prefixing may not match LiteLLM's own per-server/alias tool naming exactly"
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied"

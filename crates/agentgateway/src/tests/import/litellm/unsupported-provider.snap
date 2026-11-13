@@ -1,5 +1,5 @@
 ---
-source: crates/agentgateway/src/import.rs
+source: crates/agentgateway/src/import/litellm.rs
 description: src/tests/import/litellm/unsupported-provider.yaml
 ---
 source: litellm
@@ -12,9 +12,6 @@ config:
       port: 4000
   ui:
     gateways: default
-  llm:
-    gateways: default
-    models: []
 findings:
   - sourcePath: "model_list[0].litellm_params.model"
     status: unsupported

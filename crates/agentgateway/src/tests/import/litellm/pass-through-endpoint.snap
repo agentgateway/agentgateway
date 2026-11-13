@@ -1,0 +1,53 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/pass-through-endpoint.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: $LITELLM_MASTER_KEY
+        mode: strict
+  routes:
+    - matches:
+        - path:
+            exact: /echo
+      backends:
+        - host: "mcp-test-server:8081"
+      policies:
+        urlRewrite:
+          path:
+            full: /healthz
+        apiKey:
+          keys:
+            - key: $LITELLM_MASTER_KEY
+          mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: "general_settings.pass_through_endpoints[0].auth"
+    status: approximate
+    message: "Required inbound auth using LiteLLM's master_key; pass-through auth also accepts any virtual key, which config.yaml alone cannot provide"
+  - sourcePath: "general_settings.pass_through_endpoints[0]"
+    status: approximate
+    message: "Mapped LiteLLM pass-through endpoint to a standalone route proxying to mcp-test-server:8081"

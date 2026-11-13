@@ -25,11 +25,29 @@ pub struct ImportPlan {
 	pub providers: Vec<ImportedProvider>,
 	pub models: Vec<ImportedModel>,
 	pub routes: IndexMap<String, ImportedRoute>,
-	pub inbound_api_key: Option<ImportedInboundAPIKey>,
 	pub findings: Vec<ImportFinding>,
 	/// Outlier-detection policy applied to emitted model backends that do not override it. Populated from
 	/// source-wide health settings (for example LiteLLM `router_settings.cooldown_time`).
 	pub model_health: Option<Value>,
+	/// Request timeout policy applied once across the whole `llm:` block, since standalone
+	/// configuration has no per-model or per-route timeout attachment point. Populated from
+	/// source-wide timeout settings (for example LiteLLM `router_settings.timeout`).
+	pub timeout: Option<Value>,
+	/// Top-level standalone `routes` entries (outside the `llm:` block), fully built as JSON.
+	/// Populated from source-wide pass-through settings (for example LiteLLM
+	/// `general_settings.pass_through_endpoints`).
+	pub pass_through_routes: Vec<Value>,
+	/// The source's inbound apiKey policy, if it configured one (and, if set, a custom header
+	/// name). Reused below by the MCP mapping, which mirrors this same policy onto
+	/// `mcp.policies` rather than leave the MCP gateway unauthenticated.
+	pub inbound_api_key: Option<ImportedInboundAPIKey>,
+	/// `llm.policies.guardrails` (agentgateway's `PromptGuard`), applied to every configured
+	/// model since standalone configuration has no per-request opt-in. Populated from
+	/// source-wide guardrail settings (for example LiteLLM's top-level `guardrails`).
+	pub guardrails: Option<Value>,
+	/// Top-level standalone `mcp.targets` entries, fully built as JSON. Populated from
+	/// source-wide MCP settings (for example LiteLLM's top-level `mcp_servers`).
+	pub mcp_targets: Vec<Value>,
 }
 
 #[derive(Debug)]
@@ -67,6 +85,13 @@ pub struct ImportedModel {
 	/// False when the deployment overrides source-wide health settings, so
 	/// [`ImportPlan::model_health`] is not applied to it.
 	pub inherits_model_health: bool,
+	/// LiteLLM `litellm_params.order` (lower tried first). Used to build failover priority
+	/// tiers among deployments sharing a model name when every deployment in the group sets it.
+	pub order: Option<i64>,
+	/// This deployment's own source path (e.g. `model_list[2]`), so a later finding about the
+	/// group of deployments sharing a model name can point at the real entries instead of a
+	/// path that doesn't exist in the source document.
+	pub source_path: String,
 }
 
 #[derive(Debug, Default)]
@@ -157,14 +182,107 @@ fn importers() -> Vec<Box<dyn ConfigImporter>> {
 	vec![Box::new(litellm::LiteLlmImporter)]
 }
 
+/// Resolves `litellm_params.order` into failover priority tiers for the deployments sharing
+/// one model name, only when every deployment in the group sets it and at least two distinct
+/// values exist. A group with no `order` at all, a partial setting, or a single tied value is
+/// left to the existing weighted (no fallbacks) or flat priority-0 (with fallbacks) behavior,
+/// since there is nothing safe to convert.
+fn resolve_order_priorities(
+	targets: &[String],
+	model_by_name: &HashMap<&str, &ImportedModel>,
+	findings: &mut Vec<ImportFinding>,
+) -> Option<HashMap<String, usize>> {
+	if targets.len() < 2 {
+		return None;
+	}
+	let source_paths = || -> Vec<&str> {
+		targets
+			.iter()
+			.filter_map(|target| model_by_name.get(target.as_str()))
+			.map(|model| model.source_path.as_str())
+			.collect()
+	};
+	let orders: Vec<Option<i64>> = targets
+		.iter()
+		.map(|target| model_by_name.get(target.as_str()).and_then(|m| m.order))
+		.collect();
+	if orders.iter().all(Option::is_none) {
+		return None;
+	}
+	if orders.iter().any(Option::is_none) {
+		findings.push(ImportFinding {
+			source_path: source_paths().join(", "),
+			status: ImportStatus::Manual,
+			message: "order is only set on some deployments sharing this model name; order was not used for routing priority"
+				.to_string(),
+		});
+		return None;
+	}
+	let mut distinct: Vec<i64> = orders
+		.into_iter()
+		.map(|o| o.expect("checked above"))
+		.collect();
+	distinct.sort_unstable();
+	distinct.dedup();
+	if distinct.len() < 2 {
+		return None;
+	}
+	let priorities: HashMap<String, usize> = targets
+		.iter()
+		.map(|target| {
+			let order = model_by_name[target.as_str()].order.expect("checked above");
+			let priority = distinct
+				.binary_search(&order)
+				.expect("value came from distinct set");
+			(target.clone(), priority)
+		})
+		.collect();
+	// Order-based failover carries no weight field at all, so any earlier per-deployment
+	// "used RPM as weight" finding for these same targets no longer describes what will
+	// actually be emitted - retract it rather than leave it standing next to this one.
+	let rpm_paths: HashSet<String> = targets
+		.iter()
+		.filter_map(|target| model_by_name.get(target.as_str()))
+		.map(|model| format!("{}.litellm_params.rpm", model.source_path))
+		.collect();
+	findings.retain(|finding| {
+		!(rpm_paths.contains(&finding.source_path)
+			&& finding.message == "Used RPM as the relative weight for generated weighted routes")
+	});
+	findings.push(ImportFinding {
+		source_path: source_paths().join(", "),
+		status: ImportStatus::Approximate,
+		message: "Mapped order to failover priority between these deployments; any RPM-based weighting between them no longer applies"
+			.to_string(),
+	});
+	Some(priorities)
+}
+
+/// Builds the `apiKey` policy JSON for an inbound key, shared by the two places that attach one
+/// (`llm.policies.apiKey` and `mcp.policies.apiKey`) so both stay in sync.
+fn api_key_policy(api_key: &ImportedInboundAPIKey) -> Value {
+	let mut policy = Map::from_iter([
+		("keys".to_string(), json!([{"key": api_key.key.clone()}])),
+		("mode".to_string(), json!("strict")),
+	]);
+	if let Some(location) = &api_key.location {
+		policy.insert("location".to_string(), location.clone());
+	}
+	Value::Object(policy)
+}
+
 fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Result<ImportResult> {
 	let ImportPlan {
 		providers,
 		models,
 		routes,
-		inbound_api_key,
-		findings,
+		mut findings,
 		model_health,
+		timeout,
+		pass_through_routes,
+		guardrails,
+		mcp_targets,
+		inbound_api_key,
 	} = plan;
 	let model_by_name: HashMap<_, _> = models
 		.iter()
@@ -239,30 +357,53 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		{
 			continue;
 		}
+		let order_priorities = resolve_order_priorities(&route.targets, &model_by_name, &mut findings);
 		let routing = if route.fallback_groups.is_empty() {
-			let targets = route
-				.targets
-				.iter()
-				.map(|target| {
-					let weight = model_by_name.get(target.as_str()).map_or(1, |m| m.weight);
-					let target = direct_model_names.get(target).unwrap_or(target);
-					json!({"model": target, "weight": weight})
-				})
-				.collect::<Vec<_>>();
-			json!({"weighted": {"targets": targets}})
+			if let Some(priorities) = &order_priorities {
+				let targets = route
+					.targets
+					.iter()
+					.map(|target| {
+						let priority = priorities[target];
+						let target = direct_model_names.get(target).unwrap_or(target);
+						json!({"model": target, "priority": priority})
+					})
+					.collect::<Vec<_>>();
+				json!({"failover": {"targets": targets}})
+			} else {
+				let targets = route
+					.targets
+					.iter()
+					.map(|target| {
+						let weight = model_by_name.get(target.as_str()).map_or(1, |m| m.weight);
+						let target = direct_model_names.get(target).unwrap_or(target);
+						json!({"model": target, "weight": weight})
+					})
+					.collect::<Vec<_>>();
+				json!({"weighted": {"targets": targets}})
+			}
 		} else {
+			let own_group_tier_count = order_priorities
+				.as_ref()
+				.map(|priorities| priorities.values().copied().max().unwrap_or(0) + 1)
+				.unwrap_or(1);
 			let mut targets = route
 				.targets
 				.iter()
 				.map(|target| {
+					let priority = order_priorities
+						.as_ref()
+						.map(|priorities| priorities[target])
+						.unwrap_or(0);
 					let target = direct_model_names.get(target).unwrap_or(target);
-					json!({"model": target, "priority": 0})
+					json!({"model": target, "priority": priority})
 				})
 				.collect::<Vec<_>>();
-			for (priority, fallback_group) in route.fallback_groups.iter().enumerate() {
+			for (tier, fallback_group) in route.fallback_groups.iter().enumerate() {
+				let priority = own_group_tier_count + tier;
 				for fallback in fallback_group {
 					let fallback = direct_model_names.get(fallback).unwrap_or(fallback);
-					targets.push(json!({"model": fallback, "priority": priority + 1}));
+					targets.push(json!({"model": fallback, "priority": priority}));
 				}
 			}
 			json!({"failover": {"targets": targets}})
@@ -271,6 +412,7 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 	}
 
 	let mut config = crate::types::local::default_standalone_config(&options.database_url);
+	let models_is_empty = emitted_models.is_empty();
 	let mut llm = Map::from_iter([
 		("gateways".to_string(), json!("default")),
 		("models".to_string(), Value::Array(emitted_models)),
@@ -301,23 +443,47 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		llm.insert("virtualModels".to_string(), Value::Array(virtual_models));
 	}
 	let mut llm_policies = Map::new();
-	if let Some(api_key) = inbound_api_key {
-		let mut policy = Map::from_iter([
-			("keys".to_string(), json!([{"key": api_key.key}])),
-			("mode".to_string(), json!("strict")),
-		]);
-		if let Some(location) = api_key.location {
-			policy.insert("location".to_string(), location);
-		}
-		llm_policies.insert("apiKey".to_string(), Value::Object(policy));
+	if let Some(timeout) = timeout {
+		llm_policies.insert("timeout".to_string(), timeout);
+	}
+	if let Some(guardrails) = guardrails {
+		llm_policies.insert("guardrails".to_string(), guardrails);
+	}
+	if let Some(api_key) = &inbound_api_key {
+		llm_policies.insert("apiKey".to_string(), api_key_policy(api_key));
 	}
 	if !llm_policies.is_empty() {
 		llm.insert("policies".to_string(), Value::Object(llm_policies));
 	}
-	config
+	let config_object = config
 		.as_object_mut()
-		.expect("default standalone config must be an object")
-		.insert("llm".to_string(), Value::Object(llm));
+		.expect("default standalone config must be an object");
+	// Omit `llm:` entirely for an MCP-only import; standalone configuration has no use for an
+	// LLM gateway block with zero models. A source adapter that populated timeout/guardrails/an
+	// inbound key but imported no models is responsible for its own findings explaining why
+	// those fields don't appear here - this is purely a target-schema fact, not a decision.
+	if !models_is_empty {
+		config_object.insert("llm".to_string(), Value::Object(llm));
+	}
+	if !pass_through_routes.is_empty() {
+		config_object.insert("routes".to_string(), Value::Array(pass_through_routes));
+	}
+	// Whether an empty mcp_targets list (e.g. because a source adapter decided its migrated
+	// servers couldn't be safely protected) needs its own findings is that adapter's call, made
+	// before the plan ever reaches this function - mirroring the inbound key onto MCP, when both
+	// are present, is the only generic fact this emitter itself can state.
+	if !mcp_targets.is_empty() {
+		let mut mcp_policies = Map::new();
+		if let Some(api_key) = &inbound_api_key {
+			mcp_policies.insert("apiKey".to_string(), api_key_policy(api_key));
+		}
+		let mcp_object = json!({
+			"gateways": "default",
+			"targets": mcp_targets,
+			"policies": Value::Object(mcp_policies),
+		});
+		config_object.insert("mcp".to_string(), mcp_object);
+	}
 	let yaml = crate::yaml::to_string(&config)?;
 	let _: crate::types::local::LocalConfig =
 		crate::yaml::from_str(&yaml).context("generated agentgateway configuration is invalid")?;
@@ -396,6 +562,29 @@ fn sanitize_name(name: &str) -> String {
 	}
 }
 
+/// Sanitizes an MCP server name (or alias) into agentgateway's Gateway-API-style
+/// `SectionName` pattern: lowercase letters, digits, `-`, and `.`, starting and ending with an
+/// alphanumeric character. Returns `None` if nothing usable remains.
+fn sanitize_mcp_target_name(name: &str) -> Option<String> {
+	let sanitized: String = name
+		.chars()
+		.map(|c| {
+			let c = c.to_ascii_lowercase();
+			if c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.' {
+				c
+			} else {
+				'-'
+			}
+		})
+		.collect();
+	let trimmed = sanitized.trim_matches(|c: char| c == '-' || c == '.');
+	if trimmed.is_empty() {
+		None
+	} else {
+		Some(trimmed.to_string())
+	}
+}
+
 fn imported_model_name(source: &str, public_name: &str, deployment: usize) -> String {
 	format!(
 		"imported/{}/{}/{}",
@@ -425,4 +614,14 @@ fn unique_imported_provider_name(
 		}
 	}
 	unreachable!()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn lists_registered_sources_in_stable_order() {
+		assert_eq!(available_sources(), vec!["litellm"]);
+	}
 }

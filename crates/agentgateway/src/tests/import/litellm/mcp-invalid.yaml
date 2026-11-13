@@ -1,0 +1,52 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: sk-test-master-key
+mcp_servers:
+  no_url:
+    transport: "http"
+    allow_all_keys: true
+  no_command:
+    transport: "stdio"
+    allow_all_keys: true
+  bad_transport:
+    url: "http://example.com/mcp"
+    transport: "websocket"
+    allow_all_keys: true
+  oauth_server:
+    url: "http://oauth-mcp:8080/mcp"
+    transport: "http"
+    auth_type: "oauth2"
+    auth_value:
+      client_id: "abc"
+    allow_all_keys: true
+  "___":
+    url: "http://unnameable:8080/mcp"
+    transport: "http"
+    allow_all_keys: true
+  test_tools:
+    url: "http://first:8080/mcp"
+    transport: "http"
+    allow_all_keys: true
+  "test-tools":
+    url: "http://second:8080/mcp"
+    transport: "http"
+    allow_all_keys: true
+  auth_type_not_a_string:
+    url: "http://example.com/mcp"
+    transport: "http"
+    auth_type: 1
+    allow_all_keys: true
+  stolen_name:
+    transport: "http"
+    allow_all_keys: true
+  stolen-name:
+    url: "http://valid:8080/mcp"
+    transport: "http"
+    allow_all_keys: true
+  bad_url:
+    url: "not a valid host!"
+    transport: "http"
+    allow_all_keys: true

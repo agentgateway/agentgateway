@@ -1,0 +1,35 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/mcp-only-no-models.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: test-tools
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+findings:
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Renamed \"test_tools\" to \"test-tools\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"test-tools\""
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied"

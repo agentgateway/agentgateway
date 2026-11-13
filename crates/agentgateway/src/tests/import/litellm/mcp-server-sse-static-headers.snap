@@ -1,0 +1,61 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/mcp-server-sse-static-headers.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - sse:
+          host: "http://mcp-sse-server:9090/sse"
+        policies:
+          requestHeaderModifier:
+            set:
+              X-Team: platform
+              X-Secret: $MCP_SSE_SECRET
+        name: sse-tools
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.sse_tools
+    status: approximate
+    message: "Renamed \"sse_tools\" to \"sse-tools\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.sse_tools
+    status: exact
+    message: Mapped static_headers to a fixed request header modifier on this target
+  - sourcePath: mcp_servers.sse_tools
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"sse-tools\""
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied"

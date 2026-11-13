@@ -884,10 +884,16 @@ general_settings:
 	let imported =
 		agentgateway::import::import_config("litellm", litellm_config).expect("litellm config imports");
 	let policies = imported.config["llm"]["policies"].clone();
+	assert_ne!(
+		policies,
+		Value::Null,
+		"importer must emit an apiKey policy for a configured master_key"
+	);
 
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind.attach_route_policy(policies).await;
 
+	// Valid credential, on the migrated custom header.
 	let res = send_request_headers(
 		io.clone(),
 		Method::GET,
@@ -897,9 +903,11 @@ general_settings:
 	.await;
 	assert_eq!(res.status(), 200);
 
+	// Missing credential.
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 401);
 
+	// Incorrect credential.
 	let res = send_request_headers(
 		io.clone(),
 		Method::GET,

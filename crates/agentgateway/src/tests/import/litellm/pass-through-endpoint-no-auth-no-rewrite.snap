@@ -1,0 +1,40 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/pass-through-endpoint-no-auth-no-rewrite.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+  routes:
+    - matches:
+        - path:
+            exact: /status
+      backends:
+        - host: "mcp-test-server:8081"
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "general_settings.pass_through_endpoints[0].forward_headers"
+    status: manual
+    message: LiteLLM forward_headers is false or unset; agentgateway forwards all incoming headers by default and this could not be restricted automatically
+  - sourcePath: "general_settings.pass_through_endpoints[0]"
+    status: approximate
+    message: "Mapped LiteLLM pass-through endpoint to a standalone route proxying to mcp-test-server:8081"

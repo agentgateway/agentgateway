@@ -1,0 +1,19 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: sk-test-master-key
+mcp_servers:
+  github_mcp_server:
+    url: "http://github-mcp:8080/mcp"
+    transport: "http"
+    alias: "github"
+    allow_all_keys: true
+  zapier_production:
+    url: "http://zapier-mcp:8080/mcp"
+    transport: "http"
+    allow_all_keys: true
+litellm_settings:
+  mcp_aliases:
+    "zapier": "zapier_production"

@@ -1,0 +1,37 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/guardrail-invalid.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "guardrails[0]"
+    status: manual
+    message: LiteLLM guardrail litellm_params.mode is required to know whether to run before or after the LLM call and was not emitted
+  - sourcePath: "guardrails[1]"
+    status: manual
+    message: "LiteLLM bedrock guardrail requires string guardrailIdentifier, guardrailVersion, and aws_region_name and was not emitted"
+  - sourcePath: "guardrails[2]"
+    status: unsupported
+    message: "LiteLLM guardrail mode \"during_call\" is not supported; only pre_call and post_call are mapped"

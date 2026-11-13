@@ -1,0 +1,62 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/pass-through-endpoint-custom-header.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: $LITELLM_MASTER_KEY
+        mode: strict
+        location:
+          header:
+            name: x-litellm-key
+  routes:
+    - matches:
+        - path:
+            exact: /echo
+      backends:
+        - host: "mcp-test-server:8081"
+      policies:
+        urlRewrite:
+          path:
+            full: /healthz
+        apiKey:
+          keys:
+            - key: $LITELLM_MASTER_KEY
+          mode: strict
+          location:
+            header:
+              name: x-litellm-key
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: general_settings.litellm_key_header_name
+    status: exact
+    message: "Mapped LiteLLM's custom API-key header name to the inbound API-key policy"
+  - sourcePath: "general_settings.pass_through_endpoints[0].auth"
+    status: approximate
+    message: "Required inbound auth using LiteLLM's master_key; pass-through auth also accepts any virtual key, which config.yaml alone cannot provide"
+  - sourcePath: "general_settings.pass_through_endpoints[0]"
+    status: approximate
+    message: "Mapped LiteLLM pass-through endpoint to a standalone route proxying to mcp-test-server:8081"

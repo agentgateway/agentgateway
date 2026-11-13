@@ -1,0 +1,13 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  pass_through_endpoints:
+  - path: "echo"
+    target: "http://mcp-test-server:8081/healthz"
+  - path: "/no-target"
+  - path: "/bad-url"
+    target: "not a url"
+  - path: "/bad-scheme"
+    target: "ftp://mcp-test-server:21/"
