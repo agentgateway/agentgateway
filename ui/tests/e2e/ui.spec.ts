@@ -1855,19 +1855,29 @@ test('MCP playground displays empty tool execution errors', async ({ page }) => 
 	await expect(card.locator('.json-block')).toContainText('"isError": true');
 });
 
-test('MCP playground uses relative requests when UI shares the gateway', async ({ page }) => {
-	await mockGateway(page, sameOriginGatewayConfig());
-	await page.goto('/mcp/playground');
+for (const [where, adminAddr] of [
+	['shares the gateway', undefined],
+	['is on the admin port', '127.0.0.1:19100']
+] as const) {
+	test(`MCP playground and Client Setup target the UI gateway when the UI ${where}`, async ({
+		page
+	}) => {
+		const config = sameOriginGatewayConfig();
+		if (adminAddr) (config.config as Record<string, unknown>).adminAddr = adminAddr;
+		await mockGateway(page, config);
+		await page.goto('/mcp/playground');
 
-	await expect(page.getByText('Browser access is not allowed')).toHaveCount(0);
-	const mcpRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/mcp');
-	await page.getByRole('button', { name: 'Initialize', exact: true }).click();
+		const pageOrigin = await page.evaluate(() => window.location.origin);
+		const gatewayOrigin = adminAddr ? 'http://127.0.0.1:8080' : pageOrigin;
+		await expect(page.getByText('Browser access is not allowed')).toHaveCount(adminAddr ? 1 : 0);
+		const mcpRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/mcp');
+		await page.getByRole('button', { name: 'Initialize', exact: true }).click();
+		expect(new URL((await mcpRequest).url()).origin).toBe(gatewayOrigin);
 
-	const pageOrigin = await page.evaluate(() => window.location.origin);
-	const requestUrl = new URL((await mcpRequest).url());
-	expect(requestUrl.origin).toBe(pageOrigin);
-	expect(requestUrl.pathname).toBe('/mcp');
-});
+		await page.goto('/llm/client-setup');
+		await expect(page.getByLabel('Gateway base URL')).toHaveValue(gatewayOrigin);
+	});
+}
 
 test('edits top-level MCP policies', async ({ page }) => {
 	const gateway = await mockGateway(page, emptyConfig());
