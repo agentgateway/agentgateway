@@ -2625,6 +2625,253 @@ async fn modern_unknown_method_without_meta_returns_404() {
 	);
 }
 
+fn skills_deny_policy(expr: &str) -> Vec<BackendTrafficPolicy> {
+	vec![BackendTrafficPolicy::McpAuthorization(
+		McpAuthorization::new(RuleSet::new(PolicySet::new(
+			vec![],
+			vec![Arc::new(cel::Expression::new_strict(expr).unwrap())],
+			vec![],
+		))),
+	)]
+}
+
+// Posts a modern request for a Skills method. These carry no `Mcp-Name` header.
+async fn skills_request(
+	io: SocketAddr,
+	method: &str,
+	mut params: serde_json::Value,
+) -> serde_json::Value {
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	params["_meta"] = modern_meta();
+	let body = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", method)
+		.send()
+		.await
+		.unwrap();
+	read_response_message(response).await
+}
+
+fn skill_uris(list: &serde_json::Value) -> Vec<&str> {
+	list["result"]["skills"]
+		.as_array()
+		.unwrap_or_else(|| panic!("no skills in {list}"))
+		.iter()
+		.map(|skill| skill["uri"].as_str().unwrap())
+		.collect()
+}
+
+#[tokio::test]
+async fn modern_skills_single_target_authorization() {
+	let mock = mock_skills_streamable_http_server("a", true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		skills_deny_policy(
+			r#"mcp.resource.name.startsWith("skill://secret/") || mcp.resource.name.endsWith("/private.md")"#,
+		),
+	)
+	.await;
+
+	// With one target, URIs and the upstream cursor pass through unchanged. The denied skill is
+	// filtered out, so the listing is no longer shareable.
+	let list = skills_request(io, "skills/list", serde_json::json!({})).await;
+	assert_eq!(
+		list["result"],
+		serde_json::json!({
+			"resultType": "complete",
+			"skills": [skill_entry("a", "", "code-review")],
+			"nextCursor": "page2",
+			"ttlMs": 0,
+			"cacheScope": "private"
+		})
+	);
+
+	// The gateway authorized this result, so the upstream's public cache hints must not survive.
+	let get = skills_request(
+		io,
+		"skills/get",
+		serde_json::json!({"uri": "skill://code-review/SKILL.md"}),
+	)
+	.await;
+	assert_eq!(
+		get["result"],
+		serde_json::json!({
+			"resultType": "complete",
+			"skill": skill_entry("a", "", "code-review"),
+			"ttlMs": 0,
+			"cacheScope": "private",
+			"_meta": {"example.com/trace": "abc"}
+		})
+	);
+
+	let denied = skills_request(
+		io,
+		"skills/get",
+		serde_json::json!({"uri": "skill://secret/SKILL.md"}),
+	)
+	.await;
+	assert_eq!(denied["error"]["code"], -32602, "{denied}");
+
+	// The directory itself is allowed, but its denied child must not be listed.
+	let dir = skills_request(
+		io,
+		"resources/directory/read",
+		serde_json::json!({"uri": "skill://code-review/references"}),
+	)
+	.await;
+	assert_eq!(
+		dir["result"]["resources"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|r| r["uri"].as_str().unwrap())
+			.collect_vec(),
+		vec!["skill://code-review/references/checklist.md"],
+		"{dir}"
+	);
+	assert_eq!(dir["result"]["ttlMs"], 0);
+	assert_eq!(dir["result"]["cacheScope"], "private");
+}
+
+fn multiplex_skills_proxy(
+	targets: Vec<(&str, SocketAddr, bool)>,
+	policies: Vec<BackendTrafficPolicy>,
+) -> TestBind {
+	setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies("mcp", targets, false, policies)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")))
+}
+
+#[tokio::test]
+async fn modern_skills_multiplexed() {
+	// Both skills targets serve the same URIs, which are unrelated skills. The third target does
+	// not implement the extension and must not fail the listing, even when failing closed.
+	let a = mock_skills_streamable_http_server("a", true).await;
+	let b = mock_skills_streamable_http_server("b", true).await;
+	let plain = mock_modern_streamable_http_server().await;
+	let t = multiplex_skills_proxy(
+		vec![
+			("a", a.addr, false),
+			("b", b.addr, false),
+			("plain", plain.addr, false),
+		],
+		skills_deny_policy(
+			r#"mcp.resource.target == "b" && mcp.resource.name.startsWith("skill://secret/")"#,
+		),
+	);
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let discover = skills_request(io, "server/discover", serde_json::json!({})).await;
+	assert_eq!(
+		discover["result"]["capabilities"]["extensions"]["io.modelcontextprotocol/skills"],
+		serde_json::json!({"directoryRead": true}),
+		"{discover}"
+	);
+
+	// Every URI in an entry is namespaced, including the manifest, so the files stay readable.
+	let list = skills_request(io, "skills/list", serde_json::json!({})).await;
+	assert_eq!(
+		list["result"]["skills"],
+		serde_json::json!([
+			skill_entry("a", "a+", "code-review"),
+			skill_entry("a", "a+", "secret"),
+			skill_entry("b", "b+", "code-review"),
+		]),
+		"{list}"
+	);
+	assert_eq!(list["result"]["ttlMs"], 0);
+	assert_eq!(list["result"]["cacheScope"], "private");
+
+	// The gateway cursor carries one upstream cursor per unfinished target.
+	let cursor = list["result"]["nextCursor"].as_str().unwrap();
+	assert_ne!(cursor, "page2");
+	let second = skills_request(io, "skills/list", serde_json::json!({"cursor": cursor})).await;
+	assert_eq!(
+		skill_uris(&second),
+		vec!["a+skill://paged/SKILL.md", "b+skill://paged/SKILL.md"]
+	);
+	assert!(second["result"].get("nextCursor").is_none(), "{second}");
+
+	// The prefix selects the target, and the upstream sees its own URI.
+	let get = skills_request(
+		io,
+		"skills/get",
+		serde_json::json!({"uri": "b+skill://code-review/SKILL.md"}),
+	)
+	.await;
+	assert_eq!(
+		get["result"]["skill"],
+		skill_entry("b", "b+", "code-review"),
+		"{get}"
+	);
+	assert_eq!(get["result"]["ttlMs"], 0);
+	assert_eq!(get["result"]["cacheScope"], "private");
+
+	// Authorization applies to the target named in the URI.
+	for (uri, allowed) in [
+		("a+skill://secret/SKILL.md", true),
+		("b+skill://secret/SKILL.md", false),
+		// Without a known target prefix the request can't be routed.
+		("skill://code-review/SKILL.md", false),
+		("unknown+skill://code-review/SKILL.md", false),
+	] {
+		let get = skills_request(io, "skills/get", serde_json::json!({"uri": uri})).await;
+		assert_eq!(get.get("result").is_some(), allowed, "{uri}: {get}");
+	}
+
+	let dir = skills_request(
+		io,
+		"resources/directory/read",
+		serde_json::json!({"uri": "a+skill://code-review/references"}),
+	)
+	.await;
+	assert_eq!(
+		dir["result"]["resources"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|r| r["uri"].as_str().unwrap())
+			.collect_vec(),
+		vec![
+			"a+skill://code-review/references/checklist.md",
+			"a+skill://code-review/references/private.md"
+		],
+		"{dir}"
+	);
+
+	// A listed file is read through the same namespaced URI.
+	let read = modern_request(
+		io,
+		1,
+		"resources/read",
+		"b+skill://code-review/SKILL.md",
+		serde_json::json!({"uri": "b+skill://code-review/SKILL.md"}),
+	)
+	.await;
+	assert_eq!(
+		read["result"]["contents"],
+		serde_json::json!([{"uri": "b+skill://code-review/SKILL.md", "text": "served by b"}]),
+		"{read}"
+	);
+}
+
+#[tokio::test]
+async fn modern_skills_list_without_skills_targets_is_method_not_found() {
+	let a = mock_modern_streamable_http_server().await;
+	let b = mock_modern_streamable_http_server().await;
+	let t = multiplex_skills_proxy(vec![("a", a.addr, false), ("b", b.addr, false)], vec![]);
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let list = skills_request(io, "skills/list", serde_json::json!({})).await;
+	assert_eq!(list["error"]["code"], -32601, "{list}");
+}
+
 #[tokio::test]
 async fn modern_body_only_removed_method_is_invalid_protocol_not_404() {
 	// Removed-method rejection uses the header version only, while completeness checks use
@@ -5439,6 +5686,111 @@ async fn mock_streamable_http_server_with_discover_versions(
 	MockServer {
 		addr,
 		init_counter,
+		_cancel: tx,
+	}
+}
+
+// One entry as `skills/list` and `skills/get` return it. `prefix` is the gateway's target
+// namespace, which applies to every URI in the entry.
+fn skill_entry(server: &str, prefix: &str, name: &str) -> serde_json::Value {
+	serde_json::json!({
+		"uri": format!("{prefix}skill://{name}/SKILL.md"),
+		"frontmatter": {"name": name, "description": format!("served by {server}"), "license": "MIT"},
+		"resources": [
+			{"uri": format!("{prefix}skill://{name}/SKILL.md"), "digest": "sha256:d248", "size": 149},
+			{"uri": format!("{prefix}skill://{name}/references/checklist.md"), "digest": "sha256:dbab", "size": 65}
+		],
+		"_meta": {"example.com/owner": "team-a"}
+	})
+}
+
+// A modern server that implements the Skills extension (SEP-2640). `name` marks its skills so a
+// test can tell which target answered.
+async fn mock_skills_streamable_http_server(
+	name: &'static str,
+	directory_read: bool,
+) -> MockServer {
+	agent_core::telemetry::testing::setup_test_logging();
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let router = axum::Router::new().route(
+		"/mcp",
+		axum::routing::post(move |body: axum::Json<serde_json::Value>| async move {
+			let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
+			let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
+			let param = |key: &str| body["params"][key].as_str();
+			let error = |code: i32| {
+				axum::Json(serde_json::json!({
+					"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": method}
+				}))
+			};
+			let result = match (method, param("uri")) {
+				("server/discover", _) => serde_json::json!({
+					"resultType": "complete",
+					"supportedVersions": ["2025-06-18", "2026-07-28"],
+					"capabilities": {
+						"resources": {},
+						"extensions": {"io.modelcontextprotocol/skills": {"directoryRead": directory_read}}
+					},
+					"serverInfo": {"name": "skills-mock", "version": "0.0.1"},
+					"ttlMs": 0,
+					"cacheScope": "private"
+				}),
+				// Upstream cache hints and `_meta` are present so the tests can prove that the
+				// gateway replaces the hints.
+				("skills/list", _) => match param("cursor") {
+					None => serde_json::json!({
+						"resultType": "complete",
+						"skills": [skill_entry(name, "", "code-review"), skill_entry(name, "", "secret")],
+						"nextCursor": "page2", "ttlMs": 300000, "cacheScope": "public",
+						"_meta": {"example.com/trace": "abc"}
+					}),
+					Some("page2") => serde_json::json!({
+						"resultType": "complete", "skills": [skill_entry(name, "", "paged")],
+						"ttlMs": 300000, "cacheScope": "public"
+					}),
+					Some(_) => return error(-32602),
+				},
+				("skills/get", Some(uri @ ("skill://code-review/SKILL.md" | "skill://secret/SKILL.md"))) => {
+					let skill = uri.trim_start_matches("skill://").trim_end_matches("/SKILL.md");
+					serde_json::json!({
+						"resultType": "complete", "skill": skill_entry(name, "", skill),
+						"ttlMs": 300000, "cacheScope": "public",
+						"_meta": {"example.com/trace": "abc"}
+					})
+				},
+				("resources/directory/read", Some("skill://code-review/references")) if directory_read => {
+					serde_json::json!({
+						"resultType": "complete",
+						"resources": [
+							{"uri": "skill://code-review/references/checklist.md", "name": "checklist.md", "mimeType": "text/markdown"},
+							{"uri": "skill://code-review/references/private.md", "name": "private.md", "mimeType": "text/markdown"}
+						],
+						"ttlMs": 300000, "cacheScope": "public"
+					})
+				},
+				("resources/read", Some(uri)) => serde_json::json!({
+					"resultType": "complete",
+					"contents": [{"uri": uri, "text": format!("served by {name}")}],
+					"ttlMs": 300000, "cacheScope": "public"
+				}),
+				("skills/get" | "resources/directory/read" | "resources/read", _) => return error(-32602),
+				_ => return error(-32601),
+			};
+			axum::Json(serde_json::json!({"jsonrpc": "2.0", "id": id, "result": result}))
+		}),
+	);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	MockServer {
+		addr,
+		init_counter: std::sync::Arc::new(tokio::sync::Mutex::new(0)),
 		_cancel: tx,
 	}
 }
@@ -9751,6 +10103,51 @@ async fn mcp_guardrails_mutated_resource_read_reaches_upstream() {
 		})
 		.expect("resource should return text");
 	assert!(text.contains("Business Intelligence Memo"));
+}
+
+#[tokio::test]
+async fn mcp_guardrails_mutated_skill_get_reaches_upstream() {
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_request_json, pass_request, pass_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			if req.method != "skills/get" {
+				return pass_request();
+			}
+			// Redirect the client's "code-review" request to the "secret" skill.
+			mutated_request_json(serde_json::json!({ "uri": "skill://secret/SKILL.md" }))
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_skills_streamable_http_server("a", false).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy_with(
+			extmcp_mock.address,
+			guardrails::FailureMode::FailClosed,
+			HashMap::from([("skills/get".to_string(), guardrails::Phase::Full)]),
+			HashMap::new(),
+		)],
+	)
+	.await;
+	let get = skills_request(
+		io,
+		"skills/get",
+		serde_json::json!({"uri": "skill://code-review/SKILL.md"}),
+	)
+	.await;
+	assert_eq!(
+		get["result"]["skill"],
+		skill_entry("a", "", "secret"),
+		"{get}"
+	);
 }
 
 // Regression for https://github.com/agentgateway/agentgateway/issues/3357.
