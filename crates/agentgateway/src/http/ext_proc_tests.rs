@@ -5633,6 +5633,42 @@ mod body_streaming_and_trailers {
 	}
 
 	#[tokio::test]
+	async fn trailers_only_response_preserves_end_stream() {
+		// A gRPC error is a trailers-only response: headers carry END_STREAM. ext_proc must not
+		// replace the ended body with a stream, or the client never sees grpc-status.
+		let tracker = MetadataTracker::new();
+		let ext_proc = ExtProcMock::new(move || tracker.clone()).spawn().await;
+		let processing_options = ext_proc::ProcessingOptions {
+			request_body_mode: ext_proc::BodySendMode::None,
+			response_body_mode: ext_proc::BodySendMode::FullDuplexStreamed,
+			request_header_mode: ext_proc::HeaderSendMode::Send,
+			response_header_mode: ext_proc::HeaderSendMode::Send,
+			request_trailer_mode: ext_proc::TrailerSendMode::Skip,
+			response_trailer_mode: ext_proc::TrailerSendMode::Send,
+			..Default::default()
+		};
+		let mut ext_proc_request =
+			build_ext_proc_request_for_test(ext_proc.address, processing_options);
+
+		let mut resp = http::Response::new(Body::empty());
+		resp
+			.headers_mut()
+			.insert("grpc-status", "7".parse().unwrap());
+		resp
+			.headers_mut()
+			.insert("grpc-message", "denied".parse().unwrap());
+		ext_proc_request
+			.mutate_response(&mut resp, None)
+			.await
+			.unwrap();
+		assert!(
+			http_body::Body::is_end_stream(resp.body()),
+			"trailers-only response must keep END_STREAM on its headers"
+		);
+		assert_eq!(resp.headers().get("grpc-status").unwrap(), "7");
+	}
+
+	#[tokio::test]
 	async fn response_trailers_are_sent_end_to_end_when_enabled() {
 		let tracker = MetadataTracker::new();
 		let requests = tracker.requests.clone();

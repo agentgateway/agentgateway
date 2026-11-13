@@ -1637,12 +1637,17 @@ impl ExtProcInstance {
 
 		let tx = self.tx_req.clone();
 		let mut managed_body = body;
-		let mut pending_response_body = Some(managed_body.take_content());
+		let mut pending_response_body = had_body.then(|| managed_body.take_content());
 		let mut pending_response_buffer = None;
 		// Now we need to build the new body. This is going to be streamed in from the ext_proc server.
+		// If the response already ended with its headers (e.g. a gRPC trailers-only error response),
+		// keep the original body: replacing it with a channel stream would drop END_STREAM from the
+		// headers frame, and clients would never see grpc-status.
 		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
-		let body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
-		managed_body.replace_content(agent_http::RawBody::new(body).into());
+		if had_body {
+			let body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
+			managed_body.replace_content(agent_http::RawBody::new(body).into());
+		}
 		let (tx_downstream_dropped, rx_downstream_dropped) = tokio::sync::oneshot::channel::<()>();
 		let mut rx_downstream_dropped = Some(rx_downstream_dropped);
 		let mut resp =
