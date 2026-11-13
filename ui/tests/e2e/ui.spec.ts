@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
+	json,
 	mockGateway,
 	mockXdsGateway,
 	populatedConfig,
@@ -1859,21 +1860,25 @@ test('MCP playground displays empty tool execution errors', async ({ page }) => 
 	await expect(card.locator('.json-block')).toContainText('"isError": true');
 });
 
-for (const [where, adminAddr] of [
-	['shares the gateway', undefined],
-	['is on the admin port', '127.0.0.1:19100']
-] as const) {
-	test(`MCP playground and Client Setup target the UI gateway when the UI ${where}`, async ({
+for (const servedByAdmin of [false, true]) {
+	test(`MCP playground and Client Setup target the UI gateway (servedByAdmin=${servedByAdmin})`, async ({
 		page
 	}) => {
-		const config = sameOriginGatewayConfig();
-		if (adminAddr) (config.config as Record<string, unknown>).adminAddr = adminAddr;
-		await mockGateway(page, config);
+		await mockGateway(page, sameOriginGatewayConfig());
+		await page.route('**/api/runtime', route =>
+			json(route, {
+				build: {},
+				ui: { gatewayMode: 'standalone', configStoreMode: 'file', servedByAdmin },
+				configReload: { synchronized: true, lastError: null }
+			})
+		);
 		await page.goto('/mcp/playground');
 
 		const pageOrigin = await page.evaluate(() => window.location.origin);
-		const gatewayOrigin = adminAddr ? 'http://127.0.0.1:8080' : pageOrigin;
-		await expect(page.getByText('Browser access is not allowed')).toHaveCount(adminAddr ? 1 : 0);
+		const gatewayOrigin = servedByAdmin ? 'http://127.0.0.1:8080' : pageOrigin;
+		await expect(page.getByText('Browser access is not allowed')).toHaveCount(
+			servedByAdmin ? 1 : 0
+		);
 		const mcpRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/mcp');
 		await page.getByRole('button', { name: 'Initialize', exact: true }).click();
 		expect(new URL((await mcpRequest).url()).origin).toBe(gatewayOrigin);

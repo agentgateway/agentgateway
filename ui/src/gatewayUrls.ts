@@ -24,10 +24,12 @@ export function gatewayEndpoint(port: number, path = '', scheme = currentWindowS
 }
 
 export function llmPlaygroundEndpoint(
-	config: GatewayConfig | null | undefined
+	config: GatewayConfig | null | undefined,
+	servedByAdmin: boolean
 ): PlaygroundEndpoint {
 	return playgroundEndpoint(
 		config,
+		servedByAdmin,
 		llmGatewayRefs(config),
 		config?.llm?.port ?? 4000,
 		config?.llm ? (config.llm.tls ? 'https' : 'http') : currentWindowScheme(),
@@ -37,10 +39,12 @@ export function llmPlaygroundEndpoint(
 }
 
 export function mcpPlaygroundEndpoint(
-	config: GatewayConfig | null | undefined
+	config: GatewayConfig | null | undefined,
+	servedByAdmin: boolean
 ): PlaygroundEndpoint {
 	return playgroundEndpoint(
 		config,
+		servedByAdmin,
 		mcpGatewayRefs(config),
 		config?.mcp?.port ?? 3000,
 		'http',
@@ -49,7 +53,7 @@ export function mcpPlaygroundEndpoint(
 	);
 }
 
-export function llmGatewayOrigin(config: GatewayConfig | null | undefined) {
+export function llmGatewayOrigin(config: GatewayConfig | null | undefined, servedByAdmin: boolean) {
 	const refs = llmGatewayRefs(config);
 	const uiGateways = uiGatewayRefs(config);
 	// When the UI is served from the same gateway, the browser's origin is the externally reachable
@@ -58,7 +62,7 @@ export function llmGatewayOrigin(config: GatewayConfig | null | undefined) {
 		config &&
 		uiGateways.length > 0 &&
 		refs.length > 0 &&
-		!servedFromAdminPort(config) &&
+		!servedByAdmin &&
 		gatewayRefsOverlap(config, uiGateways, refs)
 	) {
 		// The proxy strips ui.basePath for everything on the UI's gateway, not just the UI.
@@ -76,6 +80,7 @@ export function llmGatewayOrigin(config: GatewayConfig | null | undefined) {
 
 function playgroundEndpoint(
 	config: GatewayConfig | null | undefined,
+	servedByAdmin: boolean,
 	targets: string[],
 	defaultPort: number,
 	defaultScheme: GatewayScheme,
@@ -87,7 +92,8 @@ function playgroundEndpoint(
 		config &&
 		uiGateways.length > 0 &&
 		targets.length > 0 &&
-		!servedFromAdminPort(config) &&
+		// The admin listener serves the UI too, but none of the gateway routes.
+		!servedByAdmin &&
 		gatewayRefsOverlap(config, uiGateways, targets)
 	) {
 		return { baseUrl: `${config.ui?.basePath ?? ''}${sameOriginBaseUrl}`, sameOrigin: true };
@@ -134,12 +140,6 @@ function uiGatewayRefs(config: GatewayConfig | null | undefined) {
 	if (refs.length) return refs;
 	if (config?.ui && config.gateways?.default) return ['default'];
 	return [];
-}
-
-// The admin server also serves the UI, but none of the gateway routes.
-function servedFromAdminPort(config: GatewayConfig) {
-	const port = /:(\d+)$/.exec(config.config?.adminAddr ?? 'localhost:15000')?.[1];
-	return port !== undefined && window.location.port === port;
 }
 
 function gatewayRefs(refs: string | string[] | null | undefined) {

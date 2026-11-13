@@ -22,6 +22,8 @@ export interface RuntimeInfo {
 	ui: {
 		gatewayMode: 'standalone' | 'xds';
 		configStoreMode: 'file' | 'hybrid' | 'readOnly';
+		/** True when the page came from the admin listener, which serves no gateway routes. */
+		servedByAdmin?: boolean;
 	};
 	/** Standalone config reload state; mirrors the config_synchronized metric. */
 	configReload: {

@@ -163,7 +163,9 @@ impl Service {
 
 	pub fn spawn(self) {
 		self.s.spawn(move |service, req| async move {
-			Ok(service.handle(req.map(agent_http::Body::new)).await)
+			let mut req = req.map(agent_http::Body::new);
+			req.extensions_mut().insert(crate::ui::AdminListener);
+			Ok(service.handle(req).await)
 		})
 	}
 }

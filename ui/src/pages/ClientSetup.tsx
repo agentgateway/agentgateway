@@ -27,7 +27,7 @@ import { WildcardModelSelector } from '@/components/WildcardModelSelector';
 import { providerLabel } from '@/config';
 import { hasKeyValue, keyLabel, maskKey } from '@/credentialDisplay';
 import { llmGatewayOrigin } from '@/gatewayUrls';
-import { useConfigDumpMode, useLlmConfigData } from '@/hooks';
+import { useConfigDumpMode, useLlmConfigData, useRuntimeInfo } from '@/hooks';
 import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	isWildcardModelName,
@@ -111,7 +111,8 @@ export function ClientSetupPage() {
 	);
 	const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
 	// The proxy does not know its externally reachable URL in XDS mode, so there is nothing to derive.
-	const derivedBaseUrl = dumpMode ? '' : llmGatewayOrigin(config.data);
+	const servedByAdmin = useRuntimeInfo().data?.ui.servedByAdmin ?? false;
+	const derivedBaseUrl = dumpMode ? '' : llmGatewayOrigin(config.data, servedByAdmin);
 	const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
 	const [baseUrlTouched, setBaseUrlTouched] = useState(false);
 	const [model, setModel] = useState('');
