@@ -47,7 +47,8 @@ test('core pages render with mocked gateway data', async ({ page }) => {
 	}
 
 	await page.goto('/traffic/policies');
-	await expect(page.getByText('Readonly policies unavailable')).toBeVisible();
+	await expect(page.getByText('Only available with XDS')).toBeVisible();
+	await expect(page.getByText('This gateway runs from a config file.')).toBeVisible();
 	await expect(page.getByText('Readonly mode')).toHaveCount(0);
 });
 
@@ -335,6 +336,11 @@ test('raw configuration lists hybrid database resources with masked keys', async
 		.click();
 	await expect(page.getByText('agw_sk_...t123')).toBeVisible();
 	await expect(page.locator('body')).not.toContainText('agw_sk_supersecret123');
+
+	await page.goto('/traffic/policies');
+	await expect(
+		page.getByText('This gateway runs from a config file and a database.')
+	).toBeVisible();
 });
 
 test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) => {
