@@ -822,6 +822,31 @@ fn text_part(text: &str) -> vg::Part {
 	})
 }
 
+/// Google's OpenAI-compatible shim (Gemini API and Vertex AI) return errors
+/// following the standard Google Cloud error model, but consistently wrap
+/// them in a JSON array when returned from the Vertex AI shim.
+///
+/// For the official Google Cloud error model, see:
+/// https://cloud.google.com/apis/design/errors#http_mapping
+///
+/// For the observed non-standard array-wrapping behavior in the OpenAI shim, see:
+/// https://github.com/openai/openai-node/issues/1734
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GoogleErrorResponse {
+	pub error: GoogleError,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GoogleError {
+	/// The numeric HTTP status or a provider-specific string such as `safety`.
+	pub code: serde_json::Value,
+	/// The human-readable error message.
+	pub message: String,
+	/// The programmatic error status (e.g. "INVALID_ARGUMENT", "RESOURCE_EXHAUSTED").
+	#[serde(default)]
+	pub status: Option<String>,
+}
+
 /// Provider-only Google `/v1beta/decisions` wire types.
 pub mod decisions {
 	use indexmap::IndexMap;

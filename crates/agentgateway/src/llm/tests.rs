@@ -3618,7 +3618,7 @@ fn azure_decisions_capability(
 		resource_type,
 	});
 	assert_eq!(
-		provider.non_chat_provider_format_for(InputFormat::Decisions, "deployment-alias", None),
+		provider.non_chat_provider_format_for(InputFormat::Decisions, "deployment-alias"),
 		expected
 	);
 }
@@ -3651,14 +3651,7 @@ async fn azure_foundry_uses_systemone_with_deployment_alias() {
 		request,
 		upstream_route_type,
 	} = provider
-		.process_decisions_request(
-			&openai_test_backend_info(),
-			None,
-			req,
-			false,
-			&mut None,
-			None,
-		)
+		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
 		.await
 		.expect("Foundry Decisions should convert")
 	else {
@@ -3685,14 +3678,7 @@ async fn azure_foundry_uses_systemone_with_deployment_alias() {
 		request,
 		upstream_route_type,
 	} = provider
-		.process_systemone_request(
-			&openai_test_backend_info(),
-			None,
-			req,
-			false,
-			&mut None,
-			None,
-		)
+		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
 		.await
 		.expect("Foundry SystemOne should forward natively")
 	else {
@@ -3802,7 +3788,7 @@ fn copilot_decisions_capability(
 		model_override: None,
 	});
 	assert_eq!(
-		provider.non_chat_provider_format_for(InputFormat::Decisions, model, None),
+		provider.non_chat_provider_format_for(InputFormat::Decisions, model),
 		expected
 	);
 	assert!(
@@ -3835,14 +3821,7 @@ async fn copilot_uses_systemone_with_model_override() {
 		request,
 		upstream_route_type,
 	} = provider
-		.process_decisions_request(
-			&openai_test_backend_info(),
-			None,
-			req,
-			false,
-			&mut None,
-			None,
-		)
+		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
 		.await
 		.expect("Copilot Decisions should convert")
 	else {
@@ -3868,14 +3847,7 @@ async fn copilot_uses_systemone_with_model_override() {
 		request,
 		upstream_route_type,
 	} = provider
-		.process_systemone_request(
-			&openai_test_backend_info(),
-			None,
-			req,
-			false,
-			&mut None,
-			None,
-		)
+		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
 		.await
 		.expect("Copilot SystemOne should forward natively")
 	else {

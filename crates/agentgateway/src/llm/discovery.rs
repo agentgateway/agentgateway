@@ -110,7 +110,7 @@ impl ModelDiscovery {
 			let converted = matches!(provider, AIProvider::Vertex(_) | AIProvider::Bedrock(_));
 			endpoints.extend(
 				provider
-					.supported_formats(model, Some(catalog))
+					.supported_formats(model)
 					.into_iter()
 					.filter_map(|format| match format {
 						ProviderFormat::Embeddings if !converted => Some("/embeddings"),

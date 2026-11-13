@@ -332,13 +332,6 @@ impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.state.load().snapshot.get_model_tags(model_id)
 	}
-	fn model_supports_endpoint(&self, provider_id: &str, model_id: &str, endpoint: &str) -> bool {
-		self
-			.state
-			.load()
-			.snapshot
-			.model_supports_endpoint(provider_id, model_id, endpoint)
-	}
 }
 
 impl agent_llm::model_catalog::ModelCatalogHandle for CatalogSnapshot {
@@ -347,9 +340,6 @@ impl agent_llm::model_catalog::ModelCatalogHandle for CatalogSnapshot {
 	}
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.get_model_tags(model_id)
-	}
-	fn model_supports_endpoint(&self, provider_id: &str, model_id: &str, endpoint: &str) -> bool {
-		self.model_supports_endpoint(provider_id, model_id, endpoint)
 	}
 }
 
@@ -384,13 +374,6 @@ impl CatalogSnapshot {
 
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.model_tags.get(model_id).cloned()
-	}
-
-	fn model_supports_endpoint(&self, provider_id: &str, model_id: &str, endpoint: &str) -> bool {
-		self
-			.model(provider_id, model_id)
-			.and_then(|model| model.endpoints.as_ref())
-			.is_some_and(|endpoints| endpoints.iter().any(|candidate| candidate == endpoint))
 	}
 
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
@@ -2143,18 +2126,28 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn builtin_catalog_marks_gemini_decision_endpoint() {
+	async fn builtin_catalog_advertises_only_the_gemini_decision_model() {
 		let catalog = ModelCatalog::new(Vec::new()).await.unwrap();
-		assert!(catalog.as_handle().model_supports_endpoint(
-			gemini::Provider::NAME.as_str(),
-			"gemini-decision-1",
-			"/decisions",
-		));
-		assert!(!catalog.as_handle().model_supports_endpoint(
-			gemini::Provider::NAME.as_str(),
-			"gemini-2.5-flash",
-			"/decisions",
-		));
+		let snapshot = catalog.snapshot();
+		let decision_model = snapshot
+			.model(gemini::Provider::NAME.as_str(), "gemini-decision-1")
+			.unwrap();
+		assert!(
+			decision_model
+				.endpoints
+				.as_ref()
+				.is_some_and(|endpoints| endpoints.iter().any(|endpoint| endpoint == "/decisions"))
+		);
+
+		let chat_model = snapshot
+			.model(gemini::Provider::NAME.as_str(), "gemini-2.5-flash")
+			.unwrap();
+		assert!(
+			chat_model
+				.endpoints
+				.as_ref()
+				.is_none_or(|endpoints| endpoints.iter().all(|endpoint| endpoint != "/decisions"))
+		);
 	}
 
 	#[tokio::test]

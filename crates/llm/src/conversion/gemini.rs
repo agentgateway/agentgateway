@@ -1,12 +1,10 @@
 use indexmap::IndexMap;
 use serde_json::Value;
 
-use crate::conversion::completions::{google_error_type, parse_google_error};
 use crate::conversion::value_text as text;
-use crate::types::completions::typed::GoogleError;
-use crate::types::gemini::decisions as google;
+use crate::types::gemini::{GoogleError, GoogleErrorResponse, decisions as google};
 use crate::types::{decisions, systemone};
-use crate::{AIError, InputFormat, json};
+use crate::{AIError, InputFormat, json, logged_response_parsing};
 
 pub mod from_responses {
 	use bytes::Bytes;
@@ -451,6 +449,23 @@ pub fn translate_error_to_systemone(bytes: &bytes::Bytes) -> Result<bytes::Bytes
 		.map_err(AIError::ResponseMarshal)
 }
 
+/// Parse a Google error response, handling both single object and array-wrapped formats.
+/// Google's OpenAI-compatible endpoints consistently return `[{"error": {...}}]`
+/// rather than `{"error": {...}}` when using the Vertex AI shim.
+pub(crate) fn parse_google_error(bytes: &bytes::Bytes) -> Result<GoogleErrorResponse, AIError> {
+	serde_json::from_slice::<GoogleErrorResponse>(bytes).or_else(|_| {
+		serde_json::from_slice::<Vec<GoogleErrorResponse>>(bytes)
+			.map_err(logged_response_parsing(bytes))?
+			.into_iter()
+			.next()
+			.ok_or_else(|| {
+				AIError::InvalidResponse(agent_core::strng::literal!(
+					"error response missing error details"
+				))
+			})
+	})
+}
+
 fn error_code(error: &GoogleError) -> Option<String> {
 	error
 		.code
@@ -462,7 +477,7 @@ fn error_code(error: &GoogleError) -> Option<String> {
 
 /// Uses Google's status when it names a known type, otherwise the HTTP status.
 fn error_type(error: &GoogleError, status: http::StatusCode) -> &'static str {
-	match google_error_type(error) {
+	match google_error_type(error.status.as_deref()) {
 		"api_error" => match status {
 			http::StatusCode::BAD_REQUEST => "invalid_request_error",
 			http::StatusCode::UNAUTHORIZED | http::StatusCode::FORBIDDEN => "authentication_error",
@@ -471,6 +486,18 @@ fn error_type(error: &GoogleError, status: http::StatusCode) -> &'static str {
 			_ => "api_error",
 		},
 		error_type => error_type,
+	}
+}
+
+/// Maps a Google canonical error status to the compatible client error type.
+/// Definitions and HTTP mappings: https://cloud.google.com/service-infrastructure/docs/service-management/reference/rest/v1/Code
+pub(crate) fn google_error_type(status: Option<&str>) -> &'static str {
+	match status {
+		Some("INVALID_ARGUMENT") | Some("FAILED_PRECONDITION") => "invalid_request_error",
+		Some("NOT_FOUND") => "not_found_error",
+		Some("PERMISSION_DENIED") | Some("UNAUTHENTICATED") => "authentication_error",
+		Some("RESOURCE_EXHAUSTED") => "rate_limit_error",
+		_ => "api_error",
 	}
 }
 
@@ -999,6 +1026,17 @@ mod tests {
 		assert_eq!(
 			systemone,
 			json!({"detail": {"code": "safety", "message": "blocked"}})
+		);
+
+		let array_wrapped =
+			bytes::Bytes::from_static(br#"[{"error":{"code":"safety","message":"blocked"}}]"#);
+		let openai: Value = serde_json::from_slice(
+			&translate_error_to_decisions(&array_wrapped, http::StatusCode::BAD_REQUEST).unwrap(),
+		)
+		.unwrap();
+		assert_eq!(
+			openai,
+			json!({"error": {"type": "invalid_request_error", "message": "blocked", "code": "safety"}})
 		);
 	}
 

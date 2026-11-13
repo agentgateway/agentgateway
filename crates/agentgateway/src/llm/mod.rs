@@ -1035,11 +1035,7 @@ impl AIProvider {
 		}
 	}
 
-	pub fn supported_formats(
-		&self,
-		request_model: &str,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
-	) -> Vec<custom::ProviderFormat> {
+	pub fn supported_formats(&self, request_model: &str) -> Vec<custom::ProviderFormat> {
 		use custom::ProviderFormat::*;
 		match self {
 			AIProvider::OpenAI(_) => vec![
@@ -1069,19 +1065,7 @@ impl AIProvider {
 				}
 				formats
 			},
-			AIProvider::Gemini(_) => {
-				let mut formats = vec![Completions, Embeddings, GeminiCountTokens];
-				if catalog.is_some_and(|catalog| {
-					catalog.model_supports_endpoint(
-						gemini::Provider::NAME.as_str(),
-						request_model,
-						"/decisions",
-					)
-				}) {
-					formats.push(Decisions);
-				}
-				formats
-			},
+			AIProvider::Gemini(_) => vec![Completions, Embeddings, GeminiCountTokens, Decisions],
 			AIProvider::Anthropic(_) => vec![Messages, AnthropicTokenCount],
 			AIProvider::Bedrock(p) => {
 				let mut formats = vec![Completions, Messages, Responses, Embeddings, Rerank];
@@ -1195,22 +1179,14 @@ impl AIProvider {
 			})
 	}
 
-	pub fn supports_format(
-		&self,
-		format: custom::ProviderFormat,
-		request_model: &str,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
-	) -> bool {
-		self
-			.supported_formats(request_model, catalog)
-			.contains(&format)
+	pub fn supports_format(&self, format: custom::ProviderFormat, request_model: &str) -> bool {
+		self.supported_formats(request_model).contains(&format)
 	}
 
 	fn non_chat_provider_format_for(
 		&self,
 		input_format: InputFormat,
 		request_model: &str,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Option<custom::ProviderFormat> {
 		use custom::ProviderFormat::*;
 		let format = match input_format {
@@ -1222,12 +1198,12 @@ impl AIProvider {
 			InputFormat::Decisions => {
 				return [Decisions, SystemOne]
 					.into_iter()
-					.find(|f| self.supports_format(*f, request_model, catalog));
+					.find(|f| self.supports_format(*f, request_model));
 			},
 			InputFormat::SystemOne => {
 				return [SystemOne, Decisions]
 					.into_iter()
-					.find(|f| self.supports_format(*f, request_model, catalog));
+					.find(|f| self.supports_format(*f, request_model));
 			},
 			InputFormat::Detect(_)
 			| InputFormat::Completions
@@ -1236,7 +1212,7 @@ impl AIProvider {
 			| InputFormat::Gemini => return None,
 		};
 		self
-			.supports_format(format, request_model, catalog)
+			.supports_format(format, request_model)
 			.then_some(format)
 	}
 
@@ -1965,7 +1941,6 @@ impl AIProvider {
 				managed_body,
 				tokenize,
 				log,
-				None,
 				|provider, req, _, _| provider.render_embeddings_request(req),
 			)
 			.await
@@ -1994,7 +1969,6 @@ impl AIProvider {
 				managed_body,
 				tokenize,
 				log,
-				None,
 				|provider, req, _, _| provider.render_rerank_request(req),
 			)
 			.await
@@ -2007,7 +1981,6 @@ impl AIProvider {
 		req: Request,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::decisions::Request>(policies, req, log)
@@ -2024,12 +1997,9 @@ impl AIProvider {
 				managed_body,
 				tokenize,
 				log,
-				catalog,
-				|provider, req, _, llm| match provider.non_chat_provider_format_for(
-					InputFormat::Decisions,
-					&llm.request_model,
-					catalog,
-				) {
+				|provider, req, _, llm| match provider
+					.non_chat_provider_format_for(InputFormat::Decisions, &llm.request_model)
+				{
 					Some(custom::ProviderFormat::Decisions) if matches!(provider, AIProvider::Gemini(_)) => {
 						let (body, state) = conversion::gemini::from_decisions::translate(req)?;
 						llm.provider_state = Some(ProviderState::GeminiDecisions(Arc::new(state)));
@@ -2053,7 +2023,6 @@ impl AIProvider {
 		req: Request,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::systemone::Request>(policies, req, log)
@@ -2070,12 +2039,9 @@ impl AIProvider {
 				managed_body,
 				tokenize,
 				log,
-				catalog,
-				|provider, req, _, llm| match provider.non_chat_provider_format_for(
-					InputFormat::SystemOne,
-					&llm.request_model,
-					catalog,
-				) {
+				|provider, req, _, llm| match provider
+					.non_chat_provider_format_for(InputFormat::SystemOne, &llm.request_model)
+				{
 					Some(custom::ProviderFormat::Decisions) if matches!(provider, AIProvider::Gemini(_)) => {
 						let (body, state) = conversion::gemini::from_systemone::translate(req)?;
 						llm.provider_state = Some(ProviderState::GeminiSystemOne(Arc::new(state)));
@@ -2151,7 +2117,6 @@ impl AIProvider {
 				.model
 				.as_deref()
 				.ok_or_else(|| AIError::MissingField("model not specified".into()))?,
-			catalog,
 		);
 		if use_local {
 			let count = num_tokens(
@@ -2186,7 +2151,6 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
-				catalog,
 				move |provider, req, parts, llm| {
 					provider.render_count_tokens_request(req, &parts.headers, &llm.request_model, catalog)
 				},
@@ -2219,7 +2183,6 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
-				None,
 				|provider, req, _, llm| {
 					provider.render_gemini_count_tokens_request(req, &llm.request_model)
 				},
@@ -2373,7 +2336,6 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
-				None,
 				|_, req, _, _| match req {
 					types::detect::Request::Raw(bytes)
 					| types::detect::Request::Multipart { body: bytes, .. } => Ok(bytes.to_vec()),
@@ -2665,7 +2627,6 @@ impl AIProvider {
 		mut managed_body: Body,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
 		render: F,
 	) -> Result<RequestResult, AIError>
 	where
@@ -2683,7 +2644,6 @@ impl AIProvider {
 							.model()
 							.as_deref()
 							.ok_or_else(|| AIError::MissingField("model not specified".into()))?,
-						catalog,
 					)
 					.ok_or_else(|| {
 						AIError::UnsupportedConversion(strng::format!(

@@ -58,7 +58,6 @@ pub(crate) fn anthropic_thinking_capabilities(
 pub trait ModelCatalogHandle: Send + Sync {
 	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool;
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>>;
-	fn model_supports_endpoint(&self, provider_id: &str, model_id: &str, endpoint: &str) -> bool;
 }
 
 /// Borrowed catalog handle threaded through the request path; `None` when no catalog is loaded.
@@ -90,9 +89,5 @@ impl ModelCatalogHandle for TestCatalog {
 
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>> {
 		self.models.get(model_id).map(|t| Arc::new(t.clone()))
-	}
-
-	fn model_supports_endpoint(&self, _provider_id: &str, _model_id: &str, _endpoint: &str) -> bool {
-		false
 	}
 }

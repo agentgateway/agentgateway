@@ -28,21 +28,6 @@ fn gemini_provider(model: Option<&str>) -> AIProvider {
 	})
 }
 
-fn gemini_decision_catalog() -> crate::llm::catalog::ModelCatalog {
-	gemini_catalog_with_decision_model("gemini-decision-1")
-}
-
-fn gemini_catalog_with_decision_model(model: &str) -> crate::llm::catalog::ModelCatalog {
-	let catalog = serde_json::json!({
-		"providers": {
-			"gcp.gemini": {
-				"models": {model: {"endpoints": ["/decisions"]}}
-			}
-		}
-	});
-	crate::llm::catalog::ModelCatalog::from_json(&catalog.to_string())
-}
-
 /// What `process_gemini_request` hands to `setup_request` for a chat route: the upstream route
 /// type is `GenerateContent` (the provider format the native translation renders into) and the
 /// native render is signalled by `ProviderState::VertexGemini`.
@@ -90,75 +75,53 @@ fn gemini_request(uri: &str, body: &str) -> crate::http::Request {
 }
 
 #[rstest::rstest]
-#[case(
-	"gemini-decision-1",
-	Some(crate::llm::custom::ProviderFormat::Decisions)
-)]
-#[case("models/gemini-decision-1", None)]
-#[case("gemini-2.5-flash", None)]
-fn gemini_decisions_requires_the_decision_model(
-	#[case] model: &str,
-	#[case] expected: Option<crate::llm::custom::ProviderFormat>,
-) {
+#[case("gemini-decision-1")]
+#[case("models/gemini-decision-1")]
+#[case("future-decision-model")]
+fn gemini_decisions_is_a_provider_capability(#[case] model: &str) {
 	let provider = gemini_provider(None);
-	let catalog = gemini_decision_catalog();
 	assert_eq!(
-		provider
-			.non_chat_provider_format_for(InputFormat::Decisions, model, Some(catalog.as_handle()),),
-		expected
-	);
-	assert_eq!(
-		provider
-			.non_chat_provider_format_for(InputFormat::SystemOne, model, Some(catalog.as_handle()),),
-		expected
-	);
-}
-
-#[test]
-fn gemini_decisions_support_comes_from_the_catalog() {
-	let provider = gemini_provider(None);
-	let catalog = gemini_catalog_with_decision_model("future-decision-model");
-	assert_eq!(
-		provider.non_chat_provider_format_for(
-			InputFormat::Decisions,
-			"future-decision-model",
-			Some(catalog.as_handle()),
-		),
+		provider.non_chat_provider_format_for(InputFormat::Decisions, model),
 		Some(crate::llm::custom::ProviderFormat::Decisions)
 	);
 	assert_eq!(
-		provider.non_chat_provider_format_for(
-			InputFormat::Decisions,
-			"gemini-decision-1",
-			Some(catalog.as_handle()),
-		),
-		None
+		provider.non_chat_provider_format_for(InputFormat::SystemOne, model),
+		Some(crate::llm::custom::ProviderFormat::Decisions)
 	);
 }
 
 #[tokio::test]
-async fn gemini_decisions_rejects_a_chat_model_before_forwarding() {
+async fn gemini_decisions_leaves_model_validation_to_the_provider() {
 	let provider = gemini_provider(None);
-	let catalog = gemini_decision_catalog();
 	let request = gemini_request(
 		"https://example.com/v1/decisions",
 		r#"{"model":"gemini-2.5-flash","input":"test","questions":[{"type":"predicate","instructions":"test?"}]}"#,
 	);
-	let error = provider
+	let RequestResult::Success {
+		request,
+		llm_request,
+		upstream_route_type,
+	} = provider
 		.process_decisions_request(
 			&backend_info("generativelanguage.googleapis.com"),
 			None,
 			request,
 			false,
 			&mut None,
-			Some(catalog.as_handle()),
 		)
 		.await
-		.unwrap_err();
-	assert!(
-		matches!(error, AIError::UnsupportedConversion(_)),
-		"{error}"
-	);
+		.unwrap()
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::Decisions);
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::GeminiDecisions(_))
+	));
+	let body: Value =
+		serde_json::from_slice(&request.into_body().collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["model"], "gemini-2.5-flash");
 }
 
 fn generate_content_body(uri: &str) -> crate::http::Request {
@@ -1175,7 +1138,6 @@ async fn gemini_count_tokens_requires_a_gemini_upstream() {
 #[tokio::test]
 async fn gemini_decisions_converts_both_client_formats() {
 	let provider = gemini_provider(Some("gemini-decision-1"));
-	let catalog = gemini_decision_catalog();
 	for (path, body) in [
 		(
 			"/v1/decisions",
@@ -1193,25 +1155,11 @@ async fn gemini_decisions_converts_both_client_formats() {
 		let backend = backend_info("generativelanguage.googleapis.com");
 		let result = if path.ends_with("systemone") {
 			provider
-				.process_systemone_request(
-					&backend,
-					None,
-					req,
-					false,
-					&mut None,
-					Some(catalog.as_handle()),
-				)
+				.process_systemone_request(&backend, None, req, false, &mut None)
 				.await
 		} else {
 			provider
-				.process_decisions_request(
-					&backend,
-					None,
-					req,
-					false,
-					&mut None,
-					Some(catalog.as_handle()),
-				)
+				.process_decisions_request(&backend, None, req, false, &mut None)
 				.await
 		};
 		let RequestResult::Success {
