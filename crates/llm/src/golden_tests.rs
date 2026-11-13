@@ -247,8 +247,8 @@ mod requests {
 		("cache_control_tool_outputs", &[BEDROCK]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
-		("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
+		("basic", &[ANTHROPIC, VERTEX]),
+		("with_system", &[ANTHROPIC, VERTEX]),
 	];
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
 		(
@@ -592,8 +592,6 @@ mod requests {
 
 	#[test]
 	fn count_tokens() {
-		let mut headers = http::HeaderMap::new();
-		headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
 		let vertex = vertex::Provider {
 			model_override: Some(strng::new("configured-model-before-transformation")),
 			region: Some(strng::new("us-central1")),
@@ -605,9 +603,6 @@ mod requests {
 				match *provider {
 					ANTHROPIC => test_request(ANTHROPIC, &path, |i: &mut types::count_tokens::Request| {
 						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
-					}),
-					BEDROCK => test_request(BEDROCK, &path, |i: &mut types::count_tokens::Request| {
-						conversion::bedrock::from_anthropic_token_count::translate(i, &headers)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::count_tokens::Request| {
 						let mut resolved = i.clone();

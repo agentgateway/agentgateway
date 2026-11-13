@@ -2113,13 +2113,16 @@ impl AIProvider {
 		// `/v1/messages/count_tokens`. For providers/models without a native
 		// count-tokens endpoint, we must still answer this route, so we fall
 		// back to local token estimation using the normalized messages payload.
-		let use_local = !self.supports_format(
-			custom::ProviderFormat::AnthropicTokenCount,
-			req
-				.model
-				.as_deref()
-				.ok_or_else(|| AIError::MissingField("model not specified".into()))?,
-		);
+		// Bedrock Runtime's CountTokens API only covers Claude 4.6 and older, so Runtime always
+		// counts locally; Mantle serves Anthropic's native count_tokens for current models.
+		let model = req
+			.model
+			.as_deref()
+			.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
+		let use_local = !self.supports_format(custom::ProviderFormat::AnthropicTokenCount, model)
+			|| matches!(self, AIProvider::Bedrock(p)
+				if p.resolve_endpoint(RouteType::AnthropicTokenCount, Some(model), catalog)
+					== bedrock::BedrockEndpoint::Runtime);
 		if use_local {
 			let count = local_token_count(&req);
 			let body = serde_json::to_vec(&types::count_tokens::Response {
@@ -2144,19 +2147,8 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
-				move |provider, req, parts, llm| {
-					if let AIProvider::Bedrock(p) = provider
-						&& p.resolve_endpoint(
-							RouteType::AnthropicTokenCount,
-							Some(&llm.request_model),
-							catalog,
-						) == bedrock::BedrockEndpoint::Runtime
-					{
-						llm.provider_state = Some(ProviderState::BedrockCountTokens {
-							local_count: local_token_count(req),
-						});
-					}
-					provider.render_count_tokens_request(req, &parts.headers, &llm.request_model, catalog)
+				move |provider, req, _parts, llm| {
+					provider.render_count_tokens_request(req, &llm.request_model)
 				},
 			)
 			.await
@@ -2354,26 +2346,12 @@ impl AIProvider {
 	fn render_count_tokens_request(
 		&self,
 		req: &types::count_tokens::Request,
-		headers: &HeaderMap,
 		request_model: &str,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
 		match self {
-			AIProvider::Anthropic(_) | AIProvider::Custom(_) => {
+			// Bedrock reaches here only for Mantle, which serves Anthropic's native count_tokens.
+			AIProvider::Anthropic(_) | AIProvider::Custom(_) | AIProvider::Bedrock(_) => {
 				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
-			},
-			// Mantle serves Anthropic's native count_tokens (passthrough); Runtime uses the Bedrock
-			// CountTokens API. This must match the endpoint `get_path_for_route` resolves for the path.
-			AIProvider::Bedrock(p)
-				if matches!(
-					p.resolve_endpoint(RouteType::AnthropicTokenCount, Some(request_model), catalog),
-					bedrock::BedrockEndpoint::Mantle
-				) =>
-			{
-				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
-			},
-			AIProvider::Bedrock(_) => {
-				conversion::bedrock::from_anthropic_token_count::translate(req, headers)
 			},
 			AIProvider::Vertex(provider) => {
 				let body = serde_json::to_vec(req).map_err(AIError::RequestMarshal)?;
@@ -2982,30 +2960,6 @@ impl AIProvider {
 			managed_body,
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
-		if let Some(local_count) = bedrock_count_tokens_fallback(&req, &parts, &bytes) {
-			parts.status = ::http::StatusCode::OK;
-			parts.headers.remove("x-amzn-errortype");
-			parts.headers.insert(
-				header::CONTENT_TYPE,
-				::http::HeaderValue::from_static("application/json"),
-			);
-			let body = serde_json::to_vec(&types::count_tokens::Response {
-				input_tokens: local_count,
-			})
-			.map_err(AIError::ResponseMarshal)?;
-			return Ok(Self::finalize_response(
-				parts,
-				body.into(),
-				managed_body,
-				req,
-				LLMResponse {
-					count_tokens: Some(local_count),
-					..Default::default()
-				},
-				model_catalog,
-				log,
-			));
-		}
 		if !parts.status.is_success() {
 			let body = self.process_error(
 				&req,
@@ -3712,31 +3666,6 @@ fn local_token_count(req: &types::count_tokens::Request) -> u64 {
 			.into_iter()
 			.flatten(),
 	)
-}
-
-/// Bedrock Runtime rejects CountTokens for some Claude models, including cross-Region inference
-/// profiles, with this exact ValidationException. Any other failure is the client's to see.
-fn bedrock_count_tokens_fallback(
-	req: &LLMRequest,
-	parts: &::http::response::Parts,
-	body: &[u8],
-) -> Option<u64> {
-	#[derive(serde::Deserialize)]
-	struct BedrockError<'a> {
-		message: &'a str,
-	}
-	let Some(ProviderState::BedrockCountTokens { local_count }) = req.provider_state else {
-		return None;
-	};
-	let validation = parts
-		.headers
-		.get("x-amzn-errortype")
-		.and_then(|v| v.to_str().ok())
-		.is_some_and(|v| v.split(':').next() == Some("ValidationException"));
-	let unsupported = serde_json::from_slice::<BedrockError>(body)
-		.is_ok_and(|e| e.message == "The provided model doesn't support counting tokens.");
-	(parts.status == ::http::StatusCode::BAD_REQUEST && validation && unsupported)
-		.then_some(local_count)
 }
 
 fn unsupported_encoding(headers: &::http::HeaderMap) -> AIError {
