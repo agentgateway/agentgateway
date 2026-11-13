@@ -55,7 +55,6 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "durationfmt",
- "fs-err",
  "go-parse-duration",
  "hex",
  "http",
@@ -315,7 +314,6 @@ dependencies = [
  "insta",
  "ipnet",
  "itertools 0.15.0",
- "jemalloc_pprof",
  "jsonwebtoken",
  "lazy_static",
  "libc",
@@ -3901,23 +3899,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
-name = "jemalloc_pprof"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bb2dfa20a68824f4c8c1aa271617d0ee0d9b707a866d56b7d7ee39c60c235a8"
-dependencies = [
- "anyhow",
- "libc",
- "mappings",
- "once_cell",
- "pprof_util",
- "tempfile",
- "tikv-jemalloc-ctl",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "jiff"
 version = "0.2.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4300,19 +4281,6 @@ dependencies = [
  "serde_json",
  "syn 3.0.9",
  "toml",
-]
-
-[[package]]
-name = "mappings"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bab1e61a4b76757edb59cd81fcaa7f3ba9018d43b527d9abfad877b4c6c60f2"
-dependencies = [
- "anyhow",
- "libc",
- "once_cell",
- "pprof_util",
- "tracing",
 ]
 
 [[package]]
@@ -5346,20 +5314,6 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemallocator",
  "tracing",
-]
-
-[[package]]
-name = "pprof_util"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eea0cc524de808a6d98d192a3d99fe95617031ad4a52ec0a0f987ef4432e8fe1"
-dependencies = [
- "anyhow",
- "backtrace",
- "flate2",
- "num",
- "paste",
- "prost",
 ]
 
 [[package]]

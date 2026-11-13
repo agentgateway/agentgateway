@@ -42,7 +42,8 @@ pub mod model_path {
 			&& segment != ".."
 			&& !segment.contains([
 				'/', '\\', '%', '?', '#', '<', '>', '"', '`', '{', '}', '|', '^',
-			]) && !segment.chars().any(|c| c.is_control() || c.is_whitespace())
+			])
+			&& !segment.chars().any(|c| c.is_control() || c.is_whitespace())
 	}
 
 	pub fn is_safe_resource_name(model: &str) -> bool {

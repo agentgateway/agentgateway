@@ -2183,12 +2183,12 @@ ERROR: <input>:1:24: unsupported syntax '?'
 					if !call.args.is_empty() {
 						self.inc_indent();
 						self.newline();
-						for i in 0..call.args.len() {
+						for (i, arg) in call.args.iter().enumerate() {
 							if i > 0 {
 								self.push(",");
 								self.newline();
 							}
-							self.buffer(&call.args[i]);
+							self.buffer(arg);
 						}
 						self.dec_indent();
 						self.newline();
