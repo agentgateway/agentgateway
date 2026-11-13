@@ -3121,6 +3121,55 @@ fn setup_request_preserves_gemini_query_auth_with_host_override() {
 }
 
 #[test]
+fn setup_request_drops_gemini_query_auth_when_api_key_header_is_present() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let decision_request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "test",
+		"questions": [{"type": "predicate", "instructions": "test?"}]
+	}))
+	.expect("decision request should parse");
+	let (_, state) = conversion::gemini::from_decisions::translate(&decision_request)
+		.expect("decision request should translate");
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Decisions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-decision-1".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::GeminiDecisions(state.into())),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/decisions?key=client-key&foo=bar",
+		http::Method::POST,
+		&[("x-goog-api-key", "backend-key")],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Decisions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/decisions");
+	assert_eq!(req.uri().query(), None);
+	assert_eq!(req.headers()["x-goog-api-key"], "backend-key");
+}
+
+#[test]
 fn setup_request_drops_translated_query_with_host_override() {
 	let provider = AIProvider::Gemini(gemini::Provider {
 		model_override: None,

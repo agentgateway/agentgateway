@@ -3692,7 +3692,8 @@ fn google_invalid_argument(message: &str) -> ::http::Response<Body> {
 
 fn strip_translated_query(provider: &AIProvider, req: &mut Request) -> anyhow::Result<()> {
 	let keep_query_key = matches!(provider, AIProvider::Gemini(_))
-		&& !req.headers().contains_key(::http::header::AUTHORIZATION);
+		&& !req.headers().contains_key(::http::header::AUTHORIZATION)
+		&& !req.headers().contains_key("x-goog-api-key");
 	http::modify_req_uri(req, |uri| {
 		let Some(path_and_query) = uri.path_and_query.as_ref() else {
 			return Ok(());

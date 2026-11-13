@@ -1,13 +1,3 @@
-pub mod from_responses {
-	use bytes::Bytes;
-
-	use crate::AIError;
-
-	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-		super::super::completions::translate_google_error(bytes)
-	}
-}
-
 use indexmap::IndexMap;
 use serde_json::Value;
 
@@ -17,6 +7,16 @@ use crate::types::completions::typed::GoogleError;
 use crate::types::gemini::decisions as google;
 use crate::types::{decisions, systemone};
 use crate::{AIError, InputFormat, json};
+
+pub mod from_responses {
+	use bytes::Bytes;
+
+	use crate::AIError;
+
+	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
+		super::super::completions::translate_google_error(bytes)
+	}
+}
 
 pub mod from_systemone {
 	use super::*;
@@ -51,6 +51,7 @@ pub mod from_systemone {
 				format!("unsupported SystemOne field {field:?}").into(),
 			));
 		}
+		validate_systemone_questions(req.rest.get("questions"))?;
 		let req: systemone::typed::Request =
 			json::convert(req).map_err(|err| AIError::RequestParsing(InputFormat::SystemOne, err))?;
 		validate_question_count(req.questions.len(), 1000)?;
@@ -477,21 +478,22 @@ fn normalize_decisions_input(request: &mut Value) -> Result<(), AIError> {
 	let request = request
 		.as_object_mut()
 		.ok_or_else(|| AIError::UnsupportedConversion("Decisions request must be an object".into()))?;
-	if let Some(field) = request.keys().find(|field| {
-		!matches!(
-			field.as_str(),
-			"model" | "input" | "questions" | "safety_identifier"
-		)
-	}) {
-		return Err(AIError::UnsupportedConversion(
-			format!("unsupported Decisions field {field:?}").into(),
-		));
-	}
+	reject_unknown_fields(
+		request,
+		&["model", "input", "questions", "safety_identifier"],
+		"Decisions request",
+	)?;
+	validate_decisions_questions(request.get("questions"))?;
 	let Some(Value::Array(items)) = request.get_mut("input") else {
 		return Ok(());
 	};
 	for item in items {
 		let item = item.as_object_mut().ok_or(AIError::UnsupportedContent)?;
+		reject_unknown_fields(
+			item,
+			&["type", "role", "content"],
+			"Decisions input message",
+		)?;
 		if item
 			.get("type")
 			.and_then(Value::as_str)
@@ -508,8 +510,13 @@ fn normalize_decisions_input(request: &mut Value) -> Result<(), AIError> {
 				return Err(AIError::UnsupportedContent);
 			};
 			match kind {
-				"input_text" => {},
+				"input_text" => {
+					let part = part.as_object().ok_or(AIError::UnsupportedContent)?;
+					reject_unknown_fields(part, &["type", "text"], "Decisions input text")?;
+				},
 				"input_json" if user => {
+					let object = part.as_object().ok_or(AIError::UnsupportedContent)?;
+					reject_unknown_fields(object, &["type", "data"], "Decisions input JSON")?;
 					let data = part
 						.get("data")
 						.ok_or_else(|| AIError::UnsupportedConversion("input_json is missing data".into()))?;
@@ -519,6 +526,105 @@ fn normalize_decisions_input(request: &mut Value) -> Result<(), AIError> {
 				_ => return Err(AIError::UnsupportedContent),
 			}
 		}
+	}
+	Ok(())
+}
+
+fn validate_systemone_questions(questions: Option<&Value>) -> Result<(), AIError> {
+	let Some(Value::Object(questions)) = questions else {
+		return Ok(());
+	};
+	for question in questions.values() {
+		let Some(question) = question.as_object() else {
+			continue;
+		};
+		match question.get("type").and_then(Value::as_str) {
+			Some("noul") => {
+				reject_unknown_fields(
+					question,
+					&["type", "instructions", "criteria"],
+					"SystemOne noul question",
+				)?;
+				if let Some(Value::Object(criteria)) = question.get("criteria") {
+					reject_unknown_fields(criteria, &["true", "false"], "SystemOne noul criteria")?;
+				}
+			},
+			Some("choice") => reject_unknown_fields(
+				question,
+				&["type", "instructions", "criteria"],
+				"SystemOne choice question",
+			)?,
+			Some("score") => reject_unknown_fields(
+				question,
+				&["type", "instructions", "criteria"],
+				"SystemOne score question",
+			)?,
+			_ => {},
+		}
+	}
+	Ok(())
+}
+
+fn validate_decisions_questions(questions: Option<&Value>) -> Result<(), AIError> {
+	let Some(Value::Array(questions)) = questions else {
+		return Ok(());
+	};
+	for question in questions {
+		let Some(question) = question.as_object() else {
+			continue;
+		};
+		match question.get("type").and_then(Value::as_str) {
+			Some("predicate") => reject_unknown_fields(
+				question,
+				&["type", "name", "instructions"],
+				"Decisions predicate question",
+			)?,
+			Some("choice") => {
+				reject_unknown_fields(
+					question,
+					&["type", "name", "instructions", "choices"],
+					"Decisions choice question",
+				)?;
+				if let Some(Value::Array(choices)) = question.get("choices") {
+					for choice in choices {
+						if let Some(choice) = choice.as_object() {
+							reject_unknown_fields(choice, &["value", "description"], "Decisions choice option")?;
+						}
+					}
+				}
+			},
+			Some("score") => {
+				reject_unknown_fields(
+					question,
+					&["type", "name", "instructions", "levels"],
+					"Decisions score question",
+				)?;
+				if let Some(Value::Array(levels)) = question.get("levels") {
+					for level in levels {
+						if let Some(level) = level.as_object() {
+							reject_unknown_fields(level, &["label", "description"], "Decisions score level")?;
+						}
+					}
+				}
+			},
+			_ => {},
+		}
+	}
+	Ok(())
+}
+
+fn reject_unknown_fields(
+	object: &serde_json::Map<String, Value>,
+	allowed: &[&str],
+	context: &str,
+) -> Result<(), AIError> {
+	if let Some(field) = object
+		.keys()
+		.find(|field| !allowed.contains(&field.as_str()))
+	{
+		return Err(AIError::UnsupportedConversion(
+			format!("unsupported {context} field {field:?}").into(),
+		));
 	}
 	Ok(())
 }
@@ -727,6 +833,8 @@ mod tests {
 			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "choice", "instructions": "pick", "criteria": {"only": null}}}}),
 			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "score", "instructions": "rate", "criteria": ["only"]}}}),
 			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "noul", "instructions": "yes?"}}, "temperature": 0}),
+			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "noul", "instructions": "yes?", "foo": true}}}),
+			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "noul", "instructions": "yes?", "criteria": {"true": "yes", "foo": true}}}}),
 		] {
 			let request = serde_json::from_value(request).unwrap();
 			assert!(matches!(
@@ -757,6 +865,40 @@ mod tests {
 			from_decisions::translate(&request),
 			Err(AIError::UnsupportedConversion(_))
 		));
+
+		for request in [
+			json!({
+				"model": "gemini-decision-1",
+				"input": [{"type": "message", "role": "user", "content": "text", "foo": true}],
+				"questions": [{"type": "predicate", "instructions": "yes?"}]
+			}),
+			json!({
+				"model": "gemini-decision-1",
+				"input": [{"type": "message", "role": "user", "content": [{"type": "input_text", "text": "text", "foo": true}]}],
+				"questions": [{"type": "predicate", "instructions": "yes?"}]
+			}),
+			json!({
+				"model": "gemini-decision-1",
+				"input": "text",
+				"questions": [{"type": "predicate", "instructions": "yes?", "foo": true}]
+			}),
+			json!({
+				"model": "gemini-decision-1",
+				"input": "text",
+				"questions": [{"type": "choice", "instructions": "pick", "choices": [{"value": "a", "foo": true}, {"value": "b"}]}]
+			}),
+			json!({
+				"model": "gemini-decision-1",
+				"input": "text",
+				"questions": [{"type": "score", "instructions": "rate", "levels": [{"label": "low", "foo": true}, {"label": "high"}]}]
+			}),
+		] {
+			let request = serde_json::from_value(request).unwrap();
+			assert!(matches!(
+				from_decisions::translate(&request),
+				Err(AIError::UnsupportedConversion(_))
+			));
+		}
 	}
 
 	#[test]
