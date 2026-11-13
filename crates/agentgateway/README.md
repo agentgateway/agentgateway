@@ -54,7 +54,7 @@ Running `agentgateway import --from litellm --file inbound-api-key.yaml` prints 
 
 ```text
 exact: model_list[0]: Imported model deployment for chat
-approximate: general_settings.master_key: Mapped LiteLLM master_key and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate
+approximate: general_settings.master_key: Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone.
 exact: general_settings.litellm_key_header_name: Mapped LiteLLM's custom API-key header name to the inbound API-key policy
 ```
 
@@ -79,14 +79,14 @@ llm:
   policies:
     apiKey:
       keys:
-      - key: ${LITELLM_MASTER_KEY}
+      - key: $LITELLM_MASTER_KEY
       mode: strict
       location:
         header:
           name: x-litellm-key
 ```
 
-`os.environ/LITELLM_MASTER_KEY` is emitted as `${LITELLM_MASTER_KEY}`. A literal `master_key` is copied as-is, though one containing `$` gets a `manual` finding instead, since agentgateway's config loader would try to expand it. With `--output agentgateway-config.yaml`, the config is written to that file and stdout is:
+`os.environ/LITELLM_MASTER_KEY` is emitted as `$LITELLM_MASTER_KEY`. A literal `master_key` is copied as-is, though one containing `$` gets a `manual` finding instead, since agentgateway's config loader would try to expand it. With `--output agentgateway-config.yaml`, the config is written to that file and stdout is:
 
 ```text
 Imported litellm config: agentgateway-config.yaml
@@ -111,7 +111,7 @@ The statuses are:
 
 The command still writes a config when some fields cannot be mapped. It exits 0 in that case. Review every `manual` and `unsupported` line before using the result.
 
-A `master_key` or `litellm_key_header_name` shape the importer cannot safely interpret — not a string, an empty value, an `os.environ/` reference with no variable name, or a header name that is not valid HTTP — fails the whole import instead: it is never correct to write out a config with no inbound authentication at all because one setting among many could not be read.
+A `master_key` or `litellm_key_header_name` shape the importer cannot safely interpret (not a string, an empty value, an `os.environ/` reference with no variable name, or a header name that is not valid HTTP) fails the whole import instead: it is never correct to write out a config with no inbound authentication at all because one setting among many could not be read.
 
 If `general_settings.master_key` is absent entirely, the import still succeeds, but with a `manual` finding: this importer only reads config.yaml, so it cannot tell whether LiteLLM is instead authenticating from a `LITELLM_MASTER_KEY` environment variable set outside the file (a common Docker deployment pattern).
 

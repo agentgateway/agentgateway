@@ -473,7 +473,11 @@ impl ConfigImporter for LiteLlmImporter {
 		if let Some((source_path, fallbacks)) = fallbacks {
 			apply_fallbacks(fallbacks, source_path, &mut plan);
 		}
-		apply_litellm_inbound_api_key(&config.general_settings, &mut plan)?;
+		apply_litellm_inbound_api_key(
+			&config.general_settings,
+			&config.environment_variables,
+			&mut plan,
+		)?;
 
 		let router_default_fallbacks = config.router_settings.get("default_fallbacks");
 		let litellm_default_fallbacks = config.litellm_settings.get("default_fallbacks");
@@ -810,14 +814,21 @@ fn report_litellm_cache_value(
 /// `litellm_key_header_name`) to a standalone inbound `apiKey` policy.
 fn apply_litellm_inbound_api_key(
 	settings: &Map<String, Value>,
+	environment_variables: &Map<String, Value>,
 	plan: &mut ImportPlan,
 ) -> anyhow::Result<()> {
 	let Some(master_key) = settings.get("master_key") else {
+		let message = if environment_variables.contains_key("LITELLM_MASTER_KEY") {
+			"No master_key in config.yaml, but environment_variables.LITELLM_MASTER_KEY is set; LiteLLM loads environment_variables into its own process environment at startup, so that value is very likely the real master_key. This importer does not read environment_variables for security-sensitive values automatically; copy it into general_settings.master_key (or add general_settings.master_key: os.environ/LITELLM_MASTER_KEY if you'd rather keep the literal value out of config.yaml) to make it visible"
+				.to_string()
+		} else {
+			"No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+				.to_string()
+		};
 		plan.findings.push(ImportFinding {
 			source_path: "general_settings.master_key".to_string(),
 			status: ImportStatus::Manual,
-			message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
-				.to_string(),
+			message,
 		});
 		if settings.contains_key("litellm_key_header_name") {
 			plan.findings.push(ImportFinding {
@@ -2462,6 +2473,11 @@ mod tests {
 	#[test]
 	fn reports_litellm_api_key_header_without_master_key() {
 		assert_litellm_golden("inbound-api-key-header-without-master-key");
+	}
+
+	#[test]
+	fn points_at_environment_variables_master_key_when_general_settings_lacks_one() {
+		assert_litellm_golden("inbound-api-key-master-key-in-environment-variables");
 	}
 
 	#[test]

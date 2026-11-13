@@ -908,6 +908,18 @@ general_settings:
 	)
 	.await;
 	assert_eq!(res.status(), 401);
+
+	// LiteLLM itself would also accept this key with a Bearer prefix on this header; the
+	// importer's own finding says it doesn't replicate that fallback, so a prefixed value
+	// must be rejected here too.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("x-litellm-key", "Bearer literal-master-key")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
 }
 
 #[tokio::test]
