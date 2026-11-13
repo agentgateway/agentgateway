@@ -1,0 +1,29 @@
+{
+  "teams": [],
+  "keys": [
+    {
+      "key_hash": "9b0623e368f712a81f22d1427fa6c13ced5e95d5d5e431d9332f4dd2638173ca",
+      "key_alias": "granted-key",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null,
+      "mcp_servers": ["aaa_restricted"]
+    }
+  ],
+  "mcp_servers": [
+    {
+      "server_id": "server-id-restricted",
+      "server_name": "aaa_restricted",
+      "allow_all_keys": false
+    },
+    {
+      "server_id": "server-id-open",
+      "server_name": "zzz_open",
+      "allow_all_keys": true
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "teams": [
+    {"team_id": "team-1", "max_budget": 100.0}
+  ],
+  "keys": [
+    {
+      "key_hash": "eeee5555eeee5555eeee5555eeee5555eeee5555eeee5555eeee5555eeee5555",
+      "key_alias": "daily",
+      "team_id": "team-1",
+      "budget_duration": "1d"
+    }
+  ],
+  "mcp_servers": []
+}

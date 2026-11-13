@@ -1,0 +1,50 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-not-consumed-fields.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:ae058b38bff255f5aa1954d4cdd9e348b4f487293a2b6484da8d2511f581222b"
+            metadata:
+              name: not-consumed-key
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "db_state.teams[team-with-limits]"
+    status: manual
+    message: "Team \"team-with-limits\" has its own budget_duration: \"30d\", rpm_limit: 500, tpm_limit: 1000000 that was not migrated - the budget never resets and no rate limit is applied at the team level"
+  - sourcePath: "db_state.keys[0]"
+    status: manual
+    message: "Key has its own rpm_limit: 10, tpm_limit: 20000; agentgateway's localRateLimit has one numeric spec shared by every key behind a policy, so a per-key rate limit was not migrated. remoteRateLimit can express a per-key limit via a CEL descriptor keyed on apiKey.name, but it calls out to a separately deployed external rate-limit service for the actual counting - that service isn't something this importer can provision, so it isn't emitted automatically"
+  - sourcePath: "db_state.keys[0]"
+    status: unsupported
+    message: "Key has a LiteLLM soft_budget ($15.00, an early-warning threshold below max_budget); agentgateway has no equivalent and only the hard max_budget was migrated"
+  - sourcePath: "db_state.keys[0]"
+    status: unsupported
+    message: "Key is associated with LiteLLM user \"user-abc-123\"; agentgateway has no per-user construct and this association was not migrated"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"not-consumed-key\" to llm.policies.apiKey (hash-based, no plaintext)"

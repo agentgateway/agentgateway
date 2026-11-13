@@ -28,10 +28,17 @@ cargo run -p agentgateway-app -- import --from litellm --file litellm-config.yam
 Usage: agentgateway import [OPTIONS] --from <source> --file <file>
 
 Options:
-      --from <source>  Source gateway configuration format
-  -f, --file <file>    Read source configuration from a file
-  -o, --output <file>  Write generated agentgateway configuration to a file instead of stdout
-  -h, --help           Print help
+      --from <source>    Source gateway configuration format
+  -f, --file <file>      Read source configuration from a file
+  -o, --output <file>    Write generated agentgateway configuration to a file instead of stdout
+      --db-state <file>  Read LiteLLM DB-managed state (teams, virtual keys, MCP server grants) from a JSON file, and merge it into the generated configuration alongside the config.yaml source. Omit to import config.yaml alone
+  -h, --help             Print help
+```
+
+To merge DB-managed state as well:
+
+```bash
+agentgateway import --from litellm --file litellm-config.yaml --db-state state.json --output agentgateway-config.yaml
 ```
 
 `--from` must be `litellm`. Any other value exits with: `unsupported import source "..."; supported sources: litellm`.
@@ -141,9 +148,45 @@ unsupported: general_settings.litellm_key_header_name: LiteLLM custom API-key he
 - Bedrock guardrails become `llm.policies.guardrails`. Other guardrail types, such as Presidio, are reported and not emitted.
 - `mcp_servers` become `mcp.targets`. Names are sanitized to the Gateway API section-name pattern. A restricted server (`allow_all_keys` set to false, omitted, or not a boolean) is not emitted from config.yaml alone, because the per-key grants that protect it live in LiteLLM's database. If MCP targets are emitted, the inbound API-key policy is also applied to the MCP gateway. If there is no inbound key, MCP targets are dropped rather than left unauthenticated.
 
+## `--db-state`
+
+Pass a JSON file of LiteLLM Admin API state (teams, virtual keys, and MCP server grants). Omit the flag to import `config.yaml` alone.
+
+Virtual keys are migrated by their existing SHA-256 hash. No plaintext key is written. `key_alias` becomes the key name when set; otherwise a stable name is generated. The name `master` is reserved for the inbound `master_key`.
+
+Blocked keys, keys on a blocked team, already-expired keys, and keys that still have an expiry are skipped. agentgateway API keys have no expiry field, so migrating a time-boxed key would make it permanent. An unresolvable `team_id` or a generated name that collides with another migrated key is also skipped.
+
+Key and team model lists become `allowedModels`. A key with no list of its own inherits its team's current list (a snapshot; later team edits do not propagate). If the key and team lists have no overlap, the key is migrated with an empty `allowedModels` list, which denies every model.
+
+Budgets use remaining spend (`max_budget` minus `spend`), floored to the cent. A team pool is split so per-key caps cannot add up to more than the team total: a key with its own budget keeps the minimum of that remaining amount and the team cap; any leftover pool is split equally across the team's keys that have no budget of their own; if owned remaining budgets already exceed the team cap, every key is scaled down proportionally.
+
+Daily and hourly `budget_duration` values become a resetting window. Other durations are not reset automatically.
+
+MCP grants become `mcp.policies.mcpAuthorization` rules. A restricted server that was held back from config.yaml is emitted only once a real grant protects it. If config.yaml and the DB-state file disagree on `allow_all_keys`, the closed value wins.
+
+Running `agentgateway import --from litellm --file db-state-keys-basic.yaml --db-state db-state-keys-basic.state.json` prints findings such as:
+
+```text
+exact: model_list[0]: Imported model deployment for chat-primary
+exact: model_list[1]: Imported model deployment for open-weight
+exact: db_state.keys[0]: Migrated key "no-team-full-list" to llm.policies.apiKey (hash-based, no plaintext)
+approximate: db_state.keys[1]: Key has no model list of its own; LiteLLM inherits its team's 1 models. agentgateway has no team construct, so the team's current model list was copied onto this key - a later team model change won't propagate.
+exact: db_state.keys[1]: Migrated key "inherits-team-list" to llm.policies.apiKey (hash-based, no plaintext)
+unsupported: db_state.keys[2]: Key's models have no overlap with its team's models; LiteLLM would deny every model for this key. Migrated with allowedModels: [] (denies all) to match - check whether this key is meant to be usable at all.
+exact: db_state.keys[2]: Migrated key "zero-overlap-with-team" to llm.policies.apiKey (hash-based, no plaintext)
+exact: db_state.keys[3]: Migrated key "key-b4597164a340" to llm.policies.apiKey (hash-based, no plaintext)
+
+Import summary: 6 exact, 1 approximate, 0 manual, 1 unsupported
+Needs manual review:
+  - db_state.keys[2]: Key's models have no overlap with its team's models; LiteLLM would deny every model for this key. Migrated with allowedModels: [] (denies all) to match - check whether this key is meant to be usable at all.
+```
+
 ## What is not migrated
 
 - LiteLLM database settings (`database_url` and similar) are not reused. The generated config always points at a new agentgateway SQLite database. Configure PostgreSQL yourself if you need it.
 - Unrecognized top-level fields, unused credentials, model metadata, and environment variables that are not part of a mapped value are reported and not emitted.
-- The importer does not read LiteLLM's runtime database. Virtual keys, budgets, and per-key MCP grants are not imported by this command. Restricted MCP servers therefore stay omitted.
 - Per-deployment timeouts, non-Bedrock guardrails, and pass-through endpoints that require auth without a usable `master_key` are not mapped, as in the findings above.
+- Per-key and per-team `rpm_limit` / `tpm_limit` are not mapped. agentgateway's local rate limit uses one numeric spec shared by every key. `remoteRateLimit` can express a per-key limit, but it needs an external rate-limit service that this command cannot provision.
+- Key `expires` is not mapped. Those keys are skipped rather than made permanent.
+- `soft_budget`, `user_id`, per-user budgets, and team `budget_duration` values other than daily or hourly key-level windows are reported and not migrated.
+- The `--db-state` file's own shape (`key_hash`, flattened `object_permission`, and similar) is produced by a separate extraction step against LiteLLM's Admin API, not by this command. That step can normalize away restrictions this schema has no field for at all - a per-tool grant (`mcp_tool_permissions`), an MCP access group, a per-model budget, `allowed_routes`, or an organization - before they ever reach this importer, so no finding is raised for them either. A key scoped to specific tools on a server migrates with access to the whole server if that happens. Treat a clean import as "everything this schema can see was handled," not as "every LiteLLM restriction was captured."

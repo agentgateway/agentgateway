@@ -1,0 +1,73 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-model-sentinels-and-wildcards.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: $LITELLM_MASTER_KEY
+            metadata:
+              name: master
+          - keyHash: "sha256:f000a000f000a000f000a000f000a000f000a000f000a000f000a000f000a000"
+            metadata:
+              name: proxy-unrestricted
+          - keyHash: "sha256:f000a000f000a000f000a000f000a000f000a000f000a000f000a000f000a001"
+            metadata:
+              name: team-inherit-explicit
+            allowedModels:
+              - openai/*
+          - keyHash: "sha256:f000a000f000a000f000a000f000a000f000a000f000a000f000a000f000a002"
+            metadata:
+              name: wildcard-match
+            allowedModels:
+              - openai/gpt-4o
+          - keyHash: "sha256:f000a000f000a000f000a000f000a000f000a000f000a000f000a000f000a003"
+            metadata:
+              name: bad-pattern
+            allowedModels: []
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: "db_state.keys[0]"
+    status: approximate
+    message: "Key's models includes LiteLLM's all-proxy-models sentinel, meaning no model restriction at all; allowedModels was not set to match"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"proxy-unrestricted\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[1]"
+    status: approximate
+    message: "Key has no model list of its own; LiteLLM inherits its team's 1 models. agentgateway has no team construct, so the team's current model list was copied onto this key - a later team model change won't propagate."
+  - sourcePath: "db_state.keys[1]"
+    status: exact
+    message: "Migrated key \"team-inherit-explicit\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[2]"
+    status: exact
+    message: "Migrated key \"wildcard-match\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[3]"
+    status: unsupported
+    message: "Key's models included [\"a*b*\", \"\"], which agentgateway's own model pattern rules reject (empty, or more than one wildcard); dropped from allowedModels rather than emitting a config the gateway would refuse to load"
+  - sourcePath: "db_state.keys[3]"
+    status: exact
+    message: "Migrated key \"bad-pattern\" to llm.policies.apiKey (hash-based, no plaintext)"

@@ -1,0 +1,13 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+mcp_servers:
+  open_server:
+    url: "http://mcp-test-server:8081/mcp"
+    transport: "http"
+    allow_all_keys: true
+  restricted_server:
+    url: "http://mcp-test-server:8081/mcp"
+    transport: "http"
+    allow_all_keys: false

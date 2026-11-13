@@ -1,14 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, bail};
+use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use crate::import::{
-	ConfigImporter, ImportFinding, ImportPlan, ImportStatus, ImportedInboundAPIKey, ImportedModel,
-	ImportedModelProvider, ImportedProvider, ImportedRoute, imported_model_name, move_string,
-	normalize_environment_references, report_unmapped_fields, sanitize_mcp_target_name,
+	ConfigImporter, ImportFinding, ImportOptions, ImportPlan, ImportStatus, ImportedInboundAPIKey,
+	ImportedModel, ImportedModelProvider, ImportedProvider, ImportedRoute, imported_model_name,
+	move_string, normalize_environment_references, report_unmapped_fields, sanitize_mcp_target_name,
 	unique_imported_provider_name,
 };
 use crate::types::local::McpBackendHost;
@@ -97,7 +98,7 @@ impl ConfigImporter for LiteLlmImporter {
 		"litellm"
 	}
 
-	fn import(&self, input: &str) -> anyhow::Result<ImportPlan> {
+	fn import(&self, input: &str, options: &ImportOptions) -> anyhow::Result<ImportPlan> {
 		let config: LiteLlmConfig =
 			crate::yaml::from_str(input).context("invalid LiteLLM configuration")?;
 		if config.model_list.is_empty() && config.mcp_servers.is_empty() {
@@ -389,6 +390,9 @@ impl ConfigImporter for LiteLlmImporter {
 			ImportStatus::Unsupported,
 			"Unrecognized LiteLLM top-level field was not emitted",
 		);
+		if let Some(state) = &options.db_state {
+			import_litellm_db_state(state, options, &mut plan);
+		}
 		finalize_litellm_plan(&mut plan);
 		Ok(plan)
 	}
@@ -530,7 +534,14 @@ fn report_litellm_cache_value(
 ///   never actually emitted. Retract those and record why nothing landed instead.
 fn finalize_litellm_plan(plan: &mut ImportPlan) {
 	if !plan.mcp_targets.is_empty() {
-		if plan.inbound_api_key.is_some() {
+		let has_db_state_mcp_auth =
+			!plan.mcp_api_keys.is_empty() || !plan.mcp_authorization_rules.is_empty();
+		if has_db_state_mcp_auth {
+			// DB-state already protects these targets with its own per-key auth and
+			// mcpAuthorization rules (including its own master-key bypass rule), and
+			// import_litellm_db_state already explains that via its own findings - nothing
+			// to add or retract here.
+		} else if plan.inbound_api_key.is_some() {
 			plan.findings.push(ImportFinding {
 				source_path: "general_settings.master_key".to_string(),
 				status: ImportStatus::Approximate,
@@ -563,13 +574,27 @@ fn finalize_litellm_plan(plan: &mut ImportPlan) {
 		let had_timeout = plan.timeout.is_some();
 		let had_guardrails = plan.guardrails.is_some();
 		let had_inbound_api_key = plan.inbound_api_key.is_some();
+		let had_db_api_keys = !plan.db_api_keys.is_empty();
 		plan.findings.retain(|finding| {
 			!finding
 				.message
 				.starts_with("Mapped LiteLLM router_settings.timeout")
 				&& !finding.message.starts_with("Mapped LiteLLM's master_key")
 				&& !finding.message.contains("against every configured model")
+				&& !finding.message.starts_with("Migrated key ")
 		});
+		// Only claim these weren't emitted anywhere if they genuinely weren't: when MCP targets
+		// exist, both the inbound key and any DB-state virtual keys are already mirrored onto
+		// mcp.policies.apiKey above, and that path's own findings already say so - pushing these
+		// too would contradict them.
+		if had_db_api_keys && plan.mcp_targets.is_empty() {
+			plan.findings.push(ImportFinding {
+				source_path: "db_state.keys".to_string(),
+				status: ImportStatus::Unsupported,
+				message: "No models were imported, so there is no llm: block for these DB-state virtual keys to attach to, and they were not migrated"
+					.to_string(),
+			});
+		}
 		if had_timeout {
 			plan.findings.push(ImportFinding {
 				source_path: "router_settings.timeout".to_string(),
@@ -578,9 +603,6 @@ fn finalize_litellm_plan(plan: &mut ImportPlan) {
 					.to_string(),
 			});
 		}
-		// Only claim the key wasn't emitted anywhere if it genuinely wasn't: when MCP targets
-		// exist, the key is already mirrored onto mcp.policies.apiKey above, and that finding
-		// already says so - pushing this one too would contradict it.
 		if had_inbound_api_key && plan.mcp_targets.is_empty() {
 			plan.findings.push(ImportFinding {
 				source_path: "general_settings.master_key".to_string(),
@@ -1351,8 +1373,11 @@ fn import_litellm_mcp_servers(
 		};
 		let mut server = server.clone();
 
-		// A restricted server goes through the same mapping as an open one - only the final push
-		// differs (dropped with an Unsupported finding instead of emitted).
+		// A restricted server still goes through every mapping step below and gets a fully-built
+		// spec, stashed rather than emitted into mcp.targets: a later DB-state import
+		// (import_litellm_db_state) can splice it in once it proves an mcpAuthorization rule
+		// restricts it to specific keys. It shares this path with an open server, so it gets the
+		// same transport/auth_type/extra_headers/static_headers handling and error findings.
 		// LiteLLM defaults a missing allow_all_keys to false (load_servers_from_config in
 		// litellm/proxy/mcp_server/mcp_server_manager.py); only an explicit true counts as open.
 		let allow_all_keys_value = server.remove("allow_all_keys");
@@ -1426,7 +1451,6 @@ fn import_litellm_mcp_servers(
 		let Some(mut spec) = spec else {
 			continue;
 		};
-
 		// Reserved only now that the spec is confirmed buildable - a server that fails
 		// transport/url/command validation above must not claim this name, or a later, valid
 		// server sanitizing to the same name would be wrongly dropped as a collision. A
@@ -1441,6 +1465,18 @@ fn import_litellm_mcp_servers(
 			});
 			continue;
 		}
+		// Record both the raw config.yaml key and its display name (if aliased), so DB-state MCP
+		// grants - which reference LiteLLM's own server name, never agentgateway's sanitized
+		// target name - can be resolved without re-deriving sanitization or missing a
+		// collision-driven rename. Done only once a target spec exists and survives the
+		// collision check above, so a server dropped either way (bad transport, unbuildable
+		// spec, or a colliding name) never leaves an orphaned name mapping behind.
+		plan
+			.mcp_target_names
+			.insert(server_key.clone(), target_name.clone());
+		plan
+			.mcp_target_names
+			.insert(display_name.clone(), target_name.clone());
 
 		match server.remove("auth_type") {
 			None => {},
@@ -1514,29 +1550,43 @@ fn import_litellm_mcp_servers(
 			ImportStatus::Manual,
 			"LiteLLM MCP server field requires manual review and was not emitted",
 		);
+		if let Value::Object(spec_map) = &mut spec {
+			spec_map.insert("name".to_string(), json!(target_name));
+		}
 		if is_restricted {
+			let held_back_reason = match allow_all_keys_restriction {
+				Some("omitted") => {
+					"config.yaml omitted allow_all_keys (LiteLLM defaults this to false), which it alone cannot express safely"
+				},
+				Some("non-boolean") => {
+					"config.yaml set a non-boolean allow_all_keys, which it alone cannot express safely"
+				},
+				_ => "config.yaml set allow_all_keys: false, which it alone cannot express safely",
+			};
 			let message = if allow_all_keys_restriction == Some("omitted") {
 				"LiteLLM defaults an omitted allow_all_keys to false, so this server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
 			} else {
 				"This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
 			};
+			plan
+				.pending_restricted_mcp_targets
+				.push((spec, held_back_reason));
+			plan.held_back_mcp_servers.insert(server_key.clone());
+			plan.held_back_mcp_servers.insert(display_name.clone());
 			plan.findings.push(ImportFinding {
 				source_path,
 				status: ImportStatus::Unsupported,
 				message: message.to_string(),
 			});
-			continue;
+		} else {
+			plan.mcp_targets.push(spec);
+			emitted_count += 1;
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Approximate,
+				message: format!("Mapped LiteLLM MCP server to agentgateway target {target_name:?}"),
+			});
 		}
-		if let Value::Object(spec_map) = &mut spec {
-			spec_map.insert("name".to_string(), json!(target_name));
-		}
-		plan.mcp_targets.push(spec);
-		emitted_count += 1;
-		plan.findings.push(ImportFinding {
-			source_path,
-			status: ImportStatus::Approximate,
-			message: format!("Mapped LiteLLM MCP server to agentgateway target {target_name:?}"),
-		});
 	}
 	if emitted_count > 1 {
 		plan.findings.push(ImportFinding {
@@ -2237,6 +2287,24 @@ fn is_supported_model_pattern(pattern: &str) -> bool {
 			&& (pattern == "*" || pattern.starts_with('*') || pattern.ends_with('*')))
 }
 
+/// Matches a DB-state model pattern (a team's or key's own `models` entry, which can be a
+/// literal name or a one-wildcard prefix/suffix pattern, same shape config.yaml allows) against
+/// a real model name, the same way LiteLLM itself resolves one against the other.
+fn litellm_model_matches(pattern: &str, model: &str) -> bool {
+	if pattern == model {
+		return true;
+	}
+	pattern
+		.strip_suffix('*')
+		.map(|prefix| model.starts_with(prefix))
+		.or_else(|| {
+			pattern
+				.strip_prefix('*')
+				.map(|suffix| model.ends_with(suffix))
+		})
+		.unwrap_or(false)
+}
+
 fn map_provider(provider: &str) -> Option<&'static str> {
 	match provider.to_ascii_lowercase().as_str() {
 		"openai" | "text-completion-openai" => Some("openAI"),
@@ -2769,6 +2837,935 @@ fn extend_fallback_chain<'a>(
 	}
 }
 
+/// LiteLLM's DB-managed runtime state (teams and virtual API keys), extracted separately
+/// through LiteLLM's own Admin API. Kept apart from the config.yaml the rest of this importer
+/// reads: config.yaml is static deployment configuration, this is live, DB-managed account
+/// state.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiteLlmDbState {
+	#[serde(default)]
+	pub teams: Vec<DbStateTeam>,
+	#[serde(default)]
+	pub keys: Vec<DbStateKey>,
+	#[serde(default)]
+	pub mcp_servers: Vec<DbStateMcpServer>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DbStateMcpServer {
+	pub server_id: String,
+	pub server_name: String,
+	#[serde(default)]
+	pub allow_all_keys: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DbStateTeam {
+	pub team_id: String,
+	/// Human-readable team name, used only in finding messages - `team_id` (a UUID) remains
+	/// the stable identifier everywhere a finding's `source_path` references a team.
+	pub team_alias: Option<String>,
+	#[serde(default)]
+	pub models: Vec<String>,
+	#[serde(default)]
+	pub blocked: bool,
+	pub max_budget: Option<f64>,
+	pub spend: Option<f64>,
+	pub budget_duration: Option<String>,
+	pub rpm_limit: Option<i64>,
+	pub tpm_limit: Option<i64>,
+	/// Team-level MCP server grants (server IDs or names, same forms as a key's own
+	/// `mcp_servers`). When non-empty, a key on this team can only reach a server that's in
+	/// *both* its own grant list and this one - see the intersection in
+	/// `import_litellm_db_state`.
+	#[serde(default)]
+	pub object_permission: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DbStateKey {
+	pub key_hash: String,
+	pub key_alias: Option<String>,
+	pub team_id: Option<String>,
+	pub user_id: Option<String>,
+	#[serde(default)]
+	pub models: Vec<String>,
+	pub expires: Option<String>,
+	pub blocked: Option<bool>,
+	pub max_budget: Option<f64>,
+	pub spend: Option<f64>,
+	pub soft_budget: Option<f64>,
+	pub budget_duration: Option<String>,
+	pub rpm_limit: Option<i64>,
+	pub tpm_limit: Option<i64>,
+	#[serde(default)]
+	pub mcp_servers: Vec<String>,
+}
+
+/// Parses a DB-state JSON document (LiteLLM's DB-managed teams, keys, and MCP server grants)
+/// for use as [`ImportOptions::db_state`]. A thin wrapper so callers (the CLI) don't need
+/// their own `serde_json` dependency just for this.
+pub fn parse_db_state(json: &str) -> anyhow::Result<LiteLlmDbState> {
+	serde_json::from_str(json).context("invalid LiteLLM DB-state JSON")
+}
+
+/// A team's human-readable name for finding messages, falling back to its `team_id` (a UUID)
+/// when LiteLLM never set `team_alias`. Never used for `source_path`, which stays on `team_id`
+/// as the stable, structural reference.
+fn team_label(team: &DbStateTeam) -> &str {
+	team.team_alias.as_deref().unwrap_or(team.team_id.as_str())
+}
+
+/// Maps a LiteLLM `budget_duration` string onto agentgateway's `window.rolling` duration,
+/// only for the two cases where both sides reset on the identical UTC instant: LiteLLM's
+/// `duration_parser` resolves "1d"/"24h"/"daily" to the next midnight UTC and "1h"/"hourly" to
+/// the next hour boundary, which is exactly what agentgateway's epoch-aligned "24h"/"1h"
+/// windows already do (Unix epoch 0 falls exactly on a midnight UTC hour boundary). Anything
+/// else (weekly - Monday-anchored, not epoch-aligned; monthly/"30d" - a calendar month, not a
+/// fixed 30-day span; any other custom value) is deliberately left unmapped rather than
+/// approximated, since a fixed-length rolling window would drift against LiteLLM's
+/// calendar-anchored reset over time.
+fn litellm_budget_duration_to_window(duration: &str) -> Option<&'static str> {
+	match duration.to_ascii_lowercase().as_str() {
+		"1d" | "24h" | "daily" => Some("24h"),
+		"1h" | "hourly" => Some("1h"),
+		_ => None,
+	}
+}
+
+/// Escapes a string as a CEL string literal, including the surrounding quotes. Rust's `{:?}`
+/// uses Rust's own escape rules, not CEL's, and a control character in a user-controlled value
+/// (a key alias, a server name) embedded that way can break the generated CEL expression
+/// entirely.
+fn cel_escape_string(value: &str) -> String {
+	let mut out = String::with_capacity(value.len() + 2);
+	out.push('"');
+	for c in value.chars() {
+		match c {
+			'\\' => out.push_str("\\\\"),
+			'"' => out.push_str("\\\""),
+			'\n' => out.push_str("\\n"),
+			'\r' => out.push_str("\\r"),
+			'\t' => out.push_str("\\t"),
+			c if (c as u32) < 0x20 => out.push_str(&format!("\\x{:02x}", c as u32)),
+			c => out.push(c),
+		}
+	}
+	out.push('"');
+	out
+}
+
+/// Builds an `mcpAuthorization` rule fragment matching a target by name across every MCP
+/// resource type (tool, prompt, resource) rather than only `mcp.tool.target`: LiteLLM's own
+/// access grants cover a server's tools, prompts and resources together, and a tool-only rule
+/// would deny the other two kinds outright once any mcpAuthorization rule exists at all. Each
+/// resource type's own CEL context only carries its own field (a tool request has no
+/// `mcp.prompt`), so `has(...)` guards every branch instead of letting a mismatched field
+/// access fail.
+fn mcp_target_rule(target: &str) -> String {
+	let target = cel_escape_string(target);
+	format!(
+		"(has(mcp.tool) && mcp.tool.target == {target}) || \
+		 (has(mcp.prompt) && mcp.prompt.target == {target}) || \
+		 (has(mcp.resource) && mcp.resource.target == {target})"
+	)
+}
+
+/// Maps LiteLLM's DB-managed teams/keys onto `llm.policies.apiKey.keys[]` entries
+/// (`ImportPlan::db_api_keys`), separate from the config.yaml import. A key is skipped
+/// entirely (never emitted, even disabled) rather than migrated in a degraded form when:
+/// blocked (itself or its team - re-enabling a revoked credential would be a regression);
+/// already expired; or not yet expired (agentgateway API keys have no expiry field at all, so
+/// migrating one as a plain key would make a time-boxed credential permanent) - skip it by
+/// default rather than add that risk silently.
+pub(super) fn import_litellm_db_state(
+	state: &LiteLlmDbState,
+	options: &ImportOptions,
+	plan: &mut ImportPlan,
+) {
+	let teams: HashMap<&str, &DbStateTeam> = state
+		.teams
+		.iter()
+		.map(|t| (t.team_id.as_str(), t))
+		.collect();
+
+	for team in &state.teams {
+		let mut unmapped = Vec::new();
+		if let Some(duration) = &team.budget_duration {
+			unmapped.push(format!("budget_duration: {duration:?}"));
+		}
+		let has_rate_limit = team.rpm_limit.is_some() || team.tpm_limit.is_some();
+		if let Some(rpm) = team.rpm_limit {
+			unmapped.push(format!("rpm_limit: {rpm}"));
+		}
+		if let Some(tpm) = team.tpm_limit {
+			unmapped.push(format!("tpm_limit: {tpm}"));
+		}
+		if !unmapped.is_empty() {
+			let explanation = match (team.budget_duration.is_some(), has_rate_limit) {
+				(true, true) => "the budget never resets and no rate limit is applied at the team level",
+				(true, false) => "the budget never resets at the team level",
+				_ => "no rate limit is applied at the team level",
+			};
+			plan.findings.push(ImportFinding {
+				source_path: format!("db_state.teams[{}]", team.team_id),
+				status: ImportStatus::Manual,
+				message: format!(
+					"Team {:?} has its own {} that was not migrated - {explanation}",
+					team_label(team),
+					unmapped.join(", ")
+				),
+			});
+		}
+	}
+
+	// Phase 1: skip blocked/team-blocked/expired keys up front, so the budget split below (which
+	// must see only the keys that will actually be emitted) never divides a team's pool across a
+	// key that was never going to exist.
+	let mut kept: Vec<(usize, &DbStateKey)> = Vec::new();
+	for (index, key) in state.keys.iter().enumerate() {
+		let source_path = format!("db_state.keys[{index}]");
+		if let Some(team_id) = key.team_id.as_deref()
+			&& !teams.contains_key(team_id)
+		{
+			// Can't verify this key's team isn't blocked, or what models/budget it should
+			// inherit, so skip it entirely rather than silently treating it as team-less -
+			// the same "unsafe to migrate in a degraded form" reasoning this function's own
+			// doc comment already applies to a blocked or expired key.
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"Key's team_id {team_id:?} does not match any team in the DB-state export, so its team's blocked/model/budget state can't be checked; it was not migrated"
+				),
+			});
+			continue;
+		}
+		let team = key.team_id.as_deref().and_then(|id| teams.get(id).copied());
+
+		if key.blocked == Some(true) {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: "Key is blocked in LiteLLM and was not migrated".to_string(),
+			});
+			continue;
+		}
+		if team.is_some_and(|t| t.blocked) {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: "Key's team is blocked in LiteLLM and was not migrated".to_string(),
+			});
+			continue;
+		}
+
+		if let Some(expires) = &key.expires {
+			match expires.parse::<DateTime<Utc>>() {
+				Ok(expiry) if expiry <= options.now => {
+					plan.findings.push(ImportFinding {
+						source_path,
+						status: ImportStatus::Unsupported,
+						message: format!("Key expired at {expiry} in LiteLLM and was not migrated"),
+					});
+					continue;
+				},
+				Ok(expiry) => {
+					plan.findings.push(ImportFinding {
+						source_path,
+						status: ImportStatus::Unsupported,
+						message: format!(
+							"Key expires at {expiry} in LiteLLM, but agentgateway API keys have no expiry field at all; migrating it as a plain key would make it permanent, so it was not migrated. Re-issue it without an expiry, or migrate it manually once an expiry-aware option exists."
+						),
+					});
+					continue;
+				},
+				Err(_) => {
+					plan.findings.push(ImportFinding {
+						source_path,
+						status: ImportStatus::Manual,
+						message: format!(
+							"Key expires value {expires:?} could not be parsed as a timestamp and was not migrated"
+						),
+					});
+					continue;
+				},
+			}
+		}
+
+		kept.push((index, key));
+	}
+
+	// Phase 1.5: drop keys that can never be safely emitted at all (a duplicate key_hash, a
+	// hash colliding with the master key, or a generated name collision) before the budget pool
+	// split below, so a team's pool is only ever divided across keys that will actually be
+	// emitted - not stranded on a share computed for a key that gets dropped afterward.
+	let mut used_names: HashSet<String> = HashSet::new();
+	if plan.inbound_api_key.is_some() {
+		// Reserve "master" so a virtual key aliased to the same name can never collide into the
+		// admin-bypass identity the master key gets mirrored under below.
+		used_names.insert("master".to_string());
+	}
+	let master_hash = plan.inbound_api_key.as_ref().and_then(|master| {
+		if master.key.starts_with('$') {
+			None
+		} else {
+			Some(hex::encode(crate::crypto::digest::sha256(
+				master.key.as_bytes(),
+			)))
+		}
+	});
+	let mut seen_hashes: HashMap<String, usize> = HashMap::new();
+	let mut filtered: Vec<(usize, &DbStateKey, String)> = Vec::new();
+	for (index, key) in kept {
+		let source_path = format!("db_state.keys[{index}]");
+		let is_valid_sha256_hex =
+			key.key_hash.len() == 64 && key.key_hash.chars().all(|c| c.is_ascii_hexdigit());
+		if !is_valid_sha256_hex {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: "Key's key_hash is not a 64-character hex SHA-256 digest and was not migrated"
+					.to_string(),
+			});
+			continue;
+		}
+		if master_hash.as_deref() == Some(key.key_hash.as_str()) {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: "Key's key_hash matches the resolved master key's hash; migrating it would let it silently assume the master key's identity, so it was not migrated".to_string(),
+			});
+			continue;
+		}
+		if let Some(&first_index) = seen_hashes.get(&key.key_hash) {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"Key's key_hash is already used by db_state.keys[{first_index}]; agentgateway compiles keys by hash, so only one of them would ever take effect, and this one was not migrated"
+				),
+			});
+			continue;
+		}
+		seen_hashes.insert(key.key_hash.clone(), index);
+		let name = match key.key_alias.as_deref() {
+			Some(alias) if !alias.trim().is_empty() => alias.to_string(),
+			// Never derive from LiteLLM's own masked key_name: it contains real key characters.
+			// key_hash is a one-way digest, safe to use as a stable fallback identifier. Take
+			// chars, not bytes: a byte-boundary slice can land inside a multi-byte character.
+			_ => format!("key-{}", key.key_hash.chars().take(12).collect::<String>()),
+		};
+		if !used_names.insert(name.clone()) {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"Generated name {name:?} collides with another migrated key's name (budgets and rate limits would be shared) and was not migrated"
+				),
+			});
+			continue;
+		}
+		filtered.push((index, key, name));
+	}
+	let kept = filtered;
+
+	// Phase 2: split each budget-capped team's remaining pool across its kept keys,
+	// so per-key caps can never add up to more than the team's own total. Keys with no
+	// budget-capped team fall through untouched below (their own max_budget, if any, stands on
+	// its own).
+	let mut key_budgets: HashMap<&str, f64> = HashMap::new();
+	let mut key_budget_windows: HashMap<&str, &'static str> = HashMap::new();
+	let mut team_handled: HashSet<&str> = HashSet::new();
+	for team in &state.teams {
+		let Some(team_max) = team.max_budget else {
+			continue;
+		};
+		let team_keys: Vec<&DbStateKey> = kept
+			.iter()
+			.map(|(_, key, _)| *key)
+			.filter(|key| key.team_id.as_deref() == Some(team.team_id.as_str()))
+			.collect();
+		if team_keys.is_empty() {
+			continue;
+		}
+		for key in &team_keys {
+			team_handled.insert(key.key_hash.as_str());
+		}
+		// Split the team's remaining budget so per-key caps can never add up to more than the
+		// team total: a key with its own budget keeps min(its own remaining, the team's), and
+		// whatever's left of the team cap is split equally across keys with no budget of their
+		// own (falling back to $0 rather than leaving them unbounded if the cap is already spent).
+		let team_cap = (team_max - team.spend.unwrap_or(0.0)).max(0.0);
+		let with_own: Vec<&DbStateKey> = team_keys
+			.iter()
+			.copied()
+			.filter(|key| key.max_budget.is_some())
+			.collect();
+		let without_own: Vec<&DbStateKey> = team_keys
+			.iter()
+			.copied()
+			.filter(|key| key.max_budget.is_none())
+			.collect();
+		// Remaining, not gross, budget: a key that has already spent against its own cap must
+		// not also eat into the team pool as if it still had its full original amount.
+		let own_remaining: Vec<(&DbStateKey, f64)> = with_own
+			.iter()
+			.map(|key| {
+				(
+					*key,
+					(key.max_budget.unwrap_or(0.0) - key.spend.unwrap_or(0.0)).max(0.0),
+				)
+			})
+			.collect();
+		let own_total: f64 = own_remaining.iter().map(|(_, remaining)| remaining).sum();
+		if own_total > team_cap {
+			let scale = if own_total > 0.0 {
+				team_cap / own_total
+			} else {
+				0.0
+			};
+			for (key, remaining) in &own_remaining {
+				key_budgets.insert(key.key_hash.as_str(), remaining * scale);
+			}
+			plan.findings.push(ImportFinding {
+				source_path: format!("db_state.teams[{}]", team.team_id),
+				status: ImportStatus::Approximate,
+				message: format!(
+					"Team {:?}'s keys' own remaining budgets (${own_total:.2}) exceed its remaining pool (${team_cap:.2}); scaled every key's budget down proportionally to {:.1}% to keep the team total unchanged",
+					team_label(team),
+					scale * 100.0
+				),
+			});
+			// The pool is already fully (over-)committed by keys with their own budget, so a key
+			// with no budget of its own gets none of it - a hard $0 cap, never "no budgets entry
+			// at all" (which agentgateway would read as unlimited, a regression from
+			// LiteLLM's team-capped pool).
+			if !without_own.is_empty() {
+				for key in &without_own {
+					key_budgets.insert(key.key_hash.as_str(), 0.0);
+				}
+				plan.findings.push(ImportFinding {
+					source_path: format!("db_state.teams[{}]", team.team_id),
+					status: ImportStatus::Manual,
+					message: format!(
+						"{} key(s) with no budget of their own get none of team {:?}'s pool, which is already fully committed by keys with their own budget; migrated with a $0 budget (checked before every request, so this effectively disables the key) rather than no cap at all - review whether these keys need their own budget",
+						without_own.len(),
+						team_label(team)
+					),
+				});
+			}
+		} else {
+			for (key, remaining) in &own_remaining {
+				key_budgets.insert(key.key_hash.as_str(), *remaining);
+			}
+			if !without_own.is_empty() {
+				let remaining = team_cap - own_total;
+				let share = remaining / without_own.len() as f64;
+				for key in &without_own {
+					key_budgets.insert(key.key_hash.as_str(), share);
+				}
+				plan.findings.push(ImportFinding {
+					source_path: format!("db_state.teams[{}]", team.team_id),
+					status: ImportStatus::Approximate,
+					message: format!(
+						"Split team {:?}'s remaining budget pool (${remaining:.2}) equally across {} key(s) with no budget of their own (${share:.2} each); agentgateway has no team construct, so this is a one-time snapshot, not a live shared pool",
+						team_label(team),
+						without_own.len()
+					),
+				});
+			}
+		}
+	}
+	// Phase 2.5: resolve each key's own budget_duration into a resetting window - independent of
+	// the pool split above, but only for a key whose budget is its own cap, not a team-pool
+	// share. A team-pool share is a one-time snapshot of a (possibly lifetime) pool; applying a
+	// recurring window to a fixed share would hand the key that share again every period, which
+	// matches neither a lifetime team cap nor a team cap that itself resets on its own schedule.
+	for (index, key, _) in &kept {
+		let Some(duration) = &key.budget_duration else {
+			continue;
+		};
+		let source_path = format!("db_state.keys[{index}]");
+		if team_handled.contains(key.key_hash.as_str()) {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: format!(
+					"Key has a LiteLLM budget_duration ({duration:?}), but its migrated amount is a one-time snapshot of a team budget pool share, not a standalone per-key allowance; a recurring window on a fixed pool share would hand the key that share again every period, so no window was applied - review whether the team itself needs its own budget handling"
+				),
+			});
+			continue;
+		}
+		match litellm_budget_duration_to_window(duration) {
+			Some(window) => {
+				key_budget_windows.insert(key.key_hash.as_str(), window);
+				plan.findings.push(ImportFinding {
+					source_path,
+					status: ImportStatus::Exact,
+					message: format!(
+						"Key has a LiteLLM budget_duration ({duration:?}); LiteLLM resets this on the next UTC calendar day/hour boundary, which is exactly what agentgateway's epoch-aligned rolling window does too, so it was mapped to a resetting budget window"
+					),
+				});
+			},
+			None => {
+				plan.findings.push(ImportFinding {
+					source_path,
+					status: ImportStatus::Manual,
+					message: format!(
+						"Key has a LiteLLM budget_duration ({duration:?}); only exact daily (\"1d\"/\"24h\"/\"daily\") or hourly (\"1h\"/\"hourly\") durations are mapped - LiteLLM resets weekly/monthly durations on calendar week/month boundaries (a 28-31 day month, a Monday-anchored week) that agentgateway's fixed-length rolling window cannot reproduce exactly, so the migrated budget (if any) never resets"
+					),
+				});
+			},
+		}
+	}
+	for (_, key, _) in &kept {
+		if team_handled.contains(key.key_hash.as_str()) {
+			continue;
+		}
+		if let Some(max_budget) = key.max_budget {
+			// A resetting window means LiteLLM gives the key its full max_budget back every
+			// period (spend resets to 0 too), so the window amount is the full max_budget, not
+			// the remaining balance - remaining only makes sense for a true lifetime cap.
+			let amount = if key_budget_windows.contains_key(key.key_hash.as_str()) {
+				max_budget
+			} else {
+				(max_budget - key.spend.unwrap_or(0.0)).max(0.0)
+			};
+			key_budgets.insert(key.key_hash.as_str(), amount);
+		}
+	}
+
+	// Phase 3: emit.
+	let mut mcp_api_keys: Vec<Value> = Vec::new();
+	let mut migrated: Vec<(usize, &DbStateKey, String)> = Vec::new();
+	for (index, key, name) in kept {
+		let source_path = format!("db_state.keys[{index}]");
+		let team = key.team_id.as_deref().and_then(|id| teams.get(id).copied());
+
+		if key.rpm_limit.is_some() || key.tpm_limit.is_some() {
+			let mut unmapped = Vec::new();
+			if let Some(rpm) = key.rpm_limit {
+				unmapped.push(format!("rpm_limit: {rpm}"));
+			}
+			if let Some(tpm) = key.tpm_limit {
+				unmapped.push(format!("tpm_limit: {tpm}"));
+			}
+			plan.findings.push(ImportFinding {
+				source_path: source_path.clone(),
+				status: ImportStatus::Manual,
+				message: format!(
+					"Key has its own {}; agentgateway's localRateLimit has one numeric spec shared by every key behind a policy, so a per-key rate limit was not migrated. remoteRateLimit can express a per-key limit via a CEL descriptor keyed on apiKey.name, but it calls out to a separately deployed external rate-limit service for the actual counting - that service isn't something this importer can provision, so it isn't emitted automatically",
+					unmapped.join(", ")
+				),
+			});
+		}
+		if let Some(soft_budget) = key.soft_budget {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.clone(),
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"Key has a LiteLLM soft_budget (${soft_budget:.2}, an early-warning threshold below max_budget); agentgateway has no equivalent and only the hard max_budget was migrated"
+				),
+			});
+		}
+		if let Some(user_id) = &key.user_id {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.clone(),
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"Key is associated with LiteLLM user {user_id:?}; agentgateway has no per-user construct and this association was not migrated"
+				),
+			});
+		}
+
+		// LiteLLM's own sentinels in a models list, not real model names: "all-proxy-models"
+		// means no restriction at all; "all-team-models" on a key means explicit inheritance
+		// (the same as an empty list); either one on a team means the team itself imposes no
+		// narrowing. Naive exact-string intersection against these turns them into a silent
+		// deny-all, which is the opposite of what they mean.
+		let key_is_unrestricted = key.models.iter().any(|m| m == "all-proxy-models");
+		let key_inherits_team = key.models.iter().any(|m| m == "all-team-models");
+		let effective_key_models: &[String] = if key_inherits_team { &[] } else { &key.models };
+		let team_is_unrestricted = team.is_some_and(|t| {
+			t.models
+				.iter()
+				.any(|m| m == "all-proxy-models" || m == "all-team-models")
+		});
+		let effective_team_models: Option<&[String]> = team
+			.map(|t| t.models.as_slice())
+			.filter(|models| !models.is_empty() && !team_is_unrestricted);
+
+		let allowed_models: Option<Vec<String>> = if key_is_unrestricted {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.clone(),
+				status: ImportStatus::Approximate,
+				message: "Key's models includes LiteLLM's all-proxy-models sentinel, meaning no model restriction at all; allowedModels was not set to match".to_string(),
+			});
+			None
+		} else {
+			match (effective_key_models, effective_team_models) {
+				([], Some(team_models)) => {
+					plan.findings.push(ImportFinding {
+						source_path: source_path.clone(),
+						status: ImportStatus::Approximate,
+						message: format!(
+							"Key has no model list of its own; LiteLLM inherits its team's {} models. agentgateway has no team construct, so the team's current model list was copied onto this key - a later team model change won't propagate.",
+							team_models.len()
+						),
+					});
+					Some(team_models.to_vec())
+				},
+				([], None) => None,
+				(models, Some(team_models)) => {
+					// Pattern-aware, matching LiteLLM: a team pattern like "openai/*" grants
+					// every model it matches, not only a model literally named "openai/*".
+					let overlap: Vec<String> = models
+						.iter()
+						.filter(|model| {
+							team_models
+								.iter()
+								.any(|pattern| litellm_model_matches(pattern, model))
+						})
+						.cloned()
+						.collect();
+					if overlap.is_empty() {
+						plan.findings.push(ImportFinding {
+							source_path: source_path.clone(),
+							status: ImportStatus::Unsupported,
+							message: "Key's models have no overlap with its team's models; LiteLLM would deny every model for this key. Migrated with allowedModels: [] (denies all) to match - check whether this key is meant to be usable at all.".to_string(),
+						});
+					}
+					Some(overlap)
+				},
+				(models, None) => Some(models.to_vec()),
+			}
+		};
+
+		let mut key_entry = Map::new();
+		key_entry.insert(
+			"keyHash".to_string(),
+			json!(format!("sha256:{}", key.key_hash)),
+		);
+		key_entry.insert("metadata".to_string(), json!({"name": name}));
+		if let Some(models) = &allowed_models {
+			// A pattern agentgateway's own model matcher rejects (more than one wildcard, or an
+			// empty name) would otherwise pass this import cleanly and only fail when the
+			// generated config loads. Drop it instead, same fail-closed direction as the
+			// zero-overlap case above.
+			let (valid, invalid): (Vec<String>, Vec<String>) = models
+				.iter()
+				.cloned()
+				.partition(|model| !model.is_empty() && is_supported_model_pattern(model));
+			if !invalid.is_empty() {
+				plan.findings.push(ImportFinding {
+					source_path: source_path.clone(),
+					status: ImportStatus::Unsupported,
+					message: format!(
+						"Key's models included {invalid:?}, which agentgateway's own model pattern rules reject (empty, or more than one wildcard); dropped from allowedModels rather than emitting a config the gateway would refuse to load"
+					),
+				});
+			}
+			key_entry.insert("allowedModels".to_string(), json!(valid));
+		}
+		if let Some(amount) = key_budgets.get(key.key_hash.as_str()) {
+			let mut budget = Map::from_iter([
+				("name".to_string(), json!("litellm")),
+				// Floor, never round: rounding up could grant a cent more than is actually left.
+				(
+					"limit".to_string(),
+					json!({"unit": "USD", "amount": (amount * 100.0).floor() / 100.0}),
+				),
+				("onBudgetExceeded".to_string(), json!("Block")),
+			]);
+			if let Some(window) = key_budget_windows.get(key.key_hash.as_str()) {
+				budget.insert("window".to_string(), json!({"rolling": window}));
+			}
+			key_entry.insert("budgets".to_string(), json!([budget]));
+		}
+		plan.db_api_keys.push(Value::Object(key_entry));
+		mcp_api_keys.push(json!({
+			"keyHash": format!("sha256:{}", key.key_hash),
+			"metadata": {"name": name},
+		}));
+		plan.findings.push(ImportFinding {
+			source_path,
+			status: ImportStatus::Exact,
+			message: format!("Migrated key {name:?} to llm.policies.apiKey (hash-based, no plaintext)"),
+		});
+		migrated.push((index, key, name));
+	}
+
+	// Phase 4: mcp.policies - mirror migrated keys for mcp.policies.apiKey (any valid key must
+	// be able to authenticate there to reach an allow_all_keys target, matching LiteLLM's own
+	// behavior), and build mcpAuthorization rules from DB-state MCP grants, allow_all_keys
+	// servers, and an admin-bypass rule for the master key.
+	let has_mcp_candidates =
+		!plan.mcp_targets.is_empty() || !plan.pending_restricted_mcp_targets.is_empty();
+	if has_mcp_candidates && (!migrated.is_empty() || plan.inbound_api_key.is_some()) {
+		let servers_by_id: HashMap<&str, &str> = state
+			.mcp_servers
+			.iter()
+			.map(|server| (server.server_id.as_str(), server.server_name.as_str()))
+			.collect();
+		let server_names: HashSet<&str> = state
+			.mcp_servers
+			.iter()
+			.map(|server| server.server_name.as_str())
+			.collect();
+
+		// Closed wins on a disagreement: if DB-state says allow_all_keys: false for a server
+		// config.yaml itself left open, move its already-built spec into the same held-back
+		// pool a config.yaml-restricted server uses - reachable only via an explicit
+		// per-key/per-team grant from here on, same as if config.yaml had said false itself.
+		const DISAGREEMENT_REASON: &str =
+			"config.yaml left this server open, but DB-state's allow_all_keys: false disagreed";
+		for server in &state.mcp_servers {
+			if server.allow_all_keys {
+				continue;
+			}
+			// If config.yaml already held this server back, the emitted target with the same
+			// sanitized name belongs to a different server and must not be closed as a
+			// disagreement against this one.
+			if plan
+				.held_back_mcp_servers
+				.contains(server.server_name.as_str())
+			{
+				continue;
+			}
+			let Some(target_name) = plan
+				.mcp_target_names
+				.get(server.server_name.as_str())
+				.cloned()
+			else {
+				continue;
+			};
+			if let Some(position) = plan
+				.mcp_targets
+				.iter()
+				.position(|target| target.get("name").and_then(Value::as_str) == Some(target_name.as_str()))
+			{
+				let spec = plan.mcp_targets.remove(position);
+				plan
+					.pending_restricted_mcp_targets
+					.push((spec, DISAGREEMENT_REASON));
+				plan.findings.push(ImportFinding {
+					source_path: format!("db_state.mcp_servers.{}", server.server_name),
+					status: ImportStatus::Approximate,
+					message: format!(
+						"MCP server {:?}: {DISAGREEMENT_REASON} - closed by default, only reachable now via an explicit per-key/per-team grant",
+						server.server_name
+					),
+				});
+			}
+		}
+		let mut rules: Vec<String> = Vec::new();
+		let mut activated_targets: HashSet<String> = HashSet::new();
+		// Source the open set from plan.mcp_targets (servers config.yaml treated as open, after
+		// the disagreement pass above has already moved any DB-closed server into the held-back
+		// pool), not from DB-state's own allow_all_keys flag directly: once any mcpAuthorization
+		// rule exists below, closed-world semantics deny every target with no matching rule, so
+		// an openly-emitted target would get silently locked out if it had no rule of its own.
+		for target in &plan.mcp_targets {
+			let Some(name) = target.get("name").and_then(Value::as_str) else {
+				continue;
+			};
+			activated_targets.insert(name.to_string());
+			rules.push(mcp_target_rule(name));
+		}
+		for server in &state.mcp_servers {
+			if !server.allow_all_keys {
+				continue;
+			}
+			let target = plan.mcp_target_names.get(server.server_name.as_str());
+			if !target.is_some_and(|target| activated_targets.contains(target)) {
+				plan.findings.push(ImportFinding {
+					source_path: format!("db_state.mcp_servers.{}", server.server_name),
+					status: ImportStatus::Manual,
+					message: format!(
+						"MCP server {:?} is open to every key (allow_all_keys) per DB-state, but has no emitted, open agentgateway target to grant access to - check its config.yaml mcp_servers import findings",
+						server.server_name
+					),
+				});
+			}
+		}
+		for (index, key, name) in &migrated {
+			// Team-level object_permission.mcp_servers interacts with a key's own grant like
+			// LiteLLM's `models` does: a key with no grants of its own inherits its team's full
+			// list; a key with its own grants is capped to the intersection with a non-empty
+			// team list; an empty/absent team list never narrows or grants anything by itself.
+			let team = key.team_id.as_deref().and_then(|id| teams.get(id).copied());
+			let team_grants: Option<&Vec<String>> = team
+				.map(|team| &team.object_permission)
+				.filter(|grants| !grants.is_empty());
+			let inherited_from_team = key.mcp_servers.is_empty() && team_grants.is_some();
+			let effective_grants: &[String] = if inherited_from_team {
+				team_grants.expect("checked above")
+			} else {
+				&key.mcp_servers
+			};
+			if inherited_from_team {
+				plan.findings.push(ImportFinding {
+					source_path: format!("db_state.keys[{index}]"),
+					status: ImportStatus::Approximate,
+					message: format!(
+						"Key {name:?} has no MCP server grants of its own; LiteLLM inherits its team's object_permission.mcp_servers list. agentgateway has no team construct, so the team's current grants were copied onto this key - a later team grant change won't propagate."
+					),
+				});
+			}
+			let team_ceiling: Option<HashSet<&str>> = if inherited_from_team {
+				None
+			} else {
+				team_grants.map(|grants| {
+					grants
+						.iter()
+						.filter_map(|grant| {
+							servers_by_id
+								.get(grant.as_str())
+								.copied()
+								.or_else(|| server_names.get(grant.as_str()).copied())
+						})
+						.collect()
+				})
+			};
+			for (grant_index, grant) in effective_grants.iter().enumerate() {
+				let source_path = format!("db_state.keys[{index}].mcp_servers[{grant_index}]");
+				let resolved_name = servers_by_id
+					.get(grant.as_str())
+					.copied()
+					.or_else(|| server_names.get(grant.as_str()).copied());
+				let Some(server_name) = resolved_name else {
+					plan.findings.push(ImportFinding {
+						source_path,
+						status: ImportStatus::Manual,
+						message: format!(
+							"Key {name:?} is granted MCP server {grant:?}, which is not a known DB-state MCP server, and was not migrated"
+						),
+					});
+					continue;
+				};
+				if let Some(team_ceiling) = &team_ceiling
+					&& !team_ceiling.contains(server_name)
+				{
+					plan.findings.push(ImportFinding {
+						source_path,
+						status: ImportStatus::Approximate,
+						message: format!(
+							"Key {name:?} is granted MCP server {server_name:?}, but its team's own object_permission.mcp_servers does not include it; LiteLLM's effective access is the intersection of both, so this grant was not migrated"
+						),
+					});
+					continue;
+				}
+				let Some(target) = plan.mcp_target_names.get(server_name) else {
+					plan.findings.push(ImportFinding {
+						source_path,
+						status: ImportStatus::Manual,
+						message: format!(
+							"Key {name:?} is granted MCP server {server_name:?}, which has no emitted agentgateway target, and was not migrated"
+						),
+					});
+					continue;
+				};
+				activated_targets.insert(target.clone());
+				rules.push(format!(
+					"apiKey.name == {} && ({})",
+					cel_escape_string(name),
+					mcp_target_rule(target)
+				));
+			}
+		}
+		if let Some(master) = &plan.inbound_api_key {
+			// Mirror the master key's own value (not virtual keys, which only have a hash here)
+			// so it can actually authenticate against mcp.policies.apiKey before the bypass rule
+			// below ever gets evaluated.
+			mcp_api_keys.push(json!({
+				"key": master.key.clone(),
+				"metadata": {"name": "master"},
+			}));
+			rules.push("apiKey.name == \"master\"".to_string());
+		}
+		// Collision safety: if two or more held-back targets ended up sharing the same
+		// sanitized name (two restricted config.yaml servers, or a disagreement-closed open
+		// server landing on the same name as an already-restricted one), a grant naming either
+		// server can't be told apart from the other at promotion time - mcp.tool.target is the
+		// only identity agentgateway itself understands. Retire every such name from promotion
+		// entirely rather than risk resolving a grant to the wrong backend.
+		let mut pending_name_counts: HashMap<&str, usize> = HashMap::new();
+		for (spec, _) in &plan.pending_restricted_mcp_targets {
+			if let Some(name) = spec.get("name").and_then(Value::as_str) {
+				*pending_name_counts.entry(name).or_insert(0) += 1;
+			}
+		}
+		let ambiguous_names: HashSet<String> = pending_name_counts
+			.into_iter()
+			.filter(|(_, count)| *count > 1)
+			.map(|(name, _)| name.to_string())
+			.collect();
+		let pending = std::mem::take(&mut plan.pending_restricted_mcp_targets);
+		for (spec, held_back_reason) in pending {
+			let Some(name) = spec.get("name").and_then(Value::as_str) else {
+				plan
+					.pending_restricted_mcp_targets
+					.push((spec, held_back_reason));
+				continue;
+			};
+			if ambiguous_names.contains(name) {
+				plan.findings.push(ImportFinding {
+					source_path: format!("db_state.mcp_servers.{name}"),
+					status: ImportStatus::Unsupported,
+					message: format!(
+						"MCP target name {name:?} is shared by more than one held-back LiteLLM server; a grant can't be resolved to the right one, so none of them were migrated"
+					),
+				});
+				continue;
+			}
+			plan
+				.pending_restricted_mcp_targets
+				.push((spec, held_back_reason));
+		}
+		// Promote a held-back restricted target into mcp.targets only once it has an actual
+		// mcpAuthorization rule protecting it - never unconditionally, since closed-world
+		// semantics deny every target with no matching rule (promoting it with no rule would
+		// leave it unreachable by anyone, not open to everyone).
+		for (spec, held_back_reason) in std::mem::take(&mut plan.pending_restricted_mcp_targets) {
+			let Some(name) = spec.get("name").and_then(Value::as_str) else {
+				continue;
+			};
+			if !activated_targets.contains(name) {
+				continue;
+			}
+			let already_emitted = plan
+				.mcp_targets
+				.iter()
+				.any(|target| target.get("name").and_then(Value::as_str) == Some(name));
+			if already_emitted {
+				plan.findings.push(ImportFinding {
+					source_path: format!("db_state.mcp_servers.{name}"),
+					status: ImportStatus::Unsupported,
+					message: format!(
+						"MCP target {name:?}, held back because {held_back_reason}, was not restored; its sanitized name is already used by an emitted server"
+					),
+				});
+				continue;
+			}
+			plan.findings.push(ImportFinding {
+				source_path: format!("db_state.mcp_servers.{name}"),
+				status: ImportStatus::Approximate,
+				message: format!(
+					"Emitted MCP target {name:?}, held back because {held_back_reason}, now restored by a real mcpAuthorization grant"
+				),
+			});
+			plan.mcp_targets.push(spec);
+		}
+		plan.mcp_authorization_rules = rules;
+		plan.mcp_api_keys = mcp_api_keys;
+	}
+}
+
 #[cfg(test)]
 #[path = "../tests/import/cache.rs"]
 mod cache_tests;
@@ -2779,7 +3776,7 @@ mod tests {
 	use std::path::{Path, PathBuf};
 
 	use super::*;
-	use crate::import::{ImportResult, import_config};
+	use crate::import::{ImportResult, import_config, import_config_with_options};
 
 	fn fixture_path(name: &str) -> PathBuf {
 		Path::new("src/tests/import/litellm").join(format!("{name}.yaml"))
@@ -2831,6 +3828,38 @@ mod tests {
 			"{}",
 			input_path.display()
 		);
+	}
+
+	/// Like `assert_litellm_golden`, but also reads `{name}.state.json` (LiteLLM DB-state) and
+	/// feeds it through `import_config_with_options` alongside the config.yaml. `now` fixes the
+	/// expiry reference point (an RFC3339 timestamp) so snapshots never rot with wall-clock time.
+	fn assert_litellm_db_state_golden(name: &str, now: &str) {
+		let input_path = fixture_path(name);
+		let input = fs::read_to_string(&input_path)
+			.unwrap_or_else(|error| panic!("{}: {error}", input_path.display()));
+		let state_path = Path::new("src/tests/import/litellm").join(format!("{name}.state.json"));
+		let state_json = fs::read_to_string(&state_path)
+			.unwrap_or_else(|error| panic!("{}: {error}", state_path.display()));
+		let state: LiteLlmDbState = serde_json::from_str(&state_json)
+			.unwrap_or_else(|error| panic!("{}: {error}", state_path.display()));
+		let options = ImportOptions {
+			now: now
+				.parse()
+				.unwrap_or_else(|error| panic!("{now:?}: {error}")),
+			db_state: Some(state),
+			..ImportOptions::default()
+		};
+		let result = import_config_with_options("litellm", &input, &options)
+			.unwrap_or_else(|error| panic!("{}: {error}", input_path.display()));
+
+		insta::with_settings!({
+			description => input_path.to_string_lossy().to_string(),
+			omit_expression => true,
+			prepend_module_to_snapshot => false,
+			snapshot_path => "../tests/import/litellm",
+		}, {
+			insta::assert_yaml_snapshot!(name, result);
+		});
 	}
 
 	#[test]
@@ -3544,5 +4573,113 @@ router_settings:
 	#[test]
 	fn counts_unimported_fallback_targets_against_depth() {
 		assert_litellm_golden("default-fallbacks-unimported-depth");
+	}
+
+	#[test]
+	fn maps_db_state_keys_models_and_team_inheritance() {
+		assert_litellm_db_state_golden("db-state-keys-basic", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn retracts_db_state_key_migration_claim_when_no_models_were_imported() {
+		assert_litellm_db_state_golden("db-state-no-models", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn skips_blocked_expired_and_colliding_db_state_keys() {
+		assert_litellm_db_state_golden("db-state-skip-rules", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn splits_team_budget_pool_and_scales_down_on_overflow() {
+		assert_litellm_db_state_golden("db-state-budgets", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn maps_mcp_grants_allow_all_keys_and_master_key_bypass() {
+		assert_litellm_db_state_golden("db-state-mcp-grants", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn reports_unresolvable_mcp_grants_as_manual() {
+		assert_litellm_db_state_golden("db-state-mcp-grant-gaps", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn reports_rate_limits_and_other_unmapped_fields_as_findings() {
+		assert_litellm_db_state_golden("db-state-not-consumed-fields", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn applies_team_mcp_grant_inheritance_and_intersection() {
+		assert_litellm_db_state_golden("db-state-mcp-team-permission", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn maps_daily_and_hourly_budget_duration_to_a_resetting_window() {
+		assert_litellm_db_state_golden("db-state-budget-window", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn carries_custom_header_onto_db_state_mcp_policies() {
+		assert_litellm_db_state_golden("db-state-mcp-custom-header", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn promoted_restricted_mcp_server_keeps_its_static_headers() {
+		assert_litellm_db_state_golden(
+			"db-state-mcp-restricted-static-headers",
+			"2026-01-01T00:00:00Z",
+		);
+	}
+
+	#[test]
+	fn never_promotes_an_mcp_grant_to_a_different_server_sharing_its_name() {
+		assert_litellm_db_state_golden("db-state-ambiguous-mcp-grant", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn applies_no_resetting_window_to_a_team_lifetime_pool_share() {
+		assert_litellm_db_state_golden(
+			"db-state-team-lifetime-pool-no-window",
+			"2026-01-01T00:00:00Z",
+		);
+	}
+
+	#[test]
+	fn skips_a_key_whose_hash_duplicates_another_key() {
+		assert_litellm_db_state_golden("db-state-duplicate-key-hash", "2026-01-01T00:00:00Z");
+	}
+
+	#[test]
+	fn resolves_litellm_model_sentinels_and_wildcards() {
+		assert_litellm_db_state_golden(
+			"db-state-model-sentinels-and-wildcards",
+			"2026-01-01T00:00:00Z",
+		);
+	}
+
+	#[test]
+	fn reports_allow_all_keys_disagreement_between_config_and_db_state() {
+		assert_litellm_db_state_golden(
+			"db-state-mcp-allow-all-keys-mismatch",
+			"2026-01-01T00:00:00Z",
+		);
+	}
+
+	#[test]
+	fn restores_restricted_target_for_non_boolean_allow_all_keys_when_granted() {
+		assert_litellm_db_state_golden(
+			"db-state-mcp-allow-all-keys-non-boolean",
+			"2026-01-01T00:00:00Z",
+		);
+	}
+
+	#[test]
+	fn does_not_promote_a_restricted_mcp_server_onto_an_open_server_name() {
+		assert_litellm_db_state_golden(
+			"db-state-mcp-restricted-open-name-collision",
+			"2026-01-01T00:00:00Z",
+		);
 	}
 }

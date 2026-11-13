@@ -1,0 +1,56 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-skip-rules.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:99f1839d9124facfdfddd955c4b6205ae8b4d18d8fc835ecc9544fc287bf3832"
+            metadata:
+              name: duplicate-name
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "db_state.keys[0]"
+    status: unsupported
+    message: Key is blocked in LiteLLM and was not migrated
+  - sourcePath: "db_state.keys[1]"
+    status: unsupported
+    message: "Key's team is blocked in LiteLLM and was not migrated"
+  - sourcePath: "db_state.keys[2]"
+    status: unsupported
+    message: "Key expired at 2000-01-01 00:00:00 UTC in LiteLLM and was not migrated"
+  - sourcePath: "db_state.keys[3]"
+    status: unsupported
+    message: "Key expires at 2099-01-01 00:00:00 UTC in LiteLLM, but agentgateway API keys have no expiry field at all; migrating it as a plain key would make it permanent, so it was not migrated. Re-issue it without an expiry, or migrate it manually once an expiry-aware option exists."
+  - sourcePath: "db_state.keys[6]"
+    status: unsupported
+    message: "Key's team_id \"ghost-team\" does not match any team in the DB-state export, so its team's blocked/model/budget state can't be checked; it was not migrated"
+  - sourcePath: "db_state.keys[5]"
+    status: unsupported
+    message: "Generated name \"duplicate-name\" collides with another migrated key's name (budgets and rate limits would be shared) and was not migrated"
+  - sourcePath: "db_state.keys[4]"
+    status: exact
+    message: "Migrated key \"duplicate-name\" to llm.policies.apiKey (hash-based, no plaintext)"

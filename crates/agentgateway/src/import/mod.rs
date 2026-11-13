@@ -7,16 +7,18 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::Context;
+use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 mod litellm;
+pub use litellm::{DbStateKey, DbStateMcpServer, DbStateTeam, LiteLlmDbState, parse_db_state};
 
 /// A source-specific configuration adapter.
 pub trait ConfigImporter: Send + Sync {
 	fn source(&self) -> &'static str;
-	fn import(&self, input: &str) -> anyhow::Result<ImportPlan>;
+	fn import(&self, input: &str, options: &ImportOptions) -> anyhow::Result<ImportPlan>;
 }
 
 /// Source-neutral representation consumed by the agentgateway configuration emitter.
@@ -48,6 +50,45 @@ pub struct ImportPlan {
 	/// Top-level standalone `mcp.targets` entries, fully built as JSON. Populated from
 	/// source-wide MCP settings (for example LiteLLM's top-level `mcp_servers`).
 	pub mcp_targets: Vec<Value>,
+	/// Virtual API key entries built from LiteLLM's DB-managed state (teams + keys), fully
+	/// built as JSON `LocalAPIKey::Sha256` entries. Merged into the same
+	/// `llm.policies.apiKey.keys[]` array as [`ImportPlan::inbound_api_key`] by `emit`.
+	/// Populated by `import_litellm_db_state` from a separate DB-state input document, never
+	/// from the source document this importer was given.
+	pub db_api_keys: Vec<Value>,
+	/// Original LiteLLM MCP server identifier (the config.yaml dict key, and its alias if one
+	/// is set) mapped to the final sanitized agentgateway target name actually emitted into
+	/// [`ImportPlan::mcp_targets`]. Populated by `import_litellm_mcp_servers` as it sanitizes
+	/// and deduplicates names, so `import_litellm_db_state` can resolve a DB-state MCP grant
+	/// (which references LiteLLM's own server name/id, never agentgateway's target name) to the
+	/// right target without re-deriving sanitization - and without missing a collision-driven
+	/// rename.
+	pub mcp_target_names: HashMap<String, String>,
+	/// Same virtual keys as [`ImportPlan::db_api_keys`] (same hashes, same `metadata.name`),
+	/// mirrored under `mcp.policies.apiKey`: MCP authorization can't see a key authenticated
+	/// only under `llm.policies.apiKey`, so it needs its own attachment with the same hashes.
+	/// Omits `allowedModels`/`budgets`, which have no meaning on the MCP side.
+	pub mcp_api_keys: Vec<Value>,
+	/// `mcp.policies.mcpAuthorization.rules[]` CEL strings built from DB-state MCP grants
+	/// (`apiKey.name == "<key>" && mcp.tool.target == "<target>"`), `allow_all_keys` servers
+	/// (an unconditional `mcp.tool.target == "<target>"`), and an unconditional admin-bypass
+	/// rule for the migrated master key, if any.
+	pub mcp_authorization_rules: Vec<String>,
+	/// Fully-built target specs held back from [`ImportPlan::mcp_targets`] for a reason that
+	/// requires a DB-state grant to override - config.yaml omitted `allow_all_keys` (LiteLLM
+	/// defaults that to false), set it to false, or set a non-boolean value; or (see
+	/// `import_litellm_db_state`) DB-state disagreed with an otherwise-open config.yaml server.
+	/// The paired string is that reason, reused verbatim in the promotion finding when a real
+	/// grant restores the target. Promoted into `mcp_targets` only once a DB-state grant actually
+	/// restricts it to specific keys via `mcpAuthorization`, never unconditionally: closed-world
+	/// semantics deny every target with no matching rule, so promoting it unconditionally would
+	/// leave it unreachable by anyone, not open to everyone.
+	pub pending_restricted_mcp_targets: Vec<(Value, &'static str)>,
+	/// LiteLLM MCP server identifiers (config.yaml dict key and alias, if any) whose specs
+	/// were held back from [`ImportPlan::mcp_targets`]. Disagreement must consult this set
+	/// so a restricted server cannot be mistaken for a different, already-emitted server
+	/// that happens to share the same sanitized target name.
+	pub held_back_mcp_servers: HashSet<String>,
 }
 
 #[derive(Debug)]
@@ -139,12 +180,21 @@ pub struct ImportResult {
 #[derive(Debug, Clone)]
 pub struct ImportOptions {
 	pub database_url: String,
+	/// Reference point for expiry comparisons (keys with an expiry in the past vs. future).
+	/// Threaded through explicitly, rather than reading the system clock inside the importer,
+	/// so golden tests stay deterministic.
+	pub now: DateTime<Utc>,
+	/// LiteLLM's DB-managed state (teams, virtual keys), extracted separately from config.yaml.
+	/// `None` skips DB-state mapping entirely (config.yaml-only import, unchanged behavior).
+	pub db_state: Option<LiteLlmDbState>,
 }
 
 impl Default for ImportOptions {
 	fn default() -> Self {
 		Self {
 			database_url: "sqlite://data.db".to_string(),
+			now: Utc::now(),
+			db_state: None,
 		}
 	}
 }
@@ -174,7 +224,7 @@ pub fn import_config_with_options(
 				available_sources().join(", ")
 			)
 		})?;
-	let plan = importer.import(input)?;
+	let plan = importer.import(input, options)?;
 	emit(importer.source(), plan, options)
 }
 
@@ -283,6 +333,12 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		guardrails,
 		mcp_targets,
 		inbound_api_key,
+		db_api_keys,
+		mcp_target_names: _,
+		mcp_api_keys,
+		mcp_authorization_rules,
+		pending_restricted_mcp_targets: _,
+		held_back_mcp_servers: _,
 	} = plan;
 	let model_by_name: HashMap<_, _> = models
 		.iter()
@@ -449,8 +505,31 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 	if let Some(guardrails) = guardrails {
 		llm_policies.insert("guardrails".to_string(), guardrails);
 	}
-	if let Some(api_key) = &inbound_api_key {
-		llm_policies.insert("apiKey".to_string(), api_key_policy(api_key));
+	{
+		let mut keys: Vec<Value> = Vec::new();
+		let mut location: Option<Value> = None;
+		if let Some(api_key) = &inbound_api_key {
+			location = api_key.location.clone();
+			let mut entry = Map::from_iter([("key".to_string(), json!(api_key.key.clone()))]);
+			if !db_api_keys.is_empty() {
+				// Only attach metadata when DB-state keys are also being merged in - a
+				// config.yaml-only import has no other key to disambiguate this one from, so
+				// this entry is unaffected either way.
+				entry.insert("metadata".to_string(), json!({"name": "master"}));
+			}
+			keys.push(Value::Object(entry));
+		}
+		keys.extend(db_api_keys.iter().cloned());
+		if !keys.is_empty() {
+			let mut api_key_policy = Map::from_iter([
+				("keys".to_string(), Value::Array(keys)),
+				("mode".to_string(), json!("strict")),
+			]);
+			if let Some(location) = location {
+				api_key_policy.insert("location".to_string(), location);
+			}
+			llm_policies.insert("apiKey".to_string(), Value::Object(api_key_policy));
+		}
 	}
 	if !llm_policies.is_empty() {
 		llm.insert("policies".to_string(), Value::Object(llm_policies));
@@ -470,11 +549,31 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 	}
 	// Whether an empty mcp_targets list (e.g. because a source adapter decided its migrated
 	// servers couldn't be safely protected) needs its own findings is that adapter's call, made
-	// before the plan ever reaches this function - mirroring the inbound key onto MCP, when both
-	// are present, is the only generic fact this emitter itself can state.
+	// before the plan ever reaches this function. Which of the two optional, already-resolved
+	// auth shapes to serialize - a source's own per-key `mcp_api_keys`/`mcp_authorization_rules`,
+	// or a plain mirror of the inbound key - is plumbing, not a decision: both are generic
+	// `ImportPlan` fields any source can populate the same way.
 	if !mcp_targets.is_empty() {
+		let has_db_state_mcp_auth = !mcp_api_keys.is_empty() || !mcp_authorization_rules.is_empty();
 		let mut mcp_policies = Map::new();
-		if let Some(api_key) = &inbound_api_key {
+		if has_db_state_mcp_auth {
+			let mut api_key_policy = Map::from_iter([
+				("keys".to_string(), Value::Array(mcp_api_keys)),
+				("mode".to_string(), json!("strict")),
+			]);
+			// Carry the same custom header (if any) that protects the llm: block, so a
+			// client using litellm_key_header_name isn't rejected on /mcp alone.
+			if let Some(api_key) = &inbound_api_key
+				&& let Some(location) = &api_key.location
+			{
+				api_key_policy.insert("location".to_string(), location.clone());
+			}
+			mcp_policies.insert("apiKey".to_string(), Value::Object(api_key_policy));
+			mcp_policies.insert(
+				"mcpAuthorization".to_string(),
+				json!({"rules": mcp_authorization_rules}),
+			);
+		} else if let Some(api_key) = &inbound_api_key {
 			mcp_policies.insert("apiKey".to_string(), api_key_policy(api_key));
 		}
 		let mcp_object = json!({

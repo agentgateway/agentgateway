@@ -1,0 +1,14 @@
+{
+  "teams": [],
+  "keys": [
+    {
+      "key_hash": "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
+      "key_alias": "intern",
+      "mcp_servers": ["hr-payroll"]
+    }
+  ],
+  "mcp_servers": [
+    {"server_id": "srv-1", "server_name": "hr_payroll", "allow_all_keys": false},
+    {"server_id": "srv-2", "server_name": "hr-payroll", "allow_all_keys": false}
+  ]
+}

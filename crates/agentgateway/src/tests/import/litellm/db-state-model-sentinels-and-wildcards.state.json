@@ -1,0 +1,30 @@
+{
+  "teams": [
+    {"team_id": "team-wild", "models": ["openai/*"]}
+  ],
+  "keys": [
+    {
+      "key_hash": "f000a000f000a000f000a000f000a000f000a000f000a000f000a000f000a000",
+      "key_alias": "proxy-unrestricted",
+      "models": ["all-proxy-models"]
+    },
+    {
+      "key_hash": "f000a000f000a000f000a000f000a000f000a000f000a000f000a000f000a001",
+      "key_alias": "team-inherit-explicit",
+      "team_id": "team-wild",
+      "models": ["all-team-models"]
+    },
+    {
+      "key_hash": "f000a000f000a000f000a000f000a000f000a000f000a000f000a000f000a002",
+      "key_alias": "wildcard-match",
+      "team_id": "team-wild",
+      "models": ["openai/gpt-4o"]
+    },
+    {
+      "key_hash": "f000a000f000a000f000a000f000a000f000a000f000a000f000a000f000a003",
+      "key_alias": "bad-pattern",
+      "models": ["a*b*", ""]
+    }
+  ],
+  "mcp_servers": []
+}

@@ -1,17 +1,38 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use anyhow::Context;
+
 use crate::ImportArgs;
 
 pub(crate) fn execute(args: ImportArgs) -> anyhow::Result<()> {
-	let ImportArgs { from, file, output } = args;
-	import_file(file, output, &from)
+	let ImportArgs {
+		from,
+		file,
+		output,
+		db_state,
+	} = args;
+	import_file(file, output, db_state, &from)
 }
 
-fn import_file(path: PathBuf, output: Option<PathBuf>, source: &str) -> anyhow::Result<()> {
+fn import_file(
+	path: PathBuf,
+	output: Option<PathBuf>,
+	db_state: Option<PathBuf>,
+	source: &str,
+) -> anyhow::Result<()> {
 	let contents = read_input(&path)?;
+	let db_state = db_state
+		.map(|path| {
+			let raw = read_input(&path)?;
+			agentgateway::import::parse_db_state(&raw)
+				.with_context(|| format!("invalid DB-state JSON in {}", path.display()))
+		})
+		.transpose()?;
 	let options = agentgateway::import::ImportOptions {
 		database_url: import_database_url(output.as_deref()),
+		db_state,
+		..Default::default()
 	};
 	let result = agentgateway::import::import_config_with_options(source, &contents, &options)?;
 	let imported = agentgateway::yaml::to_string(&result.config)?;

@@ -1,0 +1,87 @@
+{
+  "teams": [
+    {
+      "team_id": "team-big",
+      "models": [],
+      "blocked": false,
+      "max_budget": 500.0,
+      "spend": 0.0,
+      "team_alias": "team-big-alias"
+    },
+    {
+      "team_id": "team-small",
+      "models": [],
+      "blocked": false,
+      "max_budget": 50.0,
+      "spend": 0.0
+    }
+  ],
+  "keys": [
+    {
+      "key_hash": "ec287984518769d3d9e112a39e89e831fb2a068bcb8a412c1bb0aa251f471c7b",
+      "key_alias": "own-budget-no-team",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": 10.0,
+      "spend": 2.5,
+      "budget_duration": null
+    },
+    {
+      "key_hash": "113c7245bc51f737461b1497031f07f0909000e63578d8d3e954b6ef9c8cf390",
+      "key_alias": "team-big-own",
+      "team_id": "team-big",
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": 200.0,
+      "spend": 0.0,
+      "budget_duration": null
+    },
+    {
+      "key_hash": "361d45406bc99ff4f09cf2b0cd59966107397a41e64966ae7369a0b7caa0fb1c",
+      "key_alias": "team-big-default",
+      "team_id": "team-big",
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": 0.0,
+      "budget_duration": null
+    },
+    {
+      "key_hash": "46d2c5b60a8b633a35ded8b6079e5810d43f1cf3e874bc8ea975cec2631879a1",
+      "key_alias": "team-small-overflow",
+      "team_id": "team-small",
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": 80.0,
+      "spend": 0.0,
+      "budget_duration": null
+    },
+    {
+      "key_hash": "cd5d5a70f82914b4730fc0e56d1d2491f1306cb55a043c7f35ad87de59f8e49f",
+      "key_alias": "no-budget-no-team",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null
+    },
+    {
+      "key_hash": "d59165554bd6aaaf6d316732c2bd803b77e41b5579740864804e0761d2b3b188",
+      "key_alias": "team-small-default",
+      "team_id": "team-small",
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null
+    }
+  ]
+}

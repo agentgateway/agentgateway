@@ -114,6 +114,12 @@ pub(crate) struct ImportArgs {
 	/// Write generated agentgateway configuration to a file instead of stdout.
 	#[arg(short, long, value_name = "file")]
 	pub(crate) output: Option<PathBuf>,
+
+	/// Read LiteLLM DB-managed state (teams, virtual keys, MCP server grants) from a JSON
+	/// file, and merge it into the generated configuration alongside the config.yaml source.
+	/// Omit to import config.yaml alone.
+	#[arg(long, value_name = "file")]
+	pub(crate) db_state: Option<PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]

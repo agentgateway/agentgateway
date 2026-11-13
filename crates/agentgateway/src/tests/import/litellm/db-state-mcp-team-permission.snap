@@ -1,0 +1,98 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-mcp-team-permission.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:90bb583dfe56630a0b4a3fcbe56ecf20ef324e7b8678a8ce81edb7bc3f4a67ec"
+            metadata:
+              name: team-perm-key-inherits
+          - keyHash: "sha256:cfb9499a823476f77f65fe1bcad291071d9fcea85024128572fba71e1c795fe8"
+            metadata:
+              name: team-perm-key-matches-ceiling
+          - keyHash: "sha256:3d57c03115596b90ef7975308b8d991f1381d9dc4dcc6c42f1811d39c432be47"
+            metadata:
+              name: team-perm-key-excluded
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: open-server
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: restricted-server
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:90bb583dfe56630a0b4a3fcbe56ecf20ef324e7b8678a8ce81edb7bc3f4a67ec"
+            metadata:
+              name: team-perm-key-inherits
+          - keyHash: "sha256:cfb9499a823476f77f65fe1bcad291071d9fcea85024128572fba71e1c795fe8"
+            metadata:
+              name: team-perm-key-matches-ceiling
+          - keyHash: "sha256:3d57c03115596b90ef7975308b8d991f1381d9dc4dcc6c42f1811d39c432be47"
+            metadata:
+              name: team-perm-key-excluded
+        mode: strict
+      mcpAuthorization:
+        rules:
+          - "(has(mcp.tool) && mcp.tool.target == \"open-server\") || (has(mcp.prompt) && mcp.prompt.target == \"open-server\") || (has(mcp.resource) && mcp.resource.target == \"open-server\")"
+          - "apiKey.name == \"team-perm-key-inherits\" && ((has(mcp.tool) && mcp.tool.target == \"restricted-server\") || (has(mcp.prompt) && mcp.prompt.target == \"restricted-server\") || (has(mcp.resource) && mcp.resource.target == \"restricted-server\"))"
+          - "apiKey.name == \"team-perm-key-matches-ceiling\" && ((has(mcp.tool) && mcp.tool.target == \"restricted-server\") || (has(mcp.prompt) && mcp.prompt.target == \"restricted-server\") || (has(mcp.resource) && mcp.resource.target == \"restricted-server\"))"
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: mcp_servers.open_server
+    status: approximate
+    message: "Renamed \"open_server\" to \"open-server\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.open_server
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"open-server\""
+  - sourcePath: mcp_servers.restricted_server
+    status: approximate
+    message: "Renamed \"restricted_server\" to \"restricted-server\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.restricted_server
+    status: unsupported
+    message: "This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"team-perm-key-inherits\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[1]"
+    status: exact
+    message: "Migrated key \"team-perm-key-matches-ceiling\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[2]"
+    status: exact
+    message: "Migrated key \"team-perm-key-excluded\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[0]"
+    status: approximate
+    message: "Key \"team-perm-key-inherits\" has no MCP server grants of its own; LiteLLM inherits its team's object_permission.mcp_servers list. agentgateway has no team construct, so the team's current grants were copied onto this key - a later team grant change won't propagate."
+  - sourcePath: "db_state.keys[2].mcp_servers[0]"
+    status: approximate
+    message: "Key \"team-perm-key-excluded\" is granted MCP server \"open_server\", but its team's own object_permission.mcp_servers does not include it; LiteLLM's effective access is the intersection of both, so this grant was not migrated"
+  - sourcePath: db_state.mcp_servers.restricted-server
+    status: approximate
+    message: "Emitted MCP target \"restricted-server\", held back because config.yaml set allow_all_keys: false, which it alone cannot express safely, now restored by a real mcpAuthorization grant"

@@ -1,0 +1,67 @@
+{
+  "teams": [
+    {
+      "team_id": "blocked-team",
+      "models": [],
+      "blocked": true
+    }
+  ],
+  "keys": [
+    {
+      "key_hash": "dd866a0b2a5217ec2bf5d5b17f7b3cb87860c0edcda08a9239493680a90cc2b2",
+      "key_alias": "blocked-key",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": true
+    },
+    {
+      "key_hash": "7d797dcbd2275f4251831ad9ce201d9b1802fe3bac0a52cba09e49a797268058",
+      "key_alias": "key-on-blocked-team",
+      "team_id": "blocked-team",
+      "models": [],
+      "expires": null,
+      "blocked": false
+    },
+    {
+      "key_hash": "d7db9fecaec02b754043b9984ec51aadbe2193282c30158f64c12584615291ef",
+      "key_alias": "already-expired",
+      "team_id": null,
+      "models": [],
+      "expires": "2000-01-01T00:00:00Z",
+      "blocked": null
+    },
+    {
+      "key_hash": "b79623477e068e1f24189a2b4b0e5349760d70cb69f6780974749b29fb87c0a0",
+      "key_alias": "not-yet-expired",
+      "team_id": null,
+      "models": [],
+      "expires": "2099-01-01T00:00:00Z",
+      "blocked": null
+    },
+    {
+      "key_hash": "99f1839d9124facfdfddd955c4b6205ae8b4d18d8fc835ecc9544fc287bf3832",
+      "key_alias": "duplicate-name",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null
+    },
+    {
+      "key_hash": "f2aa0562e2bb9115fb85c688aef9395d65b52d8e0fd8f2c2c75be09631e42eae",
+      "key_alias": "duplicate-name",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null
+    },
+    {
+      "key_hash": "00be19993a102be42f5d4d5ddd972b7c88c8b9f50b174fc4596052ba91d8f319",
+      "key_alias": "unknown-team-key",
+      "team_id": "ghost-team",
+      "models": [],
+      "expires": null,
+      "blocked": null
+    }
+  ]
+}

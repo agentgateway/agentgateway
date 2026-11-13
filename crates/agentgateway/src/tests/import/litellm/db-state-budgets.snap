@@ -1,0 +1,107 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-budgets.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:ec287984518769d3d9e112a39e89e831fb2a068bcb8a412c1bb0aa251f471c7b"
+            metadata:
+              name: own-budget-no-team
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 7.5
+                onBudgetExceeded: Block
+          - keyHash: "sha256:113c7245bc51f737461b1497031f07f0909000e63578d8d3e954b6ef9c8cf390"
+            metadata:
+              name: team-big-own
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 200
+                onBudgetExceeded: Block
+          - keyHash: "sha256:361d45406bc99ff4f09cf2b0cd59966107397a41e64966ae7369a0b7caa0fb1c"
+            metadata:
+              name: team-big-default
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 300
+                onBudgetExceeded: Block
+          - keyHash: "sha256:46d2c5b60a8b633a35ded8b6079e5810d43f1cf3e874bc8ea975cec2631879a1"
+            metadata:
+              name: team-small-overflow
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 50
+                onBudgetExceeded: Block
+          - keyHash: "sha256:cd5d5a70f82914b4730fc0e56d1d2491f1306cb55a043c7f35ad87de59f8e49f"
+            metadata:
+              name: no-budget-no-team
+          - keyHash: "sha256:d59165554bd6aaaf6d316732c2bd803b77e41b5579740864804e0761d2b3b188"
+            metadata:
+              name: team-small-default
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 0
+                onBudgetExceeded: Block
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "db_state.teams[team-big]"
+    status: approximate
+    message: "Split team \"team-big-alias\"'s remaining budget pool ($300.00) equally across 1 key(s) with no budget of their own ($300.00 each); agentgateway has no team construct, so this is a one-time snapshot, not a live shared pool"
+  - sourcePath: "db_state.teams[team-small]"
+    status: approximate
+    message: "Team \"team-small\"'s keys' own remaining budgets ($80.00) exceed its remaining pool ($50.00); scaled every key's budget down proportionally to 62.5% to keep the team total unchanged"
+  - sourcePath: "db_state.teams[team-small]"
+    status: manual
+    message: "1 key(s) with no budget of their own get none of team \"team-small\"'s pool, which is already fully committed by keys with their own budget; migrated with a $0 budget (checked before every request, so this effectively disables the key) rather than no cap at all - review whether these keys need their own budget"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"own-budget-no-team\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[1]"
+    status: exact
+    message: "Migrated key \"team-big-own\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[2]"
+    status: exact
+    message: "Migrated key \"team-big-default\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[3]"
+    status: exact
+    message: "Migrated key \"team-small-overflow\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[4]"
+    status: exact
+    message: "Migrated key \"no-budget-no-team\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[5]"
+    status: exact
+    message: "Migrated key \"team-small-default\" to llm.policies.apiKey (hash-based, no plaintext)"
