@@ -1117,7 +1117,8 @@ impl ExtProcInstance {
 			&& matches!(
 				request_fsm.body_path,
 				BodyPath::Buffered | BodyPath::BufferedPartial
-			) && pending_buffered_body.is_none()
+			)
+			&& pending_buffered_body.is_none()
 			&& rx_chunk.is_some()
 		{
 			let (req_with_channel, buffered_body) = start_buffered_request_body(
