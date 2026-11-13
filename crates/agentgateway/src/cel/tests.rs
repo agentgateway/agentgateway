@@ -561,6 +561,27 @@ fn jwt_token_is_redacted_by_default() {
 	);
 }
 
+#[test]
+fn recurse_jwt_claims() {
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://example.com")
+		.body(Body::empty())
+		.unwrap();
+	let claims = json!({"sub": "user", "act": {"sub": "agent-a", "act": {"sub": "agent-b"}}});
+	req.extensions_mut().insert(crate::http::jwt::Claims {
+		inner: claims.as_object().unwrap().clone(),
+		jwt: secrecy::SecretString::new("fake.jwt.token".into()),
+	});
+	assert_eq!(
+		json!(["user", "agent-a", "agent-b"]),
+		eval_request(r#"jwt.recurse("act").map(a, a.sub)"#, req)
+			.unwrap()
+			.json()
+			.unwrap()
+	);
+}
+
 mod query_accessors {
 	use cel::Value;
 	use http::Method;
