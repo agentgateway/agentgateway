@@ -30,6 +30,7 @@ import { llmGatewayOrigin } from '@/gatewayUrls';
 import { useConfigDumpMode, useLlmConfigData } from '@/hooks';
 import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
+	catalogProviderName,
 	isWildcardModelName,
 	modelProviderLabel,
 	resolveModelName,
@@ -134,7 +135,7 @@ export function ClientSetupPage() {
 	const selectedModelConfig =
 		selectedModelOption?.kind === 'model' ? selectedModelOption.config : undefined;
 	const selectedCatalogProvider = selectedModelConfig
-		? modelProviderLabel(selectedModelConfig, providers)
+		? catalogProviderName(selectedModelConfig.provider, providers)
 		: null;
 	const selectedVirtualKey =
 		apiKeyMode === 'saved'
