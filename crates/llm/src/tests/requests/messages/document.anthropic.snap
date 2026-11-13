@@ -1,0 +1,194 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/document.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 1024
+  tools:
+    - name: fetch_report
+      description: Fetch a report as a PDF
+      input_schema:
+        type: object
+        properties:
+          id:
+            type: string
+        required:
+          - id
+  messages:
+    - role: user
+      content:
+        - type: document
+          title: invoice.pdf
+          source:
+            type: base64
+            media_type: application/pdf
+            data: JVBERi0xLjQK
+          cache_control:
+            type: ephemeral
+        - type: document
+          source:
+            type: base64
+            media_type: application/pdf
+            data: JVBERi0xLjQK
+        - type: document
+          source:
+            type: url
+            url: "https://example.com/terms.pdf"
+        - type: document
+          source:
+            type: text
+            media_type: text/plain
+            data: Payment is due in 30 days.
+        - type: text
+          text: "Compare these documents, then fetch report r-1."
+    - role: assistant
+      content:
+        - type: tool_use
+          id: toolu_01
+          name: fetch_report
+          input:
+            id: r-1
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: toolu_01
+          content:
+            - type: text
+              text: "Report r-1:"
+            - type: document
+              title: r-1.pdf
+              source:
+                type: base64
+                media_type: application/pdf
+                data: JVBERi0xLjQK
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "document",
+            "title": "invoice.pdf",
+            "source": {
+              "type": "base64",
+              "media_type": "application/pdf",
+              "data": "JVBERi0xLjQK"
+            },
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "base64",
+              "media_type": "application/pdf",
+              "data": "JVBERi0xLjQK"
+            }
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "url",
+              "url": "https://example.com/terms.pdf"
+            }
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "text",
+              "media_type": "text/plain",
+              "data": "Payment is due in 30 days."
+            }
+          },
+          {
+            "type": "text",
+            "text": "Compare these documents, then fetch report r-1."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01",
+            "name": "fetch_report",
+            "input": {
+              "id": "r-1"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "toolu_01",
+            "content": [
+              {
+                "type": "text",
+                "text": "Report r-1:"
+              },
+              {
+                "type": "document",
+                "title": "r-1.pdf",
+                "source": {
+                  "type": "base64",
+                  "media_type": "application/pdf",
+                  "data": "JVBERi0xLjQK"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "model": "claude-opus-4-6",
+    "max_tokens": 1024,
+    "tools": [
+      {
+        "name": "fetch_report",
+        "description": "Fetch a report as a PDF",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Compare these documents, then fetch report r-1."
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": ""
+      }
+    ]
+  }
+}
