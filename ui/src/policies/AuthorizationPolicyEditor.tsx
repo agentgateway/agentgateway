@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { Braces, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import type * as Monaco from 'monaco-editor';
 import { useState } from 'react';
+import { Controller, useFieldArray, useForm } from 'react-hook-form';
 
 import { celEditorOptions, celLanguage, configureCelMonaco } from '@/celMonaco';
 import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
@@ -14,6 +15,9 @@ type RuleEffect = 'allow' | 'deny' | 'require';
 type AuthzRule = {
 	effect: RuleEffect;
 	expression: string;
+};
+type AuthorizationFormValues = {
+	rules: AuthzRule[];
 };
 
 const defaultNewRule = 'request.path.startsWith("/v1/")';
@@ -35,38 +39,26 @@ export function AuthorizationPolicyEditor(props: {
 	saving: boolean;
 	onSave: (authorization: AuthorizationDraft) => void;
 }) {
-	const [rules, setRules] = useState<AuthzRule[]>(() => initialRules(props.authorization));
-	const [editingIndex, setEditingIndex] = useState<number | null>(() => (rules.length ? 0 : null));
+	const { control, watch } = useForm<AuthorizationFormValues>({
+		defaultValues: { rules: initialRules(props.authorization) }
+	});
+	const { append, fields, remove } = useFieldArray({ control, name: 'rules' });
+	const { rules } = watch();
+	const [editingIndex, setEditingIndex] = useState<number | null>(() => (fields.length ? 0 : null));
 	const [errors, setErrors] = useState<Record<number, string>>({});
 	const [summaryError, setSummaryError] = useState<string | null>(null);
 	const merged = useMergedEdits(props.authorization, buildAuthorization(rules));
 
 	function addRule() {
-		setRules(current => [
-			...current,
+		append(
 			{
 				effect: 'allow',
 				expression: props.newRuleExpression ?? defaultNewRule
-			}
-		]);
+			},
+			{ shouldFocus: false }
+		);
 		setEditingIndex(rules.length);
 		setSummaryError(null);
-	}
-
-	function updateRule(index: number, value: string) {
-		setRules(current =>
-			current.map((rule, ruleIndex) =>
-				ruleIndex === index ? { ...rule, expression: value } : rule
-			)
-		);
-		clearRuleError(index);
-	}
-
-	function updateEffect(index: number, effect: RuleEffect) {
-		setRules(current =>
-			current.map((rule, ruleIndex) => (ruleIndex === index ? { ...rule, effect } : rule))
-		);
-		clearRuleError(index);
 	}
 
 	function clearRuleError(index: number) {
@@ -80,7 +72,7 @@ export function AuthorizationPolicyEditor(props: {
 	}
 
 	function removeRule(index: number) {
-		setRules(current => current.filter((_, ruleIndex) => ruleIndex !== index));
+		remove(index);
 		setErrors(current => remapErrorsAfterDelete(current, index));
 		setEditingIndex(current => {
 			if (current === null) return null;
@@ -138,13 +130,13 @@ export function AuthorizationPolicyEditor(props: {
 				/>
 			) : (
 				<div className="authz-rule-list">
-					{rules.map((rule, index) => {
+					{fields.map((field, index) => {
+						const rule = rules[index];
 						const editing = editingIndex === index;
 						return (
 							<section
 								className={errors[index] ? 'authz-rule-card invalid' : 'authz-rule-card'}
-								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								key={index}
+								key={field.id}
 							>
 								<div className="authz-rule-header">
 									<div>
@@ -156,11 +148,20 @@ export function AuthorizationPolicyEditor(props: {
 									</div>
 									<div className="row-actions">
 										<div className="authz-effect-select">
-											<EnumSelector
-												ariaLabel={`Rule ${index + 1} effect`}
-												value={rule.effect}
-												options={effectOptions}
-												onChange={value => updateEffect(index, value)}
+											<Controller
+												control={control}
+												name={`rules.${index}.effect`}
+												render={({ field: effectField }) => (
+													<EnumSelector
+														ariaLabel={`Rule ${index + 1} effect`}
+														value={effectField.value}
+														options={effectOptions}
+														onChange={value => {
+															effectField.onChange(value);
+															clearRuleError(index);
+														}}
+													/>
+												)}
 											/>
 										</div>
 										<button
@@ -193,20 +194,29 @@ export function AuthorizationPolicyEditor(props: {
 								</div>
 								{editing ? (
 									<div className={errors[index] ? 'editor-wrap mini invalid' : 'editor-wrap mini'}>
-										<Editor
-											beforeMount={configureCelMonaco}
-											language={celLanguage}
-											theme={
-												document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'
-											}
-											value={rule.expression}
-											onChange={value => updateRule(index, value ?? '')}
-											onMount={configureMiniEditor}
-											options={{
-												...celEditorOptions,
-												lineNumbers: 'off',
-												wordWrap: 'on'
-											}}
+										<Controller
+											control={control}
+											name={`rules.${index}.expression`}
+											render={({ field: expressionField }) => (
+												<Editor
+													beforeMount={configureCelMonaco}
+													language={celLanguage}
+													theme={
+														document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'
+													}
+													value={expressionField.value}
+													onChange={value => {
+														expressionField.onChange(value ?? '');
+														clearRuleError(index);
+													}}
+													onMount={configureMiniEditor}
+													options={{
+														...celEditorOptions,
+														lineNumbers: 'off',
+														wordWrap: 'on'
+													}}
+												/>
+											)}
 										/>
 									</div>
 								) : null}
