@@ -1374,11 +1374,9 @@ fn import_litellm_mcp_servers(
 		};
 		let mut server = server.clone();
 
-		// A restricted server still goes through every mapping step below and gets a fully-built
-		// spec, stashed rather than emitted into mcp.targets: a later DB-state import
-		// (import_litellm_db_state) can splice it in once it proves an mcpAuthorization rule
-		// restricts it to specific keys. It shares this path with an open server, so it gets the
-		// same transport/auth_type/extra_headers/static_headers handling and error findings.
+		// A restricted server goes through the same mapping as an open one, just stashed rather
+		// than emitted into mcp.targets - import_litellm_db_state can splice it back in once a
+		// real grant restricts it to specific keys.
 		// LiteLLM defaults a missing allow_all_keys to false (load_servers_from_config in
 		// litellm/proxy/mcp_server/mcp_server_manager.py); only an explicit true counts as open.
 		let allow_all_keys_value = server.remove("allow_all_keys");
@@ -3387,11 +3385,8 @@ pub(super) fn import_litellm_db_state(
 			});
 		}
 
-		// LiteLLM's own sentinels in a models list, not real model names: "all-proxy-models"
-		// means no restriction at all; "all-team-models" on a key means explicit inheritance
-		// (the same as an empty list); either one on a team means the team itself imposes no
-		// narrowing. Naive exact-string intersection against these turns them into a silent
-		// deny-all, which is the opposite of what they mean.
+		// "all-proxy-models"/"all-team-models" are LiteLLM sentinels, not real model names -
+		// matching them as literal strings would deny everything instead of granting access.
 		let key_is_unrestricted = key.models.iter().any(|m| m == "all-proxy-models");
 		let key_inherits_team = key.models.iter().any(|m| m == "all-team-models");
 		let effective_key_models: &[String] = if key_inherits_team { &[] } else { &key.models };
@@ -3598,10 +3593,8 @@ pub(super) fn import_litellm_db_state(
 			}
 		}
 		for (index, key, name) in &migrated {
-			// Team-level object_permission.mcp_servers interacts with a key's own grant like
-			// LiteLLM's `models` does: a key with no grants of its own inherits its team's full
-			// list; a key with its own grants is capped to the intersection with a non-empty
-			// team list; an empty/absent team list never narrows or grants anything by itself.
+			// Same inheritance as the models list above: no grants of its own means inherit the
+			// team's; its own grants get capped to the team's list, if the team has one.
 			let team = key.team_id.as_deref().and_then(|id| teams.get(id).copied());
 			let team_grants: Option<&Vec<String>> = team
 				.map(|team| &team.object_permission)
