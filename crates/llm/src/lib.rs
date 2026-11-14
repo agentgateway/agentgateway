@@ -642,6 +642,24 @@ pub fn logged_response_parsing(bytes: &[u8]) -> impl FnOnce(serde_json::Error) -
 	}
 }
 
+/// Provider token counts from a chat completion the gateway rejected.
+///
+/// Logs and rate limits still charge these. They are the upstream's numbers, including reasoning
+/// tokens that Gemini leaves out of `completion_tokens`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportedUsage {
+	pub input_tokens: u64,
+	pub output_tokens: u64,
+	pub total_tokens: u64,
+	pub reasoning_tokens: Option<u64>,
+	pub cached_input_tokens: Option<u64>,
+	pub cache_creation_input_tokens: Option<u64>,
+}
+
+/// A translated chat completion ended without `finish_reason`. That is not a successful stop.
+pub const MISSING_FINISH_REASON_MESSAGE: &str =
+	"upstream chat completion ended without a finish_reason";
+
 #[derive(thiserror::Error, Debug)]
 pub enum AIError {
 	#[error("missing field: {0}")]
@@ -674,6 +692,10 @@ pub enum AIError {
 	ResponseParsing(serde_json::Error),
 	#[error("invalid response: {0}")]
 	InvalidResponse(Strng),
+	/// Upstream named no finish reason. Callers surface this as a client error instead of
+	/// `end_turn` / `response.completed`, and still account for [`ReportedUsage`].
+	#[error("upstream chat completion ended without a finish_reason")]
+	MissingFinishReason(Option<ReportedUsage>),
 	#[error("failed to marshal response: {0}")]
 	ResponseMarshal(serde_json::Error),
 	#[error("unsupported content encoding: {0}")]

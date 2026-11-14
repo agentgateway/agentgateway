@@ -2856,11 +2856,41 @@ impl AIProvider {
 			)?;
 			(LLMResponse::default(), body)
 		} else {
-			let mut resp = self.translate_chat_or_detect_response(
+			let mut resp = match self.translate_chat_or_detect_response(
 				&req,
 				&bytes,
 				model_catalog.map(|c| c.as_handle()),
-			)?;
+			) {
+				Ok(resp) => resp,
+				// The upstream HTTP status is still 200. A missing finish_reason is our 502, and
+				// the provider usage has to reach logs and rate limits before that response returns.
+				Err(AIError::MissingFinishReason(usage)) => {
+					parts.status = ::http::StatusCode::BAD_GATEWAY;
+					parts.headers.insert(
+						header::CONTENT_TYPE,
+						HeaderValue::from_static("application/json"),
+					);
+					let body = missing_finish_reason_body(req.input_format);
+					let llm_resp = llm_response_from_reported_usage(usage);
+					let llm_info = LLMInfo::new(req, llm_resp);
+					parts
+						.extensions
+						.insert(crate::cel::LLMContext::from_llm_info(
+							llm_info.clone(),
+							model_catalog,
+						));
+					parts.headers.remove(header::CONTENT_LENGTH);
+					managed_body.replace_bytes(body);
+					let resp = Response::from_parts(parts, managed_body);
+					if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
+						let exec = cel::Executor::new_response(req_snapshot.as_deref(), &resp);
+						amend_tokens(rate_limit, &llm_info, exec);
+					}
+					log.store(Some(llm_info));
+					return Ok(resp);
+				},
+				Err(err) => return Err(err),
+			};
 			let prompt_guard_headers =
 				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
 
@@ -3720,6 +3750,39 @@ fn response_prompt_guard_headers(
 		headers.insert(http::x_headers::TRACEPARENT, traceparent.clone());
 	}
 	headers
+}
+
+fn llm_response_from_reported_usage(usage: Option<agent_llm::ReportedUsage>) -> LLMResponse {
+	let Some(usage) = usage else {
+		return LLMResponse::default();
+	};
+	LLMResponse {
+		input_tokens: Some(usage.input_tokens),
+		output_tokens: Some(usage.output_tokens),
+		total_tokens: Some(usage.total_tokens),
+		reasoning_tokens: usage.reasoning_tokens,
+		cached_input_tokens: usage.cached_input_tokens,
+		cache_creation_input_tokens: usage.cache_creation_input_tokens,
+		..LLMResponse::default()
+	}
+}
+
+fn missing_finish_reason_body(format: InputFormat) -> Bytes {
+	let message = agent_llm::MISSING_FINISH_REASON_MESSAGE;
+	let body = match format {
+		InputFormat::Messages => serde_json::json!({
+			"type": "error",
+			"error": {"type": "api_error", "message": message}
+		}),
+		_ => serde_json::json!({
+			"error": {
+				"message": message,
+				"type": "server_error",
+				"code": "server_error"
+			}
+		}),
+	};
+	Bytes::from(serde_json::to_vec(&body).expect("missing finish_reason error is valid JSON"))
 }
 
 fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec: Executor) {
