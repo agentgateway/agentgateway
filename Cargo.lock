@@ -1645,10 +1645,14 @@ dependencies = [
 name = "cel-derive"
 version = "0.1.0"
 dependencies = [
+ "cel",
  "macrotest",
  "proc-macro2",
  "quote",
+ "serde",
+ "serde_json",
  "syn 3.0.9",
+ "vector-map",
 ]
 
 [[package]]
