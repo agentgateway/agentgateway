@@ -10,7 +10,7 @@ import {
 	YamlBlock
 } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
-import { useConfigDumpMode } from '@/hooks';
+import { useConfigDumpMode, useRuntimeInfo } from '@/hooks';
 import { ReadonlyModeBanner } from '@/pages/traffic/TrafficConfigDumpPanel';
 
 type TargetedPolicy = {
@@ -24,6 +24,7 @@ type TargetedPolicy = {
 
 export function DumpPoliciesPage() {
 	const mode = useConfigDumpMode();
+	const hybrid = useRuntimeInfo().data?.ui.configStoreMode === 'hybrid';
 	const [selectedKey, setSelectedKey] = useStickyQueryParam('policy');
 	const dumpMode = mode.data?.mode === 'dump';
 	const policies = (mode.data?.dump?.policies ?? []).filter(isTargetedPolicy);
@@ -35,7 +36,7 @@ export function DumpPoliciesPage() {
 				title="Policies"
 				description="Read-only top-level policies from the active gateway dump."
 			/>
-			<ReadonlyModeBanner />
+			{dumpMode ? <ReadonlyModeBanner /> : null}
 
 			<Panel>
 				{mode.isLoading ? (
@@ -45,9 +46,9 @@ export function DumpPoliciesPage() {
 						{mode.error.message}
 					</StatusBanner>
 				) : !dumpMode ? (
-					<StatusBanner state="warn" title="Readonly policies unavailable">
-						Top-level runtime policies are only available when the gateway is running from XDS
-						config.
+					<StatusBanner state="warn" title="Only available with XDS">
+						This gateway runs from {hybrid ? 'a config file and a database' : 'a config file'}.
+						Top-level runtime policies appear here when the gateway gets its config over XDS.
 					</StatusBanner>
 				) : !policies.length ? (
 					<EmptyState

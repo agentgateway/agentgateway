@@ -89,9 +89,12 @@ export const coreProviderNames = new Set<ProviderName>([
 	'custom'
 ]);
 
+// Spellings the config schema accepts besides the canonical provider name.
+const providerAliases: Record<string, ProviderName> = { openAI: 'openai' };
+
 export function providerLabel(provider: ModelProvider | null): string {
 	if (!provider) return '';
-	if (typeof provider === 'string') return provider;
+	if (typeof provider === 'string') return providerAliases[provider] ?? provider;
 	if ('reference' in provider) return 'reference';
 	return 'custom';
 }

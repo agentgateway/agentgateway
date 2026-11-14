@@ -28,19 +28,55 @@ export async function waitForLlmCors(baseUrl: string) {
 	throw new Error('The CORS policy was saved, but the LLM listener is not reachable. Try again.');
 }
 
+// Non-safelisted headers sent by sendChatCompletion, sendMcpJsonRpc and waitForLlmCors.
+export const playgroundRequestHeaders: Record<CorsTarget, string[]> = {
+	llm: ['content-type', 'authorization'],
+	mcp: ['content-type', 'authorization', 'mcp-session-id']
+};
+
+// Mirrors the gateway's CORS policy for the playground's uncredentialed POSTs.
+// POST is a safelisted method, so allowMethods doesn't matter.
 export function corsNeedsUpdate(
 	cors: CorsPolicy | null | undefined,
 	target: CorsTarget,
-	origin = currentOrigin()
+	origin = currentOrigin(),
+	extraHeaders: string[] = []
 ) {
 	if (!cors) return true;
+	const headers = [...playgroundRequestHeaders[target], ...extraHeaders];
 	return (
-		!hasValue(cors.allowOrigins, origin) ||
-		!hasValue(cors.allowMethods, 'GET') ||
-		!hasValue(cors.allowMethods, 'POST') ||
-		!hasValue(cors.allowHeaders, '*') ||
-		(target === 'mcp' && !hasValue(cors.exposeHeaders, 'Mcp-Session-Id'))
+		!originAllowed(cors.allowOrigins, origin) ||
+		!allows(cors.allowHeaders, headers) ||
+		(target === 'mcp' && !allows(cors.exposeHeaders, ['Mcp-Session-Id']))
 	);
+}
+
+// Same rules as the gateway: scheme, host and port must match, ports default by scheme,
+// and `*` in the host matches any run of characters.
+function originAllowed(allowOrigins: string[] | undefined, origin: string) {
+	if (hasValue(allowOrigins, '*')) return true;
+	const request = parseOrigin(origin);
+	return Boolean(
+		request &&
+			allowOrigins?.some(value => {
+				const allowed = parseOrigin(value);
+				if (allowed?.scheme !== request.scheme || allowed.port !== request.port) return false;
+				const host = allowed.host.split('*').map(escapeRegExp).join('.*');
+				return new RegExp(`^${host}$`).test(request.host);
+			})
+	);
+}
+
+function parseOrigin(value: string) {
+	const match = /^(https?):\/\/([^/?#:]+)(?::(\d+))?$/i.exec(value);
+	if (!match) return null;
+	const scheme = match[1].toLowerCase();
+	const port = Number(match[3] ?? (scheme === 'https' ? 443 : 80));
+	return { scheme, host: match[2].toLowerCase(), port };
+}
+
+function escapeRegExp(value: string) {
+	return value.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function applyPlaygroundCors(
@@ -79,6 +115,10 @@ function appendUnique(values: string[] | undefined, value: string) {
 	const next = values ? [...values] : [];
 	if (!hasValue(next, value)) next.push(value);
 	return next;
+}
+
+function allows(values: string[] | undefined, required: string[]) {
+	return hasValue(values, '*') || required.every(value => hasValue(values, value));
 }
 
 function hasValue(values: string[] | undefined, value: string) {

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
+	json,
 	mockGateway,
 	mockXdsGateway,
 	populatedConfig,
@@ -44,6 +45,11 @@ test('core pages render with mocked gateway data', async ({ page }) => {
 		await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
 		await expect(page.locator('body')).not.toContainText('Configuration API unavailable');
 	}
+
+	await page.goto('/traffic/policies');
+	await expect(page.getByText('Only available with XDS')).toBeVisible();
+	await expect(page.getByText('This gateway runs from a config file.')).toBeVisible();
+	await expect(page.getByText('Readonly mode')).toHaveCount(0);
 });
 
 test('log detail renders the normalized conversation', async ({ page }) => {
@@ -330,6 +336,11 @@ test('raw configuration lists hybrid database resources with masked keys', async
 		.click();
 	await expect(page.getByText('agw_sk_...t123')).toBeVisible();
 	await expect(page.locator('body')).not.toContainText('agw_sk_supersecret123');
+
+	await page.goto('/traffic/policies');
+	await expect(
+		page.getByText('This gateway runs from a config file and a database.')
+	).toBeVisible();
 });
 
 test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) => {
@@ -921,6 +932,19 @@ test('region composite describes its focused input and label focuses it', async 
 	await expect(region).toHaveAccessibleDescription('Optional. If unset, Vertex uses global.');
 	await page.getByText('Vertex region', { exact: true }).click();
 	await expect(region).toBeFocused();
+});
+
+test('provider editor selects a provider set by its openAI alias', async ({ page }) => {
+	const config = populatedConfig();
+	(config.llm as { providers: Array<{ provider: string }> }).providers[0].provider = 'openAI';
+	await mockGateway(page, config);
+	await page.goto('/llm/providers');
+	await page
+		.getByRole('row', { name: /openai-shared/ })
+		.getByRole('button', { name: 'Edit provider' })
+		.click();
+
+	await expect(page.getByRole('combobox', { name: 'Provider', exact: true })).toHaveText('OpenAI');
 });
 
 test('Playground Specific model hint describes the wildcard input', async ({ page }) => {
@@ -1736,19 +1760,39 @@ test('LLM playground can retry when the CORS listener stays unavailable', async 
 	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 });
 
-test('LLM playground sends selected virtual model name', async ({ page }) => {
-	const gateway = await mockGateway(page);
-	await page.goto('/llm/playground');
+for (const [name, cors, warns] of [
+	['this origin', { allowOrigins: ['http://127.0.0.1:19100'], allowHeaders: ['*'] }, false],
+	['a host pattern', { allowOrigins: ['http://*.0.0.1:19100'], allowHeaders: ['*'] }, false],
+	[
+		'any origin and the sent headers',
+		{ allowOrigins: ['*'], allowHeaders: ['Authorization', 'Content-Type'] },
+		false
+	],
+	[
+		'a header list without Authorization',
+		{ allowOrigins: ['*'], allowHeaders: ['content-type'] },
+		true
+	]
+] as const) {
+	test(`LLM playground sends selected virtual model name (CORS allows ${name})`, async ({
+		page
+	}) => {
+		const config = populatedConfig();
+		(config.llm as { policies: { cors?: unknown } }).policies.cors = cors;
+		const gateway = await mockGateway(page, config);
+		await page.goto('/llm/playground');
 
-	await page.getByRole('combobox', { name: 'Model' }).click();
-	await page.getByRole('option', { name: /resilient/ }).click();
-	await page.getByLabel('User message').fill('ping');
-	await page.getByRole('button', { name: 'Send' }).click();
+		await page.getByRole('combobox', { name: 'Model' }).click();
+		await page.getByRole('option', { name: /resilient/ }).click();
+		await expect(page.getByText('Browser access is not allowed')).toHaveCount(warns ? 1 : 0);
+		await page.getByLabel('User message').fill('ping');
+		await page.getByRole('button', { name: 'Send' }).click();
 
-	await expect(page.locator('.chat-message.assistant .chat-bubble')).toContainText('pong');
-	await expect.poll(() => gateway.chatRequests.length).toBe(1);
-	expect(gateway.chatRequests[0].model).toBe('resilient');
-});
+		await expect(page.locator('.chat-message.assistant .chat-bubble')).toContainText('pong');
+		await expect.poll(() => gateway.chatRequests.length).toBe(1);
+		expect(gateway.chatRequests[0].model).toBe('resilient');
+	});
+}
 
 test('MCP playground initializes, lists tools, and calls a tool', async ({ page }) => {
 	const gateway = await mockGateway(page);
@@ -1855,6 +1899,30 @@ test('MCP playground uses relative requests when UI shares the gateway', async (
 	expect(requestUrl.origin).toBe(pageOrigin);
 	expect(requestUrl.pathname).toBe('/mcp');
 });
+
+for (const servedByAdmin of [false, true]) {
+	test(`admin port banner points to the gateway UI (servedByAdmin=${servedByAdmin})`, async ({
+		page
+	}) => {
+		await mockGateway(page, sameOriginGatewayConfig());
+		await page.route('**/api/runtime', route =>
+			json(route, {
+				build: {},
+				ui: { gatewayMode: 'standalone', configStoreMode: 'file', servedByAdmin },
+				// A failed reload banner renders from the same response, so its presence proves the page read it.
+				configReload: { synchronized: false, lastError: 'bad config' }
+			})
+		);
+		await page.goto('/llm/playground');
+
+		await expect(page.getByText('Configuration reload failed')).toBeVisible();
+		const banner = page.locator('.status-banner', { hasText: 'Use the gateway UI' });
+		await expect(banner).toHaveCount(servedByAdmin ? 1 : 0);
+		if (servedByAdmin) {
+			await expect(banner.getByRole('link')).toHaveAttribute('href', 'http://127.0.0.1:8080/ui/');
+		}
+	});
+}
 
 test('edits top-level MCP policies', async ({ page }) => {
 	const gateway = await mockGateway(page, emptyConfig());

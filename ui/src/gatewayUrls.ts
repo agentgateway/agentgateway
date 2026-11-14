@@ -73,6 +73,13 @@ export function llmGatewayOrigin(config: GatewayConfig | null | undefined) {
 	);
 }
 
+// The UI on the gateway it's attached to, or null when the config doesn't attach it to one.
+export function uiGatewayUrl(config: GatewayConfig | null | undefined) {
+	const gateway = firstGatewayEndpoint(config, uiGatewayRefs(config));
+	if (gateway?.port === undefined) return null;
+	return `${gatewayOrigin(gateway.port, gateway.scheme ?? currentWindowScheme())}/ui/`;
+}
+
 function playgroundEndpoint(
 	config: GatewayConfig | null | undefined,
 	targets: string[],

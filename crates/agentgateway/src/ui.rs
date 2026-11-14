@@ -254,6 +254,8 @@ struct RuntimeBuildInfo {
 struct RuntimeUiInfo {
 	gateway_mode: GatewayRuntimeMode,
 	config_store_mode: ConfigStoreMode,
+	/// True when the request reached the admin listener rather than a gateway route.
+	served_by_admin: bool,
 }
 
 #[derive(Serialize)]
@@ -406,6 +408,7 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 					GatewayRuntimeMode::Standalone
 				},
 				config_store_mode: app.state.storage.mode,
+				served_by_admin: req.extensions().get::<AdminListener>().is_some(),
 			},
 			config_reload: {
 				let last_error = app.state.config_reload_status.last_error();
@@ -446,6 +449,10 @@ async fn serve_ui_asset(
 		.await
 		.map(|response| response.map(axum::body::Body::new))
 }
+
+/// Marks requests that arrived on the admin listener, which serves the UI but no gateway routes.
+#[derive(Clone)]
+pub(crate) struct AdminListener;
 
 /// Set by the gateway route the UI is attached to, from `ui.basePath`.
 #[derive(Clone)]
@@ -1816,7 +1823,20 @@ mod tests {
 				})
 				.unwrap_or(Value::Null);
 			assert_eq!(runtime["user"], expected, "expression: {expression:?}");
+			assert_eq!(runtime["ui"]["servedByAdmin"], false);
 		}
+
+		let mut req = axum::extract::Request::builder()
+			.uri("http://localhost/api/runtime")
+			.body(axum::body::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(AdminListener);
+		let response = get_runtime(State(app), req).await.into_response();
+		let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+			.await
+			.unwrap();
+		let runtime: Value = serde_json::from_slice(&body).unwrap();
+		assert_eq!(runtime["ui"]["servedByAdmin"], true);
 	}
 
 	#[tokio::test]
