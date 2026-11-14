@@ -116,19 +116,28 @@ export CARGO_NET_GIT_FETCH_WITH_CLI=true
 make build
 ```
 
-Run the agentgateway binary with a config that serves the UI on a gateway, such as:
+Run the agentgateway binary:
+
+```bash
+./target/release/agentgateway
+```
+
+With no arguments, it writes a starter config to `~/.config/agentgateway/config.yaml`. That config defines a gateway named `default` on port 4000 and serves the UI from it, at http://localhost:4000/ui.
+
+To run your own config, attach the UI to a gateway. `ui: {}` uses the gateway named `default`:
 
 ```yaml
 gateways:
   default:
-    port: 3000
+    port: 4000
 ui: {}
 ```
 
 ```bash
 ./target/release/agentgateway -f config.yaml
 ```
-Open your browser and navigate to `http://localhost:3000/ui` to see the agentgateway UI.
+
+For a gateway with another name, list it in `ui.gateways`, for example `ui: { gateways: [web] }`.
 
 ## Local Development with Tilt (Kubernetes)
 
