@@ -865,12 +865,17 @@ fn apply_litellm_inbound_api_key(
 		unreachable!("normalize_environment_references preserves the String variant");
 	};
 
+	let master_key_caveat =
+		"Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key)";
+	let virtual_key_caveat =
+		"Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone.";
 	let (location, status, message) = match settings.get("litellm_key_header_name") {
 		None => (
 			None,
 			ImportStatus::Approximate,
-			"Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
-				.to_string(),
+			format!(
+				"{master_key_caveat} to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. {virtual_key_caveat}"
+			),
 		),
 		Some(Value::String(name)) => {
 			let Ok(name) = ::http::HeaderName::from_bytes(name.as_bytes()) else {
@@ -879,8 +884,9 @@ fn apply_litellm_inbound_api_key(
 			(
 				Some(json!({"header": {"name": name.as_str()}})),
 				ImportStatus::Approximate,
-				"Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
-					.to_string(),
+				format!(
+					"{master_key_caveat} and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. {virtual_key_caveat}"
+				),
 			)
 		},
 		Some(other) => {
