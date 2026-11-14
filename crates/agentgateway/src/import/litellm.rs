@@ -1351,13 +1351,10 @@ fn import_litellm_mcp_servers(
 		};
 		let mut server = server.clone();
 
-		// A restricted server still goes through every mapping step below and gets a fully-built
-		// spec; only the final push differs (dropped with an Unsupported finding instead of
-		// emitted). It shares this path with an open server, so it gets the same
-		// transport/auth_type/extra_headers/static_headers handling and error findings.
-		// LiteLLM defaults a missing allow_all_keys to false (load_servers_from_config
-		// in litellm/proxy/mcp_server/mcp_server_manager.py). Only an explicit true is
-		// treated as open; anything else is restricted.
+		// A restricted server goes through the same mapping as an open one - only the final push
+		// differs (dropped with an Unsupported finding instead of emitted).
+		// LiteLLM defaults a missing allow_all_keys to false (load_servers_from_config in
+		// litellm/proxy/mcp_server/mcp_server_manager.py); only an explicit true counts as open.
 		let allow_all_keys_value = server.remove("allow_all_keys");
 		let allow_all_keys_restriction: Option<&str> = match &allow_all_keys_value {
 			None => Some("omitted"),
