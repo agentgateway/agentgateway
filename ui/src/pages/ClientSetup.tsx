@@ -728,23 +728,35 @@ models:
     apiBase: ${JSON.stringify(v1)}${continueApiKey}`
 		},
 		{
-			id: 'windsurf',
-			title: 'Windsurf',
-			description: 'Connect Windsurf to agentgateway using its HTTP proxy setting.',
+			id: 'devin-desktop',
+			title: 'Devin Desktop',
+			description: 'Connect the Claude Agent in Devin Desktop (formerly Windsurf) to agentgateway.',
 			icon: 'windsurf',
 			steps: [
 				<>
-					Open <strong>Windsurf Settings</strong>.
+					Run <strong>Preferences: Open User Settings (JSON)</strong> in Devin Desktop and merge
+					this configuration into it.
 				</>,
 				<>
-					Search for <strong>Http: Proxy</strong>.
-				</>,
-				<>
-					Set the proxy URL to <code>{base}</code> and save.
+					Restart Devin Desktop, open a new agent tab, and select <strong>Claude Agent</strong>.
+					Cascade, the built-in agent, does not use these settings.
 				</>
 			],
-			language: 'text',
-			code: `Http: Proxy: ${base}`
+			language: 'json',
+			code: JSON.stringify(
+				{
+					'devin.acp.enabledAgents': { 'claude-acp': true },
+					'devin.acp.agentEnv': {
+						'claude-acp': {
+							ANTHROPIC_BASE_URL: base,
+							ANTHROPIC_AUTH_TOKEN: requiredApiKey,
+							ANTHROPIC_MODEL: args.model
+						}
+					}
+				},
+				null,
+				2
+			)
 		},
 		{
 			id: 'openai-js',
