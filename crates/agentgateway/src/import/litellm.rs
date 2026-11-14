@@ -534,39 +534,40 @@ fn report_litellm_cache_value(
 ///   never actually emitted. Retract those and record why nothing landed instead.
 fn finalize_litellm_plan(plan: &mut ImportPlan) {
 	if !plan.mcp_targets.is_empty() {
+		// If DB-state already protects these targets with its own per-key auth and
+		// mcpAuthorization rules (including its own master-key bypass rule),
+		// import_litellm_db_state already explains that via its own findings, so there's
+		// nothing to add or retract below.
 		let has_db_state_mcp_auth =
 			!plan.mcp_api_keys.is_empty() || !plan.mcp_authorization_rules.is_empty();
-		if has_db_state_mcp_auth {
-			// DB-state already protects these targets with its own per-key auth and
-			// mcpAuthorization rules (including its own master-key bypass rule), and
-			// import_litellm_db_state already explains that via its own findings - nothing
-			// to add or retract here.
-		} else if plan.inbound_api_key.is_some() {
-			plan.findings.push(ImportFinding {
-				source_path: "general_settings.master_key".to_string(),
-				status: ImportStatus::Approximate,
-				message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied".to_string(),
-			});
-		} else {
-			// None of these servers will actually be emitted, so drop every per-server finding
-			// that claimed otherwise - each would contradict the single "not emitted" finding
-			// that follows.
-			plan.findings.retain(|finding| {
-				!finding
-					.message
-					.starts_with("Mapped LiteLLM MCP server to agentgateway target")
-					&& !finding
+		if !has_db_state_mcp_auth {
+			if plan.inbound_api_key.is_some() {
+				plan.findings.push(ImportFinding {
+					source_path: "general_settings.master_key".to_string(),
+					status: ImportStatus::Approximate,
+					message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied".to_string(),
+				});
+			} else {
+				// None of these servers will actually be emitted, so drop every per-server finding
+				// that claimed otherwise - each would contradict the single "not emitted" finding
+				// that follows.
+				plan.findings.retain(|finding| {
+					!finding
 						.message
-						.starts_with("Multiple MCP servers are multiplexed")
-					&& !finding.message.starts_with("Mapped static_headers")
-					&& !finding.message.starts_with("Renamed ")
-			});
-			plan.findings.push(ImportFinding {
-				source_path: "mcp_servers".to_string(),
-				status: ImportStatus::Unsupported,
-				message: "No inbound API key was emitted, so the migrated MCP target(s) could not be protected and were not emitted".to_string(),
-			});
-			plan.mcp_targets.clear();
+						.starts_with("Mapped LiteLLM MCP server to agentgateway target")
+						&& !finding
+							.message
+							.starts_with("Multiple MCP servers are multiplexed")
+						&& !finding.message.starts_with("Mapped static_headers")
+						&& !finding.message.starts_with("Renamed ")
+				});
+				plan.findings.push(ImportFinding {
+					source_path: "mcp_servers".to_string(),
+					status: ImportStatus::Unsupported,
+					message: "No inbound API key was emitted, so the migrated MCP target(s) could not be protected and were not emitted".to_string(),
+				});
+				plan.mcp_targets.clear();
+			}
 		}
 	}
 
@@ -1554,16 +1555,17 @@ fn import_litellm_mcp_servers(
 			spec_map.insert("name".to_string(), json!(target_name));
 		}
 		if is_restricted {
+			let omitted = allow_all_keys_restriction == Some("omitted");
 			let held_back_reason = match allow_all_keys_restriction {
-				Some("omitted") => {
-					"config.yaml omitted allow_all_keys (LiteLLM defaults this to false), which it alone cannot express safely"
-				},
 				Some("non-boolean") => {
 					"config.yaml set a non-boolean allow_all_keys, which it alone cannot express safely"
 				},
+				_ if omitted => {
+					"config.yaml omitted allow_all_keys (LiteLLM defaults this to false), which it alone cannot express safely"
+				},
 				_ => "config.yaml set allow_all_keys: false, which it alone cannot express safely",
 			};
-			let message = if allow_all_keys_restriction == Some("omitted") {
+			let message = if omitted {
 				"LiteLLM defaults an omitted allow_all_keys to false, so this server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
 			} else {
 				"This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
