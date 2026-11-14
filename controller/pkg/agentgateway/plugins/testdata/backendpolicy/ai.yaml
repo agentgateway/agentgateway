@@ -71,6 +71,14 @@ spec:
                   gcp:
                     type: IdToken
                     audience: "https://ai-guardrails.example.com"
+          - azureContentSafety:
+              endpoint: my-resource.cognitiveservices.azure.com
+              failureMode: FailOpen
+              analyzeText:
+                severityThreshold: 4
+              policies:
+                auth:
+                  key: test-content-safety-key
         request:
           - response:
               message: "regex rejected on request"
@@ -96,6 +104,22 @@ spec:
               templateId: model-armor-template-id
               projectId: model-armor-project-id
               location: us-central1
+          - azureContentSafety:
+              endpoint: https://my-resource.cognitiveservices.azure.com
+              action: Audit
+              analyzeText:
+                severityThreshold: 2
+                apiVersion: "2024-09-01"
+                blocklistNames:
+                  - my-blocklist
+                haltOnBlocklistHit: true
+              detectJailbreak:
+                apiVersion: "2024-02-15-preview"
+              policies:
+                auth:
+                  azure:
+                    managedIdentity:
+                      clientId: my-client-id
           - webhook:
               backendRef:
                 name: webhook
@@ -179,6 +203,24 @@ output:
                 location: us-central1
                 projectId: model-armor-project-id
                 templateId: model-armor-template-id
+            - azureContentSafety:
+                action: REJECT_AUDIT_ACTION_AUDIT
+                analyzeText:
+                  apiVersion: "2024-09-01"
+                  blocklistNames:
+                  - my-blocklist
+                  haltOnBlocklistHit: true
+                  severityThreshold: 2
+                detectJailbreak:
+                  apiVersion: 2024-02-15-preview
+                endpoint: https://my-resource.cognitiveservices.azure.com
+                inlinePolicies:
+                - auth:
+                    azure:
+                      explicitConfig:
+                        managedIdentityCredential:
+                          userAssignedIdentity:
+                            clientId: my-client-id
             - webhook:
                 action: REJECT_AUDIT_ACTION_REJECT
                 backend:
@@ -219,6 +261,16 @@ output:
                 location: us-central1
                 projectId: model-armor-project-id
                 templateId: model-armor-template-id
+            - azureContentSafety:
+                action: REJECT_AUDIT_ACTION_REJECT
+                analyzeText:
+                  severityThreshold: 4
+                endpoint: my-resource.cognitiveservices.azure.com
+                failureMode: FAIL_OPEN
+                inlinePolicies:
+                - auth:
+                    key:
+                      secret: test-content-safety-key
           prompts:
             append:
             - content: hello!
