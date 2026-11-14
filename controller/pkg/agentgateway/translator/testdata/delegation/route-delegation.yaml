@@ -191,4 +191,21 @@ status:
     namespace: team1
   spec: null
   status:
-    parents: []
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        name: parent
+        namespace: default
