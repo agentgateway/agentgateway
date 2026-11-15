@@ -1,0 +1,26 @@
+{
+  "model": "claude-sonnet-4",
+  "tools": [],
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a coding agent."
+    },
+    {
+      "role": "user",
+      "content": "Clone the repo."
+    },
+    {
+      "role": "assistant",
+      "content": "Done."
+    },
+    {
+      "role": "system",
+      "content": "New skills: createSkill"
+    },
+    {
+      "role": "user",
+      "content": "Which skills do you have?"
+    }
+  ]
+}

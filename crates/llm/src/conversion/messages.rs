@@ -633,6 +633,56 @@ pub mod from_completions {
 		}
 	}
 
+	fn push_or_merge_message(messages: &mut Vec<messages::Message>, msg: messages::Message) {
+		if let Some(last) = messages.last_mut()
+			&& last.role == msg.role
+		{
+			if last.role == messages::Role::User {
+				let incoming_has_tool_result = msg
+					.content
+					.iter()
+					.any(|block| matches!(block, messages::ContentBlock::ToolResult { .. }));
+				let last_has_non_tool_result = last
+					.content
+					.iter()
+					.any(|block| !matches!(block, messages::ContentBlock::ToolResult { .. }));
+				if incoming_has_tool_result && last_has_non_tool_result {
+					// Anthropic requires tool_result blocks to precede text and other blocks
+					// in a user message. A system reminder may have been emitted between
+					// parallel tool results; keep result order, then append the reminder.
+					let mut tool_results = Vec::new();
+					let mut other_blocks = Vec::new();
+					for block in last.content.drain(..).chain(msg.content) {
+						if matches!(block, messages::ContentBlock::ToolResult { .. }) {
+							tool_results.push(block);
+						} else {
+							other_blocks.push(block);
+						}
+					}
+					tool_results.extend(other_blocks);
+					last.content = tool_results;
+					return;
+				}
+				if incoming_has_tool_result
+					&& last
+						.content
+						.iter()
+						.all(|block| matches!(block, messages::ContentBlock::ToolResult { .. }))
+				{
+					// Preserve the established separate-message shape for consecutive tool
+					// results when there is no intervening text to reorder.
+				} else {
+					last.content.extend(msg.content);
+					return;
+				}
+			} else {
+				last.content.extend(msg.content);
+				return;
+			}
+		}
+		messages.push(msg);
+	}
+
 	fn translate_internal(
 		req: completions::Request,
 		model_id: String,
@@ -641,7 +691,12 @@ pub mod from_completions {
 		let max_tokens = req.max_tokens();
 		let stop_sequences = req.stop_sequence();
 		let mut system_blocks = Vec::new();
-		for message in &req.messages {
+		for message in req.messages.iter().take_while(|m| {
+			matches!(
+				m,
+				completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_)
+			)
+		}) {
 			match message {
 				completions::RequestMessage::System(message) => match &message.content {
 					completions::RequestSystemMessageContent::Text(text) => {
@@ -707,50 +762,101 @@ pub mod from_completions {
 		};
 
 		// Convert messages to Anthropic format
-		let messages = req
-			.messages
-			.iter()
-			.filter_map(|msg| {
-				let (role, content) = match msg {
-					completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_) => {
-						return None;
-					},
-					completions::RequestMessage::User(user) => {
-						match user_content_to_messages(&user.content) {
-							Ok(content) => (messages::Role::User, content),
-							Err(err) => return Some(Err(err)),
-						}
-					},
-					completions::RequestMessage::Assistant(assistant) => (
-						messages::Role::Assistant,
-						assistant_content_to_messages(assistant),
-					),
-					completions::RequestMessage::Tool(tool) => (
-						messages::Role::User,
-						vec![messages::ContentBlock::ToolResult {
-							tool_use_id: tool.tool_call_id.clone(),
-							content: tool_content_to_messages(&tool.content),
-							cache_control: None,
-							is_error: None,
-						}],
-					),
-					completions::RequestMessage::Function(function) => {
-						let mut blocks = Vec::new();
-						if let Some(text) = &function.content
-							&& !text.trim().is_empty()
-						{
-							blocks.push(messages::ContentBlock::text(text.clone()));
-						}
-						(messages::Role::User, blocks)
-					},
-				};
-				if content.is_empty() {
-					None
-				} else {
-					Some(Ok(messages::Message { role, content }))
-				}
-			})
-			.collect::<Result<Vec<_>, _>>()?;
+		let mut leading_system = true;
+		let mut messages = Vec::new();
+		for msg in &req.messages {
+			leading_system &= matches!(
+				msg,
+				completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_)
+			);
+			let (role, content) = match msg {
+				completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_)
+					if leading_system =>
+				{
+					continue;
+				},
+				completions::RequestMessage::System(system) => {
+					let mut blocks = Vec::new();
+					match &system.content {
+						completions::RequestSystemMessageContent::Text(text) => {
+							if !text.trim().is_empty() {
+								blocks.push(messages::ContentBlock::text(format!(
+									"<system-reminder>\n{text}\n</system-reminder>"
+								)));
+							}
+						},
+						completions::RequestSystemMessageContent::Array(parts) => {
+							for part in parts {
+								let completions::RequestSystemMessageContentPart::Text(text) = part;
+								if !text.text.trim().is_empty() {
+									blocks.push(messages::ContentBlock::Text(messages::ContentTextBlock {
+										text: format!("<system-reminder>\n{}\n</system-reminder>", text.text),
+										citations: None,
+										cache_control: cache_control(&text.prompt_cache_breakpoint),
+									}));
+								}
+							}
+						},
+					}
+					(messages::Role::User, blocks)
+				},
+				completions::RequestMessage::Developer(developer) => {
+					let mut blocks = Vec::new();
+					match &developer.content {
+						completions::RequestDeveloperMessageContent::Text(text) => {
+							if !text.trim().is_empty() {
+								blocks.push(messages::ContentBlock::text(format!(
+									"<system-reminder>\n{text}\n</system-reminder>"
+								)));
+							}
+						},
+						completions::RequestDeveloperMessageContent::Array(parts) => {
+							for part in parts {
+								let completions::RequestDeveloperMessageContentPart::Text(text) = part;
+								if !text.text.trim().is_empty() {
+									blocks.push(messages::ContentBlock::Text(messages::ContentTextBlock {
+										text: format!("<system-reminder>\n{}\n</system-reminder>", text.text),
+										citations: None,
+										cache_control: cache_control(&text.prompt_cache_breakpoint),
+									}));
+								}
+							}
+						},
+					}
+					(messages::Role::User, blocks)
+				},
+				completions::RequestMessage::User(user) => (
+					messages::Role::User,
+					user_content_to_messages(&user.content)?,
+				),
+				completions::RequestMessage::Assistant(assistant) => (
+					messages::Role::Assistant,
+					assistant_content_to_messages(assistant),
+				),
+				completions::RequestMessage::Tool(tool) => (
+					messages::Role::User,
+					vec![messages::ContentBlock::ToolResult {
+						tool_use_id: tool.tool_call_id.clone(),
+						content: tool_content_to_messages(&tool.content),
+						cache_control: None,
+						is_error: None,
+					}],
+				),
+				completions::RequestMessage::Function(function) => {
+					let mut blocks = Vec::new();
+					if let Some(text) = &function.content
+						&& !text.trim().is_empty()
+					{
+						blocks.push(messages::ContentBlock::text(text.clone()));
+					}
+					(messages::Role::User, blocks)
+				},
+			};
+			if content.is_empty() {
+				continue;
+			}
+			push_or_merge_message(&mut messages, messages::Message { role, content });
+		}
 
 		let tools = if let Some(tools) = req.tools {
 			let mapped_tools: Vec<_> = tools
