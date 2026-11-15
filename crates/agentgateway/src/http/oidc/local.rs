@@ -51,8 +51,11 @@ pub enum OidcCredentials {
 	/// Only browser sessions established through the policy's login flow.
 	#[default]
 	Session,
-	/// Browser sessions, or an ID token for this client sent as `Authorization: Bearer <token>`.
+	/// Browser sessions, or a JWT sent as `Authorization: Bearer <token>`.
 	/// This lets non-browser clients authenticate with a token obtained from the provider directly.
+	/// Any token signed by the issuer whose `aud` includes this client is accepted, including access
+	/// tokens. To accept fewer tokens, check claims in `authorization` rules, for example
+	/// `!has(jwt.azp) || jwt.azp == "<client-id>"`.
 	SessionOrBearer,
 	/// Like `sessionOrBearer`, but lets unauthenticated non-navigation requests continue to later
 	/// policies with their credentials intact. Browser navigations retain the normal login behavior.
