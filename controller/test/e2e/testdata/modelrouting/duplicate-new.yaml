@@ -1,0 +1,37 @@
+# Newer duplicate. Its name sorts first, so only the older creationTimestamp may decide the winner.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: dup-a-new
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  match:
+    model: dup-gpt
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-dup-new"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: dup-virtual
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: dup-a-new

@@ -54,7 +54,7 @@ func TranslateModel(ctx RouteContext, obj *agentgateway.AgentgatewayModel) (*age
 	rep := reports.NewReporter(&rm)
 	routeReporter := rep.Route(obj)
 
-	parentRefs := extractModelParentReferenceInfo(ctx, obj)
+	parentRefs := rejectDuplicateModelParents(ctx, obj, extractModelParentReferenceInfo(ctx, obj))
 	resources := translateModelForParents(ctx, obj, parentRefs, routeReporter)
 
 	status := rm.BuildRouteStatusWithParentRefDefaulting(context.Background(), obj, ctx.ControllerName, true)
@@ -71,7 +71,7 @@ func ModelReferences(
 	gvk schema.GroupVersionKind,
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[*plugins.RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
-	attachments := gatewayRouteAttachmentCollection(inputs, models, gvk, krtopts)
+	attachments := modelRouteAttachmentCollection(inputs, models, gvk, krtopts)
 	ancestors := krt.NewManyCollection(models, func(krtctx krt.HandlerContext, obj *agentgateway.AgentgatewayModel) []*utils.AncestorBackend {
 		return extractModelAncestorBackends(inputs.WithCtx(krtctx), obj)
 	}, krtopts.ToOptions("translator/ModelAncestorBackends")...)
@@ -90,7 +90,7 @@ func extractModelAncestorBackends(ctx RouteContext, model *agentgateway.Agentgat
 
 	// Collect the model's parent gateways (shared by both direct and indirect cases).
 	gateways := sets.Set[types.NamespacedName]{}
-	for _, parent := range FilteredReferences(extractModelParentReferenceInfo(ctx, model)) {
+	for _, parent := range FilteredReferences(rejectDuplicateModelParents(ctx, model, extractModelParentReferenceInfo(ctx, model))) {
 		gateways.Insert(parent.ParentGateway)
 	}
 	if len(gateways) == 0 {
@@ -375,7 +375,8 @@ func translateModelForParents(
 			agg[statusKey] = &parentAgg{}
 		}
 		agg[statusKey].parentRefs = append(agg[statusKey].parentRefs, parent)
-		if parent.DeniedReason != nil {
+		// A conflict on an otherwise eligible attachment is the most specific reason to report.
+		if parent.DeniedReason != nil && (denied[statusKey] == nil || denied[statusKey].Reason != ParentErrorConflicted) {
 			denied[statusKey] = parent.DeniedReason
 		}
 	}
@@ -537,7 +538,7 @@ func translateVirtualModel(ctx RouteContext, model *agentgateway.AgentgatewayMod
 		targets := make([]*api.ModelRoute_VirtualModel_Weighted_Target, 0, len(vm.Weighted.Targets))
 		var errs []error
 		for _, target := range vm.Weighted.Targets {
-			modelName, err := resolveModelTargetName(ctx, model, target.ModelTargetReference)
+			modelName, err := resolveModelTargetName(ctx, model, parent, target.ModelTargetReference)
 			if err != nil {
 				errs = append(errs, err)
 				modelName = unresolvedModelTargetName(target.ModelTargetReference)
@@ -557,7 +558,7 @@ func translateVirtualModel(ctx RouteContext, model *agentgateway.AgentgatewayMod
 		targets := make([]*api.ModelRoute_VirtualModel_Conditional_Target, 0, len(vm.Conditional.Targets))
 		var errs []error
 		for _, target := range vm.Conditional.Targets {
-			modelName, err := resolveModelTargetName(ctx, model, target.ModelTargetReference)
+			modelName, err := resolveModelTargetName(ctx, model, parent, target.ModelTargetReference)
 			if err != nil {
 				errs = append(errs, err)
 				modelName = unresolvedModelTargetName(target.ModelTargetReference)
@@ -580,7 +581,7 @@ func translateVirtualModel(ctx RouteContext, model *agentgateway.AgentgatewayMod
 	case vm.Callout != nil:
 		callout, err := plugins.TranslateModelCallout(modelPolicyCtx(ctx, model), model.Namespace, vm.Callout)
 		if fallback := vm.Callout.Fallback; fallback != nil {
-			modelName, ferr := resolveModelTargetName(ctx, model, *fallback)
+			modelName, ferr := resolveModelTargetName(ctx, model, parent, *fallback)
 			if ferr != nil {
 				err = errors.Join(err, ferr)
 			} else {
@@ -1006,9 +1007,19 @@ func modelProviderPreset(provider agentgateway.ModelProvider) (api.AIBackend_Pro
 	}
 }
 
-func resolveModelTargetName(ctx RouteContext, model *agentgateway.AgentgatewayModel, target agentgateway.ModelTargetReference) (string, error) {
-	_, modelName, err := resolveModelTarget(ctx, model, target)
-	return modelName, err
+// resolveModelTargetName returns the model name a virtual model forwards to for a target. The data plane
+// resolves that name on the parent's router, so a typed modelRef must be the model serving that name there.
+func resolveModelTargetName(ctx RouteContext, model *agentgateway.AgentgatewayModel, parent RouteParentReference, target agentgateway.ModelTargetReference) (string, error) {
+	ref, modelName, err := resolveModelTarget(ctx, model, target)
+	if err != nil {
+		return modelName, err
+	}
+	if target.Model == nil {
+		if err := checkModelTargetServed(ctx, parent, ref, modelName); err != nil {
+			return modelName, err
+		}
+	}
+	return modelName, nil
 }
 
 func unresolvedModelTargetName(target agentgateway.ModelTargetReference) string {

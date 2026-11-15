@@ -672,6 +672,7 @@ func (s *Syncer) buildAgwResources(
 		s.agwCollections.Models,
 		krtopts,
 	)
+	routeInputs.ModelNameIndex = translator.NewModelNameIndex(routeInputs)
 
 	// Build listeners
 	baseListeners := krt.NewCollection(filteredGateways, func(ctx krt.HandlerContext, obj *translator.GatewayListener) *agwir.AgwResource {
