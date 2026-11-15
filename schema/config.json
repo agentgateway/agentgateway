@@ -9893,6 +9893,17 @@
           "description": "Which endpoint to prefer (Runtime vs Mantle).",
           "$ref": "#/$defs/BedrockEndpointPreference",
           "default": "runtimePreferred"
+        },
+        "runtimeApi": {
+          "description": "Chat API on Runtime. Unset follows `AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE` (Converse by\ndefault).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BedrockRuntimeApi"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -9921,6 +9932,21 @@
           "description": "Always use Runtime for chat; unsupported models fail.",
           "type": "string",
           "const": "runtimeOnly"
+        }
+      ]
+    },
+    "BedrockRuntimeApi": {
+      "description": "Which chat API a model uses on Bedrock Runtime.",
+      "oneOf": [
+        {
+          "description": "Translate chat requests to the Converse API.",
+          "type": "string",
+          "const": "converse"
+        },
+        {
+          "description": "Forward chat requests to Runtime's native OpenAI and Anthropic APIs, like Mantle.",
+          "type": "string",
+          "const": "native"
         }
       ]
     },
@@ -12784,6 +12810,18 @@
           "description": "Which Bedrock endpoint to prefer (Runtime vs Mantle).",
           "$ref": "#/$defs/BedrockEndpointPreference",
           "default": "runtimePreferred"
+        },
+        "bedrockRuntimeApi": {
+          "description": "Chat API on Bedrock Runtime: `converse` (translate) or `native` (OpenAI and Anthropic APIs).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BedrockRuntimeApi"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "vertexRegion": {
           "description": "Google Cloud region to use for the Vertex AI provider.",

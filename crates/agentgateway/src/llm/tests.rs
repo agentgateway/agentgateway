@@ -115,6 +115,7 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: pref,
+			runtime_api: None,
 		}))
 	}
 
@@ -201,6 +202,7 @@ async fn bedrock_chat_cache_convention_follows_upstream_format() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+			runtime_api: None,
 		}));
 		let body = if input == InputFormat::Responses {
 			json!({"model": model, "input": "hello"})
@@ -235,6 +237,149 @@ async fn bedrock_chat_cache_convention_follows_upstream_format() {
 	}
 }
 
+fn bedrock_runtime_provider(api: Option<bedrock::BedrockRuntimeApi>) -> AIProvider {
+	AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+		model_override: None,
+		region: strng::new("ap-northeast-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: bedrock::BedrockEndpointPreference::RuntimeOnly,
+		runtime_api: api,
+	}))
+}
+
+fn bedrock_gpt_catalog() -> crate::llm::catalog::ModelCatalog {
+	crate::llm::catalog::ModelCatalog::from_json(
+		r#"{"providers":{"aws.bedrock":{"models":{
+			"global.openai.gpt-6.1-sol":{"tags":["mantle","openai_completions","openai_responses","runtime"]}
+		}}}}"#,
+	)
+}
+
+async fn bedrock_forward(
+	provider: &AIProvider,
+	input: InputFormat,
+	body: Value,
+	catalog: &crate::llm::catalog::ModelCatalog,
+) -> (String, Value) {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("localhost", 443)),
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&body).unwrap()))
+		.unwrap();
+	let catalog = Some(catalog.as_handle());
+	let result = match input {
+		InputFormat::Responses => {
+			provider
+				.process_responses_request(&backend_info, None, req, false, &mut None, catalog)
+				.await
+		},
+		InputFormat::Messages => {
+			provider
+				.process_messages_request(&backend_info, None, req, false, &mut None, catalog)
+				.await
+		},
+		_ => unreachable!(),
+	};
+	let RequestResult::Success {
+		mut request,
+		llm_request,
+		upstream_route_type,
+	} = result.expect("request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+	provider
+		.setup_request(
+			&mut request,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			None,
+			catalog,
+		)
+		.expect("setup_request should succeed");
+	let path = request.uri().path().to_string();
+	let body = request.into_body().collect().await.unwrap().to_bytes();
+	(
+		path,
+		serde_json::from_slice(&body).expect("forwarded body is JSON"),
+	)
+}
+
+// Codex sends most of its tools as `custom` Responses tools. Converse only carries function tools,
+// so a model on the native Runtime API must reach Bedrock with every tool intact.
+#[tokio::test]
+async fn bedrock_runtime_native_api_forwards_responses_tools_unchanged() {
+	let catalog = bedrock_gpt_catalog();
+	let body = json!({
+		"model": "global.openai.gpt-6.1-sol",
+		"input": "create hello.txt",
+		"tools": [
+			{"type": "custom", "name": "apply_patch", "description": "Apply a patch", "format": {"type": "text"}},
+			{"type": "function", "name": "shell", "parameters": {"type": "object", "properties": {}}},
+		],
+	});
+
+	let native = bedrock_runtime_provider(Some(bedrock::BedrockRuntimeApi::Native));
+	let (path, sent) = bedrock_forward(&native, InputFormat::Responses, body.clone(), &catalog).await;
+	assert_eq!(path, "/openai/v1/responses");
+	assert_eq!(sent["model"], "global.openai.gpt-6.1-sol");
+	assert_eq!(sent["tools"], body["tools"]);
+
+	let converse = bedrock_runtime_provider(Some(bedrock::BedrockRuntimeApi::Converse));
+	let (path, sent) = bedrock_forward(&converse, InputFormat::Responses, body, &catalog).await;
+	assert_eq!(path, "/model/global.openai.gpt-6.1-sol/converse");
+	let tools = sent["toolConfig"]["tools"]
+		.as_array()
+		.expect("converse tools");
+	assert_eq!(
+		tools.len(),
+		1,
+		"converse keeps only the function tool: {tools:?}"
+	);
+}
+
+// An Anthropic Messages request to a gpt model on the native Runtime API is translated to an OpenAI
+// format, whose gpt models reject `max_tokens` and only read `max_completion_tokens`.
+#[tokio::test]
+async fn bedrock_runtime_native_api_translates_messages_for_gpt_models() {
+	let catalog = bedrock_gpt_catalog();
+	let native = bedrock_runtime_provider(Some(bedrock::BedrockRuntimeApi::Native));
+	let (path, sent) = bedrock_forward(
+		&native,
+		InputFormat::Messages,
+		json!({
+			"model": "global.openai.gpt-6.1-sol",
+			"max_tokens": 64,
+			"messages": [{"role": "user", "content": "hello"}],
+		}),
+		&catalog,
+	)
+	.await;
+	assert!(
+		path == "/openai/v1/chat/completions" || path == "/openai/v1/responses",
+		"{path}"
+	);
+	assert!(sent.get("max_tokens").is_none(), "{sent}");
+	if path == "/openai/v1/chat/completions" {
+		assert_eq!(sent["max_completion_tokens"], 64);
+	} else {
+		assert_eq!(sent["max_output_tokens"], 64);
+	}
+}
+
 // A Claude model only speaks the Anthropic Messages API on Mantle, so an inbound Chat Completions
 // request must be translated to Messages, never sent to Mantle as OpenAI Chat Completions.
 #[test]
@@ -246,6 +391,7 @@ fn bedrock_mantle_never_sends_completions_to_a_claude_model() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+			runtime_api: None,
 		}))
 	}
 	let mantle = mantle_provider();
@@ -1669,6 +1815,7 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	});
 	let req = LLMRequest {
 		input_tokens: None,
@@ -2015,6 +2162,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -2097,6 +2245,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -2478,6 +2627,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -2757,6 +2907,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	});
 
 	let body = Body::from(
@@ -3046,6 +3197,7 @@ fn setup_request_drops_inbound_query_only_when_translated() {
 				guardrail_identifier: None,
 				guardrail_version: None,
 				endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+				runtime_api: None,
 			}),
 			RouteType::Messages,
 			Some("beta=true"),
@@ -3412,6 +3564,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: Default::default(),
+			runtime_api: None,
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
@@ -3427,6 +3580,7 @@ fn setup_request_bedrock_sets_signing_region_with_host_override() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	});
 	let mut req = crate::http::tests_common::request(
 		"https://bedrock-vpce.example.com/model/example/converse",
@@ -4537,6 +4691,7 @@ fn fixed_providers_classify_by_family() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+		runtime_api: None,
 	}));
 	for (path, expected) in [
 		(

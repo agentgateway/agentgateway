@@ -2166,6 +2166,7 @@ fn ai_provider_from_proto(
 				},
 				_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
 			},
+			runtime_api: None,
 		}),
 		Some(provider::Provider::Azure(azure)) => {
 			let resource_type = match azure.resource_type() {
