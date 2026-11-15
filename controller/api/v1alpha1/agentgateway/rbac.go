@@ -31,7 +31,9 @@ type CELExpression string
 
 // Defines CEL expressions for a single authorization rule.
 type AuthorizationPolicy struct {
-	// CEL expressions that must all evaluate to true for the rule to match.
+	// CEL expressions, each evaluated independently with this rule's
+	// `action`. For `Allow` and `Deny`, any single matching expression
+	// applies the action; for `Require`, every expression must match.
 	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=256

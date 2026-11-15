@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-06T08:24:40Z"
+    "generatedAt": "2026-11-13T08:24:00Z"
   },
   "providers": {
     "anthropic": {
@@ -62,6 +62,65 @@
               "1h": "20"
             }
           },
+          "tags": [
+            "adaptive_thinking"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "claude-fable-5-2": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
+            }
+          },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "16",
+                "output": "80",
+                "cacheRead": "0.4",
+                "cacheWrite": "20",
+                "cacheWriteDetails": {
+                  "1h": "32"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -434,6 +493,20 @@
               "1h": "10"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "10",
+                "output": "50",
+                "cacheRead": "1",
+                "cacheWrite": "12.5",
+                "cacheWriteDetails": {
+                  "1h": "20"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -479,6 +552,20 @@
               "1h": "10"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "10",
+                "output": "50",
+                "cacheRead": "1",
+                "cacheWrite": "12.5",
+                "cacheWriteDetails": {
+                  "1h": "20"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -524,6 +611,20 @@
               "1h": "8"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "8",
+                "output": "40",
+                "cacheRead": "0.4",
+                "cacheWrite": "10",
+                "cacheWriteDetails": {
+                  "1h": "16"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -559,6 +660,7 @@
         },
         "claude-sonnet-4-5": {
           "name": "Claude Sonnet 4.5 (latest)",
+          "status": "deprecated",
           "released": "2025-09-29",
           "rates": {
             "input": "3",
@@ -600,6 +702,7 @@
         },
         "claude-sonnet-4-5-20250929": {
           "name": "Claude Sonnet 4.5",
+          "status": "deprecated",
           "released": "2025-09-29",
           "rates": {
             "input": "3",
@@ -1071,6 +1174,52 @@
             ]
           }
         },
+        "anthropic.claude-fable-5-2": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
+            }
+          },
+          "tags": [
+            "adaptive_thinking",
+            "runtime"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "anthropic.claude-haiku-4-5-20251001-v1:0": {
           "name": "Claude Haiku 4.5",
           "released": "2025-10-15",
@@ -1186,6 +1335,11 @@
           ]
         },
         "anthropic.claude-mythos-5-1": {
+          "tags": [
+            "runtime"
+          ]
+        },
+        "anthropic.claude-mythos-5-2": {
           "tags": [
             "runtime"
           ]
@@ -3534,6 +3688,52 @@
             ]
           }
         },
+        "global.anthropic.claude-fable-5-2": {
+          "name": "Claude Fable 5.2 (Global)",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
+            }
+          },
+          "tags": [
+            "adaptive_thinking",
+            "runtime"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
           "name": "Claude Haiku 4.5 (Global)",
           "released": "2025-10-15",
@@ -4189,6 +4389,45 @@
             "temperature": false
           }
         },
+        "global.moonshotai.kimi-k3.1": {
+          "name": "Kimi K3.1 Pro Highspeed (Global)",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "4",
+            "output": "20",
+            "cacheRead": "0.2",
+            "cacheWrite": "5"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 1048576
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "global.openai.gpt-5.6-luna": {
           "name": "GPT-5.6 Luna (Global)",
           "released": "2026-07-09",
@@ -4233,7 +4472,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -4290,7 +4529,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -4347,7 +4586,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -4458,7 +4697,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -4513,7 +4752,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -4620,7 +4859,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -5160,7 +5399,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -5218,7 +5457,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -6380,6 +6619,11 @@
             "runtime"
           ]
         },
+        "moonshotai.kimi-k3.1": {
+          "tags": [
+            "runtime"
+          ]
+        },
         "nvidia.nemotron-nano-12b-v2": {
           "name": "NVIDIA Nemotron Nano 12B v2 VL BF16",
           "status": "deprecated",
@@ -6581,7 +6825,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -6597,7 +6841,8 @@
           "tags": [
             "mantle",
             "openai_completions",
-            "openai_responses"
+            "openai_responses",
+            "runtime"
           ]
         },
         "openai.gpt-5.6-luna": {
@@ -6645,7 +6890,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -6703,7 +6948,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -6761,7 +7006,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -6883,7 +7128,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -6939,7 +7184,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -7057,7 +7302,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -7074,7 +7319,8 @@
           "tags": [
             "mantle",
             "openai_completions",
-            "openai_responses"
+            "openai_responses",
+            "runtime"
           ]
         },
         "openai.gpt-oss-120b": {
@@ -7928,6 +8174,52 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
+            "runtime"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "us.anthropic.claude-fable-5-2": {
+          "name": "Claude Fable 5.2 (US)",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8.8",
+            "output": "44",
+            "cacheRead": "0.22",
+            "cacheWrite": "11",
+            "cacheWriteDetails": {
+              "1h": "17.6"
+            }
+          },
+          "tags": [
+            "adaptive_thinking",
             "runtime"
           ],
           "limits": {
@@ -8864,6 +9156,45 @@
             "temperature": false
           }
         },
+        "us.moonshotai.kimi-k3.1": {
+          "name": "Kimi K3.1 Pro Highspeed (US)",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "4.4",
+            "output": "22",
+            "cacheRead": "0.22",
+            "cacheWrite": "5.5"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 1048576
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "us.openai.gpt-5.6-luna": {
           "name": "GPT-5.6 Luna (US)",
           "released": "2026-07-09",
@@ -8908,7 +9239,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -8965,7 +9296,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -9022,7 +9353,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -9133,7 +9464,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -9188,7 +9519,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -9295,7 +9626,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -9805,6 +10136,50 @@
             "cacheWrite": "12.5",
             "cacheWriteDetails": {
               "1h": "20"
+            }
+          },
+          "tags": [
+            "adaptive_thinking"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
+        "claude-fable-5-2": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
             }
           },
           "tags": [
@@ -11772,7 +12147,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -11823,7 +12198,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -11884,7 +12259,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -11945,7 +12320,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -12049,7 +12424,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -12101,7 +12476,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -12204,7 +12579,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -12289,7 +12664,7 @@
           ],
           "rates": {
             "input": "5",
-            "output": "32",
+            "output": "10",
             "cacheRead": "1.25"
           },
           "modalities": {
@@ -14204,6 +14579,51 @@
             ]
           }
         },
+        "claude-fable-5.2": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
+            }
+          },
+          "tags": [
+            "adaptive_thinking"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "claude-haiku-4.5": {
           "name": "Claude Haiku 4.5 (latest)",
           "released": "2025-10-15",
@@ -14318,6 +14738,20 @@
               "1h": "10"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "30",
+                "output": "150",
+                "cacheRead": "3",
+                "cacheWrite": "37.5",
+                "cacheWriteDetails": {
+                  "1h": "60"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -14363,6 +14797,20 @@
               "1h": "10"
             }
           },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "10",
+                "output": "50",
+                "cacheRead": "1",
+                "cacheWrite": "12.5",
+                "cacheWriteDetails": {
+                  "1h": "20"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -14826,6 +15274,42 @@
             ]
           }
         },
+        "gemini-4-carbon": {
+          "name": "Gemini 4 Carbon",
+          "released": "2026-11-10",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
         "gpt-5-mini": {
           "name": "GPT-5 Mini",
           "status": "deprecated",
@@ -15066,7 +15550,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -15117,7 +15601,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -15169,7 +15653,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -15221,7 +15705,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -15324,7 +15808,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -15376,7 +15860,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -15479,7 +15963,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -17556,6 +18040,41 @@
             ]
           }
         },
+        "moonshotai/Kimi-K3.1-Pro": {
+          "name": "Kimi K3.1 Pro",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 943718
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        },
         "nvidia/Llama-3.3-Nemotron-Super-49B-v1.5": {
           "name": "Llama 3.3 Nemotron Super 49B v1.5",
           "status": "deprecated",
@@ -18435,10 +18954,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/models/glm-5p3": {
@@ -18530,80 +19046,6 @@
             ]
           }
         },
-        "accounts/fireworks/models/gpt-oss-120b": {
-          "name": "GPT OSS 120B",
-          "status": "deprecated",
-          "released": "2025-08-05",
-          "rates": {
-            "input": "0.15",
-            "output": "0.6",
-            "cacheRead": "0.015"
-          },
-          "tiers": [
-            {
-              "serviceTier": "priority",
-              "rates": {
-                "input": "0.18",
-                "output": "0.72",
-                "cacheRead": "0.018"
-              }
-            }
-          ],
-          "limits": {
-            "context": 131072,
-            "output": 32768
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "effort": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        },
-        "accounts/fireworks/models/inkling": {
-          "name": "Inkling",
-          "status": "deprecated",
-          "released": "2026-07-15",
-          "rates": {
-            "input": "1",
-            "output": "4.05",
-            "cacheRead": "0.17"
-          },
-          "limits": {
-            "context": 1048576,
-            "output": 1048576
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          }
-        },
         "accounts/fireworks/models/kimi-k3": {
           "name": "Kimi K3",
           "released": "2026-07-16",
@@ -18648,10 +19090,54 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
+            ]
+          }
+        },
+        "accounts/fireworks/models/kimi-k3p1-pro": {
+          "name": "Kimi K3.1 Pro",
+          "released": "2026-10-23",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.2"
+          },
+          "tiers": [
+            {
+              "serviceTier": "priority",
+              "rates": {
+                "input": "3",
+                "output": "15",
+                "cacheRead": "0.3"
+              }
             }
+          ],
+          "limits": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "toggle": true,
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
           }
         },
         "accounts/fireworks/models/minimax-m3": {
@@ -18791,78 +19277,6 @@
             ]
           }
         },
-        "accounts/fireworks/models/nemotron-3-ultra-nvfp4": {
-          "name": "Nemotron 3 Ultra 550B A55B",
-          "status": "deprecated",
-          "released": "2026-06-04",
-          "rates": {
-            "input": "0.6",
-            "output": "2.4",
-            "cacheRead": "0.12"
-          },
-          "limits": {
-            "context": 262144,
-            "output": 128000
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "toggle": true
-          }
-        },
-        "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b": {
-          "name": "Nemotron 3.5 Lightning 30B A3B",
-          "status": "deprecated",
-          "released": "2026-08-11",
-          "rates": {
-            "input": "0.05",
-            "output": "0.2",
-            "cacheRead": "0.01"
-          },
-          "tiers": [
-            {
-              "serviceTier": "priority",
-              "rates": {
-                "input": "0.0625",
-                "output": "0.25",
-                "cacheRead": "0.0125"
-              }
-            }
-          ],
-          "limits": {
-            "context": 262144,
-            "output": 262144
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "toggle": true
-          }
-        },
         "accounts/fireworks/models/qwen3p8-2p4t-a95b": {
           "name": "Qwen3.8 2.4T A95B",
           "released": "2026-08-12",
@@ -18997,6 +19411,42 @@
             "input": "0.21",
             "output": "0.84",
             "cacheRead": "0.0042"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 384000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "toggle": true,
+            "effort": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "accounts/fireworks/routers/deepseek-v4p1-flash-1017-ultrafast": {
+          "name": "DeepSeek V4.1 Flash 1017 Ultra-fast",
+          "released": "2026-10-17",
+          "rates": {
+            "input": "2.4",
+            "output": "9.6",
+            "cacheRead": "0.048"
           },
           "limits": {
             "context": 1000000,
@@ -19287,10 +19737,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/routers/kimi-k3-fast": {
@@ -19327,10 +19774,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/routers/kimi-k3-spot": {
@@ -19367,10 +19811,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/routers/kimi-latest": {
@@ -19417,10 +19858,7 @@
               "medium",
               "high",
               "max"
-            ],
-            "budgetTokens": {
-              "min": 1024
-            }
+            ]
           }
         },
         "accounts/fireworks/routers/minimax-latest": {
@@ -19536,7 +19974,7 @@
             }
           ],
           "limits": {
-            "context": 131072,
+            "context": 1048576,
             "output": 65536
           },
           "modalities": {
@@ -19577,7 +20015,7 @@
             }
           ],
           "limits": {
-            "context": 131072,
+            "context": 1048576,
             "output": 65536
           },
           "modalities": {
@@ -19606,15 +20044,6 @@
             "input": "1.25",
             "output": "10"
           },
-          "tiers": [
-            {
-              "contextOver": 200000,
-              "rates": {
-                "input": "2.5",
-                "output": "15"
-              }
-            }
-          ],
           "limits": {
             "context": 128000,
             "output": 64000
@@ -20513,6 +20942,85 @@
             ]
           }
         },
+        "gemini-4-carbon": {
+          "name": "Gemini 4 Carbon",
+          "released": "2026-11-10",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1",
+            "inputAudio": "2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "gemini-4-hydrogen": {
+          "name": "Gemini 4 Hydrogen",
+          "released": "2026-11-12",
+          "rates": {
+            "input": "1.5",
+            "output": "7.5",
+            "cacheRead": "0.075",
+            "inputAudio": "1.5"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
         "gemini-embedding-001": {
           "name": "Gemini Embedding 001",
           "released": "2025-05-20",
@@ -20652,34 +21160,6 @@
             ]
           }
         },
-        "gemini-omni-flash-preview": {
-          "name": "Gemini Omni Flash Preview",
-          "released": "2026-06-30",
-          "endpoints": [],
-          "rates": {
-            "input": "1.5",
-            "output": "17.5"
-          },
-          "limits": {
-            "context": 131072,
-            "output": 65536
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image",
-              "video"
-            ],
-            "output": [
-              "video"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "toolCall": false,
-            "temperature": true
-          }
-        },
         "gemini-pro-latest": {
           "name": "Gemini Pro Latest",
           "released": "2026-02-19",
@@ -20726,6 +21206,66 @@
               "medium",
               "high"
             ]
+          }
+        },
+        "gemma-4-26b-a4b-it": {
+          "name": "Gemma 4 26B A4B IT",
+          "released": "2026-04-02",
+          "rates": {
+            "input": "0",
+            "output": "0"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "toggle": true
+          }
+        },
+        "gemma-4-31b-it": {
+          "name": "Gemma 4 31B IT",
+          "released": "2026-04-02",
+          "rates": {
+            "input": "0",
+            "output": "0"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "toggle": true
           }
         },
         "lyria-3-clip-preview": {
@@ -20800,6 +21340,65 @@
               "1h": "20"
             }
           },
+          "tags": [
+            "adaptive_thinking"
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "claude-fable-5-2@default": {
+          "name": "Claude Fable 5.2",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.2",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "1h": "16"
+            }
+          },
+          "tiers": [
+            {
+              "serviceTier": "fast",
+              "rates": {
+                "input": "16",
+                "output": "80",
+                "cacheRead": "0.4",
+                "cacheWrite": "20",
+                "cacheWriteDetails": {
+                  "1h": "32"
+                }
+              }
+            }
+          ],
           "tags": [
             "adaptive_thinking"
           ],
@@ -22741,6 +23340,85 @@
             ]
           }
         },
+        "gemini-4-carbon": {
+          "name": "Gemini 4 Carbon",
+          "released": "2026-11-10",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1",
+            "inputAudio": "2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "gemini-4-hydrogen": {
+          "name": "Gemini 4 Hydrogen",
+          "released": "2026-11-12",
+          "rates": {
+            "input": "1.5",
+            "output": "7.5",
+            "cacheRead": "0.075",
+            "inputAudio": "1.5"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
         "gemini-embedding-001": {
           "name": "Gemini Embedding 001",
           "released": "2025-05-20",
@@ -23260,16 +23938,6 @@
             "output": "2.5",
             "cacheRead": "0.2"
           },
-          "tiers": [
-            {
-              "contextOver": 200000,
-              "rates": {
-                "input": "2.5",
-                "output": "5",
-                "cacheRead": "0.4"
-              }
-            }
-          ],
           "limits": {
             "context": 200000,
             "output": 30000
@@ -26107,6 +26775,57 @@
     },
     "meta": {
       "models": {
+        "muse-ember-1.0": {
+          "name": "Muse Ember",
+          "released": "2026-11-09",
+          "rates": {
+            "input": "0.1",
+            "output": "0.5",
+            "cacheRead": "0.004"
+          },
+          "tiers": [
+            {
+              "contextOver": 200000,
+              "rates": {
+                "input": "0.3",
+                "output": "1.5",
+                "cacheRead": "0.012"
+              }
+            }
+          ],
+          "limits": {
+            "context": 1048576,
+            "output": 524288
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "pdf",
+              "audio"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
         "muse-spark-1.1": {
           "name": "Muse Spark 1.1",
           "released": "2026-04-08",
@@ -26422,7 +27141,8 @@
           },
           "modalities": {
             "input": [
-              "text"
+              "text",
+              "image"
             ],
             "output": [
               "text"
@@ -26928,14 +27648,15 @@
         },
         "mistral-large-latest": {
           "name": "Mistral Large (latest)",
-          "released": "2024-11-01",
+          "status": "beta",
+          "released": "2026-10-06",
           "rates": {
-            "input": "0.5",
-            "output": "1.5",
-            "cacheRead": "0.05"
+            "input": "0.7",
+            "output": "2.1",
+            "cacheRead": "0.07"
           },
           "limits": {
-            "context": 262144,
+            "context": 1048576,
             "output": 262144
           },
           "modalities": {
@@ -26949,10 +27670,17 @@
             ]
           },
           "capabilities": {
-            "reasoning": false,
+            "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
             "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high"
+            ]
           }
         },
         "mistral-medium-2505": {
@@ -27571,37 +28299,6 @@
             "temperature": false
           }
         },
-        "Qwen/Qwen3.5-397B-A17B": {
-          "name": "Qwen3.5-397B-A17B",
-          "released": "2026-02-15",
-          "rates": {
-            "input": "0.6",
-            "output": "3.6",
-            "cacheRead": "0.12"
-          },
-          "limits": {
-            "context": 262144,
-            "input": 250000,
-            "output": 8192
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "toggle": true
-          }
-        },
         "Qwen/Qwen3.8-27B": {
           "name": "Qwen3.8 27B",
           "released": "2026-08-14",
@@ -27638,76 +28335,6 @@
             ]
           }
         },
-        "deepseek-ai/DeepSeek-V4-Flash-0731": {
-          "name": "DeepSeek V4 Flash 0731",
-          "released": "2026-07-31",
-          "rates": {
-            "input": "0.14",
-            "output": "0.28",
-            "cacheRead": "0.01"
-          },
-          "limits": {
-            "context": 1024000,
-            "output": 1024000
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "effort": [
-              "none",
-              "low",
-              "high",
-              "max"
-            ]
-          }
-        },
-        "deepseek-ai/DeepSeek-V4-Pro": {
-          "name": "DeepSeek V4 Pro",
-          "released": "2026-04-24",
-          "rates": {
-            "input": "1.75",
-            "output": "3.5",
-            "cacheRead": "1.75"
-          },
-          "limits": {
-            "context": 1048576,
-            "output": 1048576
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "effort": [
-              "none",
-              "low",
-              "high",
-              "max"
-            ]
-          }
-        },
         "deepseek-ai/DeepSeek-V4-Pro-0813": {
           "name": "DeepSeek V4 Pro 0813",
           "released": "2026-08-13",
@@ -27723,42 +28350,6 @@
           "modalities": {
             "input": [
               "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": true
-          },
-          "reasoning": {
-            "effort": [
-              "none",
-              "low",
-              "high",
-              "max"
-            ]
-          }
-        },
-        "deepseek-ai/DeepSeek-V4.1-Flash": {
-          "name": "DeepSeek V4.1 Flash",
-          "released": "2026-09-10",
-          "rates": {
-            "input": "0.3",
-            "output": "1.2",
-            "cacheRead": "0.01"
-          },
-          "limits": {
-            "context": 1048000,
-            "output": 1048000
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
             ],
             "output": [
               "text"
@@ -27879,33 +28470,6 @@
               "high",
               "xhigh"
             ]
-          }
-        },
-        "moonshotai/Kimi-K2.7-Code": {
-          "name": "Kimi K2.7 Code",
-          "released": "2026-06-12",
-          "rates": {
-            "input": "0.95",
-            "output": "4",
-            "cacheRead": "0.15"
-          },
-          "limits": {
-            "context": 262144,
-            "output": 8000
-          },
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "capabilities": {
-            "reasoning": true,
-            "structuredOutput": true,
-            "toolCall": true,
-            "temperature": false
           }
         },
         "moonshotai/Kimi-K3": {
@@ -28253,6 +28817,35 @@
     },
     "openai": {
       "models": {
+        "chatgpt-image-latest": {
+          "name": "chatgpt-image-latest",
+          "status": "deprecated",
+          "released": "2025-12-16",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
+          "rates": {
+            "input": "5",
+            "output": "10",
+            "cacheRead": "1.25"
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text",
+              "image"
+            ]
+          },
+          "capabilities": {
+            "reasoning": false,
+            "toolCall": false,
+            "temperature": false
+          }
+        },
         "gpt-3.5-turbo": {
           "name": "GPT-3.5-turbo",
           "status": "deprecated",
@@ -29322,7 +29915,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -29436,7 +30029,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -29506,7 +30099,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -29576,7 +30169,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -29646,7 +30239,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -29797,7 +30390,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -29867,7 +30460,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -30018,7 +30611,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -30100,7 +30693,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -30154,6 +30747,35 @@
               "xhigh",
               "max"
             ]
+          }
+        },
+        "gpt-image-1.5": {
+          "name": "gpt-image-1.5",
+          "status": "deprecated",
+          "released": "2025-11-25",
+          "endpoints": [
+            "/images/generations",
+            "/images/edits"
+          ],
+          "rates": {
+            "input": "5",
+            "output": "10",
+            "cacheRead": "1.25"
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text",
+              "image"
+            ]
+          },
+          "capabilities": {
+            "reasoning": false,
+            "toolCall": false,
+            "temperature": false
           }
         },
         "gpt-image-2": {
@@ -31783,7 +32405,7 @@
           "capabilities": {
             "reasoning": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -31833,7 +32455,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -31883,7 +32505,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -31933,7 +32555,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -32033,7 +32655,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [
@@ -32083,7 +32705,7 @@
             "reasoning": true,
             "structuredOutput": true,
             "toolCall": true,
-            "temperature": false
+            "temperature": true
           },
           "reasoning": {
             "effort": [

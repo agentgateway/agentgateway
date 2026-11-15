@@ -21,7 +21,6 @@ spec:
       - "agentgateway"
   namespaceSelector:
     any: true
-  scrapeNativeHistograms: false
   scrapeClassicHistograms: true
   scrapeProtocols:
     - OpenMetricsText1.0.0

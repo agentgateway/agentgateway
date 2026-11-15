@@ -35,6 +35,7 @@ pub enum PricingTier {
 	Priority,
 	Reserved,
 	Ultrafast,
+	Fast,
 }
 
 impl PricingTier {
@@ -78,9 +79,12 @@ impl PricingTier {
 				_ => return None,
 			},
 			// https://platform.claude.com/docs/en/api/service-tiers
+			// https://platform.claude.com/docs/en/build-with-claude/fast-mode
+			// Fast mode is reported in `usage.speed`, which we surface as the "fast" service tier.
 			(provider, tier) if provider == anthropic::Provider::NAME.as_str() => match tier {
 				"standard" => Self::Standard,
 				"priority" => Self::Priority,
+				"fast" => Self::Fast,
 				_ => return None,
 			},
 			// https://docs.aws.amazon.com/bedrock/latest/userguide/service-tiers-inference.html

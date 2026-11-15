@@ -1305,6 +1305,81 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	expect(gateway.postedConfigs).toHaveLength(0);
 });
 
+for (const filePort of [false, true]) {
+	test(`hybrid LLM settings save to the database (filePort=${filePort})`, async ({ page }) => {
+		// The file may set the port; tls only comes from the llm.settings row.
+		const config = populatedConfig();
+		const fileLlm = config.llm as Record<string, unknown>;
+		if (!filePort) delete fileLlm.port;
+		const effective = structuredClone(config);
+		Object.assign(effective.llm as Record<string, unknown>, {
+			port: 4000,
+			tls: { cert: 'cert.pem', key: 'key.pem' }
+		});
+		const gateway = await mockGateway(page, config);
+		const writes: Array<Record<string, unknown>> = [];
+
+		await page.route('**/api/runtime', route =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					build: {},
+					ui: { gatewayMode: 'standalone', configStoreMode: 'hybrid' }
+				})
+			})
+		);
+		await page.route('**/api/config/effective', route =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(effective)
+			})
+		);
+		await page.route('**/api/config/resources**', async route => {
+			if (route.request().method() === 'GET') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ resources: [] })
+				});
+				return;
+			}
+			if (
+				route.request().method() === 'PUT' &&
+				new URL(route.request().url()).pathname.endsWith('/llm.settings')
+			) {
+				const request = route.request().postDataJSON() as {
+					resources: Array<{ value: Record<string, unknown> }>;
+				};
+				writes.push(request.resources[0].value);
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ resources: [] })
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/');
+		await page.getByRole('button', { name: 'Settings' }).first().click();
+		const port = page.getByRole('textbox', { name: /Port/ });
+		if (filePort) {
+			await expect(port).toBeDisabled();
+			await expect(page.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+			expect(writes).toHaveLength(0);
+		} else {
+			await port.fill('4100');
+			await page.getByRole('button', { name: 'Save settings' }).click();
+			await expect.poll(() => writes.length).toBe(1);
+			expect(writes[0]).toEqual({ port: 4100, tls: { cert: 'cert.pem', key: 'key.pem' } });
+		}
+		expect(gateway.postedConfigs).toHaveLength(0);
+	});
+}
+
 test('hybrid file-owned API key policy is read-only', async ({ page }) => {
 	const config = emptyConfig();
 	const policies = (config.llm as Record<string, unknown>).policies as Record<string, unknown>;
