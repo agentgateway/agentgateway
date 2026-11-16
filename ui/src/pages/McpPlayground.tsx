@@ -564,7 +564,9 @@ function McpResultView(props: { response: McpResponse }) {
 					<div className="mcp-tool-list">
 						{tools.map(tool => (
 							<div className="mcp-tool-row" key={tool.name}>
-								<Tag>{tool.name}</Tag>
+								<span className="config-chip">
+									<span>{tool.name}</span>
+								</span>
 								{tool.description ? <small>{tool.description}</small> : null}
 							</div>
 						))}

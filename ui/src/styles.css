@@ -2294,10 +2294,6 @@ details summary {
 	margin-top: 3px;
 }
 
-.mcp-tool-row .ant-tag {
-	align-self: flex-start;
-}
-
 .raw-config-resource-table .json-block {
 	max-height: 360px;
 	margin: 0;
