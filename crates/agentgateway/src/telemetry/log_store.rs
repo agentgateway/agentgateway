@@ -421,101 +421,146 @@ pub struct StoredRequestLogPayload {
 	pub response_completion_json: Option<Value>,
 }
 
+/// A time range over request completion times.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TimeRange {
+	/// Start of the range, inclusive.
 	pub from: Option<DateTime<Utc>>,
+	/// End of the range, exclusive.
 	pub to: Option<DateTime<Utc>>,
 }
 
+/// Filters that select request log entries. An entry must match every filter that is set.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LogFilters {
+	/// HTTP response status codes to match. Empty matches any status.
 	#[serde(default)]
 	pub http_status: Vec<i64>,
+	/// LLM provider names to match. Empty matches any provider.
 	#[serde(default)]
 	pub provider: Vec<String>,
+	/// Requested model names to match. Empty matches any model.
 	#[serde(default)]
 	pub request_model: Vec<String>,
+	/// Response model names to match. Empty matches any model.
 	#[serde(default)]
 	pub response_model: Vec<String>,
+	/// Trace ID to match.
 	#[serde(default)]
 	pub trace_id: Option<String>,
+	/// Match only entries with (`true`) or without (`false`) stored prompt and completion content.
 	#[serde(default)]
 	pub has_payload: Option<bool>,
+	/// Logged attributes to match, by attribute key. Each value is a string, number, or boolean, or
+	/// an array of them to match any one. Other values match nothing.
 	#[serde(default)]
 	pub attributes: BTreeMap<String, Value>,
 }
 
+/// A search of the request log, newest entries first.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SearchRequest {
+	/// Maximum number of entries to return. Defaults to 100; values are clamped to 1 through 500.
 	#[serde(default)]
 	pub limit: Option<i64>,
+	/// Continue after the last entry of a previous page. Use the `nextCursor` of that response.
 	#[serde(default)]
 	pub cursor: Option<String>,
+	/// Limit the search to entries completed in this range.
 	#[serde(default)]
 	pub time_range: Option<TimeRange>,
+	/// Limit the search to matching entries.
 	#[serde(default)]
 	pub filters: LogFilters,
+	/// Include the logged attributes of each entry.
 	#[serde(default)]
 	pub include_attributes: bool,
 }
 
+/// A lookup of one request log entry.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GetRequest {
+	/// The entry id.
 	pub id: String,
+	/// Include the stored prompt and completion content, when the entry has it.
 	#[serde(default)]
 	pub include_payload: bool,
 }
 
+/// A summary of the request log, as totals per time bucket and per group.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnalyticsSummaryRequest {
+	/// The range to summarize. `to` defaults to now, and `from` to 24 hours before `to`.
 	#[serde(default)]
 	pub time_range: Option<TimeRange>,
+	/// Limit the summary to matching entries.
 	#[serde(default)]
 	pub filters: LogFilters,
+	/// Dimensions to break the totals down by. Without any, each time bucket has one total.
 	#[serde(default)]
 	pub group_by: Vec<GroupBy>,
+	/// Maximum number of time buckets for the range. Defaults to 96; values are clamped to 1 through
+	/// 500. Ignored when `bucketSeconds` is set.
 	#[serde(default)]
 	pub bucket_count: Option<i64>,
+	/// Width of each time bucket in seconds; values are clamped to 1 through the length of the
+	/// range.
 	#[serde(default)]
 	pub bucket_seconds: Option<i64>,
 }
 
+/// A request to follow the request log as entries complete, oldest first.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TailRequest {
+	/// Maximum number of entries to deliver each second. Defaults to 100; values are clamped to 1
+	/// through 500.
 	#[serde(default)]
 	pub limit: Option<i64>,
+	/// Start after this entry. Use the `cursor` of a received entry to resume. Without a cursor,
+	/// only entries that complete from now on are delivered.
 	#[serde(default)]
 	pub cursor: Option<String>,
+	/// Limit the entries to matching ones.
 	#[serde(default)]
 	pub filters: LogFilters,
+	/// Include the logged attributes of each entry.
 	#[serde(default)]
 	pub include_attributes: bool,
 }
 
+/// A dimension to group analytics totals by.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GroupBy {
+	/// The dimension.
 	pub field: GroupByField,
+	/// The attribute key to group by, when `field` is `attributes`.
 	#[serde(default)]
 	pub key: Option<String>,
 }
 
+/// The dimensions that analytics totals can be grouped by.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub enum GroupByField {
+	/// LLM provider name.
 	Provider,
+	/// Requested model name.
 	RequestModel,
+	/// Response model name.
 	ResponseModel,
+	/// HTTP response status code.
 	HttpStatus,
+	/// A logged attribute, named by `key`.
 	Attributes,
 	/// Time to first token histogram; the group value is the bucket's lower bound in milliseconds.
-	/// Requests without a first token (non-streaming) group under null.
+	/// Requests without a recorded first-token time group under null.
 	Ttft,
 	/// Output tokens per second histogram; the group value is the bucket's lower bound.
 	OutputTokensPerSecond,
@@ -561,26 +606,37 @@ pub(crate) const ANALYTICS_TOTALS_SELECT: &str = "\
 	CAST(COALESCE(SUM(cache_creation_input_tokens), 0) AS BIGINT) AS cache_write_tokens, \
 	CAST(COALESCE(SUM(reasoning_tokens), 0) AS BIGINT) AS reasoning_tokens";
 
+/// A page of request log entries.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResponse {
+	/// The matching entries, newest first.
 	pub logs: Vec<LogEntry>,
+	/// Pass as `cursor` to get the next page. Null when there are no more entries.
 	pub next_cursor: Option<String>,
 }
 
+/// The result of a request log lookup.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetResponse {
+	/// The entry, or null when no entry has the requested id.
 	pub log: Option<LogEntry>,
 }
 
+/// Request log totals for a time range.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsSummaryResponse {
+	/// The summarized range, with defaults applied.
 	pub time_range: TimeRange,
+	/// Width of each time bucket in seconds.
 	pub bucket_seconds: i64,
+	/// Totals per time bucket and group, in time order. Buckets without requests are omitted.
 	pub buckets: Vec<AnalyticsTimeBucket>,
+	/// Totals per group over the whole range.
 	pub groups: Vec<AnalyticsGroup>,
+	/// Values seen in the range for common filter dimensions, by dimension.
 	pub filter_options: BTreeMap<String, Vec<String>>,
 }
 
@@ -591,39 +647,50 @@ pub struct TailResponse {
 	pub next_cursor: Option<String>,
 }
 
+/// A request log entry delivered while following the log.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TailEvent {
+	/// The entry.
 	pub entry: LogEntry,
+	/// Pass as `cursor` in a new request to resume after this entry.
 	pub cursor: String,
 }
 
+/// Totals over a set of requests.
 #[derive(Clone, Debug, Default, Serialize, sqlx_macros::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsTotals {
+	/// Number of requests.
 	pub requests: i64,
+	/// Sum of total tokens.
 	pub total_tokens: i64,
+	/// Sum of request costs in USD.
 	pub cost: f64,
+	/// Sum of input tokens.
 	pub input_tokens: i64,
+	/// Sum of output tokens.
 	pub output_tokens: i64,
 	/// Requests with an HTTP status >= 400 or a recorded error.
 	pub errors: i64,
-	/// Sum of request durations; divide by `requests` for the mean.
+	/// Sum of request durations in milliseconds; divide by `requests` for the mean.
 	pub duration_ms: i64,
-	/// Requests with a recorded time to first token (streaming responses).
+	/// Requests with a recorded time to first token.
 	pub ttft_requests: i64,
-	/// Sum of time to first token; divide by `ttft_requests` for the mean.
+	/// Sum of time to first token in milliseconds; divide by `ttftRequests` for the mean.
 	pub ttft_ms: f64,
+	/// Largest time to first token, in milliseconds.
 	pub max_ttft_ms: f64,
 	/// Output tokens of requests with a recorded per-token time.
 	pub generation_tokens: i64,
-	/// Time spent generating those tokens; `generation_tokens` over this is the decode rate.
+	/// Time spent generating those tokens, in milliseconds; `generationTokens` over this is the
+	/// decode rate.
 	pub generation_ms: f64,
-	/// Input tokens served from the provider's prompt cache (included in `input_tokens`).
+	/// Input tokens served from the provider's prompt cache (included in `inputTokens`).
 	pub cache_read_tokens: i64,
-	/// Input tokens written to the provider's prompt cache (included in `input_tokens`).
+	/// Input tokens written to the provider's prompt cache (included in `inputTokens`).
 	pub cache_write_tokens: i64,
-	/// Reasoning tokens (included in `output_tokens`).
+	/// Reasoning tokens (included in `outputTokens`).
 	pub reasoning_tokens: i64,
 }
 
@@ -665,18 +732,25 @@ impl AnalyticsTotals {
 	}
 }
 
+/// Totals for one group.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsGroup {
+	/// The value of each requested dimension, by dimension name. An `attributes` dimension is named
+	/// by its key. A value is a string, or null for requests that have none.
 	pub group: BTreeMap<String, Value>,
 	#[serde(flatten)]
 	pub totals: AnalyticsTotals,
 }
 
+/// Totals for one group within one time bucket.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsTimeBucket {
+	/// Start of the time bucket.
 	pub start: DateTime<Utc>,
+	/// The value of each requested dimension, by dimension name. An `attributes` dimension is named
+	/// by its key. A value is a string, or null for requests that have none.
 	pub group: BTreeMap<String, Value>,
 	#[serde(flatten)]
 	pub totals: AnalyticsTotals,
@@ -698,42 +772,68 @@ pub(crate) fn groups_from_buckets(buckets: &[AnalyticsTimeBucket]) -> Vec<Analyt
 	groups.into_values().collect()
 }
 
+/// One request, as recorded in the request log.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogEntry {
+	/// Unique id of the entry.
 	pub id: String,
+	/// When the request started.
 	pub started_at: DateTime<Utc>,
+	/// When the request completed.
 	pub completed_at: DateTime<Utc>,
+	/// Duration of the request in milliseconds.
 	pub duration_ms: i64,
+	/// Trace ID of the request, when it was traced.
 	pub trace_id: Option<String>,
+	/// Span ID of the request, when it was traced.
 	pub span_id: Option<String>,
+	/// HTTP response status code.
 	pub http_status: Option<i64>,
+	/// The error that ended the request, if any.
 	pub error: Option<String>,
+	/// Start of the last user text in the stored prompt, if any.
 	pub prompt_preview: Option<String>,
+	/// What the prompt ended with and what the response produced.
 	pub turn: TurnEntry,
+	/// The LLM operation, provider, and models.
 	pub gen_ai: GenAiEntry,
+	/// Token usage.
 	pub usage: UsageEntry,
+	/// Cost of the request in USD, when the model could be priced.
 	pub cost: Option<f64>,
+	/// Whether prompt and completion content is stored for the entry.
 	pub has_payload: bool,
+	/// The logged attributes. Omitted from search and tail results unless `includeAttributes` is set.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub attributes: Option<Value>,
+	/// The stored prompt and completion content. Present only in a lookup with `includePayload`.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub payload: Option<PayloadEntry>,
 }
 
+/// The kinds of the final prompt and completion content. A kind is null when none is found, such
+/// as when content is not stored.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnEntry {
+	/// Kind of the final user or assistant text, tool call, or tool result in the prompt.
 	pub input: Option<TurnKind>,
+	/// Kind of the final user or assistant text, tool call, or tool result in the completion.
 	pub output: Option<TurnKind>,
 }
 
+/// The kind of a message part.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TurnKind {
+	/// Text from the user.
 	User,
+	/// Text from the assistant.
 	Assistant,
+	/// A tool call.
 	ToolCall,
+	/// A tool result.
 	ToolResult,
 }
 
@@ -791,27 +891,40 @@ fn turn_kind(messages: Option<&Value>) -> Option<TurnKind> {
 	})
 }
 
+/// The LLM details of a request. Fields are null when they do not apply, such as for requests
+/// that are not LLM requests.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenAiEntry {
+	/// The operation, such as `chat`.
 	pub operation_name: Option<String>,
+	/// The LLM provider.
 	pub provider_name: Option<String>,
+	/// The model that the client requested.
 	pub request_model: Option<String>,
+	/// The model that produced the response.
 	pub response_model: Option<String>,
 }
 
+/// Token usage recorded for a request.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageEntry {
+	/// Input tokens.
 	pub input_tokens: Option<i64>,
+	/// Output tokens.
 	pub output_tokens: Option<i64>,
+	/// Total tokens.
 	pub total_tokens: Option<i64>,
 }
 
+/// Stored prompt and completion content.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PayloadEntry {
+	/// The stored prompt.
 	pub request_prompt: Option<Value>,
+	/// The stored completion.
 	pub response_completion: Option<Value>,
 }
 
