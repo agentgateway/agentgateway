@@ -1557,6 +1557,15 @@ impl Drop for DropOnLog {
 			};
 
 			let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
+			// HTTP requests always record a status and reason once a response is produced, so missing
+			// both means the request was dropped because the client went away.
+			let downstream_disconnect = !is_tcp && log.status.is_none() && log.reason.is_none();
+			if downstream_disconnect {
+				log.reason = Some(ProxyResponseReason::DownstreamDisconnect);
+				log
+					.error
+					.get_or_insert_with(|| "client disconnected before response".to_string());
+			}
 
 			let mut http_labels = HTTPLabels {
 				backend: log
@@ -1626,18 +1635,21 @@ impl Drop for DropOnLog {
 				source_context: log.source_context.as_ref(),
 				upstream_calls: Some(&upstream_calls),
 			});
-			if let Some(rh) = delegated_provider_request_handle {
-				log.finish_delegated_provider_handle_with_attempt(
-					rh,
-					end_time,
-					log.status,
-					log.retry_after,
-					&cel_exec,
-					request_handle.is_some(),
-				);
-			}
-			if let Some(rh) = request_handle {
-				log.finish_request_handle(rh, end_time, &cel_exec, &log.health_policy);
+			// A client disconnect says nothing about the backend's health, so no result is recorded.
+			if !downstream_disconnect {
+				if let Some(rh) = delegated_provider_request_handle {
+					log.finish_delegated_provider_handle_with_attempt(
+						rh,
+						end_time,
+						log.status,
+						log.retry_after,
+						&cel_exec,
+						request_handle.is_some(),
+					);
+				}
+				if let Some(rh) = request_handle {
+					log.finish_request_handle(rh, end_time, &cel_exec, &log.health_policy);
+				}
 			}
 
 			let custom_metric_fields = CustomField::new(
@@ -3917,6 +3929,30 @@ mod tests {
 		drop(DropOnLog::from(log));
 		assert_eq!(provider.consecutive_failures(), 0);
 		assert_eq!(endpoint.consecutive_failures(), 1);
+	}
+
+	#[test]
+	fn downstream_disconnect_does_not_affect_backend_health() {
+		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
+		let info = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+
+		// No response was produced: the client went away mid-request.
+		let (mut log, registry) = test_request_log_with_registry();
+		log.request_handle = Some(endpoints.start_request("ep".into(), &info));
+		drop(DropOnLog::from(log));
+		assert_eq!(info.consecutive_failures(), 0);
+		assert!(
+			encoded_metrics(&registry).contains("reason=\"DownstreamDisconnect\""),
+			"{}",
+			encoded_metrics(&registry)
+		);
+
+		let mut log = test_request_log();
+		log.status = Some(http::StatusCode::SERVICE_UNAVAILABLE);
+		log.reason = Some(ProxyResponseReason::Upstream);
+		log.request_handle = Some(endpoints.start_request("ep".into(), &info));
+		drop(DropOnLog::from(log));
+		assert_eq!(info.consecutive_failures(), 1);
 	}
 
 	#[test]
