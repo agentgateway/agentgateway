@@ -3689,7 +3689,14 @@ tbody tr:hover {
 }
 
 .logs-filter-bar .multi-check {
+	flex: 1 1 170px;
 	min-width: 170px;
+	max-width: 320px;
+}
+
+.analytics-controls-left .multi-check {
+	flex: 1 1 190px;
+	max-width: 320px;
 }
 
 .analytics-controls {
