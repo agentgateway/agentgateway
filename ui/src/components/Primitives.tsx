@@ -311,7 +311,7 @@ export function SegmentedControl<T extends string>(props: {
 	return (
 		<Segmented<T>
 			block
-			className={props.className}
+			className={['segmented-buttons', props.className].filter(Boolean).join(' ')}
 			aria-label={props.ariaLabel}
 			value={props.value}
 			onChange={props.onChange}

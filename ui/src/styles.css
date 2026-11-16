@@ -5735,6 +5735,39 @@ textarea {
 	text-align: center;
 }
 
+/* A bordered button group: each option has its own border, sharing edges with its neighbours. */
+.segmented-buttons.ant-segmented {
+	padding: 0;
+	background: transparent;
+}
+
+.segmented-buttons .ant-segmented-item {
+	border: 1px solid var(--line-strong);
+	border-radius: 0;
+	background: var(--surface);
+}
+
+.segmented-buttons .ant-segmented-item + .ant-segmented-item {
+	margin-inline-start: -1px;
+}
+
+.segmented-buttons .ant-segmented-item:first-child {
+	border-start-start-radius: 7px;
+	border-end-start-radius: 7px;
+}
+
+.segmented-buttons .ant-segmented-item:last-child {
+	border-start-end-radius: 7px;
+	border-end-end-radius: 7px;
+}
+
+/* Raised so its purple outline isn't covered by the next option's border. */
+.segmented-buttons .ant-segmented-item-selected {
+	position: relative;
+	z-index: 1;
+	background: var(--accent-soft);
+}
+
 .ant-segmented-item-label:has(> .segmented-option) {
 	display: flex;
 	align-items: center;
