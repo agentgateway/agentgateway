@@ -1781,6 +1781,17 @@ impl AIProvider {
 				}
 				Ok(())
 			}),
+			AIProvider::Vertex(_)
+				if matches!(
+					route_type,
+					RouteType::Messages | RouteType::AnthropicTokenCount
+				) =>
+			{
+				http::modify_req(req, |req| {
+					vertex::filter_anthropic_beta_header(&mut req.headers)?;
+					Ok(())
+				})
+			},
 			_ => Ok(()),
 		}
 	}
