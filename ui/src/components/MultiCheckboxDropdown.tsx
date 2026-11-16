@@ -46,6 +46,7 @@ export function MultiCheckboxDropdown(props: {
 				)}
 				allowClear
 				popupMatchSelectWidth={false}
+				classNames={{ popup: { root: 'multi-check-menu' } }}
 				showSearch={
 					props.searchLabel
 						? {

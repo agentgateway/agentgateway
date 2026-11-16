@@ -2163,3 +2163,52 @@ test('group by collapses extra values into a +n tag without clipping', async ({ 
 		labels.slice(await tags.count()).join(', ')
 	);
 });
+
+test('multiselect popup fits long options inside the filter row', async ({ page }) => {
+	const longModel = 'anthropic/claude-sonnet-4-5-20250929-long-deployment-name';
+	const longProvider = 'azure-openai-eastus2-production-deployment-pool';
+	const tooLong = `${'very-long-model-name-'.repeat(20)}end`;
+	await mockGateway(page);
+	await page.route('**/api/logs/analytics/summary', route =>
+		route.fulfill({
+			json: {
+				timeRange: { from: '2025-01-01T00:00:00Z', to: '2025-01-01T01:00:00Z' },
+				bucketSeconds: 900,
+				buckets: [],
+				groups: [],
+				filterOptions: {
+					requestModel: ['gpt-4o', longModel, tooLong],
+					provider: ['openai', longProvider]
+				}
+			}
+		})
+	);
+	const summary = page.waitForResponse('**/api/logs/analytics/summary');
+	await page.goto('/llm/analytics');
+	await summary;
+	const row = page.locator('.analytics-controls-left');
+	await expect(row.locator('.multi-check')).toHaveCount(6);
+	const rowBox = await row.boundingBox();
+	if (!rowBox) throw new Error('filter row is not visible');
+	const popup = page.locator('.ant-select-dropdown:visible');
+
+	// A long provider reads in full, even from a field near the row's right edge.
+	await row.getByRole('combobox', { name: 'Providers' }).click();
+	const provider = popup.getByRole('option', { name: longProvider });
+	await expect(provider).toBeVisible();
+	expect(
+		await provider
+			.locator('.ant-select-item-option-content')
+			.evaluate(node => node.scrollWidth <= node.clientWidth)
+	).toBe(true);
+	const providerBox = await popup.boundingBox();
+	if (!providerBox) throw new Error('popup is not visible');
+	expect(providerBox.x + providerBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+	await page.keyboard.press('Escape');
+	await expect(popup).toHaveCount(0);
+
+	// A name wider than the row is capped at the row, and hovering still gives it in full.
+	await row.getByRole('combobox', { name: 'Models' }).click();
+	await expect(popup.getByRole('option', { name: tooLong })).toHaveAttribute('title', tooLong);
+	expect((await popup.boundingBox())?.width).toBeLessThanOrEqual(rowBox.width + 1);
+});

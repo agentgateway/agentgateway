@@ -3277,6 +3277,11 @@ details summary {
 	max-width: 320px;
 }
 
+/* Long values ellipsize, and hovering an option shows its full name. */
+.multi-check-menu.ant-select-dropdown {
+	max-width: min(480px, calc(100vw - 32px));
+}
+
 .analytics-controls {
 	display: flex;
 	align-items: flex-end;
