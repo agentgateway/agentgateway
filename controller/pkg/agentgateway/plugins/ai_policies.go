@@ -286,13 +286,11 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 	pgModeration.Action = mapRejectAuditAction(moderation.Action)
 	pgModeration.FailureMode = guardrailFailureMode(moderation.FailureMode)
 
-	if policies != nil {
-		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, policies)
-		if err != nil {
-			logger.Warn("failed to translate policy", "err", err)
-		} else {
-			pgModeration.InlinePolicies = pols
-		}
+	pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardPolicies(policies, moderation.Policies))
+	if err != nil {
+		logger.Warn("failed to translate policy", "err", err)
+	} else {
+		pgModeration.InlinePolicies = pols
 	}
 
 	return pgModeration
@@ -311,13 +309,11 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 		FailureMode: guardrailFailureMode(guardrails.FailureMode),
 	}
 
-	if policies != nil {
-		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, policies)
-		if err != nil {
-			logger.Warn("failed to translate policy", "err", err)
-		} else {
-			pgGuardrails.InlinePolicies = pols
-		}
+	pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardPolicies(policies, guardrails.Policies))
+	if err != nil {
+		logger.Warn("failed to translate policy", "err", err)
+	} else {
+		pgGuardrails.InlinePolicies = pols
 	}
 
 	return pgGuardrails
@@ -342,13 +338,11 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 		pgArmor.Location = new("us-central1")
 	}
 
-	if policies != nil {
-		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, policies)
-		if err != nil {
-			logger.Warn("failed to translate policy", "err", err)
-		} else {
-			pgArmor.InlinePolicies = pols
-		}
+	pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardPolicies(policies, armor.Policies))
+	if err != nil {
+		logger.Warn("failed to translate policy", "err", err)
+	} else {
+		pgArmor.InlinePolicies = pols
 	}
 
 	return pgArmor
@@ -356,6 +350,14 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 
 type backendSimplePolicy interface {
 	BackendSimple() *agentgateway.BackendSimple
+}
+
+// guardPolicies prefers guard-level policies over the deprecated provider-level policies.
+func guardPolicies(guardLevel *agentgateway.PromptGuardPolicy, deprecated backendSimplePolicy) backendSimplePolicy {
+	if guardLevel != nil {
+		return guardLevel
+	}
+	return deprecated
 }
 
 func translateAuxiliaryBackendPolicies(ctx PolicyCtx, namespace string, policies backendSimplePolicy) ([]*api.BackendPolicySpec, error) {

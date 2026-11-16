@@ -1533,3 +1533,36 @@ spec:
         gcp:
           type: IdToken
           audience: iap-client-id
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-deprecated-provider-policies
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - openAIModeration:
+            policies:
+              auth:
+                secretRef:
+                  name: openai-key
+        - bedrockGuardrails:
+            identifier: guardrail
+            version: DRAFT
+            region: us-west-2
+            policies:
+              auth:
+                aws: {}
+        response:
+        - googleModelArmor:
+            templateId: template
+            projectId: project
+            policies:
+              auth:
+                gcp: {}

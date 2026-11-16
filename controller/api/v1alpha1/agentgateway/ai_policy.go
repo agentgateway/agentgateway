@@ -234,6 +234,13 @@ type OpenAIModeration struct {
 	// would-be rejection without blocking.
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
+
+	// Policies for communicating with the provider.
+	//
+	// This field is deprecated; prefer `policies` on the prompt guard entry.
+	// It may not be set together with the guard-level `policies`.
+	// +optional
+	Policies *OpenAIModerationPolicy `json:"policies,omitempty"`
 }
 
 type BedrockGuardrails struct {
@@ -263,6 +270,13 @@ type BedrockGuardrails struct {
 	// request/response is never blocked or masked.
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
+
+	// Policies for communicating with the provider.
+	//
+	// This field is deprecated; prefer `policies` on the prompt guard entry.
+	// It may not be set together with the guard-level `policies`.
+	// +optional
+	Policies *BedrockGuardrailsPolicy `json:"policies,omitempty"`
 }
 
 type GoogleModelArmor struct {
@@ -289,11 +303,19 @@ type GoogleModelArmor struct {
 	// would-be rejection without blocking.
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
+
+	// Policies for communicating with the provider.
+	//
+	// This field is deprecated; prefer `policies` on the prompt guard entry.
+	// It may not be set together with the guard-level `policies`.
+	// +optional
+	Policies *GoogleModelArmorPolicy `json:"policies,omitempty"`
 }
 
 // Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
 // +kubebuilder:validation:XValidation:rule="!has(self.policies) || (!has(self.regex) && !has(self.webhook))",message="policies is not supported for regex or webhook guards"
+// +kubebuilder:validation:XValidation:rule="!has(self.policies) || ((!has(self.openAIModeration) || !has(self.openAIModeration.policies)) && (!has(self.bedrockGuardrails) || !has(self.bedrockGuardrails.policies)) && (!has(self.googleModelArmor) || !has(self.googleModelArmor.policies)))",message="policies may not be set together with the deprecated provider-level policies"
 // +kubebuilder:validation:XValidation:rule="!has(self.openAIModeration) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.aws) && !has(self.policies.auth.gcp))",message="openAIModeration policies.auth supports only key or secretRef"
 // +kubebuilder:validation:XValidation:rule="!has(self.bedrockGuardrails) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.gcp))",message="bedrockGuardrails policies.auth supports only key, secretRef, or aws"
 // +kubebuilder:validation:XValidation:rule="!has(self.googleModelArmor) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.key) && !has(self.policies.auth.secretRef) && !has(self.policies.auth.aws))",message="googleModelArmor policies.auth supports only gcp"
@@ -349,6 +371,7 @@ type PromptguardRequest struct {
 // Prompt guards to apply to responses returned by the LLM provider.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
 // +kubebuilder:validation:XValidation:rule="!has(self.policies) || (!has(self.regex) && !has(self.webhook))",message="policies is not supported for regex or webhook guards"
+// +kubebuilder:validation:XValidation:rule="!has(self.policies) || ((!has(self.bedrockGuardrails) || !has(self.bedrockGuardrails.policies)) && (!has(self.googleModelArmor) || !has(self.googleModelArmor.policies)))",message="policies may not be set together with the deprecated provider-level policies"
 // +kubebuilder:validation:XValidation:rule="!has(self.bedrockGuardrails) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.gcp))",message="bedrockGuardrails policies.auth supports only key, secretRef, or aws"
 // +kubebuilder:validation:XValidation:rule="!has(self.googleModelArmor) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.key) && !has(self.policies.auth.secretRef) && !has(self.policies.auth.aws))",message="googleModelArmor policies.auth supports only gcp"
 // +kubebuilder:validation:XValidation:rule="!has(self.scope) || !has(self.webhook) || (self.scope.size() == 1 && 'Messages' in self.scope)",message="scope: webhook guards do not support a non-default scope; they always inspect the default (Messages)"

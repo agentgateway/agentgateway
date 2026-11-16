@@ -1996,3 +1996,49 @@ spec:
           policies:
             tls:
               insecureSkipVerify: All
+---
+_err: policies may not be set together with the deprecated provider-level policies
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-both-policies-request
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - openAIModeration:
+            policies:
+              auth:
+                key: old
+          policies:
+            auth:
+              key: new
+---
+_err: policies may not be set together with the deprecated provider-level policies
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-both-policies-response
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        response:
+        - googleModelArmor:
+            templateId: template
+            projectId: project
+            policies:
+              auth:
+                gcp: {}
+          policies:
+            auth:
+              gcp: {}
