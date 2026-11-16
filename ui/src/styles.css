@@ -5958,6 +5958,17 @@ textarea {
 	margin: 0;
 }
 
+/* Route format rows keep main's 16px box and text line so labels wrap as they did. */
+.format-toggle.ant-checkbox-wrapper .ant-checkbox {
+	margin: -1px;
+	transform: scale(0.889);
+}
+
+.format-toggle.ant-checkbox-wrapper .ant-checkbox-label {
+	padding-inline: 0;
+	line-height: normal;
+}
+
 .prompt-cache-option.ant-checkbox-wrapper {
 	align-items: flex-start;
 	border: 1px solid var(--line);
@@ -6175,8 +6186,13 @@ textarea {
 	align-self: center;
 }
 
+/* A button inside an input (show secret, clear) overlaps the padding instead of stretching the box. */
+.ant-input-affix-wrapper > .ant-input-suffix > .ant-btn-sm {
+	margin-block: -5px;
+}
+
 .freeform-combobox .ant-input-affix-wrapper {
-	padding-block: 8.5px;
+	padding-block: 9px;
 	padding-inline-end: 6px;
 }
 
