@@ -1,19 +1,29 @@
 //! PostgreSQL integration tests for budget schema setup.
+//!
+//! These tests run against the server named by `AGW_TEST_POSTGRES_URL` and are skipped when it is
+//! unset, unless `AGW_TEST_REQUIRE_POSTGRES` is set. Each test creates its own database, so one
+//! server can be reused across tests and runs. To run them locally:
+//!
+//! ```sh
+//! docker run -d --name agw-test-postgres -e POSTGRES_PASSWORD=test \
+//!   -p 127.0.0.1:55432:5432 postgres:17-alpine
+//! until docker exec agw-test-postgres pg_isready -U postgres -h 127.0.0.1; do sleep 1; done
+//! AGW_TEST_POSTGRES_URL=postgres://postgres:test@127.0.0.1:55432/postgres \
+//!   cargo test -p agentgateway --lib budget::postgres_tests
+//! docker rm -f agw-test-postgres
+//! ```
 
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
 use rust_decimal::Decimal;
-use sqlx::postgres::{PgPool, PgPoolOptions};
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::testcontainers::runners::AsyncRunner;
-use testcontainers_modules::testcontainers::{ContainerAsync, ImageExt};
+use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
 
 use super::*;
 use crate::database::DatabasePool;
 
-const POSTGRES_VERSION: &str = "17-alpine";
 /// The `budget_usage` table as created before the `unit` column existed.
 const LEGACY_SCHEMA: &str = r#"
 CREATE TABLE budget_usage (
@@ -29,45 +39,48 @@ const CONCURRENT_INITIALIZERS: usize = 8;
 /// Rounds of the concurrent startup test, each against a fresh database.
 const CONCURRENT_ROUNDS: usize = 3;
 
+/// Reads an environment variable, treating an empty value as unset.
+fn env_var(name: &str) -> Option<String> {
+	std::env::var(name).ok().filter(|value| !value.is_empty())
+}
+
 struct TestPostgres {
-	_container: ContainerAsync<Postgres>,
-	base_url: String,
+	server: PgConnectOptions,
 }
 
 impl TestPostgres {
-	/// Starts Postgres, or returns `None` to skip the test when Docker is unavailable outside CI.
-	async fn start() -> Option<Self> {
-		let container = match Postgres::default().with_tag(POSTGRES_VERSION).start().await {
-			Ok(container) => container,
-			Err(err) if std::env::var_os("CI").is_none() => {
-				eprintln!("skipping Postgres budget test because Docker is unavailable: {err}");
-				return None;
-			},
-			Err(err) => panic!("Postgres budget tests require Docker in CI: {err}"),
+	/// Connects to the server `AGW_TEST_POSTGRES_URL` names, or returns `None` to skip the test
+	/// when it is unset and `AGW_TEST_REQUIRE_POSTGRES` is not.
+	fn from_env() -> Option<Self> {
+		let Some(url) = env_var("AGW_TEST_POSTGRES_URL") else {
+			assert!(
+				env_var("AGW_TEST_REQUIRE_POSTGRES").is_none(),
+				"AGW_TEST_REQUIRE_POSTGRES is set, but AGW_TEST_POSTGRES_URL is not"
+			);
+			eprintln!("skipping Postgres budget test because AGW_TEST_POSTGRES_URL is unset");
+			return None;
 		};
-		let host = container.get_host().await.unwrap();
-		let port = container.get_host_port_ipv4(5432).await.unwrap();
-		Some(Self {
-			base_url: format!("postgres://postgres:postgres@{host}:{port}"),
-			_container: container,
-		})
+		let server = PgConnectOptions::from_str(&url).expect("invalid AGW_TEST_POSTGRES_URL");
+		Some(Self { server })
 	}
 
-	/// Creates an empty database named `name`.
-	async fn create_database(&self, name: &str) {
-		let admin = self.pool("postgres", 1).await;
+	/// Creates an empty database with a unique name starting with `prefix`, and returns the name.
+	async fn create_database(&self, prefix: &str) -> String {
+		let name = format!("{prefix}_{}", uuid::Uuid::new_v4().simple());
+		let admin = PgPool::connect_with(self.server.clone()).await.unwrap();
 		sqlx::raw_sql(sqlx::AssertSqlSafe(format!("CREATE DATABASE {name}")))
 			.execute(&admin)
 			.await
 			.unwrap();
 		admin.close().await;
+		name
 	}
 
 	/// Opens a separate pool on database `name`, like a separate proxy would.
 	async fn pool(&self, name: &str, max_connections: u32) -> PgPool {
 		PgPoolOptions::new()
 			.max_connections(max_connections)
-			.connect(&format!("{}/{name}", self.base_url))
+			.connect_with(self.server.clone().database(name))
 			.await
 			.unwrap()
 	}
@@ -84,16 +97,18 @@ async fn unit_column_count(pool: &PgPool) -> i64 {
 }
 
 /// Several proxies sharing one database start at once. Without the advisory lock, concurrent
-/// `CREATE TABLE IF NOT EXISTS` / `ADD COLUMN` statements can fail and abort startup.
+/// `CREATE TABLE IF NOT EXISTS` statements on a fresh database can fail and abort startup. The
+/// legacy case checks that concurrent startups also all migrate an existing table.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_initializers_create_and_migrate_the_schema() {
-	let Some(postgres) = TestPostgres::start().await else {
+	let Some(postgres) = TestPostgres::from_env() else {
 		return;
 	};
 	for round in 0..CONCURRENT_ROUNDS {
 		for (case, legacy) in [("fresh", false), ("legacy", true)] {
-			let database = format!("concurrent_{case}_{round}");
-			postgres.create_database(&database).await;
+			let database = postgres
+				.create_database(&format!("concurrent_{case}_{round}"))
+				.await;
 			let inspect = postgres.pool(&database, 1).await;
 			if legacy {
 				sqlx::raw_sql(LEGACY_SCHEMA)
@@ -140,12 +155,12 @@ async fn concurrent_initializers_create_and_migrate_the_schema() {
 /// schema setup must come back with neither.
 #[tokio::test]
 async fn schema_setup_does_not_leak_lock_settings_into_the_pool() {
-	let Some(postgres) = TestPostgres::start().await else {
+	let Some(postgres) = TestPostgres::from_env() else {
 		return;
 	};
-	postgres.create_database("no_leak").await;
+	let database = postgres.create_database("no_leak").await;
 	// One connection, so the checks below run on the connection that did the schema setup.
-	let pool = postgres.pool("no_leak", 1).await;
+	let pool = postgres.pool(&database, 1).await;
 	let default_lock_timeout: String = sqlx::query_scalar("SHOW lock_timeout")
 		.fetch_one(&pool)
 		.await
@@ -175,19 +190,17 @@ async fn schema_setup_does_not_leak_lock_settings_into_the_pool() {
 /// `ALTER TABLE`, which would wait on running proxies' open transactions.
 #[tokio::test]
 async fn restart_does_not_wait_on_open_readers() {
-	let Some(postgres) = TestPostgres::start().await else {
+	let Some(postgres) = TestPostgres::from_env() else {
 		return;
 	};
-	postgres.create_database("open_reader").await;
+	let database = postgres.create_database("open_reader").await;
 	Arc::new(BudgetPolicy::default())
-		.initialize(DatabasePool::Postgres(
-			postgres.pool("open_reader", 1).await,
-		))
+		.initialize(DatabasePool::Postgres(postgres.pool(&database, 1).await))
 		.await
 		.unwrap();
 
 	// A running proxy's transaction that has read the table holds ACCESS SHARE until it ends.
-	let running = postgres.pool("open_reader", 1).await;
+	let running = postgres.pool(&database, 1).await;
 	let mut reader = running.begin().await.unwrap();
 	sqlx::query("SELECT COUNT(*) FROM budget_usage")
 		.execute(&mut *reader)
@@ -197,9 +210,7 @@ async fn restart_does_not_wait_on_open_readers() {
 	let restart = Arc::new(BudgetPolicy::default());
 	let restarted = tokio::time::timeout(
 		Duration::from_secs(5),
-		restart.initialize(DatabasePool::Postgres(
-			postgres.pool("open_reader", 1).await,
-		)),
+		restart.initialize(DatabasePool::Postgres(postgres.pool(&database, 1).await)),
 	)
 	.await
 	.expect("schema setup waited on an open reader");
@@ -211,11 +222,11 @@ async fn restart_does_not_wait_on_open_readers() {
 /// live rows preloaded into the in-memory counters.
 #[tokio::test]
 async fn initialization_prunes_expired_rows_and_preloads_live_ones() {
-	let Some(postgres) = TestPostgres::start().await else {
+	let Some(postgres) = TestPostgres::from_env() else {
 		return;
 	};
-	postgres.create_database("prune").await;
-	let pool = postgres.pool("prune", 2).await;
+	let database = postgres.create_database("prune").await;
+	let pool = postgres.pool(&database, 2).await;
 	Arc::new(BudgetPolicy::default())
 		.initialize(DatabasePool::Postgres(pool.clone()))
 		.await
