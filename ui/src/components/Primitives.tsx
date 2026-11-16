@@ -13,6 +13,7 @@ import { dump } from 'js-yaml';
 import {
 	AlertTriangle,
 	CheckCircle2,
+	ChevronDown,
 	Code,
 	HelpCircle,
 	Info,
@@ -52,13 +53,6 @@ import { useSchemaHelp } from '@/schemaHelp';
 
 // Router link styled as an antd Button. It drops `type`, so use `color="primary" variant="solid"`.
 export const ButtonLink = createLink(Button);
-
-// Shared Table pagination: fixed page size with a "from–to of count" total.
-export const tablePagination = {
-	pageSize: 20,
-	hideOnSinglePage: true,
-	showTotal: (total: number, [from, to]: [number, number]) => `${from}–${to} of ${total}`
-};
 
 // Lets a drawer's form edit its value as raw YAML instead.
 export type DrawerRaw = {
@@ -243,6 +237,7 @@ export function Dropdown(props: {
 						}
 					: false
 			}
+			suffixIcon={<ChevronDown size={16} />}
 			classNames={{ popup: { root: 'custom-select-menu' } }}
 			popupMatchSelectWidth={false}
 			labelRender={item => {
@@ -510,27 +505,22 @@ export function Drawer(props: {
 		}
 	}
 
-	// Drawers unmount instead of closing, so return focus to where it was.
-	useEffect(() => {
-		const previousFocus =
-			document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		return () => {
-			const scrollX = window.scrollX;
-			const scrollY = window.scrollY;
-			previousFocus?.focus({ preventScroll: true });
-			window.scrollTo(scrollX, scrollY);
-		};
-	}, []);
+	useRestoreFocus();
 
 	const nested = props.variant === 'nested';
+	// A nested drawer covers its parent, so outside clicks reach the parent's mask.
+	// Opened from a page, it needs its own transparent mask instead.
+	const inDrawer = useContext(InDrawerContext);
 	return (
-		<>
+		<InDrawerContext.Provider value>
 			<AntDrawer
 				open
 				placement="right"
 				size={760}
 				push={false}
-				mask={nested ? false : { closable: true }}
+				mask={nested && inDrawer ? false : { closable: true }}
+				focusable={nested && inDrawer ? { trap: true } : undefined}
+				styles={nested && !inDrawer ? { mask: { background: 'transparent' } } : undefined}
 				keyboard={!confirmClose}
 				closable={false}
 				title={<h3>{props.title}</h3>}
@@ -645,7 +635,26 @@ export function Drawer(props: {
 					<p>Your changes have not been saved and will be lost.</p>
 				</ConfirmDialog>
 			) : null}
-		</>
+		</InDrawerContext.Provider>
+	);
+}
+
+const InDrawerContext = createContext(false);
+
+// Overlays unmount instead of closing, so antd never restores focus.
+// Capture it during render, before antd's focus lock moves it inside.
+function useRestoreFocus() {
+	const [previousFocus] = useState(() =>
+		document.activeElement instanceof HTMLElement ? document.activeElement : null
+	);
+	useEffect(
+		() => () => {
+			const scrollX = window.scrollX;
+			const scrollY = window.scrollY;
+			previousFocus?.focus({ preventScroll: true });
+			window.scrollTo(scrollX, scrollY);
+		},
+		[previousFocus]
 	);
 }
 
@@ -659,6 +668,7 @@ export function ConfirmDialog(props: {
 	onCancel: () => void;
 	onConfirm: () => void;
 }) {
+	useRestoreFocus();
 	return (
 		<Modal
 			open

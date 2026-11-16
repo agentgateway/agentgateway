@@ -11,8 +11,7 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip,
-	tablePagination
+	Tooltip
 } from '@/components/Primitives';
 import { validateGatewayConfig } from '@/configValidation';
 import { maskKey } from '@/credentialDisplay';
@@ -249,7 +248,7 @@ function DatabaseResourcesPanel(props: {
 						size="small"
 						rowKey={resourceKey}
 						dataSource={props.resources}
-						pagination={tablePagination}
+						pagination={false}
 						expandable={{
 							showExpandColumn: false,
 							expandedRowKeys: expanded ? [expanded] : [],

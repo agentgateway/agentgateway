@@ -13,8 +13,7 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip,
-	tablePagination
+	Tooltip
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import {
@@ -157,7 +156,7 @@ export function ProvidersPage() {
 							size="middle"
 							rowKey="name"
 							dataSource={providers}
-							pagination={tablePagination}
+							pagination={false}
 							columns={[
 								{ title: 'Name', dataIndex: 'name', className: 'strong' },
 								...(hybrid

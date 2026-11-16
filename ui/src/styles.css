@@ -177,8 +177,11 @@ a {
 	position: fixed;
 	inset: 0 auto 0 0;
 	height: 100dvh;
+	overflow: hidden;
+	overscroll-behavior: contain;
 	border-right: 1px solid var(--line);
 	padding: 14px;
+	scrollbar-gutter: stable;
 }
 
 .sidebar .ant-layout-sider-children {
@@ -247,6 +250,11 @@ a {
 .nav-list .ant-menu-item.nav-group-start,
 .mobile-nav-menu .ant-dropdown-menu-item.nav-group-start {
 	margin-top: 11px;
+}
+
+/* antd clips menu items, which would hide the divider drawn above them. */
+.nav-list .ant-menu-item.nav-group-start {
+	overflow: visible;
 }
 
 .nav-list .ant-menu-item.nav-group-start::before,
@@ -424,7 +432,17 @@ a {
 .breadcrumb {
 	min-width: 0;
 	font-size: 13px;
+	line-height: normal;
 	white-space: nowrap;
+}
+
+.breadcrumb ol {
+	align-items: center;
+}
+
+.breadcrumb .ant-breadcrumb-separator {
+	display: flex;
+	align-items: center;
 }
 
 .breadcrumb li:last-child {
@@ -653,6 +671,8 @@ h4.field-label {
 
 .field.invalid input,
 .field.invalid textarea,
+.field.invalid .ant-input-number,
+.field.invalid .ant-input-affix-wrapper,
 .field.invalid .custom-select.ant-select {
 	border-color: color-mix(in srgb, var(--bad) 70%, var(--line));
 	background: color-mix(in srgb, var(--bad-bg) 48%, var(--surface));
@@ -1958,7 +1978,6 @@ details summary {
 /* Compact banner: bold title in the state colour, body text right under it. */
 .status-banner.ant-alert .ant-alert-icon {
 	margin-inline-end: 10px;
-	padding-top: 1px;
 }
 
 .status-banner.ant-alert .ant-alert-title {
@@ -1972,6 +1991,26 @@ details summary {
 	color: var(--text);
 	font-size: 14px;
 	line-height: normal;
+}
+
+.status-banner.ant-alert .ant-alert-title:only-child {
+	margin-bottom: 0;
+}
+
+.status-banner.ok.ant-alert {
+	border-color: color-mix(in srgb, var(--ok) 35%, var(--line));
+}
+
+.status-banner.warn.ant-alert {
+	border-color: color-mix(in srgb, var(--warn) 35%, var(--line));
+}
+
+.status-banner.info.ant-alert {
+	border-color: color-mix(in srgb, var(--info) 35%, var(--line));
+}
+
+.status-banner.bad.ant-alert {
+	border-color: color-mix(in srgb, var(--bad) 35%, var(--line));
 }
 
 .status-banner.ok .ant-alert-title {
@@ -2164,6 +2203,7 @@ details summary {
 .option-checkbox small {
 	color: var(--muted);
 	font-size: 12px;
+	font-weight: 500;
 	margin-top: 3px;
 }
 
@@ -2314,6 +2354,7 @@ details summary {
 
 /* Tags read as the old bold badges; Tag has no weight token. */
 .ant-tag {
+	gap: 5px;
 	font-weight: 600;
 }
 
@@ -2321,6 +2362,14 @@ details summary {
 .multi-check .ant-select-placeholder {
 	color: var(--text);
 	font-weight: 500;
+}
+
+/* In flow, so the select grows to fit "All user agents" as the old buttons did. */
+.multi-check .ant-select-prefix + .ant-select-content .ant-select-placeholder {
+	position: static;
+	width: auto;
+	transform: none;
+	white-space: nowrap;
 }
 
 /* antd Table: the rest of the header look and the empty row come from theme.tsx tokens. */
@@ -3242,6 +3291,7 @@ details summary {
 
 .logs-stream-toggle.ant-checkbox-wrapper {
 	align-items: center;
+	line-height: normal;
 	min-height: 40px;
 	color: var(--muted);
 	font-weight: 700;
@@ -3267,10 +3317,11 @@ details summary {
 	padding: 0;
 }
 
-.log-table.ant-table-wrapper .ant-table-footer {
+.log-table.ant-table-wrapper .ant-table.ant-table-small .ant-table-footer {
+	background: transparent;
 	color: var(--muted);
 	font-size: 11.5px;
-	padding-inline: 18px;
+	padding: 10px 18px 12px;
 }
 
 .log-status-pill.ant-tag,
@@ -5578,4 +5629,102 @@ textarea {
 
 .guardrail-summary-card .ant-collapse {
 	margin-top: 8px;
+}
+
+/* Pixel parity with the pre-antd controls. */
+.ant-tag:not(.authz-effect, .log-status-pill, .log-op-chip, .config-chip) {
+	min-height: 20px;
+	border-width: 0;
+	padding: 2px 7px;
+	line-height: 1.2;
+	letter-spacing: 0.01em;
+	display: inline-flex;
+	align-items: center;
+}
+
+.provider-badge > span:not(.ant-tag-icon) {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+}
+
+.nav-list .ant-menu-item {
+	line-height: normal;
+}
+
+.custom-select.ant-select {
+	padding-inline: 10px;
+}
+
+.custom-select-value {
+	max-height: 22px;
+}
+
+.multi-check .ant-select {
+	padding-inline: 4px 20px;
+}
+
+.multi-check .ant-select-prefix {
+	display: flex;
+	align-items: center;
+	height: 22px;
+	margin-inline-end: 8px;
+}
+
+.multi-check .ant-select-content {
+	line-height: normal;
+}
+
+.custom-select .ant-select-suffix,
+.multi-check .ant-select-suffix {
+	display: flex;
+	align-self: center;
+}
+
+.freeform-combobox .ant-input-affix-wrapper {
+	padding-block: 8.5px;
+	padding-inline-end: 6px;
+}
+
+.freeform-combobox .ant-input-suffix .ant-btn {
+	width: 26px;
+	padding: 0;
+}
+
+.logs-stream-toggle.ant-checkbox-wrapper {
+	align-items: center;
+	min-height: 58px;
+}
+
+.logs-stream-toggle .ant-checkbox {
+	margin-inline-start: 6px;
+}
+
+.logs-stream-toggle .ant-checkbox-label {
+	padding-inline: 13px 0;
+}
+
+.option-checkbox.ant-checkbox-wrapper {
+	line-height: normal;
+}
+
+.option-checkbox .ant-checkbox {
+	align-self: flex-start;
+	margin-block-start: 3px;
+	margin-inline-start: 6px;
+}
+
+.option-checkbox .ant-checkbox-label {
+	flex: 1;
+	min-width: 0;
+	padding-inline: 15px 0;
+}
+
+/* The old tables used the browser's normal line height. */
+.ant-table-wrapper .ant-table {
+	line-height: normal;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th.log-td-num {
+	font-family: inherit;
 }

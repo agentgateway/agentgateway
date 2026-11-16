@@ -122,7 +122,7 @@ export function Shell() {
 			const Icon = item.icon;
 			return {
 				key: item.to,
-				icon: <Icon size={16} />,
+				icon: <Icon size={17} />,
 				label: <Link to={item.to}>{item.label}</Link>,
 				className: item.groupStart ? 'nav-group-start' : undefined
 			};

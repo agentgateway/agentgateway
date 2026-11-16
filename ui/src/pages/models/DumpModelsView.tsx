@@ -1,14 +1,7 @@
 import { Button, Table, Tag } from 'antd';
 import { Eye } from 'lucide-react';
 
-import {
-	Drawer,
-	EmptyState,
-	Panel,
-	Tooltip,
-	tablePagination,
-	YamlBlock
-} from '@/components/Primitives';
+import { Drawer, EmptyState, Panel, Tooltip, YamlBlock } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import type { DumpModel, VirtualModelRouting } from '@/gateway-admin';
 import { routeBackendLabel } from '@/pages/traffic/TrafficConfigDumpPanel';
@@ -32,7 +25,7 @@ export function DumpModelsView(props: { models: DumpModel[] }) {
 							className="dump-models-table"
 							rowKey="key"
 							dataSource={props.models}
-							pagination={tablePagination}
+							pagination={false}
 							columns={[
 								{
 									title: 'Name',

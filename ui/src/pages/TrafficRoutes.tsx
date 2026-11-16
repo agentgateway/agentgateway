@@ -17,8 +17,7 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip,
-	tablePagination
+	Tooltip
 } from '@/components/Primitives';
 import { isDatabaseConfigResource } from '@/config';
 import type {
@@ -287,7 +286,7 @@ function TrafficRoutesEditorPage() {
 							`${context.bindIndex}-${context.listenerIndex}-${context.kind}-${context.routeIndex}`
 						}
 						dataSource={routes}
-						pagination={tablePagination}
+						pagination={false}
 						columns={[
 							{
 								title: 'Name',
@@ -557,7 +556,7 @@ function GatewayRoutesEditorPage() {
 						size="middle"
 						rowKey={row => `${row.kind}-${row.resourceId ?? row.routeIndex}`}
 						dataSource={routes}
-						pagination={tablePagination}
+						pagination={false}
 						columns={[
 							{
 								title: 'Name',

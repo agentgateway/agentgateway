@@ -8,7 +8,6 @@ import {
 	Panel,
 	StatusBanner,
 	Tooltip,
-	tablePagination,
 	YamlBlock
 } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
@@ -62,7 +61,7 @@ export function DumpPoliciesPage() {
 						scroll={{ x: 860 }}
 						locale={{ emptyText: 'No top-level policies' }}
 						dataSource={policies}
-						pagination={tablePagination}
+						pagination={false}
 						columns={[
 							{
 								title: 'Name',

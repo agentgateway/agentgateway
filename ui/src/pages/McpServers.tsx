@@ -18,8 +18,7 @@ import {
 	Panel,
 	SegmentedControl,
 	StatusBanner,
-	Tooltip,
-	tablePagination
+	Tooltip
 } from '@/components/Primitives';
 import {
 	ensureMcp,
@@ -153,7 +152,7 @@ export function McpServersPage() {
 					<Table<McpTarget>
 						rowKey="name"
 						dataSource={targets}
-						pagination={tablePagination}
+						pagination={false}
 						columns={[
 							{ title: 'Name', dataIndex: 'name', className: 'strong' },
 							{

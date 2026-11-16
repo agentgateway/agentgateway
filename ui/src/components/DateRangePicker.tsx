@@ -73,6 +73,8 @@ export function DateRangePicker(props: {
 				if (!dates?.[0] || !dates[1]) return;
 				const fromLocal = toDateTimeLocal(dates[0].toDate());
 				const toLocal = toDateTimeLocal(dates[1].toDate());
+				// Same fixed-width format, so a string compare orders them.
+				if (fromLocal >= toLocal) return;
 				// antd submits a preset as plain dates; keep it rolling when they match one exactly.
 				const preset = RANGE_PRESETS.find(item => {
 					const range = presetAbsoluteRange(item.value);

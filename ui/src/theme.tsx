@@ -148,7 +148,7 @@ function themeConfig(mode: ThemeMode): ThemeConfig {
 				iconMarginInlineEnd: 10
 			},
 			// The old inputs used the browser's normal line height, which sets textarea height.
-			Input: { ...control, lineHeight: 1.2 },
+			Input: { ...control, lineHeight: 17 / 14, paddingBlock: 9, paddingInline: 10 },
 			InputNumber: control,
 			Select: {
 				...control,

@@ -8,7 +8,6 @@ import {
 	Panel,
 	StatusBanner,
 	Tooltip,
-	tablePagination,
 	YamlBlock
 } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
@@ -205,7 +204,7 @@ export function TrafficDumpRoutesView(props: {
 					size="middle"
 					rowKey={row => `${row.source}-${row.type}-${row.route.key}`}
 					dataSource={inventory.routes}
-					pagination={tablePagination}
+					pagination={false}
 					columns={[
 						{
 							title: 'Name',

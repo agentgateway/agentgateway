@@ -429,7 +429,7 @@ export function LogsPage() {
 						onRow={entry => ({ onClick: () => void expand(entry) })}
 						expandable={{
 							expandedRowKeys: expandedId ? [expandedId] : [],
-							columnWidth: 44,
+							columnWidth: 34,
 							expandIcon: ({ expanded: open, record }) => (
 								<Button
 									type="text"
@@ -1393,7 +1393,7 @@ const LOG_COLUMNS: TableColumnsType<LogEntry> = [
 	{
 		title: 'Duration',
 		key: 'duration',
-		width: 84,
+		width: 74,
 		align: 'right',
 		className: 'log-td-num',
 		render: (_, entry) => formatDuration(entry.durationMs)
@@ -1429,7 +1429,7 @@ const LOG_COLUMNS: TableColumnsType<LogEntry> = [
 	{
 		title: 'Cache',
 		key: 'cache',
-		width: 68,
+		width: 64,
 		align: 'right',
 		className: 'log-td-num',
 		onCell: entry => {

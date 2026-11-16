@@ -1,5 +1,5 @@
 import { Select } from 'antd';
-import { Funnel, Layers3 } from 'lucide-react';
+import { ChevronDown, Funnel, Layers3 } from 'lucide-react';
 
 /**
  * Ranks a label against the typed text so the closest matches are read first: an exact value,
@@ -36,6 +36,7 @@ export function MultiCheckboxDropdown(props: {
 				mode="multiple"
 				aria-label={props.label}
 				prefix={<Icon size={14} />}
+				suffixIcon={<ChevronDown size={15} />}
 				value={props.values}
 				options={props.options}
 				placeholder={props.allLabel ?? props.placeholder ?? 'Select'}

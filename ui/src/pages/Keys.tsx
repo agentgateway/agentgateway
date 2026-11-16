@@ -34,8 +34,7 @@ import {
 	Panel,
 	SegmentedControl,
 	StatusBanner,
-	Tooltip,
-	tablePagination
+	Tooltip
 } from '@/components/Primitives';
 import { getApiKeyPolicy, isDatabaseConfigResource, upsertVirtualKey } from '@/config';
 import { hasKeyValue, keyDisplay, keyHintMetadata, keyValue } from '@/credentialDisplay';
@@ -280,7 +279,7 @@ export function KeysPage() {
 						tableLayout="fixed"
 						size="middle"
 						scroll={{ x: 980 }}
-						pagination={tablePagination}
+						pagination={false}
 						columns={[
 							{
 								title: 'Name',

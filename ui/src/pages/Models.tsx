@@ -30,8 +30,7 @@ import {
 	Panel,
 	SegmentedControl,
 	StatusBanner,
-	Tooltip,
-	tablePagination
+	Tooltip
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { WildcardModelSelector } from '@/components/WildcardModelSelector';
@@ -371,7 +370,7 @@ function ModelsEditorPage() {
 									: `model:${row.model.id ?? modelOptionValue(models, models.indexOf(row.model))}`
 							}
 							dataSource={modelRows}
-							pagination={tablePagination}
+							pagination={false}
 							columns={[
 								{
 									title: 'Name',
