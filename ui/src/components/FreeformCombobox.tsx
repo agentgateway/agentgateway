@@ -23,6 +23,10 @@ export function FreeformCombobox(props: {
 	return (
 		<AutoComplete
 			className="freeform-combobox"
+			classNames={{ popup: { root: 'freeform-combobox-menu' } }}
+			// The old menu capped at 260px including its padding and border.
+			listHeight={248}
+			transitionName=""
 			value={props.value}
 			options={options.map(option => ({ value: option, label: option }))}
 			open={open}

@@ -1,5 +1,7 @@
-import { Select } from 'antd';
+import { Checkbox, Select } from 'antd';
 import { ChevronDown, Funnel, Layers3 } from 'lucide-react';
+
+import { selectComponents } from '@/components/Primitives';
 
 /**
  * Ranks a label against the typed text so the closest matches are read first: an exact value,
@@ -33,6 +35,7 @@ export function MultiCheckboxDropdown(props: {
 		<div className="multi-check">
 			<span>{props.label}</span>
 			<Select
+				components={selectComponents}
 				mode="multiple"
 				aria-label={props.label}
 				prefix={<Icon size={14} />}
@@ -47,6 +50,34 @@ export function MultiCheckboxDropdown(props: {
 				allowClear
 				popupMatchSelectWidth={false}
 				classNames={{ popup: { root: 'multi-check-menu' } }}
+				styles={{ popup: { root: { minWidth: 240 } } }}
+				listHeight={262}
+				transitionName=""
+				menuItemSelectedIcon={null}
+				optionRender={option => (
+					<span className="multi-check-option">
+						<Checkbox checked={props.values.includes(String(option.value))} tabIndex={-1} />
+						<span title={String(option.label)}>{option.label}</span>
+					</span>
+				)}
+				popupRender={menu => (
+					<>
+						{/* Stays visible when nothing matches, so a selection can always be cleared. */}
+						{props.allLabel ? (
+							<button
+								type="button"
+								className="multi-check-option all"
+								tabIndex={-1}
+								onMouseDown={event => event.preventDefault()}
+								onClick={() => props.onChange([])}
+							>
+								<Checkbox checked={props.values.length === 0} tabIndex={-1} />
+								<span>{props.allLabel}</span>
+							</button>
+						) : null}
+						{menu}
+					</>
+				)}
 				showSearch={
 					props.searchLabel
 						? {

@@ -158,6 +158,32 @@ button {
 	border-color: var(--ant-button-default-border-color);
 }
 
+/* Hover and press keep that border and ink and only shade the background. */
+.ant-btn.ant-btn.ant-btn-variant-outlined.ant-btn-color-dangerous {
+	--ant-btn-border-color-hover: color-mix(in srgb, var(--bad) 35%, var(--line));
+	--ant-btn-border-color-active: color-mix(in srgb, var(--bad) 35%, var(--line));
+	--ant-btn-text-color-hover: var(--bad);
+	--ant-btn-text-color-active: var(--bad);
+	--ant-btn-bg-color-hover: var(--bad-bg);
+	--ant-btn-bg-color-active: var(--bad-bg);
+}
+
+.ant-btn.ant-btn.ant-btn-icon-only.ant-btn-variant-outlined.ant-btn-color-dangerous {
+	--ant-btn-border-color-hover: var(--ant-button-default-border-color);
+	--ant-btn-border-color-active: var(--ant-button-default-border-color);
+	--ant-btn-bg-color-hover: var(--surface-2);
+	--ant-btn-bg-color-active: var(--surface-2);
+}
+
+/* Danger buttons keep the theme red, also when disabled (faded by the opacity above). */
+.ant-btn.ant-btn.ant-btn-variant-outlined.ant-btn-color-dangerous {
+	color: var(--bad);
+}
+
+.ant-btn.ant-btn.ant-btn-variant-outlined.ant-btn-color-dangerous:not(.ant-btn-icon-only):disabled {
+	border-color: color-mix(in srgb, var(--bad) 35%, var(--line));
+}
+
 .ant-btn.ant-btn-variant-solid.ant-btn-color-primary:disabled {
 	border-color: var(--ant-color-primary);
 	background: var(--ant-color-primary);
@@ -385,6 +411,16 @@ a {
 
 .user-menu-panel form .ant-btn {
 	justify-content: flex-start;
+	height: 32px;
+	padding: 0 10px;
+	color: var(--text);
+	font-size: 13px;
+	font-weight: 400;
+}
+
+.user-menu-panel form .ant-btn.ant-btn-variant-text:not(:disabled):is(:hover, :active) {
+	background: var(--surface-2);
+	color: var(--text);
 }
 
 @media (max-width: 600px) {
@@ -538,6 +574,15 @@ a {
 	gap: 8px;
 }
 
+/* Selects sit at button height in a row of buttons. */
+.row-actions .ant-select {
+	height: 36px;
+}
+
+.row-actions:has(.ant-btn-sm) .ant-select {
+	height: 30px;
+}
+
 td.row-actions {
 	display: table-cell;
 	text-align: right;
@@ -565,9 +610,14 @@ td.row-actions > * + * {
 	box-shadow: var(--shadow);
 }
 
+.drawer-header.ant-drawer-header {
+	padding: 18px 20px;
+}
+
 .drawer-header h3 {
 	margin: 0;
-	font-size: 18px;
+	font-size: 16px;
+	line-height: normal;
 }
 
 .drawer-header-actions {
@@ -584,7 +634,7 @@ td.row-actions > * + * {
 	display: flex;
 	justify-content: flex-end;
 	gap: 8px;
-	padding: 14px 20px;
+	padding: 18px 20px;
 }
 
 .drawer-save-error {
@@ -596,7 +646,25 @@ td.row-actions > * + * {
 	padding-bottom: 20px;
 }
 
-.confirm-dialog-body {
+.ant-modal .ant-modal-container.confirm-dialog {
+	border: 1px solid var(--line);
+	box-shadow: var(--shadow-popover);
+	padding: 0;
+}
+
+.ant-modal .ant-modal-header.confirm-dialog-header {
+	margin: 0;
+	padding: 18px 20px 8px;
+}
+
+.ant-modal .ant-modal-footer.confirm-dialog-footer {
+	margin: 0;
+	border-top: 1px solid var(--line);
+	padding: 18px 20px;
+}
+
+.ant-modal .ant-modal-body.confirm-dialog-body {
+	padding: 0 20px 18px;
 	color: var(--muted);
 	line-height: 1.5;
 }
@@ -684,10 +752,12 @@ h4.field-label {
 	font-weight: 600;
 }
 
+/* The negative margin keeps the 18px hit area without making the label row taller. */
 .help-icon.ant-btn {
 	width: 18px;
 	min-width: 18px;
 	height: 18px;
+	margin-block: -2.5px;
 	color: inherit;
 }
 
@@ -1338,7 +1408,7 @@ details summary {
 	padding: 16px;
 }
 
-.drawer-body > .policy-form-section {
+.drawer-content > .policy-form-section {
 	margin-top: 18px;
 }
 
@@ -1688,6 +1758,23 @@ details summary {
 	color: #c084fc;
 }
 
+.ant-tag.mcp-phase {
+	margin: 0;
+	padding: 0 8px;
+	font-size: 11px;
+	line-height: 21px;
+	text-transform: uppercase;
+}
+
+.ant-tag.mcp-phase.request {
+	background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+	color: var(--primary);
+}
+
+:root[data-theme='dark'] .ant-tag.mcp-phase.request {
+	color: #c084fc;
+}
+
 .mcp-processor-list {
 	display: flex;
 	flex-direction: column;
@@ -1816,15 +1903,15 @@ details summary {
 	padding: 8px;
 }
 
-.kv-row code,
-.kv-row span {
+.kv-row > code,
+.kv-row > span {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.kv-row span {
+.kv-row > span {
 	color: var(--muted);
 	font-family: var(--mono);
 	font-size: 12px;
@@ -2227,9 +2314,22 @@ details summary {
 	margin-left: -18px;
 }
 
-/* antd caps the wrapper at 100%, which would undo the negative side margins. */
+/* antd caps the wrapper at 100%, which would undo the negative side margins.
+   clip keeps cell backgrounds inside the panel's rounded corners, like main. */
 .panel > .ant-table-wrapper {
 	max-width: none;
+	overflow: clip;
+}
+
+.panel > .ant-table-wrapper :is(.ant-table, .ant-table-container, .ant-table-content) {
+	--ant-table-header-border-radius: 0;
+	border-radius: 0;
+}
+
+/* Matches the 18px edge padding below, so the empty row fits the scroll width. */
+.panel > .ant-table-wrapper .ant-table-placeholder .ant-table-expanded-row-fixed {
+	margin-inline: -18px;
+	padding-inline: 18px;
 }
 
 .panel > .table-wrap:first-child,
@@ -2350,6 +2450,11 @@ details summary {
 .muted-copy.inline {
 	display: inline;
 	margin: 0;
+}
+
+/* Hover and pressed styles apply instantly, as the old buttons did. */
+.ant-btn {
+	transition: none;
 }
 
 /* Tags read as the old bold badges; Tag has no weight token. */
@@ -3267,19 +3372,22 @@ details summary {
 }
 
 .logs-filter-bar .multi-check {
-	flex: 1 1 170px;
+	flex: 0 1 220px;
 	min-width: 170px;
-	max-width: 320px;
 }
 
 .analytics-controls-left .multi-check {
-	flex: 1 1 190px;
-	max-width: 320px;
+	flex: 0 1 220px;
 }
 
-/* Long values ellipsize, and hovering an option shows its full name. */
-.multi-check-menu.ant-select-dropdown {
-	max-width: min(480px, calc(100vw - 32px));
+/* Values are toggled in the list, so tags skip the remove button and more fit. */
+.multi-check .ant-select .ant-select-selection-item-remove {
+	display: none;
+}
+
+.multi-check .ant-select .ant-select-selection-item {
+	margin-inline: 0 2px;
+	padding-inline: 4px;
 }
 
 .analytics-controls {
@@ -3319,6 +3427,20 @@ details summary {
 
 .log-table .log-row {
 	cursor: pointer;
+}
+
+.log-table .log-row.bad > td:first-child {
+	box-shadow: inset 2.5px 0 0 var(--bad);
+}
+
+/* The 34px chevron column keeps main's 10px padding, and the negative margin
+   centres the wider button in it so the table doesn't scroll. */
+.panel > .log-table.ant-table-wrapper .ant-table tr > .ant-table-row-expand-icon-cell {
+	padding-inline: 10px;
+}
+
+.log-table .ant-table-row-expand-icon-cell > .ant-btn {
+	margin-inline: -7px;
 }
 
 .log-table.ant-table-wrapper .log-row.expanded > td,
@@ -3381,7 +3503,23 @@ details summary {
 }
 
 .ant-btn.copy-button {
+	width: auto;
+	height: auto;
+	border: 0;
+	border-radius: 4px;
 	color: var(--muted);
+	padding: 2px 4px;
+}
+
+.ant-btn.copy-button:not(:disabled):is(:hover, :active) {
+	border: 0;
+	background: var(--surface-3);
+	color: var(--text);
+}
+
+.ant-btn.copy-button.copied,
+.ant-btn.copy-button.copied:not(:disabled):is(:hover, :active) {
+	color: var(--ok);
 }
 
 .inline-link-button.ant-btn {
@@ -4541,6 +4679,167 @@ textarea {
 	max-width: min(420px, calc(100vw - 16px));
 }
 
+/* Popups keep the old 1px border, and options highlight instantly. */
+.ant-select-dropdown,
+.ant-dropdown .ant-dropdown-menu,
+.ant-picker-dropdown .ant-picker-panel-container,
+.ant-tooltip .ant-tooltip-container {
+	border: 1px solid var(--line-strong);
+}
+
+.ant-select-item,
+.ant-dropdown-menu-item,
+.ant-picker-presets li {
+	transition: none;
+}
+
+/* No token for active text; dark uses the lighter purple, as #a855f7 fails 4.5:1. */
+.ant-select-dropdown:not(.multi-check-menu)
+.ant-select-item-option-active:not(.ant-select-item-option-selected) {
+	color: var(--primary);
+}
+
+:root[data-theme='dark']
+	.ant-select-dropdown:not(.multi-check-menu)
+	.ant-select-item-option-active:not(.ant-select-item-option-selected) {
+	color: var(--primary-strong);
+}
+
+/* Grey descriptions fail contrast on the purple highlights. */
+:is(.ant-select-item-option-active, .ant-select-item-option-selected) .custom-select-copy > small {
+	color: inherit;
+}
+
+.freeform-combobox-menu.ant-select-dropdown {
+	padding: 5px;
+	border-radius: 8px;
+}
+
+.freeform-combobox-menu .ant-select-item {
+	min-height: 0;
+	border-radius: 6px;
+	font-family: var(--mono);
+	font-size: 12px;
+	font-weight: 500;
+	line-height: normal;
+}
+
+.freeform-combobox-menu .ant-select-item-option-selected {
+	font-weight: 600;
+}
+
+.multi-check-menu.ant-select-dropdown {
+	max-width: min(480px, calc(100vw - 32px));
+	padding: 8px;
+	border-radius: 8px;
+}
+
+.multi-check-menu .ant-select-item {
+	min-height: 34px;
+	align-items: center;
+	padding: 0 10px;
+	border-radius: 6px;
+	font-size: 13px;
+}
+
+.multi-check-menu .ant-select-item + .ant-select-item {
+	margin-top: 4px;
+}
+
+/* The checkbox marks selection, so rows only shade grey on hover. */
+.multi-check-menu
+.ant-select-item-option:is(.ant-select-item-option-selected, .ant-select-item-option-active) {
+	background: transparent;
+	color: var(--text);
+	font-weight: 400;
+}
+
+.multi-check-menu .ant-select-item-option.ant-select-item-option-active,
+.multi-check-option.all:hover {
+	background: var(--surface-2);
+}
+
+.multi-check-option {
+	display: grid;
+	grid-template-columns: 18px minmax(0, 1fr);
+	align-items: center;
+	gap: 10px;
+}
+
+.multi-check-option > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.multi-check-option.all {
+	width: 100%;
+	min-height: 34px;
+	margin-bottom: 4px;
+	padding: 0 10px 6px;
+	border: 0;
+	border-bottom: 1px solid var(--line);
+	border-radius: 6px 6px 0 0;
+	background: transparent;
+	color: var(--muted);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.export-dropdown-menu .ant-dropdown-menu {
+	min-width: 150px;
+}
+
+.ant-tooltip .ant-tooltip-container {
+	padding: 7px 9px;
+	font-weight: 500;
+	line-height: 1.35;
+}
+
+/* Presets read as the old side list: bold rows on a grey column. */
+.ant-picker-dropdown .ant-picker-presets {
+	background: var(--surface-2);
+}
+
+.ant-picker-dropdown .ant-picker-presets ul {
+	padding: 10px;
+	border-inline-end-color: var(--line);
+}
+
+.ant-picker-dropdown .ant-picker-presets ul li {
+	display: flex;
+	align-items: center;
+	min-height: 34px;
+	padding: 0 10px;
+	border-radius: 6px;
+	color: var(--text);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.ant-picker-dropdown .ant-picker-presets ul li + li {
+	margin-top: 2px;
+}
+
+.ant-picker-dropdown .ant-picker-presets ul li:hover {
+	background: var(--surface);
+}
+
+.ant-picker-dropdown .ant-picker-presets ul li:has(.date-range-preset.active) {
+	background: var(--accent-soft);
+	color: var(--primary);
+}
+
+:root[data-theme='dark']
+	.ant-picker-dropdown
+	.ant-picker-presets
+	ul
+	li:has(.date-range-preset.active) {
+	color: var(--primary-strong);
+}
+
 .json-block {
 	max-height: 520px;
 	overflow: auto;
@@ -4580,6 +4879,11 @@ textarea {
 	border-radius: 8px;
 	background: var(--surface);
 	padding: 14px;
+}
+
+/* Square header corners, like the old plain tables. */
+.traffic-bind .ant-table {
+	--ant-table-header-border-radius: 0;
 }
 
 .traffic-bind-header {
@@ -4756,6 +5060,11 @@ textarea {
 
 .nested-details {
 	margin-top: 8px;
+}
+
+/* antd's table scrollbar-color forces always-on scrollbars on cell content (a shown key). */
+.ant-table-cell {
+	scrollbar-color: auto;
 }
 
 .ant-table .key-cell code {
@@ -5419,13 +5728,26 @@ textarea {
 .segmented-option {
 	display: flex;
 	flex-direction: column;
-	align-items: flex-start;
+	align-items: center;
 	padding-block: 4px;
 	line-height: 1.3;
+	font-weight: 600;
+	text-align: center;
+}
+
+.ant-segmented-item-label:has(> .segmented-option) {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.ant-segmented-item-selected .segmented-option {
+	font-weight: 700;
 }
 
 .segmented-option small {
 	color: var(--muted);
+	font-weight: 400;
 	font-size: 11.5px;
 }
 
@@ -5471,6 +5793,61 @@ textarea {
 	font-weight: 700;
 }
 
+/* Bordered compact actions (key Show, Copy, Regenerate); hover only shades the background. */
+.ant-btn.table-action {
+	gap: 5px;
+	height: auto;
+	min-height: 30px;
+	border-color: var(--line-strong);
+	border-radius: 6px;
+	background: var(--surface);
+	color: var(--text);
+	padding: 0 8px;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.ant-btn.table-action:not(:disabled):hover,
+.ant-btn.table-action:not(:disabled):active {
+	border-color: var(--line-strong);
+	background: var(--surface-2);
+	color: var(--text);
+}
+
+.ant-btn.table-action.danger,
+.ant-btn.table-action.danger:not(:disabled):hover,
+.ant-btn.table-action.danger:not(:disabled):active {
+	color: var(--bad);
+}
+
+.ant-btn.table-action.copied,
+.ant-btn.table-action.copied:not(:disabled):hover,
+.ant-btn.table-action.copied:not(:disabled):active {
+	border-color: color-mix(in srgb, var(--ok) 45%, var(--line-strong));
+	color: var(--ok);
+}
+
+.key-cell .virtual-key-value .ant-btn.table-action {
+	border-color: transparent;
+	background: transparent;
+	color: var(--muted);
+	padding: 0 6px;
+}
+
+.key-cell .virtual-key-value .ant-btn.table-action:not(:disabled):hover,
+.key-cell .virtual-key-value .ant-btn.table-action:not(:disabled):active {
+	border-color: transparent;
+	background: var(--surface-3);
+	color: var(--text);
+}
+
+.key-cell .virtual-key-value .ant-btn.table-action.copied,
+.key-cell .virtual-key-value .ant-btn.table-action.copied:not(:disabled):hover,
+.key-cell .virtual-key-value .ant-btn.table-action.copied:not(:disabled):active {
+	border-color: transparent;
+	color: var(--ok);
+}
+
 .ant-btn.traffic-policy-summary,
 .ant-btn.traffic-policy-list-item {
 	display: grid;
@@ -5480,9 +5857,15 @@ textarea {
 	font-weight: 400;
 }
 
+/* A transparent border at rest, so antd's hover border never resizes the box. */
 .ant-btn.traffic-policy-summary {
+	border: 1px solid transparent;
 	border-radius: 8px;
-	padding: 13px 14px;
+	padding: 12px 13px;
+}
+
+.ant-btn.traffic-policy-summary:not(:disabled):is(:hover, :active) {
+	background: var(--surface-2);
 }
 
 .ant-btn.traffic-policy-list-item {
@@ -5494,8 +5877,14 @@ textarea {
 	margin: 0;
 }
 
+/* The checkbox lines up with the title's first line, not the middle of the card. */
 .config-option-row.ant-checkbox-wrapper {
+	align-items: flex-start;
 	margin: 0;
+}
+
+.config-option-row.ant-checkbox-wrapper .ant-checkbox {
+	align-self: flex-start;
 }
 
 .config-option-row.ant-checkbox-wrapper::after {
@@ -5577,10 +5966,14 @@ textarea {
 	display: grid;
 }
 
+/* Radio sits on the title's row, with the description under the title. */
 .option-card.ant-radio-wrapper {
+	flex-direction: row;
 	align-items: flex-start;
+	gap: 8px;
 	margin: 0;
 	min-height: 0;
+	padding: 10px 12px;
 	cursor: pointer;
 }
 
@@ -5596,9 +5989,10 @@ textarea {
 .option-card .ant-radio-label {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 3px;
 	color: var(--text);
 	font-size: 13px;
+	line-height: normal;
 }
 
 .option-card .ant-radio-label small {
@@ -5621,6 +6015,7 @@ textarea {
 	flex-direction: column;
 	gap: 3px;
 	padding: 0;
+	line-height: normal;
 }
 
 .config-chip.ant-tag {
@@ -5628,16 +6023,41 @@ textarea {
 	align-items: center;
 	gap: 4px;
 	margin: 0;
+	font-weight: 700;
 }
 
-.ant-btn.transform-section-toggle {
+.ant-btn.choice-pill {
+	height: 34px;
+	font-weight: 700;
+}
+
+/* The toggle fills the card (the top strip when open), so hover covers that whole area.
+   Its border is always there, so hover never moves the content. */
+.policy-form-section.transform-section {
+	padding: 0;
+}
+
+.transform-section > .ant-btn.transform-section-toggle {
 	display: grid;
+	width: 100%;
 	height: auto;
 	justify-content: stretch;
-	padding: 0;
+	margin: 0;
+	border: 1px solid transparent;
+	border-radius: 7px;
+	padding: 15px;
 	text-align: left;
 	white-space: normal;
 	font-weight: 400;
+}
+
+.transform-section.open > .ant-btn.transform-section-toggle {
+	border-end-start-radius: 0;
+	border-end-end-radius: 0;
+}
+
+.transform-section > .policy-form-section-body {
+	padding: 0 16px 16px;
 }
 
 .guardrail-summary-card .ant-collapse {
@@ -5645,7 +6065,7 @@ textarea {
 }
 
 /* Pixel parity with the pre-antd controls. */
-.ant-tag:not(.authz-effect, .log-status-pill, .log-op-chip, .config-chip) {
+.ant-tag:not(.authz-effect, .mcp-phase, .log-status-pill, .log-op-chip, .config-chip) {
 	min-height: 20px;
 	border-width: 0;
 	padding: 2px 7px;
@@ -5669,8 +6089,13 @@ textarea {
 	padding-inline: 10px;
 }
 
-.custom-select-value {
+.custom-select .custom-select-value {
 	max-height: 22px;
+}
+
+/* antd fades the value while open; it stays solid until the user types. */
+.custom-select.ant-select-single.ant-select-open .ant-select-content.ant-select-content-has-value {
+	opacity: 1;
 }
 
 .multi-check .ant-select {

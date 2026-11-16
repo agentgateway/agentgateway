@@ -77,6 +77,7 @@ export function CorsPolicyEditor(props: {
 				<div className="method-grid">
 					<Button
 						shape="round"
+						className="choice-pill"
 						type={allMethods ? 'primary' : 'default'}
 						aria-pressed={allMethods}
 						onClick={() => setAllMethods(current => !current)}
@@ -88,6 +89,7 @@ export function CorsPolicyEditor(props: {
 						return (
 							<Button
 								shape="round"
+								className="choice-pill"
 								type={active ? 'primary' : 'default'}
 								aria-pressed={active}
 								disabled={allMethods}

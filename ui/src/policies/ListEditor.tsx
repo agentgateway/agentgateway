@@ -62,7 +62,12 @@ export function ListEditor(props: {
 				{props.suggestions?.length ? (
 					<div className="suggestion-row">
 						{props.suggestions.map(suggestion => (
-							<Button size="small" key={suggestion} onClick={() => add(suggestion)}>
+							<Button
+								className="table-action"
+								size="small"
+								key={suggestion}
+								onClick={() => add(suggestion)}
+							>
 								{suggestion}
 							</Button>
 						))}

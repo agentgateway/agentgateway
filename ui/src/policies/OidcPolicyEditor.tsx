@@ -160,6 +160,7 @@ export function OidcPolicyEditor(props: {
 							<div className="suggestion-row">
 								{issuerSuggestions.map(suggestion => (
 									<Button
+										className="table-action"
 										size="small"
 										key={suggestion.label}
 										onClick={() => setIssuer(suggestion.value)}

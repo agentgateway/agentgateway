@@ -165,6 +165,7 @@ export function Shell() {
 					<div className="topbar-left">
 						<div className="mobile-nav">
 							<Dropdown
+								transitionName=""
 								trigger={['click']}
 								menu={{ items: menuItems, selectedKeys }}
 								classNames={{ root: 'mobile-nav-menu' }}

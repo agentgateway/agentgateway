@@ -176,7 +176,7 @@ export function AuthorizationPolicyEditor(props: {
 											/>
 										</div>
 										<Button
-											type="text"
+											className="table-action"
 											size="small"
 											icon={<Pencil size={14} />}
 											onClick={() => setEditingIndex(editing ? null : index)}
@@ -184,7 +184,7 @@ export function AuthorizationPolicyEditor(props: {
 											{editing ? 'Done' : 'Edit'}
 										</Button>
 										<ButtonLink
-											variant="text"
+											className="table-action"
 											size="small"
 											icon={<Braces size={14} />}
 											to="/cel"
@@ -195,9 +195,8 @@ export function AuthorizationPolicyEditor(props: {
 											Playground
 										</ButtonLink>
 										<Button
-											type="text"
+											className="table-action danger"
 											size="small"
-											danger
 											icon={<Trash2 size={14} />}
 											onClick={() => removeRule(index)}
 										>

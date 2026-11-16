@@ -10,6 +10,7 @@ const palettes = {
 	light: {
 		primary: '#8023c3',
 		primaryText: '#8023c3',
+		primaryStrong: '#681aa2',
 		bg: '#f8f9fb',
 		surface: '#ffffff',
 		surface2: '#f3f4f6',
@@ -30,12 +31,17 @@ const palettes = {
 		// surface-2 55% over surface, as the old table header.
 		tableHeaderBg: '#f8f9fa',
 		buttonBorder: '#d1d5db',
+		popoverShadow: '0 6px 14px rgb(16 24 40 / 0.08)',
+		// Selected menu option: a deeper tint than hover, 6:1 text.
+		optionSelectedBg: '#e2c6fa',
+		optionSelectedText: '#681aa2',
 		tagBg: 'rgba(21, 25, 39, 0.07)',
 		tagText: 'rgba(21, 25, 39, 0.85)'
 	},
 	dark: {
 		primary: '#9333ea',
 		primaryText: '#c084fc',
+		primaryStrong: '#c084fc',
 		bg: '#030712',
 		surface: '#10141f',
 		surface2: '#1c2029',
@@ -55,6 +61,9 @@ const palettes = {
 		infoBg: '#102235',
 		tableHeaderBg: '#171b25',
 		buttonBorder: '#374151',
+		popoverShadow: '0 8px 18px rgb(0 0 0 / 0.24)',
+		optionSelectedBg: '#44206a',
+		optionSelectedText: '#e9d5ff',
 		tagBg: 'rgba(242, 245, 248, 0.07)',
 		tagText: 'rgba(242, 245, 248, 0.85)'
 	}
@@ -66,6 +75,12 @@ function themeConfig(mode: ThemeMode): ThemeConfig {
 	return {
 		algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
 		token: {
+			// Dialogs, drawers and popups appear instantly, as the old ones did.
+			motion: false,
+			// Selects, menus, pickers and tooltips share the old popover shadow.
+			boxShadowSecondary: c.popoverShadow,
+			// Drawer and dialog backdrops, as the old ones.
+			colorBgMask: 'rgb(3 7 18 / 0.35)',
 			colorPrimary: c.primary,
 			colorBgBase: c.bg,
 			colorTextBase: c.text,
@@ -115,6 +130,16 @@ function themeConfig(mode: ThemeMode): ThemeConfig {
 				contentFontSizeSM: 12,
 				paddingInlineSM: 8,
 				defaultBorderColor: c.buttonBorder,
+				defaultColor: c.text,
+				// Hover and press only shade the background, as the old buttons did.
+				defaultHoverBg: c.surface2,
+				defaultHoverColor: c.text,
+				defaultHoverBorderColor: c.buttonBorder,
+				defaultActiveBg: c.surface2,
+				defaultActiveColor: c.text,
+				defaultActiveBorderColor: c.buttonBorder,
+				colorPrimaryHover: c.primaryStrong,
+				colorPrimaryActive: c.primaryStrong,
 				// Disabled buttons fade instead (styles.css), so keep their enabled colours.
 				colorBgContainerDisabled: c.surface,
 				colorTextDisabled: c.text,
@@ -155,9 +180,39 @@ function themeConfig(mode: ThemeMode): ThemeConfig {
 				controlHeight: 40,
 				// Arrow and clear icons, which were text-coloured before.
 				colorTextQuaternary: c.text,
-				optionSelectedBg: c.accentSoft
+				// Active options are light purple as the old menus; selected ones a deeper purple.
+				optionHeight: 36,
+				optionPadding: '7px 8px',
+				optionActiveBg: c.accentSoft,
+				optionSelectedBg: c.optionSelectedBg,
+				optionSelectedColor: c.optionSelectedText,
+				optionSelectedFontWeight: 500,
+				controlItemBgActiveHover: c.optionSelectedBg,
+				borderRadiusLG: 6
 			},
-			DatePicker: { ...control, colorTextQuaternary: c.text },
+			DatePicker: { ...control, colorTextQuaternary: c.text, presetsWidth: 180 },
+			Dropdown: {
+				paddingBlock: 8,
+				controlPaddingHorizontal: 10,
+				fontSize: 13,
+				lineHeight: 16 / 13,
+				paddingXXS: 6,
+				borderRadiusSM: 6,
+				controlItemBgHover: c.surface2
+			},
+			// Paddings and the footer divider live in styles.css (.confirm-dialog).
+			Modal: {
+				titleFontSize: 16,
+				titleLineHeight: 21 / 16,
+				fontWeightStrong: 700,
+				borderRadiusLG: 8
+			},
+			Tooltip: {
+				colorBgSpotlight: c.surface,
+				colorTextLightSolid: c.text,
+				fontSize: 12,
+				maxWidth: 260
+			},
 			Tabs: {
 				itemSelectedColor: c.primaryText,
 				itemHoverColor: c.primaryText,
@@ -170,9 +225,12 @@ function themeConfig(mode: ThemeMode): ThemeConfig {
 			},
 			Segmented: {
 				trackBg: c.surface2,
-				itemSelectedBg: mode === 'dark' ? c.line : c.surface,
-				itemSelectedColor: c.text,
-				...(mode === 'dark' ? { boxShadowTertiary: `0 0 0 1px ${c.lineStrong}` } : {})
+				itemColor: c.muted,
+				itemHoverColor: c.text,
+				itemSelectedBg: c.accentSoft,
+				itemSelectedColor: c.primaryText,
+				// Outlines the selected option so it reads at a glance in both themes.
+				boxShadowTertiary: `0 0 0 1px ${c.primaryText}`
 			},
 			// Uppercase and letter-spacing for headers live in styles.css (no tokens for them).
 			Table: {
@@ -221,7 +279,12 @@ export function ThemeProvider(props: { children: ReactNode }) {
 	return (
 		<ThemeContext.Provider value={{ theme, toggleTheme }}>
 			{/* virtual={false}: virtual lists render options without role="option". */}
-			<ConfigProvider theme={themeConfig(theme)} virtual={false} tag={{ variant: 'filled' }}>
+			<ConfigProvider
+				theme={themeConfig(theme)}
+				virtual={false}
+				wave={{ disabled: true }}
+				tag={{ variant: 'filled' }}
+			>
 				<AntApp component={false}>{props.children}</AntApp>
 			</ConfigProvider>
 		</ThemeContext.Provider>

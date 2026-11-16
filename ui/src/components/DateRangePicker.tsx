@@ -46,6 +46,7 @@ export function DateRangePicker(props: {
 
 	return (
 		<RangePicker
+			transitionName=""
 			ref={pickerRef}
 			className={presetLabel ? 'date-range-picker is-preset' : 'date-range-picker'}
 			aria-label="Time range"
@@ -58,7 +59,17 @@ export function DateRangePicker(props: {
 			}
 			prefix={<CalendarDays size={16} />}
 			presets={RANGE_PRESETS.map(preset => ({
-				label: preset.label,
+				label: (
+					<span
+						className={
+							props.value.mode === 'preset' && props.value.preset === preset.value
+								? 'date-range-preset active'
+								: 'date-range-preset'
+						}
+					>
+						{preset.label}
+					</span>
+				),
 				value: () => {
 					const range = presetAbsoluteRange(preset.value);
 					return [dayjs(range.fromLocal), dayjs(range.toLocal)];

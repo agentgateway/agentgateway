@@ -89,9 +89,8 @@ export function KeyValueEditor(props: {
 							<code>{key}</code>
 							<span>{value}</span>
 							<Button
+								className="table-action danger"
 								size="small"
-								danger
-								type="text"
 								onClick={() => {
 									const next = { ...props.values };
 									delete next[key];

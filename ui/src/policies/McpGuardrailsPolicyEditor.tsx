@@ -146,9 +146,8 @@ export function McpGuardrailsPolicyEditor(props: {
 									{processor.failureMode === 'failOpen' ? 'Fail open' : 'Fail closed'}
 								</Tag>
 								<Button
-									type="text"
+									className="table-action danger"
 									size="small"
-									danger
 									icon={<Trash2 size={14} />}
 									onClick={() => removeProcessor(index)}
 								>
@@ -237,11 +236,12 @@ function MethodPhaseEditor(props: {
 						{entries.map(([key, value]) => (
 							<div className="mcp-method-row" key={key}>
 								<code>{key}</code>
-								<Tag color={phaseColor[value]}>{phaseLabel(value)}</Tag>
+								<Tag className={`mcp-phase ${value}`} color={phaseColor[value]}>
+									{phaseLabel(value)}
+								</Tag>
 								<Button
-									type="text"
+									className="table-action danger"
 									size="small"
-									danger
 									onClick={() => {
 										const next = { ...props.methods };
 										delete next[key];

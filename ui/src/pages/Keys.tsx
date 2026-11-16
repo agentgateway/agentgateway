@@ -328,6 +328,7 @@ export function KeysPage() {
 									<div className="row-actions">
 										<Tooltip content="Edit key">
 											<Button
+												className="table-action"
 												size="small"
 												aria-label="Edit key"
 												icon={<Pencil size={14} />}
@@ -344,8 +345,8 @@ export function KeysPage() {
 											}
 										>
 											<Button
+												className="table-action danger"
 												size="small"
-												danger
 												aria-label="Delete key"
 												icon={<Trash2 size={14} />}
 												disabled={saving || (hybrid && !databaseKeyId(item))}
@@ -865,7 +866,7 @@ function KeyEditor(props: {
 							<>
 								<VirtualKeyValue apiKey={replaceKey ? { key } : props.initial} />
 								<Button
-									size="small"
+									className="table-action"
 									icon={<RefreshCw size={14} />}
 									onClick={() => {
 										setKey(newGeneratedKey());
@@ -879,7 +880,7 @@ function KeyEditor(props: {
 							<>
 								{replaceKey ? keyInput : <VirtualKeyValue apiKey={props.initial} />}
 								<Button
-									size="small"
+									className="table-action"
 									icon={replaceKey ? <X size={14} /> : <Pencil size={14} />}
 									onClick={() => setReplaceKey(current => !current)}
 								>
@@ -1079,6 +1080,7 @@ function BudgetEditor(props: {
 									</div>
 									<div className="button-row compact">
 										<Button
+											className="table-action"
 											size="small"
 											icon={editing ? <Check size={14} /> : <Pencil size={14} />}
 											onClick={() => setEditingIndex(editing ? null : index)}
@@ -1086,8 +1088,8 @@ function BudgetEditor(props: {
 											{editing ? 'Done' : 'Edit'}
 										</Button>
 										<Button
+											className="table-action danger"
 											size="small"
-											danger
 											aria-label={`Remove budget ${index + 1}`}
 											icon={<Trash2 size={14} />}
 											onClick={() => removeBudget(index)}
@@ -1381,8 +1383,7 @@ function VirtualKeyValue(props: { apiKey: VirtualApiKey; revealed?: boolean }) {
 			<div className="virtual-key-value-actions">
 				<Tooltip content={shown ? 'Hide full key' : 'Show full key'}>
 					<Button
-						size="small"
-						type="text"
+						className="table-action"
 						aria-label={shown ? 'Hide full key' : 'Show full key'}
 						icon={shown ? <EyeOff size={14} /> : <Eye size={14} />}
 						onClick={() => setShown(current => !current)}
@@ -1392,10 +1393,7 @@ function VirtualKeyValue(props: { apiKey: VirtualApiKey; revealed?: boolean }) {
 				</Tooltip>
 				<Tooltip content={copied ? 'Copied' : 'Copy key'}>
 					<Button
-						size="small"
-						type="text"
-						color={copied ? 'green' : 'default'}
-						variant="text"
+						className={copied ? 'table-action copied' : 'table-action'}
 						aria-label="Copy key"
 						icon={copied ? <Check size={14} /> : <Copy size={14} />}
 						onClick={() => {

@@ -947,8 +947,11 @@ function AnalyticsExportDropdown(props: {
 }) {
 	return (
 		<AntDropdown
+			transitionName=""
 			disabled={props.disabled}
 			trigger={['click']}
+			placement="bottomRight"
+			rootClassName="export-dropdown-menu"
 			menu={{
 				items: [{ key: 'csv', label: 'CSV' }],
 				onClick: () => downloadAnalyticsCsv(props.buckets, props.groupBy)

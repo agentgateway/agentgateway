@@ -570,13 +570,17 @@ function GuardCard(props: {
 					<strong>{guardKindLabel(props.guard.kind)}</strong>
 				</span>
 				<div className="button-row compact">
-					<Button type="text" size="small" icon={<Pencil size={14} />} onClick={props.onEdit}>
+					<Button
+						className="table-action"
+						size="small"
+						icon={<Pencil size={14} />}
+						onClick={props.onEdit}
+					>
 						Edit
 					</Button>
 					<Button
-						type="text"
+						className="table-action danger"
 						size="small"
-						danger
 						icon={<Trash2 size={14} />}
 						onClick={props.onRemove}
 					>
@@ -1320,7 +1324,6 @@ function PatternList(props: {
 					/>
 					<Button
 						className="guardrail-pattern-remove"
-						type="text"
 						danger
 						aria-label="Remove pattern"
 						icon={<Trash2 size={16} />}

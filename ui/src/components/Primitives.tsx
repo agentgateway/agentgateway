@@ -22,6 +22,7 @@ import {
 	XCircle
 } from 'lucide-react';
 import type {
+	ComponentProps,
 	ReactElement,
 	KeyboardEvent as ReactKeyboardEvent,
 	MouseEvent as ReactMouseEvent,
@@ -50,6 +51,13 @@ import {
 	schemaRequires
 } from '@/configValidation';
 import { useSchemaHelp } from '@/schemaHelp';
+
+// antd marks select search inputs autocomplete="new-password", which opens browser and
+// password manager suggestions on every searchable dropdown.
+function NoAutofillInput(props: ComponentProps<'input'>) {
+	return <input {...props} autoComplete="off" />;
+}
+export const selectComponents = { input: NoAutofillInput };
 
 // Router link styled as an antd Button. It drops `type`, so use `color="primary" variant="solid"`.
 export const ButtonLink = createLink(Button);
@@ -220,6 +228,7 @@ export function Dropdown(props: {
 	);
 	return (
 		<Select
+			components={selectComponents}
 			className={['custom-select', props.className].filter(Boolean).join(' ')}
 			id={props.id}
 			aria-label={props.ariaLabel}
@@ -240,6 +249,10 @@ export function Dropdown(props: {
 			suffixIcon={<ChevronDown size={16} />}
 			classNames={{ popup: { root: 'custom-select-menu' } }}
 			popupMatchSelectWidth={false}
+			// The old menu capped at 280px including its padding and border.
+			listHeight={270}
+			// Opens without the slide; theme motion: false still runs one hidden frame.
+			transitionName=""
 			labelRender={item => {
 				const option = byValue.get(String(item.value));
 				return option ? <DropdownOptionContent option={option} /> : item.label;
@@ -297,6 +310,7 @@ export function SegmentedControl<T extends string>(props: {
 }) {
 	return (
 		<Segmented<T>
+			block
 			className={props.className}
 			aria-label={props.ariaLabel}
 			value={props.value}
@@ -324,8 +338,10 @@ export function Tooltip(props: {
 	const focusDelays = { focusDelay: 0.01, blurDelay: 0.01 };
 	return (
 		<AntTooltip
+			motion={{ motionName: '' }}
 			title={formatTooltipContent(props.content)}
 			placement={props.side ?? 'top'}
+			arrow={false}
 			trigger={['hover', 'focus']}
 			{...focusDelays}
 		>
@@ -672,17 +688,28 @@ export function ConfirmDialog(props: {
 	return (
 		<Modal
 			open
+			transitionName=""
+			maskTransitionName=""
+			// Above antd's deepest drawer stack (base 1000 + up to 1000), so a confirm is never hidden.
+			zIndex={2100}
 			width={420}
+			centered
+			closable={false}
 			title={props.title}
 			onCancel={props.onCancel}
-			classNames={{ body: 'confirm-dialog-body' }}
+			classNames={{
+				container: 'confirm-dialog',
+				header: 'confirm-dialog-header',
+				body: 'confirm-dialog-body',
+				footer: 'confirm-dialog-footer'
+			}}
 			footer={
 				<>
 					{props.cancelLabel === null ? null : (
 						<Button onClick={props.onCancel}>{props.cancelLabel ?? 'Cancel'}</Button>
 					)}
 					<Button
-						type="primary"
+						type={props.destructive ? 'default' : 'primary'}
 						danger={props.destructive}
 						disabled={props.confirmDisabled}
 						onClick={props.onConfirm}
