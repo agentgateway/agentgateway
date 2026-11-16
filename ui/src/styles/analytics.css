@@ -5,11 +5,19 @@
 	align-items: end;
 }
 
+/* minmax(0, 1fr) keeps a long tag from widening the field, which made antd's tag count flicker. */
 .multi-check {
 	position: relative;
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	min-width: 190px;
 	gap: 6px;
+}
+
+/* Leaves room for the "+n" tag, so a long first value is cut off rather than hidden. */
+.multi-check
+.ant-select-content-item:not(.ant-select-content-item-rest, .ant-select-content-item-suffix) {
+	max-width: calc(100% - 40px);
 }
 
 .multi-check > span {
