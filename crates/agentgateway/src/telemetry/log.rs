@@ -1493,6 +1493,15 @@ impl Drop for DropOnLog {
 			};
 
 			let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
+			// HTTP requests always record a status and reason once a response is produced, so missing
+			// both means the request was dropped because the client went away.
+			let downstream_disconnect = !is_tcp && log.status.is_none() && log.reason.is_none();
+			if downstream_disconnect {
+				log.reason = Some(ProxyResponseReason::DownstreamDisconnect);
+				log
+					.error
+					.get_or_insert_with(|| "client disconnected before response".to_string());
+			}
 
 			let mut http_labels = HTTPLabels {
 				backend: log
@@ -1561,7 +1570,10 @@ impl Drop for DropOnLog {
 				source_context: log.source_context.as_ref(),
 				upstream_calls: Some(&upstream_calls),
 			});
-			if let Some(rh) = request_handle {
+			// A client disconnect says nothing about the backend's health, so no result is recorded.
+			if let Some(rh) = request_handle
+				&& !downstream_disconnect
+			{
 				log.finish_request_handle(rh, end_time, &cel_exec);
 			}
 
@@ -3729,6 +3741,30 @@ mod tests {
 
 		log.grpc_status.store(Some(0));
 		assert!(!DropOnLog::default_unhealthy(&log));
+	}
+
+	#[test]
+	fn downstream_disconnect_does_not_affect_backend_health() {
+		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
+		let info = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+
+		// No response was produced: the client went away mid-request.
+		let (mut log, registry) = test_request_log_with_registry();
+		log.request_handle = Some(endpoints.start_request("ep".into(), &info));
+		drop(DropOnLog::from(log));
+		assert_eq!(info.consecutive_failures(), 0);
+		assert!(
+			encoded_metrics(&registry).contains("reason=\"DownstreamDisconnect\""),
+			"{}",
+			encoded_metrics(&registry)
+		);
+
+		let mut log = test_request_log();
+		log.status = Some(http::StatusCode::SERVICE_UNAVAILABLE);
+		log.reason = Some(ProxyResponseReason::Upstream);
+		log.request_handle = Some(endpoints.start_request("ep".into(), &info));
+		drop(DropOnLog::from(log));
+		assert_eq!(info.consecutive_failures(), 1);
 	}
 
 	#[test]
