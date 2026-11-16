@@ -1138,12 +1138,14 @@ impl ActiveHandle {
 	pub fn finish_request(
 		self,
 		success: bool,
-		latency: Duration,
+		latency: Option<Duration>,
 		eviction_time: Option<Duration>,
 		restore_health: Option<f64>,
 	) {
 		if success {
-			self.info.request_latency.record(latency.as_secs_f64());
+			if let Some(latency) = latency {
+				self.info.request_latency.record(latency.as_secs_f64());
+			}
 			self.info.health.record(1.0);
 			self
 				.info
@@ -1463,7 +1465,7 @@ mod tests {
 		let handle = eps.start_request(key.clone(), &info);
 		handle.finish_request(
 			false,
-			Duration::from_millis(10),
+			Some(Duration::from_millis(10)),
 			Some(Duration::from_millis(100)),
 			Some(1.0),
 		);
@@ -1493,7 +1495,7 @@ mod tests {
 		// First failure starts a 100ms eviction window.
 		eps.start_request(key.clone(), &info).finish_request(
 			false,
-			Duration::from_millis(10),
+			Some(Duration::from_millis(10)),
 			Some(Duration::from_millis(100)),
 			Some(1.0),
 		);
@@ -1503,7 +1505,7 @@ mod tests {
 		// the eviction CAS no-ops, so counting it would inflate the multiplier.
 		eps.start_request(key.clone(), &info).finish_request(
 			false,
-			Duration::from_millis(10),
+			Some(Duration::from_millis(10)),
 			Some(Duration::from_millis(100)),
 			Some(1.0),
 		);
@@ -1525,7 +1527,7 @@ mod tests {
 		let handle = eps.start_request(key.clone(), &info);
 		handle.finish_request(
 			false,
-			Duration::from_millis(10),
+			Some(Duration::from_millis(10)),
 			Some(Duration::from_millis(100)),
 			Some(0.0),
 		);
@@ -1562,7 +1564,7 @@ mod tests {
 		let handle = eps.start_request(key.clone(), &info);
 		handle.finish_request(
 			false,
-			Duration::from_millis(10),
+			Some(Duration::from_millis(10)),
 			Some(Duration::from_millis(100)),
 			None,
 		);

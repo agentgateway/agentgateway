@@ -846,6 +846,9 @@ impl DropOnLog {
 		log: &RequestLog,
 		status: Option<crate::http::StatusCode>,
 	) -> bool {
+		if matches!(log.backend_protocol, Some(cel::BackendProtocol::tcp)) {
+			return log.backend_connect_failed;
+		}
 		status.is_none_or(|s| s.is_server_error())
 			|| log.grpc_status.load().is_some_and(|status| {
 				// Only codes indicating a backend failure; client-induced codes (INVALID_ARGUMENT,
@@ -1181,6 +1184,7 @@ impl RequestLog {
 			ate_router_route_duration: None,
 			ate_router_outcome: None,
 			request_handle: None,
+			backend_connect_failed: false,
 			request_snapshot: None,
 			response_snapshot: None,
 			source_context: None,
@@ -1248,12 +1252,10 @@ impl RequestLog {
 			rh.times_ejected(),
 			unhealthy,
 		);
-		rh.finish_request(
-			health,
-			end_time.duration_since(&self.start),
-			eviction_duration,
-			restore_health,
-		);
+		// A TCP connection's lifetime is not a response latency.
+		let latency = (!matches!(self.backend_protocol, Some(cel::BackendProtocol::tcp)))
+			.then(|| end_time.duration_since(&self.start));
+		rh.finish_request(health, latency, eviction_duration, restore_health);
 	}
 
 	pub(crate) fn finalize_request_handle_for_attempt(
@@ -1349,6 +1351,8 @@ pub struct RequestLog {
 
 	pub retry_attempt: Option<u8>,
 	pub error: Option<String>,
+	/// For TCP, whether the connection to the backend could not be established.
+	pub backend_connect_failed: bool,
 
 	pub grpc_status: AsyncLog<u8>,
 	pub mcp_status: AsyncLog<mcp::MCPInfo>,
@@ -1493,9 +1497,9 @@ impl Drop for DropOnLog {
 			};
 
 			let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
-			// HTTP requests always record a status and reason once a response is produced, so missing
-			// both means the request was dropped because the client went away.
-			let downstream_disconnect = !is_tcp && log.status.is_none() && log.reason.is_none();
+			// HTTP requests record a status once the final response is produced, so a missing status
+			// means the request was dropped because the client went away.
+			let downstream_disconnect = !is_tcp && log.status.is_none();
 			if downstream_disconnect {
 				log.reason = Some(ProxyResponseReason::DownstreamDisconnect);
 				log
@@ -3748,8 +3752,9 @@ mod tests {
 		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
 		let info = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
 
-		// No response was produced: the client went away mid-request.
+		// The client went away while the upstream response was still being processed.
 		let (mut log, registry) = test_request_log_with_registry();
+		log.reason = Some(ProxyResponseReason::Upstream);
 		log.request_handle = Some(endpoints.start_request("ep".into(), &info));
 		drop(DropOnLog::from(log));
 		assert_eq!(info.consecutive_failures(), 0);
