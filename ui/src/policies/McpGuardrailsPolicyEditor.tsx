@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
+import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { EmptyState, Field, FieldGroup, StatusBanner } from '@/components/Primitives';
 import type { Processor } from '@/gateway-config';
 import { KeyValueEditor } from '@/policies/PolicyFormControls';
@@ -196,11 +197,12 @@ export function McpGuardrailsPolicyEditor(props: {
 								</button>
 							</div>
 
-							<FieldGroup label="Type">
+							<FieldGroup label="Type" tooltip={props.help.field<Processor>('Processor', 'kind')}>
 								<EnumSelector
 									ariaLabel={`Processor ${index + 1} type`}
 									value={processor.kind}
 									options={kindOptions}
+									schema={props.help.fieldNode<Processor>('Processor', 'kind')}
 									onChange={value => updateProcessor(index, { kind: value as Kind })}
 								/>
 							</FieldGroup>
@@ -346,23 +348,25 @@ function ExpressionControls(props: {
 	const { processor } = props;
 	return (
 		<div className="policy-editor-stack">
-			<Field
+			<FieldGroup
 				label="Condition"
 				hint="Optional. When empty, the action applies to every matched method."
 				tooltip={props.help.propertyDescription('Processor', ['condition'])}
 			>
-				<input
-					className="mono-input"
+				<MiniMonacoEditor
+					className="micro"
+					language="cel"
 					value={processor.condition}
-					onChange={event => props.onChange({ condition: event.target.value })}
+					onChange={condition => props.onChange({ condition })}
 					placeholder={'mcp.tool.name == "delete_repo"'}
 				/>
-			</Field>
+			</FieldGroup>
 			<FieldGroup label="Action">
 				<EnumSelector
 					ariaLabel={`Processor ${props.index + 1} action`}
 					value={processor.action}
 					options={actionOptions}
+					schema={props.help.node(['$defs', 'Processor', 'oneOf', 1])}
 					onChange={value => props.onChange({ action: value as Action })}
 				/>
 			</FieldGroup>
@@ -378,18 +382,17 @@ function ExpressionControls(props: {
 					/>
 				</Field>
 			) : (
-				<Field
+				<FieldGroup
 					label="Transform"
 					tooltip={props.help.propertyDescription('Processor', ['transform'])}
 				>
-					<textarea
-						className="mono-input"
-						rows={3}
+					<MiniMonacoEditor
+						language="cel"
 						value={processor.transform}
-						onChange={event => props.onChange({ transform: event.target.value })}
+						onChange={transform => props.onChange({ transform })}
 						placeholder={'merge(mcp.params, {"arguments": {...}})'}
 					/>
-				</Field>
+				</FieldGroup>
 			)}
 		</div>
 	);
