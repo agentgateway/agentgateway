@@ -38,7 +38,21 @@ info:
 {
   "request": {
     "model": "gemini-decision-1",
-    "input": "[{\"role\":\"user\",\"content\":\"{\\\"reset_worked\\\":true}\\nThe user can log in now.\"}]",
+    "input": [
+      {
+        "type": "user_input",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"reset_worked\":true}"
+          },
+          {
+            "type": "text",
+            "text": "The user can log in now."
+          }
+        ]
+      }
+    ],
     "questions": {
       "q_0": {
         "type": "noul",
@@ -52,10 +66,10 @@ info:
         "type": "choice",
         "instructions": "Pick a typed outcome.",
         "criteria": {
-          "o_000": "Boolean value true. Resolved.",
-          "o_001": "String value \"true\".",
-          "o_002": "String value \"true_\".",
-          "o_003": "Boolean value false. Unresolved."
+          "o_000": "true: Resolved.",
+          "o_001": "true",
+          "o_002": "true_",
+          "o_003": "false: Unresolved."
         }
       },
       "q_3": {

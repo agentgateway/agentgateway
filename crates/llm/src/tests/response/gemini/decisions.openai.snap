@@ -91,7 +91,7 @@ info:
             "probability": 0.12
           }
         ],
-        "confidence": 0.88
+        "confidence": 0.76
       },
       {
         "type": "choice",
@@ -111,7 +111,7 @@ info:
             "probability": 0.03
           }
         ],
-        "confidence": 0.77
+        "confidence": 0.655
       },
       {
         "type": "score",
@@ -134,7 +134,7 @@ info:
             "probability": 0.2
           }
         ],
-        "confidence": 0.7
+        "confidence": 0.5499999999999999
       },
       {
         "type": "predicate",

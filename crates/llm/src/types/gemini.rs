@@ -855,8 +855,49 @@ pub mod decisions {
 	#[derive(Debug, Serialize)]
 	pub struct Request {
 		pub model: String,
-		pub input: String,
+		pub input: Input,
 		pub questions: IndexMap<String, Question>,
+	}
+
+	#[derive(Debug, Serialize)]
+	#[serde(untagged)]
+	pub enum Input {
+		Text(String),
+		Steps(Vec<Step>),
+	}
+
+	#[derive(Debug, Serialize)]
+	#[serde(tag = "type", rename_all = "snake_case")]
+	pub enum Step {
+		UserInput { content: Vec<Content> },
+	}
+
+	#[derive(Debug, Serialize)]
+	#[serde(tag = "type", rename_all = "snake_case")]
+	pub enum Content {
+		Text {
+			text: String,
+		},
+		Image {
+			#[serde(flatten)]
+			source: ImageSource,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			resolution: Option<MediaResolution>,
+		},
+	}
+
+	#[derive(Debug, Serialize)]
+	#[serde(untagged)]
+	pub enum ImageSource {
+		Data { data: String, mime_type: String },
+		Uri { uri: String },
+	}
+
+	#[derive(Debug, Serialize)]
+	#[serde(rename_all = "snake_case")]
+	pub enum MediaResolution {
+		Low,
+		High,
 	}
 
 	#[derive(Debug, Serialize)]
@@ -907,12 +948,17 @@ pub mod decisions {
 		Choice {
 			choice: String,
 			probabilities: IndexMap<String, f64>,
-			confidence: f64,
+			// Gemini reports the top probability, unlike the TypeSafe/OpenAI confidence that is
+			// calculated for clients. Kept for possible future use; not sent to clients.
+			#[allow(dead_code)]
+			confidence: Option<f64>,
 		},
 		Score {
 			score: serde_json::Number,
 			probabilities: IndexMap<String, f64>,
-			confidence: f64,
+			// See Choice::confidence.
+			#[allow(dead_code)]
+			confidence: Option<f64>,
 		},
 	}
 }

@@ -79,7 +79,7 @@ info:
             "probability": 0.05
           }
         ],
-        "confidence": 0.7
+        "confidence": 0.6
       },
       {
         "type": "score",
@@ -102,7 +102,7 @@ info:
             "probability": 0.85
           }
         ],
-        "confidence": 0.85
+        "confidence": 0.7
       }
     ]
   },

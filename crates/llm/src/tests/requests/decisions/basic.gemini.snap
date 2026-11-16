@@ -16,7 +16,17 @@ info:
 {
   "request": {
     "model": "gpt-6-luna",
-    "input": "[{\"role\":\"user\",\"content\":\"The package was left in the rain and the box is soaked through.\"}]",
+    "input": [
+      {
+        "type": "user_input",
+        "content": [
+          {
+            "type": "text",
+            "text": "The package was left in the rain and the box is soaked through."
+          }
+        ]
+      }
+    ],
     "questions": {
       "q_0": {
         "type": "noul",

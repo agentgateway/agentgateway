@@ -44,8 +44,8 @@ info:
         "type": "choice",
         "instructions": "What is the ticket about?",
         "criteria": {
-          "o_000": "{\"examples\":[\"cracked\",\"dented\"]}",
-          "o_001": "Late or lost"
+          "o_000": "damage: {\"examples\":[\"cracked\",\"dented\"]}",
+          "o_001": "shipping: Late or lost"
         }
       },
       "q_2": {

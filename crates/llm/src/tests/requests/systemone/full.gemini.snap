@@ -57,7 +57,7 @@ info:
         "type": "choice",
         "instructions": "What is the ticket about?",
         "criteria": {
-          "o_000": "Item arrived damaged",
+          "o_000": "damage: Item arrived damaged",
           "o_001": "shipping"
         }
       },

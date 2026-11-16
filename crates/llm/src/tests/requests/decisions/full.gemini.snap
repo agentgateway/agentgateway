@@ -49,7 +49,30 @@ info:
 {
   "request": {
     "model": "gpt-6-luna",
-    "input": "[{\"role\":\"user\",\"content\":\"My order arrived with a cracked screen.\"},{\"role\":\"user\",\"content\":\"I want my money back.\\nThis is the second time.\"}]",
+    "input": [
+      {
+        "type": "user_input",
+        "content": [
+          {
+            "type": "text",
+            "text": "My order arrived with a cracked screen."
+          }
+        ]
+      },
+      {
+        "type": "user_input",
+        "content": [
+          {
+            "type": "text",
+            "text": "I want my money back."
+          },
+          {
+            "type": "text",
+            "text": "This is the second time."
+          }
+        ]
+      }
+    ],
     "questions": {
       "q_0": {
         "type": "noul",
@@ -63,24 +86,24 @@ info:
         "type": "choice",
         "instructions": "What is the ticket about?",
         "criteria": {
-          "o_000": "Item arrived damaged",
-          "o_001": "String value \"shipping\"."
+          "o_000": "damage: Item arrived damaged",
+          "o_001": "shipping"
         }
       },
       "q_3": {
         "type": "choice",
         "instructions": "Has this happened before?",
         "criteria": {
-          "o_000": "Boolean value true.",
-          "o_001": "Boolean value false.",
-          "o_002": "String value \"unsure\"."
+          "o_000": "true",
+          "o_001": "false",
+          "o_002": "unsure"
         }
       },
       "q_4": {
         "type": "score",
         "instructions": "How urgent is this ticket?",
         "criteria": [
-          "{\"label\":\"Low\",\"description\":\"Can wait\"}",
+          "Low: Can wait",
           "Medium",
           "High"
         ]

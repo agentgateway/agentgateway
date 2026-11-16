@@ -40,19 +40,8 @@ pub mod from_systemone {
 		{
 			return Err(AIError::UnsupportedContent);
 		}
-		if let Some(fields) = req.rest.as_object()
-			&& let Some(field) = fields
-				.keys()
-				.find(|field| !matches!(field.as_str(), "state" | "questions" | "assets"))
-		{
-			return Err(AIError::UnsupportedConversion(
-				format!("unsupported SystemOne field {field:?}").into(),
-			));
-		}
-		validate_systemone_questions(req.rest.get("questions"))?;
 		let req: systemone::typed::Request =
 			json::convert(req).map_err(|err| AIError::RequestParsing(InputFormat::SystemOne, err))?;
-		validate_question_count(req.questions.len(), 1000)?;
 		let mut state = State {
 			model: req.model.clone(),
 			questions: IndexMap::new(),
@@ -82,10 +71,13 @@ pub mod from_systemone {
 					let mut translated = IndexMap::new();
 					for (i, (value, description)) in criteria.into_iter().enumerate() {
 						let key = option_key(i);
-						let description = description
+						let description = match description
 							.map(text)
 							.filter(|description| !description.trim().is_empty())
-							.unwrap_or_else(|| value.clone());
+						{
+							Some(description) => format!("{value}: {description}"),
+							None => value.clone(),
+						};
 						translated.insert(key.clone(), description);
 						values.insert(key, value);
 					}
@@ -102,14 +94,7 @@ pub mod from_systemone {
 					criteria,
 				} => {
 					validate_option_count(criteria.len(), "score levels")?;
-					let translated = criteria
-						.iter()
-						.map(|criterion| {
-							let criterion = text(criterion.clone());
-							validate_nonempty_criterion(&criterion)?;
-							Ok(criterion)
-						})
-						.collect::<Result<_, AIError>>()?;
+					let translated = criteria.iter().cloned().map(text).collect();
 					(
 						QuestionState::Score(criteria),
 						google::Question::Score {
@@ -125,7 +110,7 @@ pub mod from_systemone {
 		}
 		let body = serde_json::to_vec(&google::Request {
 			model: req.model,
-			input: text(req.state),
+			input: google::Input::Text(text(req.state)),
 			questions,
 		})
 		.map_err(AIError::RequestMarshal)?;
@@ -135,22 +120,22 @@ pub mod from_systemone {
 	pub fn translate_response(bytes: &[u8], state: &State) -> Result<Vec<u8>, AIError> {
 		let resp: google::Response = serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
 		let mut answers = IndexMap::new();
-		for (key, (name, question), answer) in take_answers(resp.answers, &state.questions)? {
+		for ((name, question), answer) in take_answers(resp.answers, &state.questions) {
 			let answer = match (answer, question) {
 				(google::Answer::Noul { noul }, QuestionState::Noul) => {
-					validate_probability(noul, "noul")?;
 					systemone::typed::Answer::Noul { noul }
 				},
 				(
 					google::Answer::Choice {
 						choice,
 						probabilities,
-						confidence,
+						..
 					},
 					QuestionState::Choice(values),
 				) => {
-					let (choice, probabilities) =
-						checked_choice(values, &choice, &probabilities, confidence)?;
+					let Some((choice, probabilities)) = map_choice(values, &choice, &probabilities) else {
+						continue;
+					};
 					let confidence =
 						choice_confidence(&probabilities.iter().map(|(_, p)| *p).collect::<Vec<_>>());
 					systemone::typed::Answer::Choice {
@@ -163,12 +148,11 @@ pub mod from_systemone {
 					google::Answer::Score {
 						score,
 						probabilities,
-						confidence,
+						..
 					},
 					QuestionState::Score(criteria),
 				) => {
-					let (_, probabilities) =
-						checked_score(&score, &probabilities, confidence, criteria.len())?;
+					let probabilities = level_probabilities(&probabilities, criteria.len());
 					let confidence = score_confidence(&probabilities);
 					let legend = Some(
 						criteria
@@ -189,7 +173,7 @@ pub mod from_systemone {
 						legend,
 					}
 				},
-				_ => return Err(answer_type_mismatch(key)),
+				_ => continue,
 			};
 			answers.insert(name.clone(), answer);
 		}
@@ -242,8 +226,7 @@ pub mod from_decisions {
 			// is not part of the evidence evaluated by the model.
 			safety_identifier: _,
 		} = req;
-		validate_question_count(source_questions.len(), 400)?;
-		let input = text(super::super::decisions_input_value(input)?);
+		let input = translate_input(input)?;
 		let mut state = State {
 			model: model.clone(),
 			questions: IndexMap::new(),
@@ -264,11 +247,6 @@ pub mod from_decisions {
 					let mut values = IndexMap::new();
 					let mut criteria = IndexMap::new();
 					for (i, choice) in q.choices.into_iter().enumerate() {
-						if values.values().any(|value| value == &choice.value) {
-							return Err(AIError::UnsupportedConversion(
-								"duplicate decision choice value".into(),
-							));
-						}
 						let key = option_key(i);
 						let description = choice_description(&choice.value, choice.description);
 						criteria.insert(key.clone(), description);
@@ -291,16 +269,12 @@ pub mod from_decisions {
 						.into_iter()
 						.map(|level| {
 							labels.push(level.label.clone());
-							let criterion = match level.description {
-								Some(description) => {
-									serde_json::json!({"label": level.label, "description": description}).to_string()
-								},
+							match level.description {
+								Some(description) => format!("{}: {description}", level.label),
 								None => level.label,
-							};
-							validate_nonempty_criterion(&criterion)?;
-							Ok(criterion)
+							}
 						})
-						.collect::<Result<_, AIError>>()?;
+						.collect();
 					(
 						q.name,
 						QuestionKind::Score(labels),
@@ -327,11 +301,10 @@ pub mod from_decisions {
 	pub fn translate_response(bytes: &[u8], state: &State) -> Result<Vec<u8>, AIError> {
 		let resp: google::Response = serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
 		let mut answers = Vec::new();
-		for (key, question, answer) in take_answers(resp.answers, &state.questions)? {
+		for (question, answer) in take_answers(resp.answers, &state.questions) {
 			let name = question.name.clone();
 			let answer = match (answer, &question.kind) {
 				(google::Answer::Noul { noul }, QuestionKind::Predicate) => {
-					validate_probability(noul, "noul")?;
 					d::AnswerResource::Predicate(d::PredicateAnswer {
 						name,
 						probability: noul,
@@ -341,12 +314,15 @@ pub mod from_decisions {
 					google::Answer::Choice {
 						choice,
 						probabilities,
-						confidence,
+						..
 					},
 					QuestionKind::Choice(values),
 				) => {
-					let (choice, probabilities) =
-						checked_choice(values, &choice, &probabilities, confidence)?;
+					let Some((choice, probabilities)) = map_choice(values, &choice, &probabilities) else {
+						continue;
+					};
+					let confidence =
+						choice_confidence(&probabilities.iter().map(|(_, p)| *p).collect::<Vec<_>>());
 					d::AnswerResource::Choice(d::ChoiceAnswer {
 						name,
 						choice,
@@ -361,12 +337,15 @@ pub mod from_decisions {
 					google::Answer::Score {
 						score,
 						probabilities,
-						confidence,
+						..
 					},
 					QuestionKind::Score(labels),
 				) => {
-					let (score, probabilities) =
-						checked_score(&score, &probabilities, confidence, labels.len())?;
+					let Some(score) = score.as_f64() else {
+						continue;
+					};
+					let probabilities = level_probabilities(&probabilities, labels.len());
+					let confidence = score_confidence(&probabilities);
 					d::AnswerResource::Score(d::ScoreAnswer {
 						name,
 						score,
@@ -383,7 +362,7 @@ pub mod from_decisions {
 						confidence,
 					})
 				},
-				_ => return Err(answer_type_mismatch(key)),
+				_ => continue,
 			};
 			answers.push(answer);
 		}
@@ -403,15 +382,67 @@ pub mod from_decisions {
 		.map_err(AIError::ResponseMarshal)
 	}
 
+	fn translate_input(input: d::DecisionInput) -> Result<google::Input, AIError> {
+		match input {
+			d::DecisionInput::Text(text) => Ok(google::Input::Text(text)),
+			d::DecisionInput::Messages(items) => items
+				.into_iter()
+				.map(|d::DecisionInputItem::Message(message)| {
+					if message.role != "user" {
+						return Err(AIError::UnsupportedContent);
+					}
+					let content = match message.content {
+						d::DecisionInputContent::Text(text) => vec![google::Content::Text { text }],
+						d::DecisionInputContent::Parts(parts) => parts
+							.into_iter()
+							.map(|part| match part {
+								d::DecisionInputContentPart::InputText(text) => {
+									Ok(google::Content::Text { text: text.text })
+								},
+								d::DecisionInputContentPart::InputImage(image) => translate_image(image),
+							})
+							.collect::<Result<_, _>>()?,
+					};
+					Ok(google::Step::UserInput { content })
+				})
+				.collect::<Result<Vec<_>, _>>()
+				.map(google::Input::Steps),
+		}
+	}
+
+	fn translate_image(image: d::DecisionInputImage) -> Result<google::Content, AIError> {
+		let resolution = match image.detail {
+			None | Some(d::ImageDetail::Auto) => None,
+			Some(d::ImageDetail::Low) => Some(google::MediaResolution::Low),
+			// Gemini's closest documented resolution to OpenAI's unscaled original.
+			Some(d::ImageDetail::High | d::ImageDetail::Original) => Some(google::MediaResolution::High),
+		};
+		let source =
+			if image.image_url.starts_with("https://") || image.image_url.starts_with("http://") {
+				google::ImageSource::Uri {
+					uri: image.image_url,
+				}
+			} else {
+				let Some((mime_type, data)) = super::super::completions::parse_data_url(&image.image_url)
+				else {
+					return Err(AIError::UnsupportedContent);
+				};
+				google::ImageSource::Data {
+					data: data.to_string(),
+					mime_type: mime_type.to_string(),
+				}
+			};
+		Ok(google::Content::Image { source, resolution })
+	}
+
 	fn choice_description(value: &d::ChoiceValue, description: Option<String>) -> String {
-		let description = description.filter(|description| !description.trim().is_empty());
-		match (value, description) {
-			(d::ChoiceValue::String(_), Some(description)) => description,
-			(d::ChoiceValue::String(value), None) => format!("String value {value:?}."),
-			(d::ChoiceValue::Boolean(value), Some(description)) => {
-				format!("Boolean value {value}. {description}")
-			},
-			(d::ChoiceValue::Boolean(value), None) => format!("Boolean value {value}."),
+		let value = match value {
+			d::ChoiceValue::String(value) => value.clone(),
+			d::ChoiceValue::Boolean(value) => value.to_string(),
+		};
+		match description.filter(|description| !description.trim().is_empty()) {
+			Some(description) => format!("{value}: {description}"),
+			None => value,
 		}
 	}
 }
@@ -466,6 +497,18 @@ pub(crate) fn parse_google_error(bytes: &bytes::Bytes) -> Result<GoogleErrorResp
 	})
 }
 
+/// Maps a Google canonical error status to the compatible client error type.
+/// Definitions and HTTP mappings: https://cloud.google.com/service-infrastructure/docs/service-management/reference/rest/v1/Code
+pub(crate) fn google_error_type(status: Option<&str>) -> &'static str {
+	match status {
+		Some("INVALID_ARGUMENT") | Some("FAILED_PRECONDITION") => "invalid_request_error",
+		Some("NOT_FOUND") => "not_found_error",
+		Some("PERMISSION_DENIED") | Some("UNAUTHENTICATED") => "authentication_error",
+		Some("RESOURCE_EXHAUSTED") => "rate_limit_error",
+		_ => "api_error",
+	}
+}
+
 fn error_code(error: &GoogleError) -> Option<String> {
 	error
 		.code
@@ -489,38 +532,15 @@ fn error_type(error: &GoogleError, status: http::StatusCode) -> &'static str {
 	}
 }
 
-/// Maps a Google canonical error status to the compatible client error type.
-/// Definitions and HTTP mappings: https://cloud.google.com/service-infrastructure/docs/service-management/reference/rest/v1/Code
-pub(crate) fn google_error_type(status: Option<&str>) -> &'static str {
-	match status {
-		Some("INVALID_ARGUMENT") | Some("FAILED_PRECONDITION") => "invalid_request_error",
-		Some("NOT_FOUND") => "not_found_error",
-		Some("PERMISSION_DENIED") | Some("UNAUTHENTICATED") => "authentication_error",
-		Some("RESOURCE_EXHAUSTED") => "rate_limit_error",
-		_ => "api_error",
-	}
-}
-
 fn normalize_decisions_input(request: &mut Value) -> Result<(), AIError> {
 	let request = request
 		.as_object_mut()
 		.ok_or_else(|| AIError::UnsupportedConversion("Decisions request must be an object".into()))?;
-	reject_unknown_fields(
-		request,
-		&["model", "input", "questions", "safety_identifier"],
-		"Decisions request",
-	)?;
-	validate_decisions_questions(request.get("questions"))?;
 	let Some(Value::Array(items)) = request.get_mut("input") else {
 		return Ok(());
 	};
 	for item in items {
 		let item = item.as_object_mut().ok_or(AIError::UnsupportedContent)?;
-		reject_unknown_fields(
-			item,
-			&["type", "role", "content"],
-			"Decisions input message",
-		)?;
 		if item
 			.get("type")
 			.and_then(Value::as_str)
@@ -537,13 +557,8 @@ fn normalize_decisions_input(request: &mut Value) -> Result<(), AIError> {
 				return Err(AIError::UnsupportedContent);
 			};
 			match kind {
-				"input_text" => {
-					let part = part.as_object().ok_or(AIError::UnsupportedContent)?;
-					reject_unknown_fields(part, &["type", "text"], "Decisions input text")?;
-				},
+				"input_text" | "input_image" => {},
 				"input_json" if user => {
-					let object = part.as_object().ok_or(AIError::UnsupportedContent)?;
-					reject_unknown_fields(object, &["type", "data"], "Decisions input JSON")?;
 					let data = part
 						.get("data")
 						.ok_or_else(|| AIError::UnsupportedConversion("input_json is missing data".into()))?;
@@ -557,237 +572,61 @@ fn normalize_decisions_input(request: &mut Value) -> Result<(), AIError> {
 	Ok(())
 }
 
-fn validate_systemone_questions(questions: Option<&Value>) -> Result<(), AIError> {
-	let Some(Value::Object(questions)) = questions else {
-		return Ok(());
-	};
-	for question in questions.values() {
-		let Some(question) = question.as_object() else {
-			continue;
-		};
-		match question.get("type").and_then(Value::as_str) {
-			Some("noul") => {
-				reject_unknown_fields(
-					question,
-					&["type", "instructions", "criteria"],
-					"SystemOne noul question",
-				)?;
-				if let Some(Value::Object(criteria)) = question.get("criteria") {
-					reject_unknown_fields(criteria, &["true", "false"], "SystemOne noul criteria")?;
-				}
-			},
-			Some("choice") => reject_unknown_fields(
-				question,
-				&["type", "instructions", "criteria"],
-				"SystemOne choice question",
-			)?,
-			Some("score") => reject_unknown_fields(
-				question,
-				&["type", "instructions", "criteria"],
-				"SystemOne score question",
-			)?,
-			_ => {},
-		}
-	}
-	Ok(())
-}
-
-fn validate_decisions_questions(questions: Option<&Value>) -> Result<(), AIError> {
-	let Some(Value::Array(questions)) = questions else {
-		return Ok(());
-	};
-	for question in questions {
-		let Some(question) = question.as_object() else {
-			continue;
-		};
-		match question.get("type").and_then(Value::as_str) {
-			Some("predicate") => reject_unknown_fields(
-				question,
-				&["type", "name", "instructions"],
-				"Decisions predicate question",
-			)?,
-			Some("choice") => {
-				reject_unknown_fields(
-					question,
-					&["type", "name", "instructions", "choices"],
-					"Decisions choice question",
-				)?;
-				if let Some(Value::Array(choices)) = question.get("choices") {
-					for choice in choices {
-						if let Some(choice) = choice.as_object() {
-							reject_unknown_fields(choice, &["value", "description"], "Decisions choice option")?;
-						}
-					}
-				}
-			},
-			Some("score") => {
-				reject_unknown_fields(
-					question,
-					&["type", "name", "instructions", "levels"],
-					"Decisions score question",
-				)?;
-				if let Some(Value::Array(levels)) = question.get("levels") {
-					for level in levels {
-						if let Some(level) = level.as_object() {
-							reject_unknown_fields(level, &["label", "description"], "Decisions score level")?;
-						}
-					}
-				}
-			},
-			_ => {},
-		}
-	}
-	Ok(())
-}
-
-fn reject_unknown_fields(
-	object: &serde_json::Map<String, Value>,
-	allowed: &[&str],
-	context: &str,
-) -> Result<(), AIError> {
-	if let Some(field) = object
-		.keys()
-		.find(|field| !allowed.contains(&field.as_str()))
-	{
-		return Err(AIError::UnsupportedConversion(
-			format!("unsupported {context} field {field:?}").into(),
-		));
-	}
-	Ok(())
-}
-
 fn option_key(index: usize) -> String {
 	format!("o_{index:03}")
 }
 
-fn validate_question_count(count: usize, maximum: usize) -> Result<(), AIError> {
-	if !(1..=maximum).contains(&count) {
-		return Err(AIError::UnsupportedConversion(
-			format!("Google Decisions conversion accepts 1 to {maximum} questions, got {count}").into(),
-		));
-	}
-	Ok(())
-}
-
+/// The confidence formulas need at least two outcomes; Gemini enforces its own upper limits.
 fn validate_option_count(count: usize, field: &str) -> Result<(), AIError> {
-	if !(2..=255).contains(&count) {
+	if count < 2 {
 		return Err(AIError::UnsupportedConversion(
-			format!("Google Decisions requires 2 to 255 {field}, got {count}").into(),
-		));
-	}
-	Ok(())
-}
-
-fn validate_nonempty_criterion(criterion: &str) -> Result<(), AIError> {
-	if criterion.trim().is_empty() {
-		return Err(AIError::UnsupportedConversion(
-			"Google Decisions score levels cannot be empty".into(),
-		));
-	}
-	Ok(())
-}
-
-fn validate_probability(value: f64, field: &str) -> Result<(), AIError> {
-	if !value.is_finite() || !(0.0..=1.0).contains(&value) {
-		return Err(AIError::UnsupportedConversion(
-			format!("invalid Google decision {field} probability {value}").into(),
+			format!("Google Decisions requires at least 2 {field}, got {count}").into(),
 		));
 	}
 	Ok(())
 }
 
 /// Pairs each requested question with its Google answer, in request order.
+/// Unanswered questions and answers to unknown keys are left out.
 fn take_answers<Q>(
 	mut answers: IndexMap<String, google::Answer>,
 	questions: &IndexMap<String, Q>,
-) -> Result<Vec<(&str, &Q, google::Answer)>, AIError> {
-	let paired = questions
+) -> Vec<(&Q, google::Answer)> {
+	questions
 		.iter()
-		.map(|(key, question)| {
-			let answer = answers.shift_remove(key).ok_or_else(|| {
-				AIError::UnsupportedConversion(format!("missing Google decision answer {key:?}").into())
-			})?;
-			Ok((key.as_str(), question, answer))
-		})
-		.collect::<Result<Vec<_>, AIError>>()?;
-	if !answers.is_empty() {
-		return Err(AIError::UnsupportedConversion(
-			"unexpected Google decision answers".into(),
-		));
-	}
-	Ok(paired)
+		.filter_map(|(key, question)| Some((question, answers.shift_remove(key)?)))
+		.collect()
 }
 
-fn answer_type_mismatch(key: &str) -> AIError {
-	AIError::UnsupportedConversion(format!("Google decision answer type mismatch for {key:?}").into())
-}
-
-/// Checks a Google choice answer and maps its option keys back to the client's values.
-fn checked_choice<V: Clone>(
+/// Maps a Google choice answer back to the client's values, or `None` if the chosen key is unknown.
+/// Every requested option gets a probability; options Google left out get 0.
+fn map_choice<V: Clone>(
 	values: &IndexMap<String, V>,
 	choice: &str,
 	probabilities: &IndexMap<String, f64>,
-	confidence: f64,
-) -> Result<(V, Vec<(V, f64)>), AIError> {
-	validate_probability(confidence, "confidence")?;
-	validate_distribution(probabilities, values.keys())?;
-	let choice = values.get(choice).cloned().ok_or_else(|| {
-		AIError::UnsupportedConversion(format!("unknown Google decision choice {choice:?}").into())
-	})?;
+) -> Option<(V, Vec<(V, f64)>)> {
+	let choice = values.get(choice)?.clone();
 	let probabilities = values
 		.iter()
-		.map(|(key, value)| (value.clone(), probabilities[key]))
+		.map(|(key, value)| {
+			(
+				value.clone(),
+				probabilities.get(key).copied().unwrap_or(0.0),
+			)
+		})
 		.collect();
-	Ok((choice, probabilities))
+	Some((choice, probabilities))
 }
 
-/// Checks a Google score answer and returns the score with probabilities in level order.
-fn checked_score(
-	score: &serde_json::Number,
-	probabilities: &IndexMap<String, f64>,
-	confidence: f64,
-	levels: usize,
-) -> Result<(f64, Vec<f64>), AIError> {
-	validate_probability(confidence, "confidence")?;
-	let score = score
-		.as_f64()
-		.filter(|score| score.is_finite())
-		.ok_or_else(|| AIError::UnsupportedConversion("invalid Google decision score".into()))?;
-	if !(0.0..=(levels - 1) as f64).contains(&score) {
-		return Err(AIError::UnsupportedConversion(
-			format!("Google decision score {score} is outside 0..{}", levels - 1).into(),
-		));
-	}
-	let keys = (0..levels).map(|i| i.to_string()).collect::<Vec<_>>();
-	validate_distribution(probabilities, &keys)?;
-	Ok((score, keys.iter().map(|key| probabilities[key]).collect()))
+/// Returns score probabilities in level order; levels Google left out get 0.
+fn level_probabilities(probabilities: &IndexMap<String, f64>, levels: usize) -> Vec<f64> {
+	(0..levels)
+		.map(|i| probabilities.get(&i.to_string()).copied().unwrap_or(0.0))
+		.collect()
 }
 
-fn validate_distribution<'a>(
-	probabilities: &IndexMap<String, f64>,
-	expected: impl IntoIterator<Item = &'a String>,
-) -> Result<(), AIError> {
-	let expected = expected.into_iter().collect::<Vec<_>>();
-	if probabilities.len() != expected.len()
-		|| expected.iter().any(|key| !probabilities.contains_key(*key))
-	{
-		return Err(AIError::UnsupportedConversion(
-			"Google decision probabilities do not match the requested outcomes".into(),
-		));
-	}
-	for probability in probabilities.values() {
-		validate_probability(*probability, "outcome")?;
-	}
-	let sum = probabilities.values().sum::<f64>();
-	if (sum - 1.0).abs() > 0.02 {
-		return Err(AIError::UnsupportedConversion(
-			format!("Google decision probabilities sum to {sum}, expected 1").into(),
-		));
-	}
-	Ok(())
-}
-
-// TypeSafe documents these formulas; OpenAI does not document a confidence formula.
+// TypeSafe's adapter calculates these formulas. OpenAI does not formally specify them,
+// but its published choice and score examples produce the same values.
 // Callers pass at least two probabilities, checked by validate_option_count on the request.
 fn choice_confidence(probabilities: &[f64]) -> f64 {
 	let uniform = 1.0 / probabilities.len() as f64;
@@ -796,6 +635,8 @@ fn choice_confidence(probabilities: &[f64]) -> f64 {
 }
 
 /// `probabilities` are in level order.
+///
+/// Gemini returned the maximum probability in testing, so translated clients recalculate confidence.
 fn score_confidence(probabilities: &[f64]) -> f64 {
 	let levels = probabilities.len();
 	let mut peak = 0;
@@ -815,278 +656,5 @@ fn score_confidence(probabilities: &[f64]) -> f64 {
 }
 
 #[cfg(test)]
-mod tests {
-	use serde_json::json;
-
-	use super::*;
-
-	#[test]
-	fn confidence_uses_typesafe_formulas() {
-		assert!((choice_confidence(&[0.7, 0.3]) - 0.4).abs() < 1e-10);
-		assert!((score_confidence(&[0.1, 0.7, 0.2]) - 0.55).abs() < 1e-10);
-		assert_eq!(score_confidence(&[0.5, 0.0, 0.5]), 0.0);
-		// Score probabilities follow level order, independent of the provider's map order.
-		let score = IndexMap::from([("2".into(), 0.2), ("0".into(), 0.1), ("1".into(), 0.7)]);
-		let (_, ordered) = checked_score(&1.into(), &score, 0.5, 3).unwrap();
-		assert_eq!(ordered, [0.1, 0.7, 0.2]);
-	}
-
-	#[test]
-	fn malformed_answers_are_rejected() {
-		let req = serde_json::from_value(json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "noul", "instructions": "yes?"}}})).unwrap();
-		let (_, state) = from_systemone::translate(&req).unwrap();
-		let missing_usage = json!({"answers": {"q_0": {"type": "noul", "noul": 0.5}}});
-		assert!(matches!(
-			from_systemone::translate_response(&serde_json::to_vec(&missing_usage).unwrap(), &state),
-			Err(AIError::ResponseParsing(_))
-		));
-
-		for response in [
-			json!({"answers": {}, "usage": {"total_input_tokens": 1, "total_output_tokens": 0}}),
-			json!({"answers": {"q_0": {"type": "score", "score": 1, "probabilities": {}, "confidence": 0}}, "usage": {"total_input_tokens": 1, "total_output_tokens": 0}}),
-			json!({"answers": {"q_0": {"type": "noul", "noul": 0.5}, "extra": {"type": "noul", "noul": 0.5}}, "usage": {"total_input_tokens": 1, "total_output_tokens": 0}}),
-		] {
-			assert!(matches!(
-				from_systemone::translate_response(&serde_json::to_vec(&response).unwrap(), &state),
-				Err(AIError::UnsupportedConversion(_))
-			));
-		}
-	}
-
-	#[test]
-	fn invalid_requests_are_rejected() {
-		for request in [
-			json!({"model": "gemini-decision-1", "state": "text", "questions": {}}),
-			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "choice", "instructions": "pick", "criteria": {"only": null}}}}),
-			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "score", "instructions": "rate", "criteria": ["only"]}}}),
-			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "noul", "instructions": "yes?"}}, "temperature": 0}),
-			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "noul", "instructions": "yes?", "foo": true}}}),
-			json!({"model": "gemini-decision-1", "state": "text", "questions": {"q": {"type": "noul", "instructions": "yes?", "criteria": {"true": "yes", "foo": true}}}}),
-		] {
-			let request = serde_json::from_value(request).unwrap();
-			assert!(matches!(
-				from_systemone::translate(&request),
-				Err(AIError::UnsupportedConversion(_))
-			));
-		}
-
-		let request = serde_json::from_value(json!({
-			"model": "gemini-decision-1",
-			"input": "text",
-			"questions": [{"type": "choice", "instructions": "pick", "choices": [{"value": "only"}]}]
-		}))
-		.unwrap();
-		assert!(matches!(
-			from_decisions::translate(&request),
-			Err(AIError::UnsupportedConversion(_))
-		));
-
-		let request = serde_json::from_value(json!({
-			"model": "gemini-decision-1",
-			"input": "text",
-			"questions": [{"type": "predicate", "instructions": "yes?"}],
-			"temperature": 0
-		}))
-		.unwrap();
-		assert!(matches!(
-			from_decisions::translate(&request),
-			Err(AIError::UnsupportedConversion(_))
-		));
-
-		for request in [
-			json!({
-				"model": "gemini-decision-1",
-				"input": [{"type": "message", "role": "user", "content": "text", "foo": true}],
-				"questions": [{"type": "predicate", "instructions": "yes?"}]
-			}),
-			json!({
-				"model": "gemini-decision-1",
-				"input": [{"type": "message", "role": "user", "content": [{"type": "input_text", "text": "text", "foo": true}]}],
-				"questions": [{"type": "predicate", "instructions": "yes?"}]
-			}),
-			json!({
-				"model": "gemini-decision-1",
-				"input": "text",
-				"questions": [{"type": "predicate", "instructions": "yes?", "foo": true}]
-			}),
-			json!({
-				"model": "gemini-decision-1",
-				"input": "text",
-				"questions": [{"type": "choice", "instructions": "pick", "choices": [{"value": "a", "foo": true}, {"value": "b"}]}]
-			}),
-			json!({
-				"model": "gemini-decision-1",
-				"input": "text",
-				"questions": [{"type": "score", "instructions": "rate", "levels": [{"label": "low", "foo": true}, {"label": "high"}]}]
-			}),
-		] {
-			let request = serde_json::from_value(request).unwrap();
-			assert!(matches!(
-				from_decisions::translate(&request),
-				Err(AIError::UnsupportedConversion(_))
-			));
-		}
-	}
-
-	#[test]
-	fn malformed_choice_and_score_answers_are_rejected() {
-		let choice_request = serde_json::from_value(json!({
-			"model": "gemini-decision-1", "state": "text",
-			"questions": {"q": {"type": "choice", "instructions": "pick", "criteria": {"a": null, "b": null}}}
-		})).unwrap();
-		let (_, choice_state) = from_systemone::translate(&choice_request).unwrap();
-		let sparse_distribution = json!({
-			"answers": {"q_0": {"type": "choice", "choice": "o_000", "probabilities": {"o_000": 1.0}, "confidence": 1.0}},
-			"usage": {"total_input_tokens": 1, "total_output_tokens": 0}
-		});
-		let error = from_systemone::translate_response(
-			&serde_json::to_vec(&sparse_distribution).unwrap(),
-			&choice_state,
-		)
-		.unwrap_err();
-		assert!(error.to_string().contains("probabilities do not match"));
-
-		let unknown_choice = json!({
-			"answers": {"q_0": {"type": "choice", "choice": "unknown", "probabilities": {"o_000": 0.5, "o_001": 0.5}, "confidence": 1.0}},
-			"usage": {"total_input_tokens": 1, "total_output_tokens": 0}
-		});
-		let error = from_systemone::translate_response(
-			&serde_json::to_vec(&unknown_choice).unwrap(),
-			&choice_state,
-		)
-		.unwrap_err();
-		assert!(error.to_string().contains("unknown Google decision choice"));
-
-		let score_request = serde_json::from_value(json!({
-			"model": "gemini-decision-1", "input": "text",
-			"questions": [{"type": "score", "instructions": "rate", "levels": [{"label": "low"}, {"label": "high"}]}]
-		})).unwrap();
-		let (_, score_state) = from_decisions::translate(&score_request).unwrap();
-		let response = json!({
-			"answers": {"q_0": {"type": "score", "score": 99, "probabilities": {"0": 0.5, "1": 0.5}, "confidence": 0.5}},
-			"usage": {"total_input_tokens": 1, "total_output_tokens": 0}
-		});
-		assert!(
-			from_decisions::translate_response(&serde_json::to_vec(&response).unwrap(), &score_state)
-				.is_err()
-		);
-	}
-
-	#[test]
-	fn confidence_matches_each_client_contract() {
-		let systemone_request = serde_json::from_value(json!({
-			"model": "gemini-decision-1",
-			"state": "text",
-			"questions": {"q": {"type": "choice", "instructions": "pick", "criteria": {"a": null, "b": null}}}
-		}))
-		.unwrap();
-		let (_, systemone_state) = from_systemone::translate(&systemone_request).unwrap();
-		let decisions_request = serde_json::from_value(json!({
-			"model": "gemini-decision-1",
-			"input": "text",
-			"questions": [{"type": "choice", "instructions": "pick", "choices": [{"value": "a"}, {"value": "b"}]}]
-		}))
-		.unwrap();
-		let (_, decisions_state) = from_decisions::translate(&decisions_request).unwrap();
-		let response = serde_json::to_vec(&json!({
-			"answers": {"q_0": {"type": "choice", "choice": "o_000", "probabilities": {"o_000": 0.7, "o_001": 0.3}, "confidence": 0.9}},
-			"usage": {"total_input_tokens": 1, "total_output_tokens": 0}
-		}))
-		.unwrap();
-
-		let systemone: Value = serde_json::from_slice(
-			&from_systemone::translate_response(&response, &systemone_state).unwrap(),
-		)
-		.unwrap();
-		let decisions: Value = serde_json::from_slice(
-			&from_decisions::translate_response(&response, &decisions_state).unwrap(),
-		)
-		.unwrap();
-		assert!((systemone["answers"]["q"]["confidence"].as_f64().unwrap() - 0.4).abs() < 1e-10);
-		assert_eq!(decisions["answers"][0]["confidence"], 0.9);
-	}
-
-	#[test]
-	fn google_errors_are_translated_to_client_shapes() {
-		let numeric = bytes::Bytes::from_static(
-			br#"{"error":{"code":401,"message":"bad key","status":"UNAUTHENTICATED"}}"#,
-		);
-		let openai: Value = serde_json::from_slice(
-			&translate_error_to_decisions(&numeric, http::StatusCode::UNAUTHORIZED).unwrap(),
-		)
-		.unwrap();
-		assert_eq!(
-			openai,
-			json!({"error": {"type": "authentication_error", "message": "bad key", "code": "UNAUTHENTICATED"}})
-		);
-
-		let string = bytes::Bytes::from_static(br#"{"error":{"code":"safety","message":"blocked"}}"#);
-		let systemone: Value =
-			serde_json::from_slice(&translate_error_to_systemone(&string).unwrap()).unwrap();
-		assert_eq!(
-			systemone,
-			json!({"detail": {"code": "safety", "message": "blocked"}})
-		);
-
-		let array_wrapped =
-			bytes::Bytes::from_static(br#"[{"error":{"code":"safety","message":"blocked"}}]"#);
-		let openai: Value = serde_json::from_slice(
-			&translate_error_to_decisions(&array_wrapped, http::StatusCode::BAD_REQUEST).unwrap(),
-		)
-		.unwrap();
-		assert_eq!(
-			openai,
-			json!({"error": {"type": "invalid_request_error", "message": "blocked", "code": "safety"}})
-		);
-	}
-
-	#[test]
-	fn unsupported_media_is_rejected() {
-		let req = serde_json::from_value(json!({"model": "gemini-decision-1", "state": "{image}", "assets": {"image": "data:image/png;base64,AA=="}, "questions": {}})).unwrap();
-		assert!(matches!(
-			from_systemone::translate(&req),
-			Err(AIError::UnsupportedContent)
-		));
-		let req = serde_json::from_value(json!({"model": "gemini-decision-1", "input": [{"role": "user", "content": [{"type": "input_image", "image_url": "https://example.com/image.png"}]}], "questions": []})).unwrap();
-		assert!(matches!(
-			from_decisions::translate(&req),
-			Err(AIError::UnsupportedContent)
-		));
-	}
-
-	#[test]
-	fn blank_choice_descriptions_use_the_value() {
-		let req = serde_json::from_value(json!({
-			"model": "gemini-decision-1",
-			"state": "text",
-			"questions": {"q": {"type": "choice", "instructions": "pick", "criteria": {
-				"first": "", "second": "   "
-			}}}
-		}))
-		.unwrap();
-		let (body, _) = from_systemone::translate(&req).unwrap();
-		let body: Value = serde_json::from_slice(&body).unwrap();
-		assert_eq!(body["questions"]["q_0"]["criteria"]["o_000"], "first");
-		assert_eq!(body["questions"]["q_0"]["criteria"]["o_001"], "second");
-
-		let req = serde_json::from_value(json!({
-			"model": "gemini-decision-1",
-			"input": "text",
-			"questions": [{"type": "choice", "instructions": "pick", "choices": [
-				{"value": "first", "description": ""},
-				{"value": true, "description": "   "}
-			]}]
-		}))
-		.unwrap();
-		let (body, _) = from_decisions::translate(&req).unwrap();
-		let body: Value = serde_json::from_slice(&body).unwrap();
-		assert_eq!(
-			body["questions"]["q_0"]["criteria"]["o_000"],
-			"String value \"first\"."
-		);
-		assert_eq!(
-			body["questions"]["q_0"]["criteria"]["o_001"],
-			"Boolean value true."
-		);
-	}
-}
+#[path = "gemini_tests.rs"]
+mod tests;
