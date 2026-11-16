@@ -4812,8 +4812,7 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> Result<(
 	{
 		let mut parts = std::mem::take(req.uri_mut()).into_parts();
 		// TODO(https://github.com/hyperium/http/pull/811) actually make this shared
-		let host =
-			Authority::try_from(host.as_bytes()).map_err(|e| ProxyError::Processing(e.into()))?;
+		let host = Authority::try_from(host.as_bytes()).map_err(|_| ProxyError::InvalidRequest)?;
 
 		parts.authority = Some(host);
 		if parts.path_and_query.is_some() && parts.scheme.is_none() {
