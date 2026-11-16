@@ -683,8 +683,8 @@ pub struct AnalyticsTotals {
 	pub max_ttft_ms: f64,
 	/// Output tokens of requests with a recorded per-token time.
 	pub generation_tokens: i64,
-	/// Time spent generating those tokens, in milliseconds; `generationTokens` over this is the
-	/// decode rate.
+	/// Time spent generating those tokens, in milliseconds. When greater than zero,
+	/// `generationTokens * 1000 / generationMs` is the decode rate in tokens per second.
 	pub generation_ms: f64,
 	/// Input tokens served from the provider's prompt cache (included in `inputTokens`).
 	pub cache_read_tokens: i64,
