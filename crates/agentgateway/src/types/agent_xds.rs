@@ -2584,7 +2584,10 @@ fn transformation_from_proto(
 				permissive_cel_expression(diagnostics, "transformation", v),
 			));
 		}
-		// The xDS proto does not carry replace yet, so it remains unset.
+		config.replace = t
+			.replace
+			.as_ref()
+			.map(|r| permissive_cel_expression(diagnostics, "transformation replace", r));
 		Ok(Some(Arc::new(config)))
 	}
 
@@ -5613,6 +5616,7 @@ mod tests {
 								name: "x-backend-req".to_string(),
 								expression: "\"backend-req\"".to_string(),
 							}],
+							replace: Some("request.headers.filterKeys(k, k in [\"content-type\"])".to_string()),
 							..Default::default()
 						},
 					),
@@ -5633,7 +5637,9 @@ mod tests {
 		let BackendTrafficPolicy::Transformation(transformation) = policy else {
 			panic!("Expected Transformation policy variant");
 		};
-		assert_eq!(transformation.expressions().count(), 2);
+		// set + add + replace expressions
+		assert_eq!(transformation.expressions().count(), 3);
+		assert!(transformation.request.as_ref().unwrap().replace.is_some());
 		Ok(())
 	}
 

@@ -2870,6 +2870,12 @@ type Transform struct {
 	// +optional
 	Remove []HeaderName `json:"remove,omitempty"`
 
+	// CEL expression evaluating to a map that replaces the full header set.
+	// Applied before set/add/remove; on evaluation error the existing headers are kept.
+	//
+	// +optional
+	Replace *CELExpression `json:"replace,omitempty"`
+
 	// HTTP body transformation.
 	// +optional
 	Body *CELExpression `json:"body,omitempty"`

@@ -13698,12 +13698,15 @@ func (x *TrafficPolicySpec_APIKey_User) GetKeyHash() string {
 }
 
 type TrafficPolicySpec_TransformationPolicy_Transform struct {
-	state         protoimpl.MessageState                    `protogen:"open.v1"`
-	Set           []*TrafficPolicySpec_HeaderTransformation `protobuf:"bytes,1,rep,name=set,proto3" json:"set,omitempty"`
-	Add           []*TrafficPolicySpec_HeaderTransformation `protobuf:"bytes,2,rep,name=add,proto3" json:"add,omitempty"`
-	Remove        []string                                  `protobuf:"bytes,3,rep,name=remove,proto3" json:"remove,omitempty"`
-	Body          *TrafficPolicySpec_BodyTransformation     `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
-	Metadata      map[string]string                         `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state    protoimpl.MessageState                    `protogen:"open.v1"`
+	Set      []*TrafficPolicySpec_HeaderTransformation `protobuf:"bytes,1,rep,name=set,proto3" json:"set,omitempty"`
+	Add      []*TrafficPolicySpec_HeaderTransformation `protobuf:"bytes,2,rep,name=add,proto3" json:"add,omitempty"`
+	Remove   []string                                  `protobuf:"bytes,3,rep,name=remove,proto3" json:"remove,omitempty"`
+	Body     *TrafficPolicySpec_BodyTransformation     `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
+	Metadata map[string]string                         `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// CEL expression evaluating to a map that replaces the full header set.
+	// Applied before set/add/remove; on error the existing headers are kept.
+	Replace       *string `protobuf:"bytes,6,opt,name=replace,proto3,oneof" json:"replace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -13771,6 +13774,13 @@ func (x *TrafficPolicySpec_TransformationPolicy_Transform) GetMetadata() map[str
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *TrafficPolicySpec_TransformationPolicy_Transform) GetReplace() string {
+	if x != nil && x.Replace != nil {
+		return *x.Replace
+	}
+	return ""
 }
 
 type TrafficPolicySpec_ExtProc_NamespacedMetadataContext struct {
@@ -19571,7 +19581,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xc9]\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xf4]\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -19747,19 +19757,22 @@ const file_resource_proto_rawDesc = "" +
 	"\x06STRICT\x10\x00\x12\f\n" +
 	"\bOPTIONAL\x10\x01\x12\x0e\n" +
 	"\n" +
-	"PERMISSIVE\x10\x02\x1a\xbf\x05\n" +
+	"PERMISSIVE\x10\x02\x1a\xea\x05\n" +
 	"\x14TransformationPolicy\x12e\n" +
 	"\arequest\x18\x01 \x01(\v2K.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.TransformR\arequest\x12g\n" +
-	"\bresponse\x18\x02 \x01(\v2K.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.TransformR\bresponse\x1a\xd6\x03\n" +
+	"\bresponse\x18\x02 \x01(\v2K.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.TransformR\bresponse\x1a\x81\x04\n" +
 	"\tTransform\x12S\n" +
 	"\x03set\x18\x01 \x03(\v2A.agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformationR\x03set\x12S\n" +
 	"\x03add\x18\x02 \x03(\v2A.agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformationR\x03add\x12\x16\n" +
 	"\x06remove\x18\x03 \x03(\tR\x06remove\x12S\n" +
 	"\x04body\x18\x04 \x01(\v2?.agentgateway.dev.resource.TrafficPolicySpec.BodyTransformationR\x04body\x12u\n" +
-	"\bmetadata\x18\x05 \x03(\v2Y.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntryR\bmetadata\x1a;\n" +
+	"\bmetadata\x18\x05 \x03(\v2Y.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntryR\bmetadata\x12\x1d\n" +
+	"\areplace\x18\x06 \x01(\tH\x00R\areplace\x88\x01\x01\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aJ\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\n" +
+	"\n" +
+	"\b_replace\x1aJ\n" +
 	"\x14HeaderTransformation\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1e\n" +
 	"\n" +
@@ -21591,6 +21604,7 @@ func file_resource_proto_init() {
 	file_resource_proto_msgTypes[122].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[126].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[131].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[133].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[141].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[144].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[145].OneofWrappers = []any{}

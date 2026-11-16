@@ -12,6 +12,7 @@ spec:
     phase: PostRouting
     transformation:
       request:
+        replace: "request.headers.filterKeys(k, k in"
         set:
           - name: x-invalid-header
             value: foolen_{{header("content-length")}}
@@ -37,6 +38,7 @@ output:
       traffic:
         transformation:
           request:
+            replace: request.headers.filterKeys(k, k in
             set:
             - expression: foolen_{{header("content-length")}}
               name: x-invalid-header
@@ -58,7 +60,9 @@ status:
         namespace: default
       conditions:
       - lastTransitionTime: fake
-        message: 'header value is not a valid CEL expression: foolen_{{header("content-length")}}'
+        message: |-
+          header value is not a valid CEL expression: foolen_{{header("content-length")}}
+          replace value is not a valid CEL expression: request.headers.filterKeys(k, k in
         reason: PartiallyValid
         status: "True"
         type: Accepted
