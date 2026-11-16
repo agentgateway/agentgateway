@@ -2135,3 +2135,31 @@ test('login loads without protected API requests and preserves the return destin
 	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
 	await expect(page.getByText('OAuth started')).toBeVisible();
 });
+
+test('group by collapses extra values into a +n tag without clipping', async ({ page }) => {
+	await mockGateway(page);
+	const summary = page.waitForResponse('**/api/logs/analytics/summary');
+	await page.goto('/llm/analytics');
+	await summary;
+	const field = page.locator('.multi-check', { hasText: 'Group by' });
+	await field.getByRole('combobox').click();
+	const labels = ['Model', 'User', 'Group', 'Provider', 'User agent'];
+	for (const label of labels) await page.getByRole('option', { name: label, exact: true }).click();
+	await page.keyboard.press('Escape');
+
+	const rest = field.locator('.ant-select-content-item-rest');
+	const tags = field.locator(
+		'.ant-select-content-item:not([aria-hidden]):not(.ant-select-content-item-rest) .ant-select-selection-item-content'
+	);
+	await expect(rest).toHaveText(/^\+\d+$/);
+	await expect
+		.poll(async () => (await tags.count()) + Number((await rest.innerText()).slice(1)))
+		.toBe(labels.length);
+	expect(
+		await tags.evaluateAll(nodes => nodes.every(node => node.scrollWidth <= node.clientWidth))
+	).toBe(true);
+	await expect(rest.locator('[title]')).toHaveAttribute(
+		'title',
+		labels.slice(await tags.count()).join(', ')
+	);
+});

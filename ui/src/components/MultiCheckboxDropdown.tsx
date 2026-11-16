@@ -40,7 +40,10 @@ export function MultiCheckboxDropdown(props: {
 				value={props.values}
 				options={props.options}
 				placeholder={props.allLabel ?? props.placeholder ?? 'Select'}
-				maxTagCount={1}
+				maxTagCount="responsive"
+				maxTagPlaceholder={omitted => (
+					<span title={omitted.map(option => option.label).join(', ')}>+{omitted.length}</span>
+				)}
 				allowClear
 				popupMatchSelectWidth={false}
 				showSearch={

@@ -2369,6 +2369,7 @@ details summary {
 	position: static;
 	width: auto;
 	transform: none;
+	line-height: 1;
 	white-space: nowrap;
 }
 
@@ -3266,7 +3267,14 @@ details summary {
 }
 
 .logs-filter-bar .multi-check {
+	flex: 1 1 170px;
 	min-width: 170px;
+	max-width: 320px;
+}
+
+.analytics-controls-left .multi-check {
+	flex: 1 1 190px;
+	max-width: 320px;
 }
 
 .analytics-controls {
