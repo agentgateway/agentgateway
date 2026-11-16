@@ -1193,7 +1193,7 @@ async fn upstream_delete_status_handling() {
 }
 
 #[tokio::test]
-async fn delete_on_replica_without_session_closes_upstream_session() {
+async fn replica_without_session_resumes_get_and_delete() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind_a, io_a) = setup_proxy(&mock, true, false).await;
 	let (_bind_b, io_b) = setup_proxy(&mock, true, false).await;
@@ -1237,6 +1237,17 @@ async fn delete_on_replica_without_session_closes_upstream_session() {
 		.session
 		.clone()
 		.expect("stateful upstream should assign a session id");
+
+	let get = client
+		.get(format!("http://{io_b}/mcp"))
+		.header("accept", "text/event-stream")
+		.header("mcp-session-id", &session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(get.status(), reqwest::StatusCode::OK);
+	drop(get);
 
 	let delete = client
 		.delete(format!("http://{io_b}/mcp"))
