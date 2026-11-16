@@ -41,7 +41,7 @@ fn apply_hbone_headers(req: &mut ::http::Request<()>, headers: &HboneHeaders, in
 }
 
 pub async fn handshake(
-	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
+	hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
 	ep: SocketAddr,
 	hbone_port: u16,
 	identities: Vec<Identity>,
@@ -83,7 +83,7 @@ pub async fn handshake(
 }
 
 pub async fn handshake_waypoint(
-	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
+	hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
 	target: &Target,
 	waypoint_address: SocketAddr,
 	identities: Vec<Identity>,
@@ -182,9 +182,7 @@ pub async fn handshake_double(
 		dst_id: gateway_identities,
 		dst: gateway_address,
 	});
-	let mut pool_clone = pool.clone();
-
-	let outer_upgraded = Box::pin(pool_clone.send_request_pooled(&outer_pool_key, outer_req))
+	let outer_upgraded = Box::pin(pool.send_request_pooled(&outer_pool_key, outer_req))
 		.await
 		.map_err(crate::http::Error::new)?;
 

@@ -172,7 +172,6 @@ spec:
       app.kubernetes.io/name: agentgateway-standalone
       app.kubernetes.io/instance: test-release
       app.kubernetes.io/component: standalone
-  scrapeNativeHistograms: false
   scrapeClassicHistograms: true
   scrapeProtocols:
     - OpenMetricsText1.0.0

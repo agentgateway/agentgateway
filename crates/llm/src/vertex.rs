@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use agent_core::strng;
 use agent_core::strng::Strng;
 use serde_json::{Map, Value};
@@ -5,6 +7,85 @@ use serde_json::{Map, Value};
 use crate::{AIError, RouteType, apply};
 
 const ANTHROPIC_VERSION: &str = "vertex-2023-10-16";
+
+// Betas Vertex accepts for Anthropic models; it rejects the request if any other value is sent.
+// Checked against Vertex 2026-11-13. AGENTGATEWAY_VERTEX_ANTHROPIC_BETA_HEADERS replaces this list,
+// and `default` in it expands to this list.
+const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
+	"afk-mode-2026-01-31",
+	"auto-mode-classifier-2026-07-16",
+	"claude-code-20250219",
+	"compact-2026-01-12",
+	"computer-use-2025-01-24",
+	"computer-use-2025-11-24",
+	"context-1m-2025-08-07",
+	"context-management-2025-06-27",
+	"dangerous-tool-use-2026-09-03",
+	"effort-2025-11-24",
+	"fallback-credit-2026-06-01",
+	"fine-grained-tool-streaming-2025-05-14",
+	"interleaved-thinking-2025-05-14",
+	"mid-conversation-output-config-2026-07-01",
+	"mid-conversation-system-2026-04-07",
+	"mid-conversation-tool-changes-2026-07-01",
+	"oauth-2025-04-20",
+	"output-128k-2025-02-19",
+	"pdfs-2024-09-25",
+	"per-turn-control-2026-07-01",
+	"prompt-caching-2024-07-31",
+	"server-side-fallback-2026-06-01",
+	"structured-outputs-2025-11-13",
+	"structured-outputs-2025-12-15",
+	"task-budgets-2026-03-13",
+	"thinking-token-count-2026-05-13",
+	"token-counting-2024-11-01",
+	"token-efficient-tools-2025-02-19",
+	"tool-examples-2025-10-29",
+	"tool-search-tool-2025-10-19",
+	"web-search-2025-03-05",
+];
+const ALLOWED_BETA_HEADERS_ENV: &str = "AGENTGATEWAY_VERTEX_ANTHROPIC_BETA_HEADERS";
+
+static ALLOWED_BETA_HEADERS: LazyLock<Vec<String>> = LazyLock::new(|| {
+	let defaults = || DEFAULT_ALLOWED_BETA_HEADERS.iter().map(|f| f.to_string());
+	let Ok(env) = std::env::var(ALLOWED_BETA_HEADERS_ENV) else {
+		return defaults().collect();
+	};
+	env
+		.split(',')
+		.map(str::trim)
+		.filter(|feature| !feature.is_empty())
+		.flat_map(|feature| match feature {
+			"default" => defaults().collect(),
+			_ => vec![feature.to_string()],
+		})
+		.collect()
+});
+
+/// Drops `anthropic-beta` values that are not in the allowlist.
+pub fn filter_anthropic_beta_header(headers: &mut http::HeaderMap) -> Result<(), AIError> {
+	let invalid = || AIError::MissingField("Invalid anthropic-beta header value".into());
+	let mut features = Vec::new();
+	for value in headers.get_all("anthropic-beta") {
+		features.extend(
+			value
+				.to_str()
+				.map_err(|_| invalid())?
+				.split(',')
+				.map(str::trim)
+				.filter(|feature| ALLOWED_BETA_HEADERS.iter().any(|f| f == feature)),
+		);
+	}
+	let joined = features.join(",");
+	headers.remove("anthropic-beta");
+	if !joined.is_empty() {
+		headers.insert(
+			"anthropic-beta",
+			http::HeaderValue::from_str(&joined).map_err(|_| invalid())?,
+		);
+	}
+	Ok(())
+}
 
 /// Host for the Discovery Engine ranking endpoint used by rerank. Distinct from the `aiplatform`
 /// host used for chat/embeddings; defined once so the request authority/Host header and the actual

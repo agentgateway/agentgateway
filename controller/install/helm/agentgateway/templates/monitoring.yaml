@@ -24,7 +24,9 @@ spec:
   namespaceSelector:
     {{- toYaml . | nindent 4 }}
   {{- end }}
-  scrapeNativeHistograms: {{ .Values.monitoring.proxy.podMonitor.scrapeNativeHistograms }}
+  {{- if .Values.monitoring.proxy.podMonitor.scrapeNativeHistograms }}
+  scrapeNativeHistograms: true
+  {{- end }}
   scrapeClassicHistograms: {{ .Values.monitoring.proxy.podMonitor.scrapeClassicHistograms }}
   scrapeProtocols:
     {{- if .Values.monitoring.proxy.podMonitor.scrapeNativeHistograms }}
@@ -70,7 +72,9 @@ spec:
   namespaceSelector:
     matchNames:
     - {{ .Release.Namespace }}
-  scrapeNativeHistograms: {{ .Values.monitoring.serviceMonitor.scrapeNativeHistograms }}
+  {{- if .Values.monitoring.serviceMonitor.scrapeNativeHistograms }}
+  scrapeNativeHistograms: true
+  {{- end }}
   scrapeClassicHistograms: {{ .Values.monitoring.serviceMonitor.scrapeClassicHistograms }}
   scrapeProtocols:
     {{- if .Values.monitoring.serviceMonitor.scrapeNativeHistograms }}

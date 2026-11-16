@@ -7231,7 +7231,7 @@
           "const": "session"
         },
         {
-          "description": "Browser sessions, or an ID token for this client sent as `Authorization: Bearer <token>`.\nThis lets non-browser clients authenticate with a token obtained from the provider directly.",
+          "description": "Browser sessions, or a JWT sent as `Authorization: Bearer <token>`.\nThis lets non-browser clients authenticate with a token obtained from the provider directly.\nAny token signed by the issuer whose `aud` includes this client is accepted, including access\ntokens. To accept fewer tokens, check claims in `authorization` rules, for example\n`!has(jwt.azp) || jwt.azp == \"<client-id>\"`.",
           "type": "string",
           "const": "sessionOrBearer"
         },
@@ -13826,6 +13826,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TimeoutPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "retry": {
+          "description": "Retry matching failed upstream requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetryPolicy"
             },
             {
               "type": "null"

@@ -1305,6 +1305,81 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	expect(gateway.postedConfigs).toHaveLength(0);
 });
 
+for (const filePort of [false, true]) {
+	test(`hybrid LLM settings save to the database (filePort=${filePort})`, async ({ page }) => {
+		// The file may set the port; tls only comes from the llm.settings row.
+		const config = populatedConfig();
+		const fileLlm = config.llm as Record<string, unknown>;
+		if (!filePort) delete fileLlm.port;
+		const effective = structuredClone(config);
+		Object.assign(effective.llm as Record<string, unknown>, {
+			port: 4000,
+			tls: { cert: 'cert.pem', key: 'key.pem' }
+		});
+		const gateway = await mockGateway(page, config);
+		const writes: Array<Record<string, unknown>> = [];
+
+		await page.route('**/api/runtime', route =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					build: {},
+					ui: { gatewayMode: 'standalone', configStoreMode: 'hybrid' }
+				})
+			})
+		);
+		await page.route('**/api/config/effective', route =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(effective)
+			})
+		);
+		await page.route('**/api/config/resources**', async route => {
+			if (route.request().method() === 'GET') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ resources: [] })
+				});
+				return;
+			}
+			if (
+				route.request().method() === 'PUT' &&
+				new URL(route.request().url()).pathname.endsWith('/llm.settings')
+			) {
+				const request = route.request().postDataJSON() as {
+					resources: Array<{ value: Record<string, unknown> }>;
+				};
+				writes.push(request.resources[0].value);
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ resources: [] })
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/');
+		await page.getByRole('button', { name: 'Settings' }).first().click();
+		const port = page.getByRole('textbox', { name: /Port/ });
+		if (filePort) {
+			await expect(port).toBeDisabled();
+			await expect(page.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+			expect(writes).toHaveLength(0);
+		} else {
+			await port.fill('4100');
+			await page.getByRole('button', { name: 'Save settings' }).click();
+			await expect.poll(() => writes.length).toBe(1);
+			expect(writes[0]).toEqual({ port: 4100, tls: { cert: 'cert.pem', key: 'key.pem' } });
+		}
+		expect(gateway.postedConfigs).toHaveLength(0);
+	});
+}
+
 test('hybrid file-owned API key policy is read-only', async ({ page }) => {
 	const config = emptyConfig();
 	const policies = (config.llm as Record<string, unknown>).policies as Record<string, unknown>;
@@ -2034,4 +2109,81 @@ test('login loads without protected API requests and preserves the return destin
 	await page.getByRole('link', { name: 'Sign in with SSO' }).click();
 	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
 	await expect(page.getByText('OAuth started')).toBeVisible();
+});
+
+test('multiselect shows selected values as chips with an overflow count', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/analytics');
+
+	const field = page.locator('.multi-check', { hasText: 'Group by' });
+	const trigger = field.locator('.multi-check-trigger');
+	const chips = field.locator('.multi-check-values > .multi-check-chip');
+	const count = field.locator('.multi-check-values > .multi-check-count');
+	const widthBefore = (await trigger.boundingBox())?.width;
+
+	await trigger.click();
+	const popover = field.locator('.multi-check-popover');
+	await popover.getByRole('checkbox', { name: 'Model' }).check();
+	await popover.getByRole('checkbox', { name: 'User', exact: true }).check();
+	await expect(chips).toHaveText(['Model', 'User']);
+	await expect(count).toHaveCount(0);
+
+	// Picking everything can't fit: the rest collapse into +n, and hovering still names them all.
+	const labels = ['Model', 'User', 'Group', 'Provider', 'User agent'];
+	for (const label of labels) {
+		await popover.getByRole('checkbox', { name: label, exact: true }).check();
+	}
+	await expect(count).toBeVisible();
+	const shown = await chips.count();
+	expect(shown).toBeGreaterThan(1);
+	await expect(count).toHaveText(`+${labels.length - shown}`);
+	await expect(trigger).toHaveAttribute('title', labels.join(', '));
+
+	// The field keeps its width so the open popover doesn't move while picking.
+	expect((await trigger.boundingBox())?.width).toBe(widthBefore);
+});
+
+test('multiselect popover fits long options inside the filter row', async ({ page }) => {
+	const longModel = 'anthropic/claude-sonnet-4-5-20250929-long-deployment-name';
+	const longProvider = 'azure-openai-eastus2-production-deployment-pool';
+	const tooLong = `${'very-long-model-name-'.repeat(20)}end`;
+	await mockGateway(page);
+	await page.route('**/api/logs/analytics/summary', route =>
+		route.fulfill({
+			json: {
+				timeRange: { from: '2025-01-01T00:00:00Z', to: '2025-01-01T01:00:00Z' },
+				bucketSeconds: 900,
+				buckets: [],
+				groups: [],
+				filterOptions: {
+					requestModel: ['gpt-4o', longModel, tooLong],
+					provider: ['openai', longProvider]
+				}
+			}
+		})
+	);
+	await page.goto('/llm/analytics');
+	const row = page.locator('.analytics-controls-left');
+	await expect(row.locator('.multi-check')).toHaveCount(6);
+	const rowBox = await row.boundingBox();
+	if (!rowBox) throw new Error('filter row is not visible');
+
+	// A long provider reads in full, even from a field near the row's right edge.
+	const providers = row.locator('.multi-check', { hasText: 'Providers' });
+	await providers.locator('.multi-check-trigger').click();
+	const label = providers.locator('.multi-check-option span', { hasText: longProvider });
+	await expect(label).toBeVisible();
+	expect(await label.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+	const popover = await providers.locator('.multi-check-popover').boundingBox();
+	if (!popover) throw new Error('popover is not visible');
+	expect(popover.x + popover.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+	await page.keyboard.press('Escape');
+	await page.mouse.click(5, 5);
+
+	// A name wider than the row is capped at the row, and the tooltip still gives it in full.
+	const models = row.locator('.multi-check', { hasText: 'Models' });
+	await models.locator('.multi-check-trigger').click();
+	const capped = await models.locator('.multi-check-popover').boundingBox();
+	expect(capped?.width).toBeLessThanOrEqual(rowBox.width + 1);
+	await expect(models.locator(`.multi-check-option span[title="${tooLong}"]`)).toBeVisible();
 });

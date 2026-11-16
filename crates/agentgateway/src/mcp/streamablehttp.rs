@@ -280,7 +280,10 @@ impl StreamableHttpService {
 		};
 
 		let ctx = crate::mcp::upstream::IncomingRequestContext::new(&parts);
-		let Some(session) = self.session_manager.get_session(session_id, inputs, &ctx) else {
+		let Some(session) = self
+			.session_manager
+			.get_or_resume_session(session_id, inputs, &ctx)?
+		else {
 			return mcp::Error::UnknownSession.into();
 		};
 
