@@ -40,17 +40,15 @@ struct BudgetCounter {
 }
 
 impl BudgetCounter {
-	fn configured(api_key: &str, budget: &Budget, now: UnixDate) -> anyhow::Result<Self> {
+	fn configured(definition: &BudgetDefinition, now: UnixDate) -> anyhow::Result<Self> {
+		let budget = &definition.budget;
 		let rolling = budget
 			.window
 			.as_ref()
 			.map_or(UNBOUNDED_WINDOW, |window| window.rolling);
 		let (window_start, window_end) = budget_window(now, rolling)?;
 		Ok(Self {
-			definition: Some(BudgetDefinition {
-				api_key: api_key.to_owned(),
-				budget: budget.clone(),
-			}),
+			definition: Some(definition.clone()),
 			amount: Decimal::ZERO,
 			pending: Decimal::ZERO,
 			unit: Some(budget.limit.unit),
@@ -62,7 +60,8 @@ impl BudgetCounter {
 	}
 
 	/// Attaches the latest definition and resets runtime state if its window or unit changed.
-	fn configure(&mut self, api_key: &str, budget: &Budget, now: UnixDate) -> anyhow::Result<()> {
+	fn configure(&mut self, definition: &BudgetDefinition, now: UnixDate) -> anyhow::Result<()> {
+		let budget = &definition.budget;
 		let rolling = budget
 			.window
 			.as_ref()
@@ -75,11 +74,24 @@ impl BudgetCounter {
 			self.updated_at = now;
 		}
 		self.rolling = rolling;
-		self.definition = Some(BudgetDefinition {
-			api_key: api_key.to_owned(),
-			budget: budget.clone(),
-		});
+		self.definition = Some(definition.clone());
 		Ok(())
+	}
+
+	/// Adds usage persisted under a legacy budget id when it belongs to this counter's current
+	/// window and unit; usage from another window or unit no longer counts.
+	fn absorb(
+		&mut self,
+		unit: Option<BudgetLimitUnit>,
+		window_start: UnixDate,
+		window_end: UnixDate,
+		amount: Decimal,
+		updated_at: UnixDate,
+	) {
+		if unit == self.unit && window_start == self.window_start && window_end == self.window_end {
+			self.amount += amount;
+			self.updated_at = self.updated_at.max(updated_at);
+		}
 	}
 
 	/// Advances an expired counter to the epoch-aligned fixed window containing `now`. Counters
@@ -119,6 +131,9 @@ struct PendingBudgetUsage {
 struct BudgetDefinition {
 	api_key: String,
 	budget: Budget,
+	/// Id this budget was stored under by releases that keyed budgets by the key hash. Only an
+	/// alias: usage found under it is folded into this budget; see [`BudgetPolicy::legacy_rows`].
+	legacy_id: Option<String>,
 }
 
 /// A named budget attached to a standalone API key.
@@ -276,6 +291,13 @@ pub struct BudgetPolicy {
 	/// share runtime counters with the process-wide policy but do not mutate them until reload succeeds.
 	#[serde(skip)]
 	registration: Option<Arc<DashMap<String, BudgetDefinition>>>,
+	/// Legacy budget ids with a persisted row, mapped to the budget that already counts that usage
+	/// in memory. The next flush merges each row into the current one and deletes it.
+	///
+	/// TODO: temporary migration from key-hash budget ids; remove once releases that wrote them are
+	/// no longer supported.
+	#[serde(skip)]
+	legacy_rows: Arc<DashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -343,6 +365,7 @@ impl BudgetPolicy {
 			database: self.database.clone(),
 			flush_lock: self.flush_lock.clone(),
 			registration: Some(Arc::new(DashMap::new())),
+			legacy_rows: self.legacy_rows.clone(),
 		}
 	}
 
@@ -363,20 +386,7 @@ impl BudgetPolicy {
 	pub(crate) fn apply_registration(&self, registration: BudgetRegistration) -> anyhow::Result<()> {
 		let now = Utc::now();
 		for (budget_id, definition) in &registration.0 {
-			match self.counters.entry(budget_id.clone()) {
-				Entry::Occupied(mut entry) => {
-					entry
-						.get_mut()
-						.configure(&definition.api_key, &definition.budget, now)?
-				},
-				Entry::Vacant(entry) => {
-					entry.insert(BudgetCounter::configured(
-						&definition.api_key,
-						&definition.budget,
-						now,
-					)?);
-				},
-			}
+			self.configure_counter(budget_id, definition, now)?;
 		}
 		for mut counter in self.counters.iter_mut() {
 			if !registration.0.contains_key(counter.key()) {
@@ -402,34 +412,74 @@ impl BudgetPolicy {
 			!has_budgets || self.database.get().is_some() || database_configured,
 			"API key budgets require config.database to be configured"
 		);
-		for policy in authentication.users.values() {
+		for (key_hash, policy) in authentication.users.iter() {
 			let Some(budgets) = policy.budgets.as_ref() else {
 				continue;
 			};
 			for budget in &budgets.budgets {
 				let budget_id = budget_id(&budgets.api_key_id, budget);
+				let definition = BudgetDefinition {
+					api_key: budgets.api_key.clone(),
+					budget: budget.clone(),
+					// Releases before the key id was used keyed budgets by the key hash.
+					legacy_id: (budgets.api_key_id != key_hash.as_str())
+						.then(|| self::budget_id(key_hash.as_str(), budget)),
+				};
 				if let Some(registration) = &self.registration {
-					BudgetCounter::configured(&budgets.api_key, budget, now)?;
-					registration.insert(
-						budget_id,
-						BudgetDefinition {
-							api_key: budgets.api_key.clone(),
-							budget: budget.clone(),
-						},
-					);
+					BudgetCounter::configured(&definition, now)?;
+					registration.insert(budget_id, definition);
 					continue;
 				}
-				match self.counters.entry(budget_id) {
-					Entry::Occupied(mut entry) => {
-						entry.get_mut().configure(&budgets.api_key, budget, now)?;
-					},
-					Entry::Vacant(entry) => {
-						entry.insert(BudgetCounter::configured(&budgets.api_key, budget, now)?);
-					},
-				}
+				self.configure_counter(&budget_id, &definition, now)?;
 			}
 		}
 		Ok(())
+	}
+
+	/// Attaches a definition to its counter, creating the counter if needed.
+	fn configure_counter(
+		&self,
+		budget_id: &str,
+		definition: &BudgetDefinition,
+		now: UnixDate,
+	) -> anyhow::Result<()> {
+		match self.counters.entry(budget_id.to_owned()) {
+			Entry::Occupied(mut entry) => entry.get_mut().configure(definition, now)?,
+			Entry::Vacant(entry) => {
+				entry.insert(BudgetCounter::configured(definition, now)?);
+			},
+		}
+		if let Some(legacy_id) = &definition.legacy_id {
+			self.absorb_legacy_counter(legacy_id, budget_id, now);
+		}
+		Ok(())
+	}
+
+	/// TODO: temporary migration from key-hash budget ids, see [`Self::legacy_rows`].
+	///
+	/// A legacy row is never a counter of its own. Rows preloaded before their alias was known are
+	/// folded into the current counter here, which also removes them, so a later reload cannot
+	/// count them twice. Rows read once the alias is known are folded by `reconcile` instead.
+	fn absorb_legacy_counter(&self, legacy_id: &str, budget_id: &str, now: UnixDate) {
+		let Some((_, legacy)) = self
+			.counters
+			.remove_if(legacy_id, |_, counter| counter.definition.is_none())
+		else {
+			return;
+		};
+		if let Some(mut counter) = self.counters.get_mut(budget_id) {
+			counter.refresh(now);
+			counter.absorb(
+				legacy.unit,
+				legacy.window_start,
+				legacy.window_end,
+				legacy.amount,
+				legacy.updated_at,
+			);
+		}
+		self
+			.legacy_rows
+			.insert(legacy_id.to_owned(), budget_id.to_owned());
 	}
 
 	/// Refreshes each matched counter before a request, logs exceeded budgets, and returns the first
@@ -571,6 +621,14 @@ impl crate::store::RequestPolicyTrait for BudgetPolicy {
 mod tests {
 	use super::*;
 
+	fn definition(api_key: &str, budget: &Budget) -> BudgetDefinition {
+		BudgetDefinition {
+			api_key: api_key.to_owned(),
+			budget: budget.clone(),
+			legacy_id: None,
+		}
+	}
+
 	#[test]
 	fn budgets_require_a_database() {
 		let keys: crate::http::apikey::LocalAPIKeys = serde_json::from_value(serde_json::json!({
@@ -593,6 +651,44 @@ mod tests {
 		assert_eq!(
 			err.to_string(),
 			"API key budgets require config.database to be configured"
+		);
+	}
+
+	#[test]
+	fn budgets_follow_the_key_id_when_the_key_value_changes() {
+		let budget_id_for = |key: &str, metadata: serde_json::Value| {
+			let keys: crate::http::apikey::LocalAPIKeys = serde_json::from_value(serde_json::json!({
+				"keys": [{
+					"key": key,
+					"metadata": metadata,
+					"budgets": [{
+						"name": "daily",
+						"limit": {"unit": "USD", "amount": 10},
+						"onBudgetExceeded": "Block"
+					}]
+				}]
+			}))
+			.unwrap();
+			let authentication = keys.compile().unwrap();
+			let budgets = authentication
+				.users
+				.values()
+				.next()
+				.unwrap()
+				.budgets
+				.clone()
+				.unwrap();
+			budget_id(&budgets.api_key_id, &budgets.budgets[0])
+		};
+		let with_id = serde_json::json!({"name": "team", "agentgateway.dev/id": "key-id"});
+		assert_eq!(
+			budget_id_for("sk-old", with_id.clone()),
+			budget_id_for("sk-new", with_id)
+		);
+		let without_id = serde_json::json!({"name": "team"});
+		assert_ne!(
+			budget_id_for("sk-old", without_id.clone()),
+			budget_id_for("sk-new", without_id)
 		);
 	}
 
@@ -697,7 +793,7 @@ CREATE TABLE budget_usage (
 		let preloaded = Arc::new(BudgetPolicy::default());
 		preloaded.counters.insert(
 			"preloaded".to_string(),
-			BudgetCounter::configured("key", &budget, now).unwrap(),
+			BudgetCounter::configured(&definition("key", &budget), now).unwrap(),
 		);
 		preloaded
 			.initialize(crate::database::DatabasePool::Sqlite(pool.clone()))
@@ -715,11 +811,11 @@ CREATE TABLE budget_usage (
 		assert_eq!(expired, 0);
 		first.counters.insert(
 			"window".to_string(),
-			BudgetCounter::configured("key", &budget, now).unwrap(),
+			BudgetCounter::configured(&definition("key", &budget), now).unwrap(),
 		);
 		second.counters.insert(
 			"window".to_string(),
-			BudgetCounter::configured("key", &budget, now).unwrap(),
+			BudgetCounter::configured(&definition("key", &budget), now).unwrap(),
 		);
 		assert_eq!(
 			first.counters.get("window").unwrap().window_start,
@@ -764,7 +860,8 @@ CREATE TABLE budget_usage (
 			}),
 			on_budget_exceeded: BudgetExceededAction::Block,
 		};
-		let mut expired_residue = BudgetCounter::configured("key", &usd_budget, now).unwrap();
+		let mut expired_residue =
+			BudgetCounter::configured(&definition("key", &usd_budget), now).unwrap();
 		expired_residue.amount = Decimal::new(1, 10);
 		expired_residue.pending = Decimal::new(1, 10);
 		expired_residue.window_start = UnixDate::from_timestamp_millis(0).unwrap();
@@ -781,6 +878,187 @@ CREATE TABLE budget_usage (
 				.pending
 				.is_zero()
 		);
+	}
+
+	#[test]
+	fn duplicate_key_ids_are_rejected_on_budgeted_keys() {
+		let compile = |second_budgets: serde_json::Value| {
+			let keys: crate::http::apikey::LocalAPIKeys = serde_json::from_value(serde_json::json!({
+				"keys": [{
+					"key": "sk-first",
+					"metadata": {"name": "first", "agentgateway.dev/id": "shared"},
+					"budgets": [{
+						"name": "daily",
+						"limit": {"unit": "Tokens", "amount": 10},
+						"onBudgetExceeded": "Block"
+					}]
+				}, {
+					"key": "sk-second",
+					"metadata": {"name": "second", "agentgateway.dev/id": "shared"},
+					"budgets": second_budgets
+				}]
+			}))
+			.unwrap();
+			keys.compile()
+		};
+		let err = compile(serde_json::json!([{
+			"name": "daily",
+			"limit": {"unit": "Tokens", "amount": 10},
+			"onBudgetExceeded": "Block"
+		}]))
+		.err()
+		.unwrap();
+		assert_eq!(
+			err.to_string(),
+			"duplicate agentgateway.dev/id \"shared\" on API keys with budgets"
+		);
+		assert!(compile(serde_json::json!([])).is_ok());
+	}
+
+	/// Usage persisted by a release that keyed budgets by the key hash, under `legacy_id`.
+	struct LegacyFixture {
+		pool: sqlx::SqlitePool,
+		authentication: crate::http::apikey::APIKeyAuthentication,
+		budget_id: String,
+		legacy_id: String,
+		window_start: i64,
+		window_end: i64,
+	}
+
+	impl LegacyFixture {
+		async fn new() -> Self {
+			let pool = sqlx::sqlite::SqlitePoolOptions::new()
+				.max_connections(1)
+				.connect("sqlite::memory:")
+				.await
+				.unwrap();
+			let keys: crate::http::apikey::LocalAPIKeys = serde_json::from_value(serde_json::json!({
+				"keys": [{
+					"key": "sk-upgraded",
+					"metadata": {"name": "upgraded", "agentgateway.dev/id": "upgraded-id"},
+					"budgets": [{
+						"name": "lifetime",
+						"limit": {"unit": "Tokens", "amount": 100},
+						"onBudgetExceeded": "Block"
+					}]
+				}]
+			}))
+			.unwrap();
+			let authentication = keys.compile().unwrap();
+			let (key_hash, policy) = authentication.users.iter().next().unwrap();
+			let budgets = policy.budgets.clone().unwrap();
+			let budget_id = budget_id(&budgets.api_key_id, &budgets.budgets[0]);
+			let legacy_id = super::budget_id(key_hash.as_str(), &budgets.budgets[0]);
+			assert_ne!(budget_id, legacy_id);
+			// Creates the schema.
+			Arc::new(BudgetPolicy::default())
+				.initialize(crate::database::DatabasePool::Sqlite(pool.clone()))
+				.await
+				.unwrap();
+			let (window_start, window_end) = budget_window(Utc::now(), UNBOUNDED_WINDOW).unwrap();
+			Self {
+				pool,
+				authentication,
+				budget_id,
+				legacy_id,
+				window_start: window_start.timestamp_millis(),
+				window_end: window_end.timestamp_millis(),
+			}
+		}
+
+		async fn write(&self, budget_id: &str, used_amount: i64) {
+			sqlx::query(
+				"INSERT INTO budget_usage (budget_id, window_start, window_end, unit, used_amount, updated_at) VALUES (?, ?, ?, 'Tokens', ?, 0) \
+				ON CONFLICT(budget_id) DO UPDATE SET used_amount = budget_usage.used_amount + excluded.used_amount",
+			)
+			.bind(budget_id)
+			.bind(self.window_start)
+			.bind(self.window_end)
+			.bind(used_amount)
+			.execute(&self.pool)
+			.await
+			.unwrap();
+		}
+
+		async fn rows(&self) -> Vec<(String, i64)> {
+			sqlx::query_as("SELECT budget_id, used_amount FROM budget_usage ORDER BY budget_id")
+				.fetch_all(&self.pool)
+				.await
+				.unwrap()
+		}
+
+		async fn start(&self) -> Arc<BudgetPolicy> {
+			let policy = Arc::new(BudgetPolicy::default());
+			policy
+				.initialize(crate::database::DatabasePool::Sqlite(self.pool.clone()))
+				.await
+				.unwrap();
+			policy
+		}
+
+		/// Loads the configuration the way a reload does.
+		fn reload(&self, policy: &BudgetPolicy) {
+			let candidate = policy.registration_policy();
+			candidate.register(&self.authentication, true).unwrap();
+			policy.apply_registration(candidate.registration()).unwrap();
+		}
+
+		fn used(&self, policy: &BudgetPolicy) -> Decimal {
+			policy.counters.get(&self.budget_id).unwrap().amount
+		}
+	}
+
+	#[tokio::test]
+	async fn legacy_usage_counts_as_soon_as_the_key_is_registered() {
+		let fixture = LegacyFixture::new().await;
+		fixture.write(&fixture.legacy_id, 7).await;
+		// Another upgraded replica already wrote under the key id.
+		fixture.write(&fixture.budget_id, 1).await;
+
+		let policy = fixture.start().await;
+		fixture.reload(&policy);
+		assert_eq!(fixture.used(&policy), Decimal::from(8));
+		assert!(!policy.counters.contains_key(&fixture.legacy_id));
+		// A reload before the next flush does not count the legacy usage again.
+		fixture.reload(&policy);
+		assert_eq!(fixture.used(&policy), Decimal::from(8));
+
+		{
+			let mut counter = policy.counters.get_mut(&fixture.budget_id).unwrap();
+			counter.amount += Decimal::from(2);
+			counter.pending += Decimal::from(2);
+		}
+		policy.flush().await.unwrap();
+		assert_eq!(fixture.rows().await, vec![(fixture.budget_id.clone(), 10)]);
+		assert_eq!(fixture.used(&policy), Decimal::from(10));
+		assert!(policy.legacy_rows.is_empty());
+
+		// Without legacy rows, reloads and flushes have nothing to migrate.
+		fixture.reload(&policy);
+		assert!(policy.legacy_rows.is_empty());
+		policy.flush().await.unwrap();
+		assert_eq!(fixture.rows().await, vec![(fixture.budget_id.clone(), 10)]);
+		assert_eq!(fixture.used(&policy), Decimal::from(10));
+	}
+
+	#[tokio::test]
+	async fn legacy_usage_written_after_the_upgrade_is_merged() {
+		let fixture = LegacyFixture::new().await;
+		let policy = fixture.start().await;
+		fixture.reload(&policy);
+		fixture.write(&fixture.budget_id, 5).await;
+		policy.flush().await.unwrap();
+		assert!(policy.legacy_rows.is_empty());
+
+		// A replica still running the previous release charges the key under its hash.
+		fixture.write(&fixture.legacy_id, 3).await;
+		policy.flush().await.unwrap();
+		assert_eq!(fixture.used(&policy), Decimal::from(8));
+		assert!(!policy.counters.contains_key(&fixture.legacy_id));
+		policy.flush().await.unwrap();
+		assert_eq!(fixture.rows().await, vec![(fixture.budget_id.clone(), 8)]);
+		assert_eq!(fixture.used(&policy), Decimal::from(8));
+		assert!(policy.legacy_rows.is_empty());
 	}
 
 	#[tokio::test]
@@ -843,7 +1121,7 @@ CREATE TABLE budget_usage (
 		{
 			let mut counter = restarted.counters.get_mut(&budget_id).unwrap();
 			counter
-				.configure(&budgets.api_key, &rolling, Utc::now())
+				.configure(&definition(&budgets.api_key, &rolling), Utc::now())
 				.unwrap();
 			assert_eq!(counter.amount, Decimal::ZERO);
 			counter.amount = Decimal::from(3);
