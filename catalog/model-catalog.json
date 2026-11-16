@@ -124,7 +124,8 @@
             }
           ],
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -1194,7 +1195,8 @@
           },
           "tags": [
             "adaptive_thinking",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -3717,7 +3719,8 @@
           },
           "tags": [
             "adaptive_thinking",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -8240,7 +8243,8 @@
           },
           "tags": [
             "adaptive_thinking",
-            "runtime"
+            "runtime",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -10207,7 +10211,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -14620,7 +14625,8 @@
             }
           },
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -21432,7 +21438,8 @@
             }
           ],
           "tags": [
-            "adaptive_thinking"
+            "adaptive_thinking",
+            "always_on_thinking"
           ],
           "limits": {
             "context": 1000000,
