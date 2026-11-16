@@ -182,6 +182,17 @@
             }
           ]
         },
+        "fileAccess": {
+          "description": "Restricts which files may be read by configuration from the API, database, or xDS.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileAccess"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caAddress": {
           "description": "Address of the Certificate Authority used to issue SPIFFE certificates.",
           "type": [
@@ -1033,6 +1044,29 @@
           "const": "readOnly"
         }
       ]
+    },
+    "FileAccess": {
+      "description": "Restricts which files may be read by configuration from the API, database, or xDS.\nThe local configuration file is not restricted.\n\nThe longest matching prefix decides; `deny` wins a tie.",
+      "type": "object",
+      "properties": {
+        "allow": {
+          "description": "Path prefixes that may be read. When empty, any path that is not denied may be read.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "deny": {
+          "description": "Path prefixes that may not be read, in addition to `/dev`, `/proc`, and `/sys`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
     },
     "RawSpiffeConfig": {
       "type": "object",

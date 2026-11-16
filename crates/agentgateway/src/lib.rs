@@ -178,6 +178,8 @@ pub struct RawConfig {
 	database: Option<database::DatabaseConfig>,
 	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
 	storage: Option<RawStorageConfig>,
+	/// Restricts which files may be read by configuration from the API, database, or xDS.
+	file_access: Option<resource_manager::FileAccess>,
 
 	/// Address of the Certificate Authority used to issue SPIFFE certificates.
 	ca_address: Option<String>,
@@ -770,6 +772,7 @@ pub struct Config {
 	pub logging: crate::telemetry::log::Config,
 	pub database: Option<database::DatabaseConfig>,
 	pub storage: StorageConfig,
+	pub file_access: resource_manager::FileAccess,
 	#[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
 	pub sensitive_headers: Vec<::http::HeaderName>,
 

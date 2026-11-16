@@ -71,6 +71,9 @@
 |`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`, `readOnly`.|
+|`config.fileAccess`|object|Restricts which files may be read by configuration from the API, database, or xDS.|
+|`config.fileAccess.allow`|[]string|Path prefixes that may be read. When empty, any path that is not denied may be read.|
+|`config.fileAccess.deny`|[]string|Path prefixes that may not be read, in addition to `/dev`, `/proc`, and `/sys`.|
 |`config.caAddress`|string|Address of the Certificate Authority used to issue SPIFFE certificates.|
 |`config.caAuthToken`|string|Authentication token for communicating with the Certificate Authority.|
 |`config.xdsAddress`|string|Address of the xDS control plane used for dynamic configuration.|
