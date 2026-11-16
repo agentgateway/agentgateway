@@ -13832,6 +13832,18 @@
             }
           ],
           "default": null
+        },
+        "retry": {
+          "description": "Retry matching failed upstream requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetryPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
