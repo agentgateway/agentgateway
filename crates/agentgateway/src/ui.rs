@@ -1750,8 +1750,8 @@ mod tests {
 		let app = test_app(false);
 		assert!(app.state.logging.database.is_none());
 		for (expression, jwt, expected_subject, can_logout) in [
-			(None, true, Some("jwt-user"), false),
-			(None, true, Some("jwt-user"), true),
+			(None, true, Some("user@example.com"), false),
+			(None, true, Some("user@example.com"), true),
 			(None, false, Some("basic-user"), false),
 			(
 				Some("request.headers['x-display-user']"),
