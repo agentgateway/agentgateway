@@ -26,6 +26,7 @@ impl<T> ErrorContext<T> for Option<T> {
 
 pub struct WatchedFiles {
 	paths: Vec<PathBuf>,
+	options: WatchFilesOptions,
 	changes: mpsc::Receiver<FileWatchChange>,
 }
 
@@ -63,6 +64,41 @@ impl WatchedFiles {
 	/// watch was invalidated by file removal/replacement.
 	pub async fn changed_invalidated(&mut self) -> Option<bool> {
 		self.changes.recv().await.map(|change| change.invalidated)
+	}
+
+	/// Waits for the next reload-worthy change, re-registering the watch *before*
+	/// returning when it was invalidated by a file removal/replacement.
+	///
+	/// Callers that reload on each change should prefer this over
+	/// [`WatchedFiles::changed_invalidated`]: an invalidated watch is closed by the
+	/// watch task, so re-registering only after the reload leaves the file unwatched
+	/// for the whole reload. A writer replacing the file atomically during that window
+	/// produces no event at all, and its version is never loaded. Re-registering first
+	/// means the fresh watch is already in place when the caller starts reading, so any
+	/// later replacement queues another change.
+	///
+	/// Returns `false` once no further changes will arrive, at which point the caller
+	/// should stop watching. When re-registering fails, the current change is still
+	/// reported and the next call returns `false`, so the caller gets to act on it.
+	pub async fn changed_rearmed(&mut self) -> bool {
+		let Some(change) = self.changes.recv().await else {
+			return false;
+		};
+		if change.invalidated {
+			match watch_files_with_options(self.paths.clone(), self.options) {
+				Ok(rearmed) => *self = rearmed,
+				Err(e) => warn!(
+					"failed to re-watch files [{}]: {e}",
+					self
+						.paths
+						.iter()
+						.map(|p| p.display().to_string())
+						.collect::<Vec<_>>()
+						.join(", ")
+				),
+			}
+		}
+		true
 	}
 }
 
@@ -164,6 +200,7 @@ pub fn watch_files_with_options(
 
 	Ok(WatchedFiles {
 		paths: watched_paths,
+		options,
 		changes: change_rx,
 	})
 }
@@ -604,6 +641,52 @@ mod tests {
 			&targets,
 			WatchFilesOptions::default()
 		));
+	}
+
+	/// Replaces `path` the way config writers do: write a sibling temporary file,
+	/// then rename it over the target.
+	fn replace_atomically(path: &Path, contents: &str) {
+		let tmp = path.with_extension("tmp");
+		fs_err::write(&tmp, contents).unwrap();
+		fs_err::rename(&tmp, path).unwrap();
+	}
+
+	#[tokio::test]
+	async fn live_watcher_reports_replacement_landing_during_a_reload() {
+		// Regression: the watch task closes an invalidated watch, so re-registering it
+		// only after the reload left the file unwatched for the length of the reload,
+		// and a replacement landing in that window was never loaded.
+		let dir = tempfile::tempdir().unwrap();
+		let file = dir.path().join("config.yaml");
+		fs_err::write(&file, "version: 1").unwrap();
+
+		let mut watched = watch_files_with_options(
+			vec![file.clone()],
+			WatchFilesOptions::default().close_on_removal(true),
+		)
+		.unwrap();
+
+		replace_atomically(&file, "version: 2");
+		assert!(
+			tokio::time::timeout(Duration::from_secs(10), watched.changed_rearmed())
+				.await
+				.expect("watcher should report the first replacement"),
+			"watch should stay open after an atomic replacement"
+		);
+
+		// Stand in for a slow reload: the caller is busy and not asking for changes
+		// while the next replacement lands.
+		tokio::time::sleep(Duration::from_millis(100)).await;
+		replace_atomically(&file, "version: 3");
+		tokio::time::sleep(Duration::from_millis(750)).await;
+
+		assert!(
+			tokio::time::timeout(Duration::from_secs(10), watched.changed_rearmed())
+				.await
+				.expect("watcher should report a replacement that landed during the reload"),
+			"watch should stay open after an atomic replacement"
+		);
+		assert_eq!(fs_err::read_to_string(&file).unwrap(), "version: 3");
 	}
 
 	#[cfg(target_family = "unix")]

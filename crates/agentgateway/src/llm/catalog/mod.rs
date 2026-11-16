@@ -965,18 +965,11 @@ fn watch_catalog_files(
 		"watching model catalog files"
 	);
 	let task = tokio::task::spawn(async move {
-		while let Some(invalidated) = watched.changed_invalidated().await {
+		// Re-registering an invalidated watch happens before the reload, so a file
+		// replaced while the catalog is reloading still produces an event.
+		while watched.changed_rearmed().await {
 			if let Err(e) = catalog.reload().await {
 				error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
-			}
-			if invalidated {
-				match crate::util::watch_files_with_options(watched.paths().to_vec(), watch_options) {
-					Ok(new_watched) => watched = new_watched,
-					Err(e) => {
-						warn!("failed to re-watch model catalog files: {e}");
-						break;
-					},
-				}
 			}
 		}
 	});
