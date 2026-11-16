@@ -3522,9 +3522,24 @@ details summary {
 	color: var(--ok);
 }
 
+/* Inline text links are underlined and fade on hover and press, as main's link buttons did. */
 .inline-link-button.ant-btn {
 	height: auto;
 	padding: 0;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.inline-link-button.ant-btn > span {
+	text-decoration: inherit;
+}
+
+.inline-link-button.ant-btn:not(:disabled):hover {
+	opacity: 0.8;
+}
+
+.inline-link-button.ant-btn:not(:disabled):active {
+	opacity: 0.65;
 }
 
 .log-prompt-option.ant-checkbox-wrapper {
@@ -5910,14 +5925,22 @@ textarea {
 	margin: 0;
 }
 
-/* The checkbox lines up with the title's first line, not the middle of the card. */
+/* A checkbox with a title and description lines up with the title's first line, not the middle. */
 .config-option-row.ant-checkbox-wrapper {
-	align-items: flex-start;
 	margin: 0;
 }
 
-.config-option-row.ant-checkbox-wrapper .ant-checkbox {
+.ant-checkbox-wrapper:has(.ant-checkbox-label small) {
+	align-items: flex-start;
+}
+
+.ant-checkbox-wrapper:has(.ant-checkbox-label small) > .ant-checkbox {
 	align-self: flex-start;
+	margin-top: 0;
+}
+
+.ant-checkbox-wrapper:has(.ant-checkbox-label small) > .ant-checkbox-label {
+	line-height: normal;
 }
 
 .config-option-row.ant-checkbox-wrapper::after {
