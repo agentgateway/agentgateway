@@ -1779,14 +1779,14 @@ async fn handle_upgrade(
 			let _ = agent_core::copy::copy_bidirectional(
 				&mut TokioIo::new(req),
 				&mut server,
-				&agent_core::copy::ConnectionResult {},
+				&agent_core::copy::ConnectionResult::default(),
 			)
 			.await;
 		} else {
 			let _ = agent_core::copy::copy_bidirectional(
 				&mut TokioIo::new(req),
 				&mut server,
-				&agent_core::copy::ConnectionResult {},
+				&agent_core::copy::ConnectionResult::default(),
 			)
 			.await;
 		}
@@ -1794,6 +1794,23 @@ async fn handle_upgrade(
 		drop(log);
 	});
 	Ok(resp)
+}
+
+/// Writes the tunnel byte counts into the log before the log is emitted, including when the
+/// tunnel task is dropped before the copy completes.
+struct TunnelLog {
+	log: DropOnLog,
+	stats: agent_core::copy::ConnectionResult,
+}
+
+impl Drop for TunnelLog {
+	fn drop(&mut self) {
+		let stats = &self.stats;
+		self.log.with(|l| {
+			l.bytes_sent = Some(stats.bytes_sent());
+			l.bytes_received = Some(stats.bytes_recv());
+		});
+	}
 }
 
 fn handle_connect_tunnel(connect: ConnectTunnel, resp: Response, log: DropOnLog) -> Response {
@@ -1813,14 +1830,13 @@ fn handle_connect_tunnel(connect: ConnectTunnel, resp: Response, log: DropOnLog)
 				return;
 			},
 		};
+		let tunnel_log = TunnelLog {
+			log,
+			stats: Default::default(),
+		};
 		let mut downstream = TokioIo::new(downstream);
-		let _ = agent_core::copy::copy_bidirectional(
-			&mut downstream,
-			&mut upstream,
-			&agent_core::copy::ConnectionResult {},
-		)
-		.await;
-		drop(log);
+		let _ =
+			agent_core::copy::copy_bidirectional(&mut downstream, &mut upstream, &tunnel_log.stats).await;
 	});
 	resp
 }
