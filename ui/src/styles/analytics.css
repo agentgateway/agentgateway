@@ -20,6 +20,31 @@
 	max-width: calc(100% - 40px);
 }
 
+/* A filter narrowed from "All" is tinted, with a purple icon and "+n", as on main. */
+.multi-check .ant-select:has(.ant-select-selection-item) {
+	border-color: color-mix(in srgb, var(--primary) 34%, var(--line-strong));
+	background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+
+.multi-check .ant-select:has(.ant-select-selection-item) .ant-select-prefix,
+.multi-check .ant-select-content-item-rest .ant-select-selection-item {
+	color: var(--primary);
+}
+
+.multi-check .ant-select-content-item-rest .ant-select-selection-item {
+	border-color: transparent;
+	background: color-mix(in srgb, var(--primary) 12%, transparent);
+	font-weight: 600;
+}
+
+:root[data-theme='dark']
+	.multi-check
+	.ant-select:has(.ant-select-selection-item)
+	.ant-select-prefix,
+:root[data-theme='dark'] .multi-check .ant-select-content-item-rest .ant-select-selection-item {
+	color: #c084fc;
+}
+
 .multi-check > span {
 	color: var(--muted);
 	font-size: 12px;
