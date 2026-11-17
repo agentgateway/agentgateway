@@ -568,6 +568,10 @@ impl crate::store::RequestPolicyTrait for BudgetPolicy {
 }
 
 #[cfg(test)]
+#[path = "postgres_tests.rs"]
+mod postgres_tests;
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 
