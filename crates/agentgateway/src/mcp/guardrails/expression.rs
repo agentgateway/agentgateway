@@ -93,11 +93,7 @@ fn evaluate<P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug 
 
 fn internal(method: &str, reason: String) -> ErrorData {
 	debug!(method, %reason, "mcpGuardrails: expression processor failed");
-	ErrorData::new(
-		ErrorCode::INTERNAL_ERROR,
-		format!("mcpGuardrails expression: {reason}"),
-		None,
-	)
+	ErrorData::new(ErrorCode::INTERNAL_ERROR, "guardrail check failed", None)
 }
 
 #[cfg(test)]
@@ -439,7 +435,7 @@ mod tests {
 
 	#[test]
 	fn has_cannot_hide_conversion_errors() {
-		assert_matches!(check(&reject("has(mcp.params.name)", "denied"), "tools/call", Some(&UnusedPayload), &request_context()), Outcome::Reject(e) if e.code == ErrorCode::INTERNAL_ERROR && e.message.contains("unexpected payload conversion"));
+		assert_matches!(check(&reject("has(mcp.params.name)", "denied"), "tools/call", Some(&UnusedPayload), &request_context()), Outcome::Reject(e) if e.code == ErrorCode::INTERNAL_ERROR && e.message == "guardrail check failed");
 	}
 
 	#[test]

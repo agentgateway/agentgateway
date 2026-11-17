@@ -12,8 +12,8 @@ use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
 use crate::mcp::{FailureMode, MCPInfo, McpAuthorizationSet, auth};
-use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
+use crate::proxy::{ProxyError, ProxyResponseReason};
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
@@ -21,6 +21,11 @@ use crate::types::agent::{
 	SimpleBackend, SimpleBackendReference,
 };
 use crate::{ProxyInputs, cel, mcp};
+
+// Each MCP request boxes one of these and holds it until the response is ready.
+// A larger future usually means some value is now held across an await.
+const SSE_HANDLE_FUTURE_SIZE: usize = 20 * 1024;
+const STREAMABLE_HANDLE_FUTURE_SIZE: usize = 4 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct App {
@@ -85,7 +90,7 @@ impl App {
 					let be = t
 						.spec
 						.backend()
-						.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, &pi))
+						.map(|b| crate::proxy::resolve_simple_backend_with_binds(b, &pi, Some(&binds)))
 						.transpose()?;
 					let inline_pols = be.as_ref().map(|pol| pol.inline_policies.as_slice());
 					let sub_backend_target = BackendTargetRef::Backend {
@@ -141,7 +146,10 @@ impl App {
 		if backend.dns_rebinding_protection
 			&& let Some(resp) = mcp::dns_rebinding::reject_non_localhost(&req)
 		{
-			return Ok(resp);
+			return Err(ProxyError::direct_response_from(
+				ProxyResponseReason::Authorization,
+				resp,
+			));
 		}
 
 		authorization_policies.register(log.cel.ctx());
@@ -152,17 +160,20 @@ impl App {
 		// authentication so it can include verified claims
 
 		// Take a request snapshot before authentication can mutate or partially consume the
-		// request. If authentication lets the request continue, the normal snapshot below
+		// request. If authentication lets the request continue, the snapshot below
 		// replaces this with the post-authentication request state.
-		Self::snapshot_request_without_clearing_extensions(&mut req, log);
+		// MCP requires CEL execution after the snapshot so we do not clear extensions
+		let mut req = req.take_and_snapshot_without_clearing_extensions(Some(&mut log))?;
 		if let Some(auth) = authn.as_ref()
 			&& let Some(resp) = auth::enforce_authentication(&mut req, auth, &request_client).await?
 		{
 			return Ok(resp);
 		}
-
-		// MCP requires CEL execution after the snapshot so we do not clear extensions
-		let req = req.take_and_snapshot_without_clearing_extensions(Some(&mut log))?;
+		log.request_snapshot = log
+			.cel
+			.cel_context
+			.maybe_snapshot_request(&mut req, false)
+			.map(Arc::new);
 		if log.request_processing_duration.is_none() {
 			// This is a bit inaccurate but the best we can do for the MCP path without very invasive changes.
 			log.request_processing_duration = Some(log.request_processing_start.elapsed());
@@ -184,7 +195,7 @@ impl App {
 							client: client.clone(),
 						},
 					)
-					.assert_size::<{ 20 * 1024 }>(),
+					.assert_size::<{ SSE_HANDLE_FUTURE_SIZE }>(),
 			)
 			.await
 		} else {
@@ -206,7 +217,7 @@ impl App {
 							client: client.clone(),
 						},
 					)
-					.assert_size::<{ 4 * 1024 }>(),
+					.assert_size::<{ STREAMABLE_HANDLE_FUTURE_SIZE }>(),
 			)
 			.await
 		};
@@ -226,17 +237,6 @@ impl App {
 				));
 		}
 		response
-	}
-
-	fn snapshot_request_without_clearing_extensions(
-		req: &mut MustSnapshot<'_>,
-		log: &mut RequestLog,
-	) {
-		log.request_snapshot = log
-			.cel
-			.cel_context
-			.maybe_snapshot_request(req, false)
-			.map(Arc::new);
 	}
 }
 

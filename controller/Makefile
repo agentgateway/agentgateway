@@ -131,6 +131,7 @@ lint: analyze
 
 .PHONY: analyze
 analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options with ANALYZE_ARGS.
+	$(if $(findstring --fix,$(ANALYZE_ARGS)),$(CUSTOM_GOLANGCI_LINT_FMT) ./...)
 	$(CUSTOM_GOLANGCI_LINT_RUN) $(ANALYZE_ARGS) ./...
 
 .PHONY: ensure-custom-golangci-lint
@@ -339,7 +340,7 @@ clean-gen:
 	rm -rf api/applyconfiguration
 	rm -rf pkg/generated/openapi
 	rm -rf pkg/client
-	rm -f install/helm/agentgateway-crds/templates/agentgateway.dev_*.yaml
+	rm -f install/helm/agentgateway-crds/files/crds/agentgateway.dev_*.yaml
 
 # Clean all stamp files to force regeneration
 .PHONY: clean-stamps
@@ -710,7 +711,7 @@ kind-load: kind-load-testbox
 
 # Agent Gateway conformance test configuration
 AGW_CONFORMANCE_GATEWAY_CLASS ?= agentgateway
-AGW_CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/agw-$(VERSION)-report.yaml -organization=agentgateway -project=agentgateway -version=$(VERSION) -url=github.com/agentgateway/agentgateway -contact=github.com/agentgateway/agentgateway/issues/new/choose
+AGW_CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/agw-$(VERSION)-report.yaml -organization=agentgateway -project=agentgateway -version=$(VERSION) -url=https://github.com/agentgateway/agentgateway -contact=https://github.com/agentgateway/agentgateway/issues/new/choose
 AGW_CONFORMANCE_SKIP_TESTS ?=
 AGW_CONFORMANCE_SKIP_ARGS := $(if $(AGW_CONFORMANCE_SKIP_TESTS),-skip-tests=$(AGW_CONFORMANCE_SKIP_TESTS))
 AGW_CONFORMANCE_ARGS := -gateway-class=$(AGW_CONFORMANCE_GATEWAY_CLASS) $(AGW_CONFORMANCE_REPORT_ARGS) $(AGW_CONFORMANCE_SKIP_ARGS)
@@ -736,15 +737,21 @@ GIE_CONFORMANCE_REPORT_ARGS ?= \
 GIE_CONFORMANCE_GATEWAY_CLASS ?= agentgateway
 GIE_CONFORMANCE_ARGS := \
     -gateway-class=$(GIE_CONFORMANCE_GATEWAY_CLASS) \
+    -allow-crds-mismatch \
     $(GIE_CONFORMANCE_REPORT_ARGS)
+
+# The suite runs from an upstream checkout so it builds with its own go.mod.
+GIE_CONFORMANCE_REF ?= $(GIE_CRD_VERSION)
+GIE_CONFORMANCE_DIR := $(OUTPUT_DIR)/gie-conformance-$(GIE_CONFORMANCE_REF)
 
 .PHONY: gie-conformance
 gie-conformance: gie-crds ## Run the Gateway API Inference Extension conformance suite
 	@mkdir -p $(TEST_ASSET_DIR)/conformance
-	CGO_ENABLED=0 go test -mod=mod -ldflags='$(LDFLAGS)' \
-	    -tags conformance \
+	@[ -d $(GIE_CONFORMANCE_DIR) ] || git -c advice.detachedHead=false clone -q --depth 1 --branch $(GIE_CONFORMANCE_REF) \
+	    https://github.com/kubernetes-sigs/gateway-api-inference-extension $(GIE_CONFORMANCE_DIR)
+	cd $(GIE_CONFORMANCE_DIR)/conformance && CGO_ENABLED=0 go test \
 	    -timeout=25m \
-	    -v $(shell go mod download && go list -m -f '{{.Dir}}' sigs.k8s.io/gateway-api-inference-extension/conformance) \
+	    -v . \
 	    -args $(GIE_CONFORMANCE_ARGS)
 
 # An alias to run both Gateway API and Inference Extension conformance tests.

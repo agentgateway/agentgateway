@@ -48,25 +48,17 @@ pub trait Handler {
 }
 
 /// Mock ext_authz server for testing
-pub struct ExtAuthMock<T> {
-	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
+#[derive(Clone)]
+pub struct ExtAuthMock {
+	handler: Arc<dyn Fn() -> Box<dyn Handler + Send + Sync> + Send + Sync>,
 }
 
-impl<T> Clone for ExtAuthMock<T> {
-	fn clone(&self) -> Self {
+impl ExtAuthMock {
+	pub fn new<T: Handler + Send + Sync + 'static>(
+		handler: impl Fn() -> T + Send + Sync + 'static,
+	) -> Self {
 		Self {
-			handler: self.handler.clone(),
-		}
-	}
-}
-
-impl<T> ExtAuthMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
-	pub fn new(handler: impl Fn() -> T + Send + Sync + 'static) -> Self {
-		Self {
-			handler: Arc::new(handler),
+			handler: Arc::new(move || Box::new(handler())),
 		}
 	}
 
@@ -82,10 +74,7 @@ where
 }
 
 #[tonic::async_trait]
-impl<T> Authorization for ExtAuthMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
+impl Authorization for ExtAuthMock {
 	async fn check(
 		&self,
 		request: Request<CheckRequest>,

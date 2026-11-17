@@ -248,11 +248,11 @@ impl LocalClient {
 		let config_content = self.config_content().await?;
 		let resources =
 			crate::resource_manager::ResourceFetcher::managed(self.resource_manager.clone());
-		let config = crate::types::local::NormalizedLocalConfig::from(
+		let config = crate::types::local::NormalizedLocalConfig::from_expanded(
 			&self.config,
 			&resources,
 			self.gateway.clone(),
-			config_content.as_str(),
+			config_content,
 		)
 		.await?;
 		let model_catalog = config
@@ -262,7 +262,7 @@ impl LocalClient {
 		self
 			.config
 			.logging
-			.database_fields
+			.standard_attributes
 			.store(config.standard_attributes);
 		self.config.logging.session.store(config.session_attribute);
 		info!("loaded config from {:?}", self.cfg);
@@ -302,7 +302,7 @@ impl LocalClient {
 		{
 			return config_store::materialize_hybrid_config(&self.cfg, store).await;
 		}
-		self.cfg.read_to_string().await
+		crate::types::local::expand_env(&self.cfg.read_to_string().await?)
 	}
 
 	async fn reload_config_after_change(&self, prev: PreviousState) -> PreviousState {
@@ -380,8 +380,7 @@ async fn watch_self_workload(
 	// allow a cluster id mismatch as a very common misconfiguration is that the control plane and
 	// dataplane mismatch on this but if we do hit a conflict (should be rare) we use the cluster_id
 	// as a tiebreaker
-	let lookup = || {
-		let store = stores.discovery.read();
+	let lookup = |store: &crate::store::DiscoveryStore| {
 		store
 			.workloads
 			.find_by_name(&name, &namespace)
@@ -391,7 +390,7 @@ async fn watch_self_workload(
 
 	{
 		let store = stores.discovery.read();
-		if let Some(w) = lookup() {
+		if let Some(w) = lookup(&store) {
 			store.self_workload.set((*w).clone());
 			store.rebucket_all();
 			return;
@@ -414,7 +413,7 @@ async fn watch_self_workload(
 	loop {
 		{
 			let store = stores.discovery.read();
-			if let Some(w) = lookup() {
+			if let Some(w) = lookup(&store) {
 				store.self_workload.set((*w).clone());
 				store.rebucket_all();
 				return;
@@ -465,6 +464,7 @@ mod tests {
 			&client::Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+				max_ttl: None,
 			},
 			None,
 			crate::BackendConfig::default(),
@@ -639,7 +639,7 @@ frontendPolicies:
 		local_client.clone().run().await.unwrap();
 		wait_for_access_log_remove(&config, &stores, "first").await;
 		wait_for_catalog_model(&model_catalog, "first").await;
-		let first_attributes = config.logging.database_fields.load_full();
+		let first_attributes = config.logging.standard_attributes.load_full();
 
 		fs_err::tokio::write(&path, local_config("ready"))
 			.await
@@ -660,7 +660,7 @@ frontendPolicies:
 		replace_config(&path, "third").await;
 		wait_for_access_log_remove(&config, &stores, "third").await;
 		wait_for_catalog_model(&model_catalog, "third").await;
-		let current_attributes = config.logging.database_fields.load_full();
+		let current_attributes = config.logging.standard_attributes.load_full();
 		let request = crate::http::Request::new(crate::http::Body::empty());
 		let exec = crate::cel::Executor::new_request(&request);
 		for (snapshot, expected) in [(&first_attributes, "first"), (&current_attributes, "third")] {
@@ -685,7 +685,7 @@ frontendPolicies:
 				.await
 				.is_err()
 		);
-		let retained = config.logging.database_fields.load_full();
+		let retained = config.logging.standard_attributes.load_full();
 		let expression = retained
 			.add
 			.iter()

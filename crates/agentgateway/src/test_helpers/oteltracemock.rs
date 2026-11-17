@@ -26,25 +26,17 @@ pub trait Handler {
 }
 
 /// Mock OTLP TraceService server for testing
-pub struct OtelTraceMock<T> {
-	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
+#[derive(Clone)]
+pub struct OtelTraceMock {
+	handler: Arc<dyn Fn() -> Box<dyn Handler + Send + Sync> + Send + Sync>,
 }
 
-impl<T> Clone for OtelTraceMock<T> {
-	fn clone(&self) -> Self {
+impl OtelTraceMock {
+	pub fn new<T: Handler + Send + Sync + 'static>(
+		handler: impl Fn() -> T + Send + Sync + 'static,
+	) -> Self {
 		Self {
-			handler: self.handler.clone(),
-		}
-	}
-}
-
-impl<T> OtelTraceMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
-	pub fn new(handler: impl Fn() -> T + Send + Sync + 'static) -> Self {
-		Self {
-			handler: Arc::new(handler),
+			handler: Arc::new(move || Box::new(handler())),
 		}
 	}
 
@@ -60,10 +52,7 @@ where
 }
 
 #[tonic::async_trait]
-impl<T> TraceService for OtelTraceMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
+impl TraceService for OtelTraceMock {
 	async fn export(
 		&self,
 		request: Request<ExportTraceServiceRequest>,

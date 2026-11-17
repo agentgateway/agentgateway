@@ -1,0 +1,31 @@
+#refresh=true
+# A Service with one Pod, like a pilot-load `type: plain` application with `pods: 1`.
+# Refreshing flips the Pod between ready and not ready.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.Name}}
+spec:
+  clusterIP: 10.0.{{div .Index 256}}.{{mod .Index 256}}
+  selector:
+    app: {{.Name}}
+  ports:
+  - name: http
+    port: 80
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{.Name}}-0
+  labels:
+    app: {{.Name}}
+spec:
+  nodeName: node
+status:
+  phase: Running
+  podIP: 10.1.{{div .Index 256}}.{{mod .Index 256}}
+  podIPs:
+  - ip: 10.1.{{div .Index 256}}.{{mod .Index 256}}
+  conditions:
+  - type: Ready
+    status: "{{ if .Rand }}False{{ else }}True{{ end }}"

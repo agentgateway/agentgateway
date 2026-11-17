@@ -21,6 +21,54 @@ const fakeCondition = "agentgateway.dev/SomeCondition"
 var ctx = context.Background()
 
 func TestBuildGatewayStatus(t *testing.T) {
+	t.Run("recompute insecure frontend validation condition", func(t *testing.T) {
+		for _, tt := range []struct {
+			name        string
+			tls         *gwv1.GatewayTLSConfig
+			wantPresent bool
+		}{
+			{
+				name: "fallback disabled",
+				tls: &gwv1.GatewayTLSConfig{Frontend: &gwv1.FrontendTLSConfig{
+					Default: gwv1.TLSConfig{Validation: &gwv1.FrontendTLSValidation{Mode: gwv1.AllowValidOnly}},
+				}},
+			},
+			{
+				name: "per port fallback enabled",
+				tls: &gwv1.GatewayTLSConfig{Frontend: &gwv1.FrontendTLSConfig{
+					Default: gwv1.TLSConfig{Validation: &gwv1.FrontendTLSValidation{Mode: gwv1.AllowValidOnly}},
+					PerPort: []gwv1.TLSPortConfig{{
+						Port: 443,
+						TLS:  gwv1.TLSConfig{Validation: &gwv1.FrontendTLSValidation{Mode: gwv1.AllowInsecureFallback}},
+					}},
+				}},
+				wantPresent: true,
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				gw := gw()
+				gw.Generation = 2
+				gw.Spec.TLS = tt.tls
+				gw.Status.Conditions = []metav1.Condition{{
+					Type:               string(gwv1.GatewayConditionInsecureFrontendValidationMode),
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: 1,
+				}}
+				rm := reports.NewReportMap()
+				reports.NewReporter(&rm).Gateway(gw)
+				status := rm.BuildGWStatus(ctx, *gw, 0)
+				condition := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionInsecureFrontendValidationMode))
+				if (condition != nil) != tt.wantPresent {
+					t.Fatalf("InsecureFrontendValidationMode = %v, want present: %v", condition, tt.wantPresent)
+				}
+				if tt.wantPresent {
+					assert.Equal(t, metav1.ConditionTrue, condition.Status)
+					assert.Equal(t, int64(2), condition.ObservedGeneration)
+				}
+			})
+		}
+	})
+
 	t.Run("build all positive conditions with an empty report", func(t *testing.T) {
 		gw := gw()
 		rm := reports.NewReportMap()
@@ -241,6 +289,71 @@ func TestBuildGatewayStatus(t *testing.T) {
 		newTransitionTime := acceptedCond.LastTransitionTime
 		assert.Equal(t, oldTransitionTime, newTransitionTime)
 	})
+}
+
+func TestBuildGatewayStatusListenerMessages(t *testing.T) {
+	for _, tc := range []struct {
+		name, acceptedMessage, programmedMessage string
+		listenerNames                            []gwv1.SectionName
+		want                                     string
+	}{
+		{
+			name: "deduplicate identical condition messages", listenerNames: []gwv1.SectionName{"http"},
+			acceptedMessage: "conflict", programmedMessage: "conflict",
+			want: "Some listeners are not accepted: http: conflict",
+		},
+		{
+			name: "preserve distinct condition messages", listenerNames: []gwv1.SectionName{"http"},
+			acceptedMessage: "not accepted", programmedMessage: "not programmed",
+			want: "Some listeners are not accepted: http: not accepted; http: not programmed",
+		},
+		{
+			name: "preserve identical messages from different listeners", listenerNames: []gwv1.SectionName{"first", "second"},
+			acceptedMessage: "conflict", programmedMessage: "conflict",
+			want: "Some listeners are not accepted: first: conflict; second: conflict",
+		},
+		{
+			name: "preserve listener name fallback", listenerNames: []gwv1.SectionName{"http"},
+			want: "Some listeners are not accepted: http",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gw := gw()
+			gw.Spec.Listeners = nil
+			for _, name := range tc.listenerNames {
+				gw.Spec.Listeners = append(gw.Spec.Listeners, gwv1.Listener{Name: name})
+			}
+			rm := reports.NewReportMap()
+			gwReporter := reports.NewReporter(&rm).Gateway(gw)
+			for i := range gw.Spec.Listeners {
+				lr := gwReporter.Listener(&gw.Spec.Listeners[i])
+				lr.SetCondition(reporter.ListenerCondition{
+					Type: gwv1.ListenerConditionAccepted, Status: metav1.ConditionFalse,
+					Reason: gwv1.ListenerReasonHostnameConflict, Message: tc.acceptedMessage,
+				})
+				lr.SetCondition(reporter.ListenerCondition{
+					Type: gwv1.ListenerConditionProgrammed, Status: metav1.ConditionFalse,
+					Reason: gwv1.ListenerReasonHostnameConflict, Message: tc.programmedMessage,
+				})
+			}
+			status := rm.BuildGWStatus(context.Background(), *gw, 0)
+			accepted := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionAccepted))
+			assert.Equal(t, true, accepted != nil)
+			assert.Equal(t, metav1.ConditionFalse, accepted.Status)
+			assert.Equal(t, string(gwv1.GatewayReasonListenersNotValid), accepted.Reason)
+			assert.Equal(t, tc.want, accepted.Message)
+			for _, listener := range status.Listeners {
+				for _, condition := range listener.Conditions {
+					switch condition.Type {
+					case string(gwv1.ListenerConditionAccepted):
+						assert.Equal(t, tc.acceptedMessage, condition.Message)
+					case string(gwv1.ListenerConditionProgrammed):
+						assert.Equal(t, tc.programmedMessage, condition.Message)
+					}
+				}
+			}
+		})
+	}
 }
 
 func TestBuildRouteStatus(t *testing.T) {

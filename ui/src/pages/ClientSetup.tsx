@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 
 import claudeIcon from '@/assets/claude-color.svg';
 import codexIcon from '@/assets/codex-color.svg';
+import continueIcon from '@/assets/continue.svg';
 import curlIcon from '@/assets/curl.svg';
 import cursorIcon from '@/assets/cursor.svg';
 import gooseIcon from '@/assets/goose.svg';
@@ -12,7 +13,6 @@ import piIcon from '@/assets/pi.svg';
 import githubCopilotIcon from '@/assets/providers/copilot.svg';
 import windsurfIcon from '@/assets/windsurf.svg';
 import { claudeSubscriptionWarning } from '@/claudeSubscription';
-import { CatalogModelSelector } from '@/components/CatalogModelSelector';
 import { FreeformCombobox } from '@/components/FreeformCombobox';
 import {
 	Dropdown,
@@ -23,16 +23,18 @@ import {
 	StatusBanner
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
+import { WildcardModelSelector } from '@/components/WildcardModelSelector';
 import { providerLabel } from '@/config';
 import { hasKeyValue, keyLabel, maskKey } from '@/credentialDisplay';
 import { llmGatewayOrigin } from '@/gatewayUrls';
 import { useConfigDumpMode, useLlmConfigData } from '@/hooks';
+import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	isWildcardModelName,
 	modelProviderLabel,
 	resolveModelName,
-	wildcardModelPrefix,
-	wildcardResolvedSuffix
+	wildcardMatchesModel,
+	wildcardModelPrefix
 } from '@/modelResolution';
 import { requestableDumpModelNames } from '@/pages/models/dumpModels';
 import type { LlmModel, LlmProvider, ProviderName } from '@/types';
@@ -44,6 +46,7 @@ type ClientRecipe = {
 	icon:
 		| 'claude'
 		| 'codex'
+		| 'continue'
 		| 'curl'
 		| 'cursor'
 		| 'copilot'
@@ -86,9 +89,11 @@ export function ClientSetupPage() {
 	);
 	const modelOptions = useMemo(
 		() => [
-			...models.map(item => ({
+			...models.map((item, index) => ({
 				kind: 'model' as const,
 				name: item.name,
+				value: modelOptionValue(models, index),
+				description: modelSubtitle(item) || undefined,
 				icon: <ProviderIcon provider={modelProviderLabel(item, providers) as ProviderName} />,
 				searchText: `${item.name} ${modelProviderLabel(item, providers)} ${providerLabel(item.provider)}`,
 				config: item
@@ -96,6 +101,8 @@ export function ClientSetupPage() {
 			...virtualModels.map(item => ({
 				kind: 'virtual' as const,
 				name: item.name,
+				value: item.name,
+				description: 'Virtual model',
 				icon: <GitBranch size={16} />,
 				searchText: `${item.name} virtual`
 			}))
@@ -120,19 +127,12 @@ export function ClientSetupPage() {
 			modelTouched
 			? model
 			: (dumpModelNames[0] ?? '')
-		: modelOptions.some(item => item.name === model)
+		: modelOptions.some(item => item.value === model)
 			? model
-			: (modelOptions[0]?.name ?? '');
-	const selectedModelOption = modelOptions.find(item => item.name === selectedModel);
+			: (modelOptions[0]?.value ?? '');
+	const selectedModelOption = modelOptions.find(item => item.value === selectedModel);
 	const selectedModelConfig =
 		selectedModelOption?.kind === 'model' ? selectedModelOption.config : undefined;
-	const wildcardPrefix =
-		selectedModelConfig && isWildcardModelName(selectedModelConfig.name)
-			? wildcardModelPrefix(selectedModelConfig.name)
-			: '';
-	const specificModelSuffix = selectedModelConfig
-		? wildcardResolvedSuffix(specificModel, selectedModelConfig.name, wildcardPrefix)
-		: '';
 	const selectedCatalogProvider = selectedModelConfig
 		? modelProviderLabel(selectedModelConfig, providers)
 		: null;
@@ -146,10 +146,15 @@ export function ClientSetupPage() {
 	const requestModel = dumpMode
 		? dumpRequestModel(selectedModel, specificModel)
 		: clientSetupRequestModel(selectedModelOption, selectedModel, specificModel, providers);
+	const matchHeaders = selectedModelConfig ? modelMatchHeaders(selectedModelConfig) : {};
+	const matchHeadersText = Object.entries(matchHeaders)
+		.map(([name, value]) => `${name}: ${value}`)
+		.join(', ');
 	const recipes = clientRecipes({
 		baseUrl: effectiveBaseUrl,
 		model: requestModel || 'model',
-		apiKey
+		apiKey,
+		headers: matchHeaders
 	});
 	const activeRecipe = recipes.find(recipe => recipe.id === selectedIntegration) ?? recipes[0];
 
@@ -209,7 +214,14 @@ export function ClientSetupPage() {
 							placeholder={dumpMode ? 'https://gateway.example.com' : derivedBaseUrl}
 						/>
 					</Field>
-					<FieldGroup label="Model">
+					<FieldGroup
+						label="Model"
+						hint={
+							matchHeadersText
+								? `Clients must send ${matchHeadersText} to reach this model.`
+								: undefined
+						}
+					>
 						{dumpMode ? (
 							<FreeformCombobox
 								ariaLabel="Model"
@@ -229,13 +241,16 @@ export function ClientSetupPage() {
 								placeholder="No models"
 								searchable
 								options={modelOptions.map(item => ({
-									value: item.name,
-									label: item.name,
-									description: item.kind === 'virtual' ? 'Virtual model' : undefined,
+									value: item.value,
+									label: item.kind === 'model' ? modelLabel(item.config) : item.name,
+									description: item.description,
 									icon: item.icon,
 									searchText: item.searchText
 								}))}
-								onChange={setModel}
+								onChange={value => {
+									setModel(value);
+									setSpecificModel('');
+								}}
 							/>
 						)}
 					</FieldGroup>
@@ -244,31 +259,37 @@ export function ClientSetupPage() {
 							label="Specific model"
 							hint="The dump lists a pattern; clients have to request a concrete model."
 						>
-							<div className="target-resolved-composite">
-								{wildcardModelPrefix(selectedModel) ? (
-									<span className="target-prefix">{wildcardModelPrefix(selectedModel)}</span>
-								) : null}
-								<input
-									aria-label="Specific model"
-									value={specificModel}
-									onChange={event => setSpecificModel(event.target.value)}
-									placeholder="Model name"
-								/>
-							</div>
+							{(id, hintId) => (
+								<div className="target-resolved-composite">
+									{wildcardModelPrefix(selectedModel) ? (
+										<span className="target-prefix">{wildcardModelPrefix(selectedModel)}</span>
+									) : null}
+									<input
+										id={id}
+										aria-label="Specific model"
+										aria-describedby={hintId}
+										value={specificModel}
+										onChange={event => setSpecificModel(event.target.value)}
+										placeholder="Model name"
+									/>
+								</div>
+							)}
 						</Field>
 					) : null}
 					{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
 						<Field label="Specific model" hint="Model uses a wildcard; specify the specific model.">
-							<div className="target-resolved-composite">
-								{wildcardPrefix ? <span className="target-prefix">{wildcardPrefix}</span> : null}
-								<CatalogModelSelector
+							{(id, hintId) => (
+								<WildcardModelSelector
+									id={id}
 									ariaLabel="Specific model"
-									value={specificModelSuffix}
+									aria-describedby={hintId}
+									model={selectedModelConfig}
+									value={specificModel}
 									provider={selectedCatalogProvider}
-									onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}
+									onChange={setSpecificModel}
 									placeholder="Select or type a model"
 								/>
-							</div>
+							)}
 						</Field>
 					) : null}
 					<FieldGroup label="Virtual API key">
@@ -369,16 +390,12 @@ function clientSetupRequestModel(
 		return resolveModelName(option.config, specificModel, providers);
 	const normalized = normalizedClientSpecificModel(option.config, specificModel);
 	if (normalized) return resolveModelName(option.config, normalized, providers);
-	const prefix = wildcardModelPrefix(option.config.name);
-	return prefix ? `${prefix}<model>` : '<model>';
+	return option.config.name.replace('*', '<model>');
 }
 
 function normalizedClientSpecificModel(model: LlmModel, specificModel: string) {
 	const trimmed = specificModel.trim();
-	const prefix = wildcardModelPrefix(model.name);
-	if (!trimmed || trimmed === prefix) return '';
-	if (prefix && !trimmed.startsWith(prefix)) return '';
-	return trimmed;
+	return wildcardMatchesModel(model.name, trimmed) ? trimmed : '';
 }
 
 function ClientRecipeCard(props: {
@@ -445,7 +462,12 @@ function CopyButton(props: { value: string }) {
 	);
 }
 
-function clientRecipes(args: { baseUrl: string; model: string; apiKey: string }): ClientRecipe[] {
+function clientRecipes(args: {
+	baseUrl: string;
+	model: string;
+	apiKey: string;
+	headers?: Record<string, string>;
+}): ClientRecipe[] {
 	const base = args.baseUrl.replace(/\/$/, '');
 	const v1 = `${base}/v1`;
 	const completions = `${v1}/chat/completions`;
@@ -454,9 +476,19 @@ function clientRecipes(args: { baseUrl: string; model: string; apiKey: string })
 	const curlAuthorization = args.apiKey
 		? `  -H ${JSON.stringify(`Authorization: Bearer ${args.apiKey}`)} ${continuation}\n`
 		: '';
+	// Single quotes keep the shell from expanding `$` or backticks in header values.
+	const curlMatchHeaders = Object.entries(args.headers ?? {})
+		.map(
+			([name, value]) => `  -H '${`${name}: ${value}`.replaceAll("'", `'\\''`)}' ${continuation}\n`
+		)
+		.join('');
 	const openCodeApiKey = args.apiKey
 		? `,
         "apiKey": "{env:AGENTGATEWAY_API_KEY}"`
+		: '';
+	const continueApiKey = args.apiKey
+		? `
+    apiKey: ${JSON.stringify(args.apiKey)}`
 		: '';
 	const openCodeApiKeyExport = args.apiKey
 		? `
@@ -471,7 +503,7 @@ export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, typ
 			icon: 'curl',
 			language: 'bash',
 			code: `curl ${JSON.stringify(completions)} ${continuation}
-${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
+${curlAuthorization}${curlMatchHeaders}  -H "Content-Type: application/json" ${continuation}
   -d '{
     "model": "${args.model}",
     "messages": [
@@ -672,6 +704,30 @@ Custom model: ${args.model}`
 }`
 		},
 		{
+			id: 'continue',
+			title: 'Continue',
+			description: 'Connect Continue to agentgateway using an OpenAI-compatible model.',
+			icon: 'continue',
+			steps: [
+				<>
+					Add this configuration to <code>~/.continue/config.yaml</code>. If the file exists, add
+					the model to its <code>models</code> list.
+				</>,
+				<>
+					Save the file, then select <strong>agentgateway</strong> in the Continue model selector.
+				</>
+			],
+			language: 'text',
+			code: `name: agentgateway
+version: 0.0.1
+schema: v1
+models:
+  - name: agentgateway
+    provider: openai
+    model: ${JSON.stringify(args.model)}
+    apiBase: ${JSON.stringify(v1)}${continueApiKey}`
+		},
+		{
 			id: 'windsurf',
 			title: 'Windsurf',
 			description: 'Connect Windsurf to agentgateway using its HTTP proxy setting.',
@@ -776,6 +832,13 @@ function ClientSetupIcon(props: { recipe: ClientRecipe; compact?: boolean }) {
 		return (
 			<span className={className}>
 				<img src={githubCopilotIcon} alt="" aria-hidden="true" />
+			</span>
+		);
+	}
+	if (props.recipe.icon === 'continue') {
+		return (
+			<span className={className}>
+				<img src={continueIcon} alt="" aria-hidden="true" />
 			</span>
 		);
 	}

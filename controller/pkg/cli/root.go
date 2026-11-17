@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/bugreport"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/catalog"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/config"
 	controllercmd "github.com/agentgateway/agentgateway/controller/pkg/cli/controller"
@@ -13,6 +14,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/migrate"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/profile"
 	proxycmd "github.com/agentgateway/agentgateway/controller/pkg/cli/proxy"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/standalone"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/trace"
 	cliversion "github.com/agentgateway/agentgateway/controller/pkg/cli/version"
 )
@@ -25,11 +27,13 @@ func NewRootCmd() *cobra.Command {
 
 	flag.AttachGlobalFlags(rootCmd)
 	rootCmd.AddCommand(flag.BuildCobra(cliversion.Command))
+	rootCmd.AddCommand(flag.BuildCobra(bugreport.Command))
 	rootCmd.AddCommand(proxycmd.Command())
 	rootCmd.AddCommand(controllercmd.Command())
 	rootCmd.AddCommand(catalog.Command())
 	rootCmd.AddCommand(costs.Command())
 	rootCmd.AddCommand(migrate.Command())
+	rootCmd.AddCommand(standalone.Command())
 	rootCmd.AddCommand(flag.BuildCobra(config.Command))
 	rootCmd.AddCommand(flag.BuildCobra(profile.Command))
 	rootCmd.AddCommand(flag.BuildCobra(trace.Command))

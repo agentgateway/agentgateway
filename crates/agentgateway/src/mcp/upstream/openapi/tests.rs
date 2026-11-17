@@ -36,6 +36,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		&client::Config {
 			resolver_cfg: ResolverConfig::default(),
 			resolver_opts: ResolverOpts::default(),
+			max_ttl: None,
 		},
 		None,
 		BackendConfig::default(),
@@ -51,6 +52,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		)),
 		model_catalog: crate::llm::catalog::ModelCatalog::empty(),
 		admin: None,
+		stats: None,
 		upstream: client.clone(),
 		ca: None,
 		spiffe: None,
@@ -342,6 +344,36 @@ async fn test_call_tool_get_simple_success() {
 		result.unwrap().structured_content.unwrap(),
 		expected_response
 	);
+}
+
+#[rstest]
+#[case::replace("/api")]
+#[case::trailing_slash("/api/")]
+#[tokio::test]
+async fn test_call_tool_configured_path_prefix(#[case] prefix: &str) {
+	let (server, handler) = setup_with_prefix(prefix).await;
+	let expected_response = json!({ "id": "123", "name": "Test User" });
+	Mock::given(method("GET"))
+		.and(path("/api/users/123"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(
+				json!({ "path": { "user_id": "123" } })
+					.as_object()
+					.unwrap()
+					.clone(),
+			),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(result.structured_content.unwrap(), expected_response);
 }
 
 #[tokio::test]
@@ -2025,6 +2057,7 @@ async fn test_openapi_from_url() {
 		&client::Config {
 			resolver_cfg: ResolverConfig::default(),
 			resolver_opts: ResolverOpts::default(),
+			max_ttl: None,
 		},
 		None,
 		BackendConfig::default(),
@@ -2323,6 +2356,7 @@ async fn test_call_tool_with_binary_body() {
 		&client::Config {
 			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			max_ttl: None,
 		},
 		None,
 		BackendConfig::default(),
@@ -2338,6 +2372,7 @@ async fn test_call_tool_with_binary_body() {
 		)),
 		model_catalog: crate::llm::catalog::ModelCatalog::empty(),
 		admin: None,
+		stats: None,
 		upstream: client.clone(),
 		ca: None,
 		spiffe: None,
@@ -2423,4 +2458,56 @@ async fn test_call_tool_with_binary_body() {
 		result.unwrap().structured_content.unwrap(),
 		expected_response
 	);
+}
+
+#[tokio::test]
+async fn initialize_echoes_supported_legacy_protocol_version() {
+	use futures_util::StreamExt;
+	use rmcp::model::*;
+
+	let (_, handler) = setup().await;
+	let request = JsonRpcRequest {
+		jsonrpc: JsonRpcVersion2_0,
+		id: RequestId::Number(1),
+		request: ClientRequest::InitializeRequest(InitializeRequest::new(
+			InitializeRequestParams::new(
+				ClientCapabilities::default(),
+				Implementation::new("repro", "1.0"),
+			)
+			.with_protocol_version(ProtocolVersion::V_2025_11_25),
+		)),
+	};
+	let mut stream = handler
+		.send_message(request, &IncomingRequestContext::empty())
+		.await
+		.unwrap();
+	let first = stream.next().await.unwrap().unwrap();
+	let value = serde_json::to_value(first).unwrap();
+	assert_eq!(value["result"]["protocolVersion"], json!("2025-11-25"));
+}
+
+#[tokio::test]
+async fn initialize_falls_back_when_client_requests_modern_only_version() {
+	use futures_util::StreamExt;
+	use rmcp::model::*;
+
+	let (_, handler) = setup().await;
+	let request = JsonRpcRequest {
+		jsonrpc: JsonRpcVersion2_0,
+		id: RequestId::Number(2),
+		request: ClientRequest::InitializeRequest(InitializeRequest::new(
+			InitializeRequestParams::new(
+				ClientCapabilities::default(),
+				Implementation::new("repro", "1.0"),
+			)
+			.with_protocol_version(ProtocolVersion::V_2026_07_28),
+		)),
+	};
+	let mut stream = handler
+		.send_message(request, &IncomingRequestContext::empty())
+		.await
+		.unwrap();
+	let first = stream.next().await.unwrap().unwrap();
+	let value = serde_json::to_value(first).unwrap();
+	assert_eq!(value["result"]["protocolVersion"], json!("2025-11-25"));
 }

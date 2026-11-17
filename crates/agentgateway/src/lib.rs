@@ -150,6 +150,12 @@ pub struct RawDnsConfig {
 	/// When `None`, the system-provided resolver setting is preserved.
 	/// Can also be set via the `DNS_EDNS0` environment variable.
 	edns0: Option<bool>,
+
+	/// Maximum interval between DNS refreshes, regardless of the TTL returned by the server.
+	/// Useful when upstream IPs change faster than their advertised TTL. Zero disables caching.
+	#[serde(default, with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	max_ttl: Option<Duration>,
 }
 
 #[apply(schema_de!)]
@@ -167,8 +173,9 @@ pub struct RawConfig {
 
 	/// Model cost catalog sources; entries are merged in order, with later entries taking precedence.
 	model_catalog: Option<Vec<ModelCatalogSource>>,
-	/// Primary database used by local runtime features.
-	database: Option<telemetry::log_store::Config>,
+	/// Primary database used by local runtime features. Request logs are also stored here unless
+	/// `config.logging.database` sets its own `url` or `enabled: false`.
+	database: Option<database::DatabaseConfig>,
 	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
 	storage: Option<RawStorageConfig>,
 
@@ -318,6 +325,11 @@ pub struct BackendConfig {
 	#[serde(default = "defaults::h2_keepalive_timeout", with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	h2_keepalive_timeout: Duration,
+	/// Allow dynamic backends to connect to loopback and link-local addresses (such as cloud
+	/// metadata servers). Disabled by default, as this lets requests reach services local to the
+	/// gateway.
+	#[serde(default)]
+	allow_dynamic_loopback: bool,
 }
 
 #[apply(schema!)]
@@ -369,6 +381,7 @@ impl Default for BackendConfig {
 			pool_max_size: None,
 			h2_keepalive_interval: Duration::ZERO,
 			h2_keepalive_timeout: defaults::h2_keepalive_timeout(),
+			allow_dynamic_loopback: false,
 		}
 	}
 }
@@ -419,7 +432,7 @@ pub struct RawHBONE {
 	/// Maximum concurrent streams per pooled connection. Defaults to 100.
 	pool_max_streams_per_conn: Option<u16>,
 	/// Duration after which unused pooled connections are released.
-	#[serde(with = "serde_dur_option")]
+	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pool_unused_release_timeout: Option<Duration>,
 }
@@ -427,7 +440,8 @@ pub struct RawHBONE {
 #[apply(schema_de!)]
 pub struct RawSession {
 	/// The AES-256-GCM session protection key to be used for session tokens.
-	/// If not set, sessions will not be encrypted.
+	/// If not set, a key is generated when the config file or database is writable.
+	/// Set to `disabled` to leave sessions unencrypted.
 	/// For example, generated via `openssl rand -hex 32`.
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
@@ -478,8 +492,50 @@ pub struct RawLogging {
 	level: Option<RawLoggingLevel>,
 	/// Log output format: `text` or `json`.
 	format: Option<LoggingFormat>,
-	/// Log-store database configuration; enables request logging to a database backend.
-	database: Option<telemetry::log_store::Config>,
+	/// Request log database. When omitted (or null), request logs are stored in `config.database`
+	/// if it is set. Set `enabled: false` to turn off request log storage.
+	database: Option<RawLoggingDatabase>,
+}
+
+/// Request log database. Without a `url`, request logs are stored in `config.database`.
+#[apply(schema_de!)]
+#[cfg_attr(
+	feature = "schema",
+	// A disabled store's settings are ignored, so these rules apply only when enabled is not false:
+	// a url must not be blank, a pool size must be positive, and a non-null pool size requires a
+	// non-null url.
+	schemars(extend(
+		"if" = {"properties": {"enabled": {"const": false}}, "required": ["enabled"]},
+		"else" = {
+			"properties": {"url": {"pattern": "\\S"}, "maxConnections": {"minimum": 1}},
+			"if": {"properties": {"maxConnections": {"type": "integer"}}, "required": ["maxConnections"]},
+			"then": {"properties": {"url": {"type": "string"}}, "required": ["url"]}
+		}
+	))
+)]
+pub struct RawLoggingDatabase {
+	/// Store request logs in a database. When omitted, request logs are stored if either `url` or
+	/// `config.database.url` is set, and otherwise not. When true, one of them is required. When
+	/// false, no request log store is started, even if `config.database` is set.
+	enabled: Option<bool>,
+	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
+	/// Defaults to `config.database`.
+	url: Option<String>,
+	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
+	/// Can only be set together with `url`. Without a `url`, the `config.database` pool and its limit
+	/// are used. With a `url`, the pool is shared only when both `url` and `maxConnections` match
+	/// `config.database`.
+	max_connections: Option<u32>,
+}
+
+impl RawLoggingDatabase {
+	/// The explicitly configured connection, if `url` is set.
+	fn connection(&self) -> Option<database::DatabaseConfig> {
+		self.url.as_ref().map(|url| database::DatabaseConfig {
+			url: url.clone(),
+			max_connections: self.max_connections,
+		})
+	}
 }
 
 #[apply(schema_de!)]
@@ -712,7 +768,7 @@ pub struct Config {
 	pub tracing: Option<trc::DeprecatedConfig>,
 	pub metrics: crate::telemetry::log::MetricsConfig,
 	pub logging: crate::telemetry::log::Config,
-	pub database: Option<telemetry::log_store::Config>,
+	pub database: Option<database::DatabaseConfig>,
 	pub storage: StorageConfig,
 	#[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
 	pub sensitive_headers: Vec<::http::HeaderName>,
@@ -721,6 +777,9 @@ pub struct Config {
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
 	pub session_encoder: http::sessionpersistence::Encoder,
+	/// True when neither SESSION_KEY nor config.session.key is set, so a key may be generated.
+	#[serde(skip)]
+	pub session_key_unset: bool,
 	/// Runtime cookie/session crypto for browser OIDC flows.
 	pub oidc_cookie_encoder: Option<http::sessionpersistence::Encoder>,
 	/// Handle for tasks/spans emitted on the admin runtime.
@@ -905,6 +964,7 @@ pub struct ProxyInputs {
 	pub model_catalog: Arc<llm::catalog::ModelCatalog>,
 
 	pub admin: Option<management::admin::AdminService>,
+	pub stats: Option<management::metrics_server::MetricsService>,
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
 	pub spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
@@ -935,6 +995,7 @@ impl ProxyInputs {
 			metrics,
 			model_catalog: Arc::new(model_catalog.unwrap_or_default()),
 			admin: None,
+			stats: None,
 			mcp_state,
 			ca,
 			spiffe,
@@ -1015,6 +1076,14 @@ impl Address {
 			Address::Off | Address::UnixSocket(_) => 0,
 			Address::Localhost(_, port) => *port,
 			Address::SocketAddr(s) => s.port(),
+		}
+	}
+
+	/// The port when bound on all interfaces, which is what a meshed caller could reach.
+	pub fn wildcard_port(&self) -> Option<u16> {
+		match self {
+			Address::SocketAddr(s) if s.ip().is_unspecified() => Some(s.port()),
+			_ => None,
 		}
 	}
 

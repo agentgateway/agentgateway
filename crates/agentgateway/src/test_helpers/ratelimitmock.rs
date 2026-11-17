@@ -44,25 +44,17 @@ pub trait Handler {
 }
 
 /// Mock remote ratelimit server for testing
-pub struct RateLimitMock<T> {
-	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
+#[derive(Clone)]
+pub struct RateLimitMock {
+	handler: Arc<dyn Fn() -> Box<dyn Handler + Send + Sync> + Send + Sync>,
 }
 
-impl<T> Clone for RateLimitMock<T> {
-	fn clone(&self) -> Self {
+impl RateLimitMock {
+	pub fn new<T: Handler + Send + Sync + 'static>(
+		handler: impl Fn() -> T + Send + Sync + 'static,
+	) -> Self {
 		Self {
-			handler: self.handler.clone(),
-		}
-	}
-}
-
-impl<T> RateLimitMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
-	pub fn new(handler: impl Fn() -> T + Send + Sync + 'static) -> Self {
-		Self {
-			handler: Arc::new(handler),
+			handler: Arc::new(move || Box::new(handler())),
 		}
 	}
 
@@ -78,10 +70,7 @@ where
 }
 
 #[tonic::async_trait]
-impl<T> RateLimitService for RateLimitMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
+impl RateLimitService for RateLimitMock {
 	async fn should_rate_limit(
 		&self,
 		request: Request<RateLimitRequest>,

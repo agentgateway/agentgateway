@@ -5,10 +5,14 @@ use crate::*;
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum Phase {
+	/// Do not run this processor for matching methods.
 	#[default]
 	Off,
+	/// Run before forwarding the MCP request.
 	Request,
+	/// Run after the MCP response is available.
 	Response,
+	/// Run with request and response context.
 	Full,
 }
 

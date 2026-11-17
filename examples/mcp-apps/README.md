@@ -5,7 +5,7 @@
 Agentgateway proxies Apps metadata and UI resources:
 
 * Tool `_meta.ui` is preserved, and its `resourceUri` rewritten when multiplexing.
-* `ui://` URIs keep their scheme, with the target carried in the URI authority (`ui://<target>+<rest>`), so hosts still see valid Apps resources.
+* `ui://` URIs keep their scheme, with the target carried in the URI authority (`ui://<target>+<rest>`), so hosts still see valid Apps resources. Some hosts, such as GitHub Copilot, reject the `+`. Set `AGENTGATEWAY_MCP_UI_URI_DELIMITER` to one of `_`, `-`, `.` or `~` to use a different delimiter.
 * `_meta.ui.visibility` passes through untouched: per the Apps spec, hiding app-only tools from the model and rejecting app calls to non-app tools are the host's responsibility.
 * UI metadata is only advertised for resources the client is authorized to read.
 

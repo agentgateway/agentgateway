@@ -4,7 +4,8 @@ pub mod from_decisions {
 	use async_openai::types::decisions as d;
 	use indexmap::IndexMap;
 
-	use crate::types::{decisions, systemone};
+	use crate::types::decisions;
+	use crate::types::systemone::typed as systemone;
 	use crate::{AIError, json};
 
 	/// Request details SystemOne cannot represent, used to restore them on the response.
@@ -70,7 +71,10 @@ pub mod from_decisions {
 									b.to_string()
 								},
 							};
-							if criteria.insert(value.clone(), c.description).is_some() {
+							if criteria
+								.insert(value.clone(), c.description.map(serde_json::Value::String))
+								.is_some()
+							{
 								return Err(AIError::UnsupportedConversion(
 									format!("duplicate choice value {value:?}").into(),
 								));
@@ -182,9 +186,10 @@ pub mod from_decisions {
 						score,
 						probabilities,
 						confidence,
+						..
 					} => d::AnswerResource::Score(d::ScoreAnswer {
 						name: name.clone(),
-						score,
+						score: score.as_f64().unwrap_or_default(),
 						probabilities: probabilities
 							.into_iter()
 							.map(|(level, probability)| {
@@ -216,6 +221,198 @@ pub mod from_decisions {
 				output_tokens_details: Default::default(),
 				total_tokens: input_tokens + output_tokens,
 			},
+		};
+		serde_json::to_vec(&resp).map_err(AIError::ResponseMarshal)
+	}
+}
+
+pub mod from_systemone {
+	use std::collections::HashMap;
+
+	use async_openai::types::decisions as d;
+	use indexmap::IndexMap;
+
+	use crate::types::systemone::{Request, typed as systemone};
+	use crate::{AIError, json};
+
+	/// Request details Decisions cannot represent, used to restore them on the response.
+	#[derive(Debug, Default)]
+	pub struct State {
+		/// Score criteria, by question key, to rebuild the legend.
+		legends: HashMap<String, Vec<serde_json::Value>>,
+	}
+
+	fn text(v: serde_json::Value) -> String {
+		match v {
+			serde_json::Value::String(s) => s,
+			v => v.to_string(),
+		}
+	}
+
+	pub fn translate(req: &Request) -> Result<(Vec<u8>, State), AIError> {
+		let req = json::convert::<_, systemone::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::SystemOne, err))?;
+		let input = d::DecisionInput::Text(text(req.state));
+		let mut state = State::default();
+		let questions = req
+			.questions
+			.into_iter()
+			.map(|(name, q)| match q {
+				systemone::Question::Noul {
+					instructions,
+					criteria,
+				} => {
+					let mut instructions = text(instructions);
+					if let Some(c) = criteria {
+						instructions.push('\n');
+						for (k, v) in [("true", c.true_), ("false", c.false_)] {
+							if let Some(v) = v {
+								instructions.push_str(&format!("\n{k}: {}", text(v)));
+							}
+						}
+					}
+					d::QuestionParam::Predicate(d::QuestionPredicate {
+						name: Some(name),
+						instructions,
+					})
+				},
+				systemone::Question::Choice {
+					instructions,
+					criteria,
+				} => d::QuestionParam::Choice(d::QuestionChoice {
+					name: Some(name),
+					instructions: text(instructions),
+					choices: criteria
+						.into_iter()
+						.map(|(value, description)| d::ChoiceOption {
+							value: d::ChoiceValue::String(value),
+							description: description.map(text),
+						})
+						.collect(),
+				}),
+				systemone::Question::Score {
+					instructions,
+					criteria,
+				} => {
+					state.legends.insert(name.clone(), criteria.clone());
+					d::QuestionParam::Score(d::QuestionScore {
+						name: Some(name),
+						instructions: text(instructions),
+						levels: criteria
+							.into_iter()
+							.map(|c| match c {
+								serde_json::Value::Object(mut o)
+									if o.get("label").is_some_and(|l| l.is_string()) =>
+								{
+									let label = o.remove("label").map(text).unwrap_or_default();
+									let description = match o.len() {
+										0 => None,
+										1 if o.contains_key("description") => o.remove("description").map(text),
+										_ => Some(serde_json::Value::Object(o).to_string()),
+									};
+									d::ScoreLevel { label, description }
+								},
+								c => d::ScoreLevel {
+									label: text(c),
+									description: None,
+								},
+							})
+							.collect(),
+					})
+				},
+			})
+			.collect();
+		let req = d::DecisionRequest {
+			model: req.model,
+			input,
+			questions,
+			safety_identifier: None,
+		};
+		let body = serde_json::to_vec(&req).map_err(AIError::RequestMarshal)?;
+		Ok((body, state))
+	}
+
+	pub fn translate_response(bytes: &[u8], state: &State) -> Result<Vec<u8>, AIError> {
+		let resp: d::DecisionResponse =
+			serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+		let choice_value = |v: d::ChoiceValue| match v {
+			d::ChoiceValue::String(s) => s,
+			d::ChoiceValue::Boolean(b) => b.to_string(),
+		};
+		let mut answers = IndexMap::new();
+		// Questions are always sent named, so every answer maps back to its key.
+		for answer in resp.answers {
+			let (name, answer) = match answer {
+				d::AnswerResource::Predicate(a) => (
+					a.name,
+					systemone::Answer::Noul {
+						noul: a.probability,
+					},
+				),
+				d::AnswerResource::Choice(a) => (
+					a.name,
+					systemone::Answer::Choice {
+						choice: choice_value(a.choice),
+						probabilities: a
+							.probabilities
+							.into_iter()
+							.map(|p| (choice_value(p.value), p.probability))
+							.collect(),
+						confidence: a.confidence,
+					},
+				),
+				d::AnswerResource::Score(a) => {
+					let criteria = a.name.as_ref().and_then(|n| state.legends.get(n));
+					let legend = a
+						.probabilities
+						.iter()
+						.map(|p| {
+							let level = usize::try_from(p.value)
+								.ok()
+								.and_then(|i| criteria.and_then(|c| c.get(i)).cloned())
+								.unwrap_or_else(|| serde_json::Value::String(p.label.clone()));
+							(p.value.to_string(), level)
+						})
+						.collect();
+					(
+						a.name,
+						systemone::Answer::Score {
+							score: if a.score.fract() == 0.0 {
+								(a.score as i64).into()
+							} else {
+								serde_json::Number::from_f64(a.score).unwrap_or_else(|| 0.into())
+							},
+							legend: Some(legend),
+							probabilities: a
+								.probabilities
+								.into_iter()
+								.map(|p| (p.value.to_string(), p.probability))
+								.collect(),
+							confidence: a.confidence,
+						},
+					)
+				},
+				d::AnswerResource::Refusal(a) => {
+					return Err(AIError::UnsupportedConversion(
+						format!(
+							"decisions refusal for question {:?} has no SystemOne equivalent",
+							a.name.unwrap_or_default()
+						)
+						.into(),
+					));
+				},
+			};
+			if let Some(name) = name {
+				answers.insert(name, answer);
+			}
+		}
+		let resp = systemone::Response {
+			model: resp.model,
+			answers,
+			usage: Some(systemone::Usage {
+				input_tokens: resp.usage.input_tokens,
+				output_tokens: resp.usage.output_tokens,
+			}),
 		};
 		serde_json::to_vec(&resp).map_err(AIError::ResponseMarshal)
 	}

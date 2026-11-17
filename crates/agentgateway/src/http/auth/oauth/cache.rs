@@ -1,14 +1,13 @@
 use std::fmt;
 use std::future::Future;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use quick_cache::sync::{Cache, EntryAction, EntryResult};
 use secrecy::{ExposeSecret, SecretString};
 
 use super::transport::TokenEndpointResponse;
 use super::{ExchangeRequest, decode_unverified_jwt_claims};
 use crate::crypto::digest::Sha256;
+use crate::http::expiring_cache::ExpiringCache;
 
 pub(super) const DEFAULT_CACHE_CAPACITY: usize = 8192;
 pub(super) const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(300);
@@ -18,14 +17,14 @@ const CACHE_SAFETY_MARGIN: Duration = Duration::from_secs(15);
 
 #[derive(Clone)]
 pub(super) struct InMemoryTokenCache {
-	entries: Arc<Cache<TokenCacheKey, CachedToken>>,
+	entries: ExpiringCache<TokenCacheKey, SecretString>,
 	default_ttl: Duration,
 }
 
 impl InMemoryTokenCache {
 	pub(super) fn new(max_entries: usize, default_ttl: Duration) -> Self {
 		Self {
-			entries: Arc::new(Cache::new(max_entries)),
+			entries: ExpiringCache::new(max_entries),
 			default_ttl,
 		}
 	}
@@ -34,43 +33,29 @@ impl InMemoryTokenCache {
 		&self,
 		req: &ExchangeRequest,
 		fetch: F,
-	) -> Result<TokenCacheResult, E>
+	) -> Result<SecretString, E>
 	where
 		F: FnOnce() -> Fut,
 		Fut: Future<Output = Result<TokenEndpointResponse, E>>,
+		E: fmt::Display,
 	{
-		let now = SystemTime::now();
-		let cache_key = TokenCacheKey::from(req);
-		let guard = match self
+		self
 			.entries
-			.entry_async(&cache_key, |_key, cached| {
-				if is_fresh(cached.expires_at, now) {
-					EntryAction::Retain(cached.access_token.clone())
-				} else {
-					EntryAction::ReplaceWithGuard
-				}
+			.get_or_fetch(TokenCacheKey::from(req), || async {
+				let TokenEndpointResponse {
+					access_token,
+					expires_in,
+				} = fetch().await?;
+				let ttl = cache_expiry(
+					expires_in,
+					req.subject_token.expose_secret(),
+					self.default_ttl,
+				)
+				.and_then(|expires_at| expires_at.duration_since(SystemTime::now()).ok())
+				.and_then(|ttl| ttl.checked_sub(CACHE_SAFETY_MARGIN));
+				Ok::<_, E>((access_token, ttl))
 			})
 			.await
-		{
-			EntryResult::Retained(access_token) => return Ok(TokenCacheResult::Hit(access_token)),
-			EntryResult::Vacant(guard) | EntryResult::Replaced(guard, _) => guard,
-			EntryResult::Removed(_, _) | EntryResult::Timeout => unreachable!(),
-		};
-
-		let subject_token = req.subject_token.expose_secret();
-
-		let TokenEndpointResponse {
-			access_token,
-			expires_in,
-		} = fetch().await?;
-
-		if let Some(expires_at) = cache_expiry(expires_in, subject_token, self.default_ttl) {
-			let _ = guard.insert(CachedToken {
-				access_token: access_token.clone(),
-				expires_at,
-			});
-		}
-		Ok(TokenCacheResult::Miss(access_token))
 	}
 }
 
@@ -138,25 +123,6 @@ impl CacheKeyDigest {
 	}
 }
 
-#[derive(Clone)]
-struct CachedToken {
-	access_token: SecretString,
-	expires_at: SystemTime,
-}
-
-pub enum TokenCacheResult {
-	Hit(SecretString),
-	Miss(SecretString),
-}
-
-impl TokenCacheResult {
-	pub fn into_token(self) -> SecretString {
-		match self {
-			Self::Hit(token) | Self::Miss(token) => token,
-		}
-	}
-}
-
 // Best-effort `exp` from a JWT-shaped subject token; opaque tokens yield None.
 // Decoded without signature or expiry validation — we only need the raw `exp`.
 fn subject_token_exp(token: &str) -> Option<SystemTime> {
@@ -190,6 +156,7 @@ fn is_fresh(expires_at: SystemTime, now: SystemTime) -> bool {
 #[cfg(test)]
 mod tests {
 	use std::convert::Infallible;
+	use std::sync::Arc;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	use base64::Engine;
@@ -246,7 +213,6 @@ mod tests {
 			})
 			.await
 			.unwrap()
-			.into_token()
 	}
 
 	fn same_request_cached_case() -> CacheScenario {

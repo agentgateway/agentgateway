@@ -115,13 +115,14 @@ func GetSecretDataValue(data map[string][]byte, key string) (string, bool) {
 }
 
 // GetSecretDataAuth extracts an authentication value from Secret data.
-// It looks for the "Authorization" field and strips the "Bearer " prefix if present.
+// It looks for the "Authorization" field and strips the "Bearer" scheme if present.
+// A scheme with no credential is rejected rather than used as a literal token.
 func GetSecretDataAuth(data map[string][]byte) (string, bool) {
-	if authValue, exists := GetSecretDataValue(data, wellknown.Authorization); exists {
-		// Strip the "Bearer " prefix if present, as it will be added by the provider
-		authValue = strings.TrimSpace(authValue)
-		authKey := strings.TrimSpace(strings.TrimPrefix(authValue, "Bearer "))
-		return authKey, authKey != ""
+	authValue, exists := GetSecretDataValue(data, wellknown.Authorization)
+	if !exists || authValue == "Bearer" {
+		return "", false
 	}
-	return "", false
+	// Strip the "Bearer " prefix if present, as it will be added by the provider
+	authKey := strings.TrimSpace(strings.TrimPrefix(authValue, "Bearer "))
+	return authKey, authKey != ""
 }

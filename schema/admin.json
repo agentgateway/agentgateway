@@ -155,6 +155,18 @@
         "protocol": {
           "$ref": "#/$defs/ListenerProtocol"
         },
+        "inlinePolicies": {
+          "description": "Gateway phase traffic policies applied to all requests on the listener.",
+          "type": "array",
+          "items": true
+        },
+        "error": {
+          "description": "If set, the listener's configuration is invalid, and every request on it fails.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "routes": {
           "type": [
             "object",
@@ -961,13 +973,22 @@
       ]
     },
     "ModelDiscovery": {
+      "description": "Links a served model name to its model catalog entries.",
       "type": "object",
       "properties": {
         "provider": {
           "type": "string"
         },
         "transformation": {
+          "description": "Maps catalog model IDs to served model names.",
           "$ref": "#/$defs/ModelTransformation"
+        },
+        "model": {
+          "description": "The upstream model when it is fixed regardless of the served name.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -1114,6 +1135,13 @@
               "properties": {
                 "backend": {
                   "$ref": "#/$defs/RouteBackendReference"
+                },
+                "targets": {
+                  "description": "Target model names in priority order, used only to describe the virtual model.",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               },
               "additionalProperties": false,
@@ -2995,7 +3023,7 @@
           "$ref": "#/$defs/AuthorizationLocation"
         },
         "key": {
-          "description": "Credential value. Exactly one of `key` or `expression` must be set.",
+          "description": "Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.",
           "anyOf": [
             {
               "$ref": "#/$defs/FileOrInline"
@@ -3016,13 +3044,26 @@
             }
           ],
           "default": null
+        },
+        "gcp": {
+          "description": "Fetch a Google Cloud access or ID token.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GcpAuth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
       "required": [
         "location",
         "key",
-        "expression"
+        "expression",
+        "gcp"
       ]
     },
     "BackendAuth": {

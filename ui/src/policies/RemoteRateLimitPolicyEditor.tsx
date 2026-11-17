@@ -1,20 +1,14 @@
 import { Gauge, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import { UnsupportedYamlFallback } from '@/components/EditorContracts';
+import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type { DescriptorEntry, RemoteRateLimit } from '@/gateway-config';
-import {
-	hasUnsupportedTarget,
-	TargetEditor,
-	targetFrom,
-	unsupportedTargetLabel
-} from '@/policies/PolicyFormControls';
+import { hasUnsupportedTarget, TargetEditor, targetFrom } from '@/policies/PolicyFormControls';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, isRecord } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { RemoteRateLimitDraft, TargetDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -57,37 +51,19 @@ export function RemoteRateLimitPolicyEditor(props: {
 		descriptorDrafts(props.remoteRateLimit)
 	);
 	const [attemptedSave, setAttemptedSave] = useState(false);
-	const errors = useMemo(
-		() => validate({ domain, target, descriptors }),
-		[domain, target, descriptors]
+	const errors = useMemo(() => validate(descriptors), [descriptors]);
+
+	const merged = useMergedEdits(
+		props.remoteRateLimit,
+		unsupported ? props.remoteRateLimit : build()
 	);
 
 	if (unsupported) {
-		return (
-			<UnsupportedYamlFallback
-				title="Unsupported remote rate limit shape"
-				value={props.remoteRateLimit}
-				schema={props.help.node(['$defs', 'RemoteRateLimit'])}
-				help={props.help}
-			>
-				{isConditional(props.remoteRateLimit)
-					? 'This policy uses conditional remote rate limit entries. The visual editor currently supports one explicit remote rate limit.'
-					: `This policy uses a ${unsupportedTargetLabel(props.remoteRateLimit)} target. The visual editor currently supports host targets only.`}
-			</UnsupportedYamlFallback>
-		);
+		return <UnsupportedInForm supports="a single remote rate limit with a host target" />;
 	}
 
-	function save() {
-		setAttemptedSave(true);
-		if (errors.length) return;
-		const preserved: Record<string, unknown> =
-			isRecord(props.remoteRateLimit) && !isConditional(props.remoteRateLimit)
-				? { ...props.remoteRateLimit }
-				: {};
-		delete preserved.service;
-		delete preserved.backend;
-		const next = cleanEmpty({
-			...preserved,
+	function build() {
+		return cleanEmpty({
 			...target,
 			domain,
 			descriptors: descriptors.map(descriptor =>
@@ -100,7 +76,12 @@ export function RemoteRateLimitPolicyEditor(props: {
 			),
 			failureMode: failureMode === 'failClosed' ? undefined : failureMode
 		}) as RemoteRateLimitDraft;
-		props.onSave(next);
+	}
+
+	function save() {
+		setAttemptedSave(true);
+		if (errors.length) return;
+		props.onSave(merged.value as RemoteRateLimitDraft);
 	}
 
 	return (
@@ -112,6 +93,7 @@ export function RemoteRateLimitPolicyEditor(props: {
 				save();
 			}}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			{attemptedSave && errors.length ? (
 				<div className="field-error remote-rate-errors">{errors.join(' ')}</div>
 			) : null}
@@ -124,8 +106,8 @@ export function RemoteRateLimitPolicyEditor(props: {
 				<div className="form-grid">
 					<Field
 						label="Domain"
+						path="domain"
 						tooltip={props.help.field<RemoteRateLimit>('RemoteRateLimit', 'domain')}
-						className={attemptedSave && !domain.trim() ? 'invalid' : undefined}
 					>
 						<input
 							value={domain}
@@ -135,29 +117,24 @@ export function RemoteRateLimitPolicyEditor(props: {
 					</Field>
 					<FieldGroup
 						label="Failure mode"
+						path="failureMode"
 						tooltip={props.help.field<RemoteRateLimit>('RemoteRateLimit', 'failureMode')}
 					>
 						<EnumSelector<FailureMode>
 							ariaLabel="Failure mode"
 							value={failureMode}
 							options={[
-								{
-									value: 'failClosed',
-									label: 'Fail closed',
-									description: 'Deny requests when the rate limit service is unavailable.'
-								},
-								{
-									value: 'failOpen',
-									label: 'Fail open',
-									description: 'Allow requests when the rate limit service is unavailable.'
-								}
+								{ value: 'failClosed', label: 'Fail closed' },
+								{ value: 'failOpen', label: 'Fail open' }
 							]}
+							schema={props.help.fieldNode<RemoteRateLimit>('RemoteRateLimit', 'failureMode')}
 							onChange={setFailureMode}
 						/>
 					</FieldGroup>
 				</div>
 				<TargetEditor
 					value={target}
+					help={props.help}
 					tooltip={props.help.field<RemoteRateLimit>('RemoteRateLimit', 'host')}
 					onChange={setTarget}
 				/>
@@ -200,22 +177,6 @@ export function RemoteRateLimitPolicyEditor(props: {
 					Add descriptor
 				</button>
 			</PolicySection>
-
-			<ResultingYaml
-				value={cleanEmpty({
-					...target,
-					domain,
-					descriptors: descriptors.map(descriptor =>
-						cleanEmpty({
-							entries: descriptor.entries,
-							type: descriptor.type === 'requests' ? undefined : descriptor.type,
-							cost: descriptor.cost.trim() || undefined,
-							limitOverride: descriptor.limitOverride.trim() || undefined
-						})
-					),
-					failureMode: failureMode === 'failClosed' ? undefined : failureMode
-				})}
-			/>
 		</form>
 	);
 }
@@ -258,28 +219,20 @@ function DescriptorEditor(props: {
 			</div>
 			<FieldGroup
 				label="Type"
+				path={`descriptors.${props.index}.type`}
 				tooltip={props.help.field<DescriptorEntry>('DescriptorEntry', 'type')}
 			>
 				<EnumSelector<DescriptorType>
 					ariaLabel={`Descriptor ${props.index + 1} type`}
 					value={props.descriptor.type}
-					options={[
-						{
-							value: 'requests',
-							label: 'Requests',
-							description: 'Evaluate request-count descriptors while processing the request.'
-						},
-						{
-							value: 'tokens',
-							label: 'Tokens',
-							description: 'Evaluate token descriptors after the LLM response completes.'
-						}
-					]}
+					schema={props.help.fieldNode<DescriptorEntry>('DescriptorEntry', 'type')}
+					labels={{ requests: 'Requests', tokens: 'Tokens' }}
 					onChange={type => props.onChange({ ...props.descriptor, type })}
 				/>
 			</FieldGroup>
 			<FieldGroup
 				label="Entries"
+				path={`descriptors.${props.index}.entries`}
 				tooltip={props.help.field<DescriptorEntry>('DescriptorEntry', 'entries')}
 			>
 				<div className="remote-entry-list">
@@ -335,6 +288,7 @@ function DescriptorEditor(props: {
 			<div className="form-grid">
 				<FieldGroup
 					label="Cost expression"
+					path={`descriptors.${props.index}.cost`}
 					tooltip={props.help.field<DescriptorEntry>('DescriptorEntry', 'cost')}
 				>
 					<MiniMonacoEditor
@@ -347,6 +301,7 @@ function DescriptorEditor(props: {
 				</FieldGroup>
 				<FieldGroup
 					label="Limit override"
+					path={`descriptors.${props.index}.limitOverride`}
 					tooltip={props.help.field<DescriptorEntry>('DescriptorEntry', 'limitOverride')}
 				>
 					<MiniMonacoEditor
@@ -397,13 +352,11 @@ function isConditional(value: unknown) {
 	return isRecord(value) && Array.isArray(value.conditional);
 }
 
-function validate(args: { domain: string; target: TargetDraft; descriptors: DescriptorDraft[] }) {
+function validate(descriptors: DescriptorDraft[]) {
 	const errors: string[] = [];
-	if (!args.domain.trim()) errors.push('Domain is required.');
-	if (!('host' in args.target) || !args.target.host.trim()) errors.push('Host is required.');
 	if (
-		!args.descriptors.length ||
-		args.descriptors.every(descriptor =>
+		!descriptors.length ||
+		descriptors.every(descriptor =>
 			descriptor.entries.every(entry => !entry.key.trim() || !entry.value.trim())
 		)
 	) {

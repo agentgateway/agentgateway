@@ -5,14 +5,12 @@
 //! via the backend policies.
 
 use agent_core::strng;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::http::auth::{BackendAuthKind, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::json;
-use crate::llm::RequestType;
 use crate::llm::policy::{GoogleModelArmor, with_default_timeout};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
@@ -243,20 +241,15 @@ impl SanitizeResponse {
 
 /// Use Model Armor sanitizeUserPrompt API for request content
 pub async fn send_request(
-	req: &mut dyn RequestType,
+	content: Vec<String>,
 	claims: Option<Claims>,
 	client: &PolicyClient,
 	model_armor: &GoogleModelArmor,
 ) -> anyhow::Result<SanitizeResponse> {
-	let content = req
-		.get_messages()
-		.into_iter()
-		.map(|m| m.content.to_string())
-		.collect_vec()
-		.join("\n");
-
 	let request_body = SanitizeUserPromptRequest {
-		user_prompt_data: UserPromptData { text: content },
+		user_prompt_data: UserPromptData {
+			text: content.join("\n"),
+		},
 	};
 
 	let response = send_model_armor_request(

@@ -4,6 +4,9 @@ description: src/tests/requests/messages/cache_control_reasoning_prefix.json
 info:
   model: gpt-5.6
   max_tokens: 64
+  cache_control:
+    type: ephemeral
+    ttl: 1h
   system: Retained system prefix
   messages:
     - role: user
@@ -131,6 +134,12 @@ info:
         "content": [
           {
             "text": "Uncached suffix"
+          },
+          {
+            "cachePoint": {
+              "ttl": "1h",
+              "type": "default"
+            }
           }
         ]
       }

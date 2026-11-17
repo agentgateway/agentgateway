@@ -38,7 +38,9 @@ info:
     "request_model": "custom-adaptive-model",
     "provider": "bedrock",
     "streaming": false,
-    "params": {},
+    "params": {
+      "reasoning_effort": "high"
+    },
     "prompt": [
       {
         "role": "user",

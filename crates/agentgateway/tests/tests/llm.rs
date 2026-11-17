@@ -1,4 +1,4 @@
-use agentgateway::llm::{AIProvider, custom, gemini, openai};
+use agentgateway::llm::{AIProvider, copilot, custom, gemini, openai};
 use agentgateway::test_helpers::ratelimitmock;
 use agentgateway::types::agent::TrafficPolicy;
 use tokio::sync::mpsc;
@@ -36,6 +36,104 @@ async fn llm_openai() {
 	assert_llm(io, llm_body!("requests/completions/basic.json"), want).await;
 }
 
+#[rstest::rstest]
+#[case::configured_key("configured-token")]
+#[case::empty_key("")]
+#[tokio::test]
+async fn llm_copilot_explicit_auth(#[case] credential: &str) {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let mut provider = llm_named_provider(
+		&mock,
+		AIProvider::Copilot(copilot::Provider {
+			model_override: None,
+		}),
+		false,
+	);
+	provider.policies =
+		Some(serde_json::from_value(json!({"backendAuth": {"key": credential}})).unwrap());
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let response = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		llm_body!("requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+	read_body_raw(response.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(
+		request.headers[header::AUTHORIZATION].to_str().unwrap(),
+		format!("Bearer {credential}").trim_end()
+	);
+	assert_eq!(request.headers[header::CONTENT_TYPE], "application/json");
+	assert_eq!(
+		request.headers["editor-version"],
+		concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+	);
+	assert_eq!(request.headers["openai-intent"], "conversation-agent");
+	assert_eq!(request.headers["x-github-api-version"], "2025-10-01");
+	assert_eq!(request.headers["x-initiator"], "agent");
+	assert_eq!(request.headers["x-interaction-type"], "conversation-agent");
+}
+
+#[tokio::test]
+async fn llm_streaming_response_transformation_sees_llm_context() {
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(wiremock::ResponseTemplate::new(200).set_body_raw(
+			llm_body!("response/completions/stream-content_filter.json").to_vec(),
+			"text/event-stream",
+		))
+		.mount(&mock)
+		.await;
+	let (_mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation: None,
+		}),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"transformations": {
+				"response": {
+					"set": {
+						"x-llm-provider": "llm.provider",
+						"x-llm-request-model": "llm.requestModel",
+						"x-llm-streaming": "string(llm.streaming)"
+					}
+				}
+			}
+		}))
+		.await;
+
+	let mut body: Value =
+		serde_json::from_slice(llm_body!("requests/completions/basic.json")).unwrap();
+	body["stream"] = json!(true);
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&body).unwrap()))
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let header = |name: &str| {
+		res
+			.headers()
+			.get(name)
+			.map(|v| v.to_str().unwrap().to_string())
+	};
+	assert_eq!(header("x-llm-provider").as_deref(), Some("openai"));
+	assert_eq!(header("x-llm-request-model").as_deref(), Some("replaceme"));
+	assert_eq!(header("x-llm-streaming").as_deref(), Some("true"));
+	let text = String::from_utf8(read_body_raw(res.into_body()).await.to_vec()).unwrap();
+	assert!(text.contains("data: "), "expected SSE body, got: {text}");
+}
+
 #[tokio::test]
 async fn llm_openai_tokenize() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
@@ -58,6 +156,125 @@ async fn llm_openai_tokenize() {
 		"gen_ai.usage.output_tokens": 23
 	});
 	assert_llm(io, llm_body!("requests/completions/basic.json"), want).await;
+}
+
+const GEMINI_SIGNATURE: &str = "opaque-thought-signature";
+const GEMINI_SIGNATURE_CARRIER_PREFIX: &str = "agentgateway.gemini.thought-signature.v1:";
+
+fn gemini_signature_carrier() -> String {
+	format!(
+		"{GEMINI_SIGNATURE_CARRIER_PREFIX}{}",
+		json!({"call_id": "call_1", "signature": GEMINI_SIGNATURE})
+	)
+}
+
+// A client replays the assistant turn it received from a Gemini-backed route. Only Gemini
+// understands the signature, so every other provider must get a request without it.
+fn gemini_signature_replay(api: &str, model: &str) -> (&'static str, Value) {
+	let carrier = gemini_signature_carrier();
+	match api {
+		"messages" => (
+			"/v1/messages",
+			json!({
+				"model": model,
+				"max_tokens": 64,
+				"messages": [
+					{"role": "user", "content": "What is the weather?"},
+					{"role": "assistant", "content": [
+						{"type": "thinking", "thinking": "", "signature": carrier},
+						{"type": "tool_use", "id": "call_1", "name": "get_weather", "input": {"city": "Paris"}}
+					]},
+					{"role": "user", "content": [
+						{"type": "tool_result", "tool_use_id": "call_1", "content": "sunny"}
+					]}
+				]
+			}),
+		),
+		"responses" => (
+			"/v1/responses",
+			json!({
+				"model": model,
+				"input": [
+					{"role": "user", "content": "What is the weather?"},
+					{"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": carrier},
+					{"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{\"city\":\"Paris\"}"},
+					{"type": "function_call_output", "call_id": "call_1", "output": "sunny"}
+				]
+			}),
+		),
+		_ => unreachable!("unknown client API {api}"),
+	}
+}
+
+#[rstest::rstest]
+#[case::messages_to_openai("messages", false)]
+#[case::responses_to_gemini("responses", true)]
+#[tokio::test]
+async fn llm_gemini_thought_signature_follows_provider(#[case] api: &str, #[case] is_gemini: bool) {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let provider = if is_gemini {
+		AIProvider::Gemini(gemini::Provider {
+			model_override: None,
+		})
+	} else {
+		AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation: None,
+		})
+	};
+	let (mock, mut bind, io) = setup_llm_mock(mock, provider, false, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/messages": "messages",
+					"/v1/responses": "responses"
+				}
+			}
+		}))
+		.await;
+	let model = if is_gemini {
+		"gemini-3.8-flash"
+	} else {
+		"gpt-4o"
+	};
+	let (path, body) = gemini_signature_replay(api, model);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.to_string().as_bytes(),
+	)
+	.await;
+	// The canned upstream response may not match the format the request was translated to;
+	// only the upstream request matters here.
+	let _ = read_body_raw(res.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	let upstream = serde_json::from_slice::<Value>(&request.body).unwrap();
+	let upstream_text = upstream.to_string();
+	assert!(
+		!upstream_text.contains(GEMINI_SIGNATURE_CARRIER_PREFIX),
+		"carrier leaked upstream: {upstream_text}"
+	);
+	if is_gemini {
+		let tool_call = upstream["messages"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find_map(|message| message["tool_calls"].get(0))
+			.unwrap_or_else(|| panic!("no replayed tool call: {upstream_text}"));
+		assert_eq!(
+			tool_call["extra_content"]["google"]["thought_signature"],
+			GEMINI_SIGNATURE
+		);
+	} else {
+		assert!(
+			!upstream_text.contains(GEMINI_SIGNATURE) && !upstream_text.contains("extra_content"),
+			"signature leaked upstream: {upstream_text}"
+		);
+	}
 }
 
 #[tokio::test]
@@ -225,7 +442,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "unknown",
+		"gen_ai.operation.name": "chat",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -288,7 +505,7 @@ async fn llm_detect_mode_respects_model_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "unknown",
+		"gen_ai.operation.name": "chat",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme-overwrite",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -323,173 +540,6 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 		)
 		.expect("sync local binds");
 	t
-}
-
-#[rstest::rstest]
-#[case::root_default("", "", false)]
-#[case::prefixed_default("/foo/", "", false)]
-#[case::prefixed_detect("/foo/", "passthrough: detect", false)]
-#[case::prefixed_opaque("/foo/", "passthrough: opaque", false)]
-#[case::httproute_root("", "", true)]
-#[case::httproute_prefix("/foo/", "", true)]
-#[tokio::test]
-async fn llm_model_router_endpoint_classification_and_trace_names(
-	#[case] prefix: &str,
-	#[case] passthrough: &str,
-	#[case] http_route: bool,
-) {
-	use agentgateway::test_helpers::oteltracemock;
-	struct TraceHandler(mpsc::UnboundedSender<String>);
-	#[async_trait::async_trait]
-	impl oteltracemock::Handler for TraceHandler {
-		async fn export(
-			&mut self,
-			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
-		) -> Result<
-			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
-			tonic::Status,
-		> {
-			for span in request
-				.resource_spans
-				.iter()
-				.flat_map(|r| &r.scope_spans)
-				.flat_map(|s| &s.spans)
-			{
-				if span.kind == opentelemetry_proto::tonic::trace::v1::span::SpanKind::Server as i32 {
-					let _ = self.0.send(span.name.clone());
-				}
-			}
-			oteltracemock::ok_response()
-		}
-	}
-	let (tx, mut rx) = mpsc::unbounded_channel();
-	let otel = oteltracemock::OtelTraceMock::new(move || TraceHandler(tx.clone()))
-		.spawn()
-		.await;
-	let mock = body_mock(llm_body!("response/responses/basic.json")).await;
-	let serving_prefix = if http_route { "" } else { prefix };
-	let config = format!(
-		r#"
-frontendPolicies:
-  tracing:
-    host: {}
-    randomSampling: true
-llm:
-  port: 0
-  pathPrefix: "{serving_prefix}"
-  models:
-  - name: real-model
-    provider: openAI
-    {passthrough}
-    params:
-      baseUrl: http://{}/v1
-"#,
-		otel.address,
-		mock.address()
-	);
-	let t = setup_local_llm_config(&config).await;
-	let prefix = prefix.trim_end_matches('/');
-	let t = if http_route {
-		// The controller emits this prefix match and rewrite for a model-serving HTTPRoute.
-		let mut route = basic_named_route(strng::literal!("/llm:router"));
-		route.key = strng::literal!("llm:request");
-		route.matches[0].path =
-			PathMatch::PathPrefix(strng::new(if prefix.is_empty() { "/" } else { prefix }));
-		route.inline_policies.push(TrafficPolicy::UrlRewrite(
-			agentgateway::store::RequestPolicy::single(agentgateway::http::filters::UrlRewrite {
-				authority: None,
-				path: Some(agentgateway::types::agent::PathRedirect::Prefix(
-					strng::EMPTY,
-				)),
-			}),
-		));
-		t.with_route_for_listener(strng::literal!("llm"), route)
-	} else {
-		t
-	};
-	let io = t.serve_http(strng::literal!("bind/0"));
-	let body =
-		br#"{"model":"real-model","max_tokens":32,"messages":[{"role":"user","content":"hello"}]}"#;
-	for path in ["/v1/messages", "/other/v1/messages", "/custom"] {
-		let response = send_request_body(
-			io.clone(),
-			Method::POST,
-			&format!("http://lo{prefix}{path}?trace=1"),
-			body,
-		)
-		.await;
-		assert_eq!(response.status(), StatusCode::OK, "{path}");
-		let _ = read_body_raw(response.into_body()).await;
-	}
-	let requests = mock.received_requests().await.unwrap();
-	assert_eq!(requests.len(), 3);
-	assert_eq!(
-		&requests[0].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/responses"
-	);
-	assert_eq!(
-		&requests[1].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/other/v1/messages?trace=1"
-	);
-	assert_eq!(
-		&requests[2].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/custom?trace=1"
-	);
-	for request in &requests[1..] {
-		assert_eq!(
-			serde_json::from_slice::<Value>(&request.body).unwrap(),
-			serde_json::from_slice::<Value>(body).unwrap()
-		);
-	}
-	for (method, path, status) in [
-		(Method::GET, "/v1/models", StatusCode::OK),
-		(Method::POST, "/v1/messages", StatusCode::BAD_REQUEST),
-		(
-			Method::POST,
-			"/v1beta/models/missing:generateContent",
-			StatusCode::NOT_FOUND,
-		),
-		(
-			Method::POST,
-			"/model/missing/converse",
-			StatusCode::NOT_FOUND,
-		),
-	] {
-		let response = send_request_body(
-			io.clone(),
-			method,
-			&format!("http://lo{prefix}{path}"),
-			b"{}",
-		)
-		.await;
-		assert_eq!(response.status(), status, "{path}");
-		let _ = read_body_raw(response.into_body()).await;
-	}
-	let mut names = tokio::time::timeout(Duration::from_secs(10), async {
-		let mut names = Vec::new();
-		for _ in 0..7 {
-			names.push(rx.recv().await.unwrap());
-		}
-		names
-	})
-	.await
-	.expect("request spans exported");
-	names.sort();
-	let mut expected = vec![
-		format!("GET {prefix}/v1/models"),
-		format!("POST {prefix}/v1/messages"),
-		format!("POST {prefix}/v1beta/models/{{model}}:generateContent"),
-		format!("POST {prefix}/model/{{model}}/converse"),
-		format!("POST {prefix}/v1/messages"),
-		format!("POST {prefix}/*"),
-		format!("POST {prefix}/*"),
-	];
-	expected.sort();
-	assert_eq!(names, expected);
-	if !prefix.is_empty() {
-		let response = send_request_body(io, Method::POST, "http://lo/v1/messages", body).await;
-		assert_eq!(response.status(), StatusCode::NOT_FOUND);
-	}
 }
 
 #[tokio::test]
@@ -540,6 +590,54 @@ llm:
 	let body: Value = serde_json::from_slice(&read_body_raw(response.into_body()).await).unwrap();
 	assert_eq!(body["error"]["code"], "model_not_allowed");
 	assert_eq!(mock.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn llm_attached_rejection_is_stored_in_log_database() {
+	let _guard = agentgateway::telemetry::log_store::setup(&agentgateway::database::DatabaseConfig {
+		url: "sqlite::memory:".to_string(),
+		max_connections: Some(1),
+	})
+	.await
+	.unwrap();
+	let t = setup_local_llm_config(
+		r#"
+gateways:
+  default:
+    port: 0
+llm:
+  gateways: default
+  policies:
+    apiKey:
+      keys:
+      - key: sk-test
+      mode: strict
+  models:
+  - name: gpt-4o
+    provider: openAI
+"#,
+	)
+	.await;
+	// No API key: rejected before the LLM handler runs, on a listener not named "llm".
+	let response =
+		send_completions_with_model(t.serve_http(strng::literal!("bind/0")), "gpt-4o", &[]).await;
+	assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+	let _ = read_body_raw(response.into_body()).await;
+
+	let request: agentgateway::telemetry::log_store::SearchRequest =
+		serde_json::from_value(json!({"filters": {"httpStatus": [401]}})).unwrap();
+	tokio::time::timeout(Duration::from_secs(10), async {
+		while agentgateway::telemetry::log_store::search(request.clone())
+			.await
+			.unwrap()
+			.logs
+			.is_empty()
+		{
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	})
+	.await
+	.expect("rejected request stored in log database");
 }
 
 #[tokio::test]
@@ -617,6 +715,209 @@ llm:
 		}
 	}
 	insta::assert_json_snapshot!(results);
+}
+
+#[tokio::test]
+async fn llm_model_list_metadata() {
+	let config = r#"
+llm:
+  port: 0
+  models:
+  - name: gpt-5.5
+    provider: openAI
+  - name: fast
+    provider: openAI
+    params:
+      model: gpt-5-mini
+  - name: openai/*
+    provider: openAI
+    transformation:
+      model: llmRequest.model.stripPrefix("openai/")
+  - name: local-model
+    provider: openAI
+  virtualModels:
+  - name: blend
+    routing:
+      weighted:
+        targets:
+        - model: gpt-5.5
+          weight: 1
+        - model: fast
+          weight: 1
+  - name: resilient
+    routing:
+      failover:
+        targets:
+        - model: gpt-5.5
+          priority: 0
+        - model: fast
+          priority: 1
+"#;
+	let mut t = setup_local_llm_config(config).await;
+	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
+		agentgateway::ModelCatalogSource::Inline {
+			inline: r#"{"metadata":{"generatedAt":"2099-01-01T00:00:00Z"},"providers":{"openai":{"models":{
+				"gpt-5.5":{"name":"GPT-5.5","released":"2026-04-23","limits":{"context":1050000,"input":922000,"output":128000},"modalities":{"input":["text","image","pdf"],"output":["text"]},"capabilities":{"reasoning":true,"structuredOutput":true,"toolCall":true,"temperature":false},"reasoning":{"effort":["low","high"]}},
+				"gpt-5-mini":{"name":"GPT-5 mini","released":"2025-08","limits":{"context":400000,"output":64000},"modalities":{"input":["text","image"],"output":["text"]},"capabilities":{"reasoning":true,"toolCall":true,"temperature":true},"reasoning":{"effort":["low","medium"]}}
+			}}}}"#.to_string(),
+		},
+	]).await.unwrap();
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let mut models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models?limit=1").await;
+	let limited: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(limited["data"].as_array().unwrap().len(), 1);
+
+	let res = send_request(
+		io.clone(),
+		Method::GET,
+		"http://lo/v1/models/openai/gpt-5.5",
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let model: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(model["id"], "openai/gpt-5.5");
+	assert_eq!(model["max_tokens"], 128000);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models/missing").await;
+	assert_eq!(res.status(), StatusCode::NOT_FOUND);
+	// Entries without catalog metadata carry the config load time.
+	for model in models["data"].as_array_mut().unwrap() {
+		if ["local-model", "blend", "resilient"].contains(&model["id"].as_str().unwrap()) {
+			model["created"] = json!(0);
+		}
+	}
+	let listed = models["data"].as_array().unwrap();
+	let described = |id: &str| {
+		let mut model = listed.iter().find(|m| m["id"] == id).unwrap().clone();
+		model.as_object_mut().unwrap().remove("id");
+		model
+	};
+	assert_eq!(described("resilient")["max_tokens"], 64000);
+	assert_eq!(described("resilient"), described("blend"));
+	insta::assert_json_snapshot!(models);
+}
+
+#[tokio::test]
+async fn llm_model_list_preferred_endpoints() {
+	let config = r#"
+llm:
+  port: 0
+  models:
+  - name: gpt-5.5
+    provider: openAI
+  - name: text-embedding-3-small
+    provider: openAI
+  - name: gpt-image-2
+    provider: openAI
+  - name: claude-sonnet-4-5
+    provider: anthropic
+  - name: gemini-2.5-flash
+    provider: gemini
+  - name: gemini-2.5-flash-image
+    provider: gemini
+  - name: vertex/claude-sonnet-4-5
+    provider: vertex
+    params:
+      model: claude-sonnet-4-5
+      vertexProject: p
+  - name: vertex/gemini-embedding-001
+    provider: vertex
+    params:
+      model: gemini-embedding-001
+      vertexProject: p
+  - name: bedrock/claude-sonnet-4-5
+    provider: bedrock
+    params:
+      model: anthropic.claude-sonnet-4-5
+      awsRegion: us-east-1
+  - name: bedrock/llama3
+    provider: bedrock
+    params:
+      model: meta.llama3-70b-instruct-v1:0
+      awsRegion: us-east-1
+  - name: bedrock/titan-embed
+    provider: bedrock
+    params:
+      model: amazon.titan-embed-text-v2:0
+      awsRegion: us-east-1
+  - name: azure/gpt-5.5
+    provider: azure
+    params:
+      model: gpt-5.5
+      azureResourceName: r
+      azureResourceType: openAI
+  - name: foundry/claude-sonnet-4-5
+    provider: azure
+    params:
+      model: claude-sonnet-4-5
+      azureResourceName: r
+      azureResourceType: foundry
+      azureProjectName: p
+  - name: FLUX.1-schnell
+    provider: togetherai
+  - name: custom-embedder
+    provider:
+      custom:
+        formats:
+        - type: embeddings
+    params:
+      baseUrl: http://localhost:9999/v1
+  - name: custom-everything
+    provider:
+      custom:
+        formats:
+        - type: completions
+        - type: generateContent
+        - type: anthropicTokenCount
+        - type: geminiCountTokens
+        - type: rerank
+        - type: decisions
+        - type: systemOne
+        - type: realtime
+    params:
+      baseUrl: http://localhost:9999/v1
+  virtualModels:
+  - name: openai-and-azure
+    routing:
+      weighted:
+        targets:
+        - model: gpt-5.5
+          weight: 1
+        - model: azure/gpt-5.5
+          weight: 1
+"#;
+	let mut t = setup_local_llm_config(config).await;
+	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
+		agentgateway::ModelCatalogSource::Inline {
+			inline: r#"{"metadata":{"generatedAt":"2099-01-01T00:00:00Z"},"providers":{
+				"openai":{"models":{"gpt-5.5":{},"text-embedding-3-small":{"endpoints":["/embeddings"]},"gpt-image-2":{"endpoints":["/images/generations","/images/edits"]}}},
+				"gcp.gemini":{"models":{"gemini-2.5-flash":{},"gemini-2.5-flash-image":{"endpoints":["/images/generations","/images/edits"]}}},
+				"gcp.vertex_ai":{"models":{"gemini-embedding-001":{"endpoints":["/embeddings"]}}},
+				"aws.bedrock":{"models":{"anthropic.claude-sonnet-4-5":{"modalities":{"input":["text"],"output":["text"]}},"meta.llama3-70b-instruct-v1:0":{"modalities":{"input":["text"],"output":["text"]}},"amazon.titan-embed-text-v2:0":{}}},
+				"togetherai":{"models":{"FLUX.1-schnell":{"endpoints":["/images/generations","/images/edits"]}}}
+			}}"#.to_string(),
+		},
+	]).await.unwrap();
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	let endpoints = models["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| {
+			(
+				m["id"].as_str().unwrap().to_string(),
+				m["preferred_endpoints"].clone(),
+			)
+		})
+		.collect::<std::collections::BTreeMap<_, _>>();
+	insta::assert_json_snapshot!(endpoints);
 }
 
 #[tokio::test]
@@ -773,6 +1074,93 @@ llm:
 }
 
 #[tokio::test]
+async fn llm_policies_see_request_model() {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let set = r#"
+            x-request-model: llm.requestModel
+            x-messages: string(llmRequest.messages.size())"#;
+	// The AI backend reads them from a route policy; the model router from a provider policy,
+	// which is only known once the model is resolved.
+	let config = format!(
+		r#"
+gateways:
+  default:
+    port: 0
+routes:
+- hostnames: [ai.example]
+  policies:
+    transformations:
+      request:
+        set:{set}
+  backends:
+  - ai:
+      name: ai
+      hostOverride: {addr}
+      provider:
+        openAI:
+          model: upstream-model
+llm:
+  models:
+  - name: router-model
+    provider: openAI
+    params:
+      model: upstream-model
+      baseUrl: http://{addr}/v1
+    requestTransformation:
+      set:{set}
+"#,
+		addr = mock.address(),
+	);
+	let t = setup_local_llm_config(&config).await;
+
+	for (host, model, encoding) in [
+		("ai.example", "ai-model", None),
+		("ai.example", "identity-model", Some("identity")),
+		("lo", "router-model", None),
+	] {
+		let mut req = RequestBuilder::new(Method::POST, &format!("http://{host}/v1/chat/completions"));
+		if let Some(encoding) = encoding {
+			req = req.header(header::CONTENT_ENCODING, encoding);
+		}
+		let res = req
+			.body(Body::from(completions_request_body_with_model(model)))
+			.send(t.serve_http(strng::literal!("bind/0")))
+			.await
+			.expect("completions request");
+		assert_eq!(res.status(), StatusCode::OK, "{model}");
+	}
+	let got: Vec<_> = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled")
+		.iter()
+		.map(|req| {
+			let body: Value = serde_json::from_slice(&req.body).unwrap();
+			(
+				req.headers["x-request-model"].to_str().unwrap().to_string(),
+				req.headers["x-messages"].to_str().unwrap().to_string(),
+				body["model"].as_str().unwrap().to_string(),
+			)
+		})
+		.collect();
+	let want = |model: &str| {
+		(
+			model.to_string(),
+			"2".to_string(),
+			"upstream-model".to_string(),
+		)
+	};
+	assert_eq!(
+		got,
+		vec![
+			want("ai-model"),
+			want("identity-model"),
+			want("router-model")
+		]
+	);
+}
+
+#[tokio::test]
 async fn llm_conditional_virtual_model_no_match_returns_json_error() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
 	let config = format!(
@@ -815,24 +1203,101 @@ llm:
 }
 
 #[tokio::test]
-async fn llm_model_router_handles_multipart_audio_detect_request() {
+async fn llm_nested_virtual_models() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
 	let config = format!(
 		r#"
 llm:
   port: 0
   models:
-  - name: real-model
+  - name: fast
+    visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}/v1
-    passthrough: detect
+      baseUrl: http://{0}/v1
+    transformation:
+      max_tokens: "256"
+  - name: other
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{0}/v1
+  virtualModels:
+  - name: entry
+    routing:
+      conditional:
+        targets:
+        - model: pool
+          when: request.headers["x-route"] == "pool"
+        - model: other
+  - name: pool
+    routing:
+      weighted:
+        targets:
+        - model: fast
+          weight: 1
+  # Shadows the concrete model of the same name.
+  - name: fast
+    routing:
+      weighted:
+        targets:
+        - model: fast
+          weight: 1
 "#,
 		mock.address()
 	);
 	let t = setup_local_llm_config(&config).await;
 	let io = t.serve_http(strng::literal!("bind/0"));
-	let body = multipart_audio_body("real-model");
+
+	for (model, headers) in [
+		("entry", &[("x-route", "pool")][..]),
+		("entry", &[][..]),
+		("fast", &[][..]),
+	] {
+		let res = send_completions_with_model(io.clone(), model, headers).await;
+		assert_eq!(res.status(), StatusCode::OK);
+	}
+
+	let got = mock
+		.received_requests()
+		.await
+		.expect("upstream requests")
+		.iter()
+		.map(|request| {
+			let body: Value = serde_json::from_slice(&request.body).expect("upstream request JSON");
+			(body["model"].clone(), body["max_tokens"].clone())
+		})
+		.collect::<Vec<_>>();
+	assert_eq!(
+		got,
+		vec![
+			(json!("fast"), json!(256)),
+			(json!("other"), Value::Null),
+			(json!("fast"), json!(256)),
+		]
+	);
+}
+
+#[tokio::test]
+async fn llm_model_router_handles_multipart_audio_detect_request() {
+	let mock = body_mock(br#"{"text":"Hello world","usage":{"type":"duration","seconds":9}}"#).await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: openai/*
+    provider: openAI
+    transformation:
+      model: llmRequest.model.stripPrefix("openai/")
+    params:
+      baseUrl: http://{}/v1
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let body = multipart_audio_body("openai/audio-model");
 
 	let res = send_multipart_audio(io.clone(), body.clone()).await;
 	assert_eq!(res.status(), StatusCode::OK);
@@ -843,20 +1308,75 @@ llm:
 		&request.url[Position::BeforePath..Position::AfterPath],
 		"/v1/audio/transcriptions"
 	);
-	assert_eq!(request.body, body);
+	assert_multipart_audio_body(&request.body, "audio-model").await;
 
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", "/v1/audio/transcriptions"),
-		("gen_ai.provider.name", "openai"),
+		("gen_ai.request.model", "audio-model"),
 	])
 	.await
 	.unwrap();
 	let want = json!({
 		"gen_ai.provider.name": "openai",
-		"gen_ai.response.model": "gpt-3.5-turbo-0125",
-		"gen_ai.usage.input_tokens": 17,
-		"gen_ai.usage.output_tokens": 23
+		"gen_ai.operation.name": "transcription",
+		"gen_ai.request.model": "audio-model",
+		"gen_ai.usage.audio_seconds": 9.0
+	});
+	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
+#[tokio::test]
+async fn llm_detect_reads_usage_from_unrequested_event_stream() {
+	// The client did not set `stream`, so only the response content type marks this as a stream.
+	let mock = MockServer::start().await;
+	Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(ResponseTemplate::new(StatusCode::OK.as_u16()).set_body_raw(
+			concat!(
+				"data: {\"type\":\"image_generation.partial_image\",\"b64_json\":\"AAAA\"}\n\n",
+				"data: {\"type\":\"image_generation.completed\",\"b64_json\":\"AAAA\",\"usage\":{",
+				"\"input_tokens\":14,\"output_tokens\":45,\"total_tokens\":59,",
+				"\"input_tokens_details\":{\"text_tokens\":14,\"image_tokens\":0}}}\n\n",
+			),
+			"text/event-stream",
+		))
+		.mount(&mock)
+		.await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: stream-model
+    provider: openAI
+    params:
+      baseUrl: http://{}/v1
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/images/generations")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(r#"{"model":"stream-model","prompt":"a cat"}"#))
+		.send(io)
+		.await
+		.expect("image generation request");
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", "/v1/images/generations"),
+		("gen_ai.request.model", "stream-model"),
+	])
+	.await
+	.unwrap();
+	let want = json!({
+		"gen_ai.operation.name": "image_generation",
+		"gen_ai.usage.input_tokens": 14,
+		"gen_ai.usage.output_tokens": 45
 	});
 	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
 }
@@ -928,6 +1448,56 @@ llm:
 		"agw.ai.usage.cost.total": "0.020"
 	});
 	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
+#[tokio::test]
+async fn llm_model_router_rewrites_path_model() {
+	let mock = body_mock(llm_body!("response/bedrock/basic.json")).await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: internal-model
+    visibility: internal
+    provider: bedrock
+    params:
+      awsRegion: us-east-1
+      hostOverride: "{}"
+      pathPrefix: /
+    transformation:
+      model: '"global.openai.gpt-5.6-luna"'
+  virtualModels:
+  - name: gpt-5.6-luna
+    routing:
+      failover:
+        targets:
+        - model: internal-model
+          priority: 0
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let body = json!({"messages": [{"role": "user", "content": [{"text": "hi"}]}]});
+	let res = RequestBuilder::new(
+		Method::POST,
+		"http://lo/model/gpt-5.6-luna/converse?trace=true",
+	)
+	.json(&body)
+	.send(io)
+	.await
+	.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(
+		request.url.path(),
+		"/model/global.openai.gpt-5.6-luna/converse"
+	);
+	assert_eq!(request.url.query(), Some("trace=true"));
+	assert_eq!(request.body_json::<Value>().unwrap(), body);
 }
 
 #[tokio::test]

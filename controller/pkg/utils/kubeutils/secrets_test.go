@@ -250,10 +250,30 @@ func TestGetSecretDataAuth(t *testing.T) {
 		wantFound bool
 	}{
 		{
-			name:      "strips bearer prefix",
-			data:      map[string][]byte{"Authorization": []byte("Bearer token")},
+			name:      "bearer alone",
+			data:      map[string][]byte{"Authorization": []byte("Bearer")},
+			wantFound: false,
+		},
+		{
+			name:      "bearer followed by spaces",
+			data:      map[string][]byte{"Authorization": []byte("Bearer   ")},
+			wantFound: false,
+		},
+		{
+			name:      "bearer followed by tab and newline",
+			data:      map[string][]byte{"Authorization": []byte("Bearer \t\n")},
+			wantFound: false,
+		},
+		{
+			name:      "bearer with extra whitespace before token",
+			data:      map[string][]byte{"Authorization": []byte("Bearer \t token \n")},
 			wantValue: "token",
 			wantFound: true,
+		},
+		{
+			name:      "missing",
+			data:      map[string][]byte{},
+			wantFound: false,
 		},
 		{
 			name:      "plain value",
@@ -262,15 +282,10 @@ func TestGetSecretDataAuth(t *testing.T) {
 			wantFound: true,
 		},
 		{
-			name:      "bare bearer value",
-			data:      map[string][]byte{"Authorization": []byte("Bearer   ")},
-			wantValue: "Bearer",
+			name:      "strips bearer prefix",
+			data:      map[string][]byte{"Authorization": []byte("Bearer token")},
+			wantValue: "token",
 			wantFound: true,
-		},
-		{
-			name:      "missing",
-			data:      map[string][]byte{},
-			wantFound: false,
 		},
 	}
 

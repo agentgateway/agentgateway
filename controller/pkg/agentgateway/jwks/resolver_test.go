@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -34,7 +33,7 @@ func TestResolverURLWithPolicyBackendGrants(t *testing.T) {
 				},
 				DefaultNamespace: "demo",
 				Remote: agentgateway.RemoteJWKS{
-					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{URL: ptr.Of(url)},
+					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{URL: new(url)},
 				},
 			}
 			resolved, err := resolver.ResolveOwner(krt.TestingDummyContext{}, owner)
@@ -143,7 +142,7 @@ func TestResolverBackendRefGrant(t *testing.T) {
 				},
 				DefaultNamespace: tt.ownerNS,
 				Remote: agentgateway.RemoteJWKS{
-					JwksPath: ptr.Of(agentgateway.LongString("keys")),
+					JwksPath: new(agentgateway.LongString("keys")),
 					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
 						BackendRef: &gwv1.BackendObjectReference{
 							Name:      targetName,

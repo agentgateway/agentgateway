@@ -11,12 +11,12 @@ use aws_credential_types::provider::error::CredentialsError;
 use aws_sigv4::http_request::{SignableBody, sign};
 use aws_sigv4::sign::v4::SigningParams;
 use aws_types::region::Region;
-use quick_cache::sync::{Cache as BoundedCache, EntryAction, EntryResult};
 use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::{Mutex, OnceCell};
 
 use super::BackendAuthError;
+use crate::http::expiring_cache::ExpiringCache;
 use crate::llm::bedrock::AwsRegion;
 use crate::util::ErrorContext;
 use crate::*;
@@ -85,11 +85,11 @@ const ASSUME_ROLE_CACHE_CAPACITY: usize = 8192;
 /// its own entry, so the cache must be bounded, and fetches are single-flight so N
 /// concurrent requests for the same key coalesce into one STS call.
 #[derive(Clone)]
-pub struct AwsAssumeRoleCache(Arc<BoundedCache<AssumeRoleCacheKey, Credentials>>);
+pub struct AwsAssumeRoleCache(ExpiringCache<AssumeRoleCacheKey, Credentials>);
 
 impl Default for AwsAssumeRoleCache {
 	fn default() -> Self {
-		Self(Arc::new(BoundedCache::new(ASSUME_ROLE_CACHE_CAPACITY)))
+		Self(ExpiringCache::new(ASSUME_ROLE_CACHE_CAPACITY))
 	}
 }
 
@@ -103,27 +103,21 @@ impl AwsAssumeRoleCache {
 		F: FnOnce() -> Fut,
 		Fut: Future<Output = anyhow::Result<Credentials>>,
 	{
-		let guard = match self
+		self
 			.0
-			.entry_async(&key, |_key, creds| {
-				if credentials_valid(creds) {
-					EntryAction::Retain(creds.clone())
-				} else {
-					EntryAction::ReplaceWithGuard
-				}
+			.get_or_fetch(key, || async {
+				let creds = fetch().await?;
+				let ttl = match creds.expiry() {
+					Some(expiry) => expiry
+						.duration_since(SystemTime::now())
+						.ok()
+						.and_then(|ttl| ttl.checked_sub(ASSUMED_CREDENTIAL_REFRESH_BUFFER))
+						.filter(|ttl| !ttl.is_zero()),
+					None => Some(Duration::MAX),
+				};
+				Ok::<_, anyhow::Error>((creds, ttl))
 			})
 			.await
-		{
-			EntryResult::Retained(creds) => return Ok(creds),
-			EntryResult::Vacant(guard) | EntryResult::Replaced(guard, _) => guard,
-			EntryResult::Removed(_, _) | EntryResult::Timeout => unreachable!(),
-		};
-
-		let creds = fetch().await?;
-		if credentials_valid(&creds) {
-			let _ = guard.insert(creds.clone());
-		}
-		Ok(creds)
 	}
 }
 

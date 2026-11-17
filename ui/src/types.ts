@@ -178,7 +178,14 @@ export interface AnalyticsSummaryRequest {
 	timeRange?: TimeRange;
 	filters?: LogFilters;
 	groupBy?: Array<{
-		field: 'provider' | 'requestModel' | 'responseModel' | 'httpStatus' | 'attributes';
+		field:
+			| 'provider'
+			| 'requestModel'
+			| 'responseModel'
+			| 'httpStatus'
+			| 'attributes'
+			| 'ttft'
+			| 'outputTokensPerSecond';
 		key?: string | null;
 	}>;
 	bucketCount?: number;
@@ -195,19 +202,31 @@ export interface TailEvent {
 	cursor: string;
 }
 
-export interface AnalyticsGroup {
-	group: Record<string, unknown>;
+export interface AnalyticsTotals {
 	requests: number;
 	totalTokens: number;
 	cost?: number | null;
+	inputTokens: number;
+	outputTokens: number;
+	errors: number;
+	durationMs: number;
+	ttftRequests: number;
+	ttftMs: number;
+	maxTtftMs: number;
+	generationTokens: number;
+	generationMs: number;
+	cacheReadTokens: number;
+	cacheWriteTokens: number;
+	reasoningTokens: number;
 }
 
-export interface AnalyticsTimeBucket {
+export interface AnalyticsGroup extends AnalyticsTotals {
+	group: Record<string, unknown>;
+}
+
+export interface AnalyticsTimeBucket extends AnalyticsTotals {
 	start: string;
 	group: Record<string, unknown>;
-	requests: number;
-	totalTokens: number;
-	cost?: number | null;
 }
 
 export interface AnalyticsSummaryResponse {

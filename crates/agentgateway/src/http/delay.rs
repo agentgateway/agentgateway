@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use crate::cel::{Executor, Expression, Value};
 use crate::http::filters::RequestDeadline;
+use crate::proxy::ProxyError;
 use crate::*;
 
 #[apply(schema!)]
@@ -40,7 +41,7 @@ impl crate::store::RequestPolicyTrait for Policy {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		let Some(duration) = self.eval_duration(req) else {
 			return Ok(Default::default());
 		};

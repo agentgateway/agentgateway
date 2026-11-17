@@ -1,0 +1,37 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/document_unsupported_source.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 1024
+  messages:
+    - role: user
+      content:
+        - type: document
+          source:
+            type: content
+            content:
+              - type: text
+                text: A custom-content document.
+        - type: text
+          text: Summarize the document.
+---
+{
+  "error": "unsupported conversion: messages document source cannot be represented by responses",
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "responses",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Summarize the document."
+      }
+    ]
+  }
+}

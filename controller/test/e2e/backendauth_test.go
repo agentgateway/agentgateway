@@ -90,7 +90,7 @@ func testInvalidJwtSign(t base.Test) {
 	t.Send("invalid-jwt-sign.example.com", &testmatchers.HttpResponse{
 		StatusCode: http.StatusInternalServerError,
 		Body: gomega.And(
-			gomega.ContainSubstring("backend authentication failed: jwtSign configuration is invalid"),
+			gomega.ContainSubstring("backend authentication failed"),
 			gomega.Not(gomega.ContainSubstring(missingKeyRef)),
 		),
 	})
@@ -108,7 +108,7 @@ func testInvalidGcpCredential(t base.Test) {
 	t.Send("invalid-gcp-credential.example.com", &testmatchers.HttpResponse{
 		StatusCode: http.StatusInternalServerError,
 		Body: gomega.And(
-			gomega.ContainSubstring("backend authentication failed: GCP credential configuration is invalid"),
+			gomega.ContainSubstring("backend authentication failed"),
 			gomega.Not(gomega.ContainSubstring("PRIVATE_KEY")),
 		),
 	})

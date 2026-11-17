@@ -36,12 +36,17 @@ function hasLegacyUiPromptCompletionMappings(add: Record<string, string> | undef
 	);
 }
 
+export const llmSettingsFields = ['gateways', 'port', 'tls'] as const;
+
 export const mcpSettingsFields = [
 	'gateways',
 	'port',
 	'statefulMode',
 	'prefixMode',
-	'failureMode'
+	'failureMode',
+	'sseKeepAlive',
+	'dnsRebindingProtection',
+	'server'
 ] as const;
 
 export const providerNames: ProviderName[] = [
@@ -68,6 +73,7 @@ export const providerNames: ProviderName[] = [
 	'fireworks',
 	'meta',
 	'perplexity',
+	'nebius',
 	'custom'
 ];
 
@@ -122,6 +128,7 @@ export function providerDisplayName(provider: ProviderName | string): string {
 		fireworks: 'Fireworks AI',
 		meta: 'Meta',
 		perplexity: 'Perplexity',
+		nebius: 'Nebius Token Factory',
 		custom: 'Custom'
 	};
 	return names[provider] ?? provider;
@@ -262,6 +269,15 @@ export function fileOwnedMcpSettingFields(
 	if (!hybrid) return new Set();
 	const mcp = config?.mcp;
 	return new Set(mcpSettingsFields.filter(field => Object.hasOwn(mcp ?? {}, field)));
+}
+
+export function fileOwnedLlmSettingFields(
+	config: GatewayConfig | null | undefined,
+	hybrid: boolean
+): ReadonlySet<string> {
+	if (!hybrid) return new Set();
+	const llm = config?.llm;
+	return new Set(llmSettingsFields.filter(field => Object.hasOwn(llm ?? {}, field)));
 }
 
 type LlmPolicyWithGuardrails = NonNullable<LlmConfig['policies']> & {
@@ -447,12 +463,12 @@ export function makeEmptyModel(): LlmModel {
 	} as unknown as LlmModel;
 }
 
-export function makeEmptyVirtualModel(): LlmVirtualModel {
+export function makeEmptyVirtualModel(model = ''): LlmVirtualModel {
 	return {
 		name: '',
 		routing: {
 			weighted: {
-				targets: [{ model: '', weight: 1 }]
+				targets: [{ model, weight: 1 }]
 			}
 		}
 	};

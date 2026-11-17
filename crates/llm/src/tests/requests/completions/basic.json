@@ -1,5 +1,6 @@
 {
   "model": "replaceme",
+  "tools": [],
   "messages": [
     {
       "role": "system",

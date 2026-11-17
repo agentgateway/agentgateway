@@ -14,6 +14,9 @@ info:
     totalTokens: 2412
     cacheReadInputTokens: 0
     cacheWriteInputTokens: 2387
+    cacheDetails:
+      - ttl: 5m
+        inputTokens: 2387
   metrics:
     latencyMs: 2083
 ---
@@ -29,7 +32,11 @@ info:
       "input_tokens": 16,
       "output_tokens": 9,
       "cache_creation_input_tokens": 2387,
-      "cache_read_input_tokens": 0
+      "cache_read_input_tokens": 0,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 2387,
+        "ephemeral_1h_input_tokens": 0
+      }
     },
     "content": [
       {
@@ -43,6 +50,7 @@ info:
     "output_tokens": 9,
     "total_tokens": 2412,
     "cache_creation_input_tokens": 2387,
+    "cache_creation_1h_input_tokens": 0,
     "cached_input_tokens": 0,
     "provider_model": "input-model"
   }

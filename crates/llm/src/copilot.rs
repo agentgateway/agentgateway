@@ -1,5 +1,6 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
+use http::{HeaderMap, HeaderValue, header};
 
 use crate::{ChatFormat, RouteType, apply};
 
@@ -18,6 +19,29 @@ impl super::Provider for Provider {
 impl Provider {
 	pub fn is_anthropic_model(request_model: &str) -> bool {
 		request_model.to_ascii_lowercase().starts_with("claude-")
+	}
+	pub fn set_required_headers(headers: &mut HeaderMap) {
+		headers.insert(
+			header::CONTENT_TYPE,
+			HeaderValue::from_static("application/json"),
+		);
+		headers.insert(
+			"editor-version",
+			HeaderValue::from_static(concat!("agentgateway/", env!("CARGO_PKG_VERSION"))),
+		);
+		headers.insert(
+			"openai-intent",
+			HeaderValue::from_static("conversation-agent"),
+		);
+		headers.insert(
+			"x-github-api-version",
+			HeaderValue::from_static("2025-10-01"),
+		);
+		headers.insert("x-initiator", HeaderValue::from_static("agent"));
+		headers.insert(
+			"x-interaction-type",
+			HeaderValue::from_static("conversation-agent"),
+		);
 	}
 	pub fn supported_formats_for_model(
 		request_model: &str,
@@ -65,6 +89,7 @@ impl Provider {
 			m if m.starts_with("gpt-") => {
 				vec![ChatFormat::OpenAIResponses]
 			},
+			m if m.starts_with("microsoft-decision-") || m.starts_with("text-embedding-") => vec![],
 			_ => vec![ChatFormat::OpenAICompletions],
 		}
 	}
@@ -75,11 +100,12 @@ pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 
 pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
-		RouteType::Messages => "/v1/messages",
-		RouteType::Responses => "/responses",
 		RouteType::Embeddings => "/embeddings",
-		RouteType::Rerank => "/rerank",
+		RouteType::Messages => "/v1/messages",
 		RouteType::Models => "/models",
+		RouteType::Rerank => "/rerank",
+		RouteType::Responses => "/responses",
+		RouteType::SystemOne => "/v1/systemone",
 		_ => "/chat/completions",
 	}
 }
@@ -88,6 +114,16 @@ pub fn path_suffix(route: RouteType) -> &'static str {
 mod tests {
 	use super::*;
 	use crate::model_catalog::{Catalog, TestCatalog, tags};
+
+	#[test]
+	fn catalog_format_tags_are_case_insensitive() {
+		let cat = TestCatalog::new([("grok-2", &[tags::OPENAI_COMPLETIONS][..])]);
+		let catalog: Catalog = Some(&cat);
+		assert_eq!(
+			Provider::supported_formats_for_model("Grok-2", catalog),
+			vec![ChatFormat::OpenAICompletions]
+		);
+	}
 
 	#[test]
 	fn catalog_format_tags_override_builtins() {
@@ -101,13 +137,9 @@ mod tests {
 	}
 
 	#[test]
-	fn catalog_format_tags_are_case_insensitive() {
-		let cat = TestCatalog::new([("grok-2", &[tags::OPENAI_COMPLETIONS][..])]);
-		let catalog: Catalog = Some(&cat);
-		assert_eq!(
-			Provider::supported_formats_for_model("Grok-2", catalog),
-			vec![ChatFormat::OpenAICompletions]
-		);
+	fn decision_model_has_no_chat_formats_and_uses_systemone_path() {
+		assert!(Provider::supported_formats_for_model("microsoft-decision-1", None).is_empty());
+		assert_eq!(path_suffix(RouteType::SystemOne), "/v1/systemone");
 	}
 
 	#[test]
@@ -118,5 +150,11 @@ mod tests {
 			Provider::supported_formats_for_model("grok-2", catalog),
 			vec![ChatFormat::OpenAIResponses]
 		);
+	}
+
+	#[test]
+	fn embedding_model_has_no_chat_formats_and_uses_embeddings_path() {
+		assert!(Provider::supported_formats_for_model("text-embedding-3-small", None).is_empty());
+		assert_eq!(path_suffix(RouteType::Embeddings), "/embeddings");
 	}
 }

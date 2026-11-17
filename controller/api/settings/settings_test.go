@@ -2,6 +2,7 @@ package settings
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -18,37 +19,33 @@ import (
 // with values set to a non-default value.
 func allEnvVarsSet() map[string]string {
 	return map[string]string{
-		"AGW_DNS_LOOKUP_FAMILY":                        string(DnsLookupFamilyV4Only),
-		"AGW_LISTENER_BIND_IPV6":                       "false",
-		"AGW_ISTIO_NAMESPACE":                          "my-istio-namespace",
-		"AGW_ISTIO_REVISION":                           "my-istio-revision",
-		"AGW_ISTIO_AUTO_ENABLED":                       "true",
-		"AGW_ISTIO_CLUSTER_ID":                         "my-cluster",
-		"AGW_ISTIO_NETWORK":                            "my-network",
-		"AGW_ISTIO_CA_ADDRESS":                         "https://my-istiod:15012",
-		"AGW_XDS_SERVICE_HOST":                         "my-xds-host",
-		"AGW_ADDITIONAL_XDS_TLS_HOSTS":                 "localhost,xds.example.com",
-		"AGW_XDS_SERVICE_NAME":                         "custom-svc",
-		"AGW_AGENTGATEWAY_XDS_SERVICE_PORT":            "5678",
-		"AGW_NO_LISTENERS_DUMMY_PORT":                  "8443",
-		"AGW_ENABLE_INFER_EXT":                         "true",
-		"AGW_ENABLE_AGENTGATEWAY_MODELS":               "false",
-		"AGW_ENABLE_X_BACKEND":                         "true",
-		"AGW_LOG_LEVEL":                                "debug",
-		"AGW_DISCOVERY_NAMESPACE_SELECTORS":            `[{"matchLabels":{"app":"test"}}]`,
-		"AGW_ENABLE_BUILTIN_DEFAULT_METRICS":           "true",
-		"AGW_GLOBAL_POLICY_NAMESPACE":                  "policy-ns",
-		"AGW_DISABLE_LEADER_ELECTION":                  "true",
-		"AGW_GATEWAY_CLASS_PARAMETERS_REFS":            `{"kgateway":{"name":"custom-gwp","namespace":"infra"},"agentgateway":{"name":"custom-gwp-agw","namespace":"infra"}}`,
-		"AGW_XDS_AUTH":                                 "false",
-		"AGW_XDS_MODE":                                 "tls",
-		"AGW_BACKEND_REF_GRANT_MODE":                   "route-and-policy",
-		"AGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES": "false",
-		"AGW_PROXY_IMAGE_REGISTRY":                     "my-registry",
-		"AGW_PROXY_IMAGE_REPOSITORY":                   "my-repo",
-		"AGW_PROXY_IMAGE_TAG":                          "my-tag",
-		"AGW_CONTROLLER_NAME":                          "example.com/my-controller",
-		"AGW_AGENTGATEWAY_CLASS_NAME":                  "my-gateway-class",
+		"AGW_UNSAFE_ADMIN_BIND_ADDRESS":      "0.0.0.0",
+		"AGW_ISTIO_NAMESPACE":                "my-istio-namespace",
+		"AGW_ISTIO_REVISION":                 "my-istio-revision",
+		"AGW_ISTIO_AUTO_ENABLED":             "true",
+		"AGW_ISTIO_CLUSTER_ID":               "my-cluster",
+		"AGW_ISTIO_NETWORK":                  "my-network",
+		"AGW_ISTIO_CA_ADDRESS":               "https://my-istiod:15012",
+		"AGW_XDS_SERVICE_HOST":               "my-xds-host",
+		"AGW_ADDITIONAL_XDS_TLS_HOSTS":       "localhost,xds.example.com",
+		"AGW_XDS_SERVICE_NAME":               "custom-svc",
+		"AGW_AGENTGATEWAY_XDS_SERVICE_PORT":  "5678",
+		"AGW_NO_LISTENERS_DUMMY_PORT":        "8443",
+		"AGW_ENABLE_INFER_EXT":               "true",
+		"AGW_ENABLE_X_BACKEND":               "true",
+		"AGW_LOG_LEVEL":                      "debug",
+		"AGW_DISCOVERY_NAMESPACE_SELECTORS":  `[{"matchLabels":{"app":"test"}}]`,
+		"AGW_ENABLE_BUILTIN_DEFAULT_METRICS": "true",
+		"AGW_DISABLE_LEADER_ELECTION":        "true",
+		"AGW_GATEWAY_CLASS_PARAMETERS_REFS":  `{"kgateway":{"name":"custom-gwp","namespace":"infra"},"agentgateway":{"name":"custom-gwp-agw","namespace":"infra"}}`,
+		"AGW_XDS_AUTH":                       "false",
+		"AGW_XDS_MODE":                       "tls",
+		"AGW_BACKEND_REF_GRANT_MODE":         "route-and-policy",
+		"AGW_PROXY_IMAGE_REGISTRY":           "my-registry",
+		"AGW_PROXY_IMAGE_REPOSITORY":         "my-repo",
+		"AGW_PROXY_IMAGE_TAG":                "my-tag",
+		"AGW_CONTROLLER_NAME":                "example.com/my-controller",
+		"AGW_AGENTGATEWAY_CLASS_NAME":        "my-gateway-class",
 	}
 }
 
@@ -72,32 +69,28 @@ func TestSettings(t *testing.T) {
 			name:    "defaults to empty or default values",
 			envVars: map[string]string{},
 			expectedSettings: &Settings{
-				DnsLookupFamily:                      DnsLookupFamilyV4Preferred,
-				ListenerBindIpv6:                     true,
-				IstioNamespace:                       "istio-system",
-				IstioRevision:                        "default",
-				XdsServiceHost:                       "",
-				AdditionalXdsTLSHosts:                nil,
-				XdsServiceName:                       "agentgateway",
-				AgentgatewayXdsServicePort:           9978,
-				NoListenersDummyPort:                 443,
-				EnableInferExt:                       false,
-				EnableAgentgatewayModels:             true,
-				EnableXBackend:                       false,
-				LogLevel:                             "info",
-				DiscoveryNamespaceSelectors:          "[]",
-				EnableBuiltinDefaultMetrics:          false,
-				GlobalPolicyNamespace:                "",
-				DisableLeaderElection:                false,
-				XdsAuth:                              true,
-				XdsMode:                              XdsModePlaintext,
-				BackendRefGrantMode:                  BackendRefGrantModeRoute,
-				EnableExperimentalGatewayAPIFeatures: true,
-				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
-				ProxyImageRegistry:                   "cr.agentgateway.dev",
-				ProxyImageRepository:                 "agentgateway",
-				ControllerName:                       "agentgateway.dev/agentgateway",
-				AgentgatewayClassName:                "agentgateway",
+				UnsafeAdminBindAddress:      "localhost",
+				IstioNamespace:              "istio-system",
+				IstioRevision:               "default",
+				XdsServiceHost:              "",
+				AdditionalXdsTLSHosts:       nil,
+				XdsServiceName:              "agentgateway",
+				AgentgatewayXdsServicePort:  9978,
+				NoListenersDummyPort:        443,
+				EnableInferExt:              false,
+				EnableXBackend:              false,
+				LogLevel:                    "info",
+				DiscoveryNamespaceSelectors: "[]",
+				EnableBuiltinDefaultMetrics: false,
+				DisableLeaderElection:       false,
+				XdsAuth:                     true,
+				XdsMode:                     XdsModePlaintext,
+				BackendRefGrantMode:         BackendRefGrantModeRoute,
+				GatewayClassParametersRefs:  GatewayClassParametersRefs{},
+				ProxyImageRegistry:          "cr.agentgateway.dev",
+				ProxyImageRepository:        "agentgateway",
+				ControllerName:              "agentgateway.dev/agentgateway",
+				AgentgatewayClassName:       "agentgateway",
 			},
 		},
 		{
@@ -106,36 +99,32 @@ func TestSettings(t *testing.T) {
 			name:    "all values set",
 			envVars: allEnvVarsSet(),
 			expectedSettings: &Settings{
-				DnsLookupFamily:                      DnsLookupFamilyV4Only,
-				ListenerBindIpv6:                     false,
-				IstioNamespace:                       "my-istio-namespace",
-				IstioRevision:                        "my-istio-revision",
-				IstioAutoEnabled:                     true,
-				IstioClusterId:                       "my-cluster",
-				IstioNetwork:                         "my-network",
-				IstioCaAddress:                       "https://my-istiod:15012",
-				XdsServiceHost:                       "my-xds-host",
-				AdditionalXdsTLSHosts:                []string{"localhost", "xds.example.com"},
-				XdsServiceName:                       "custom-svc",
-				AgentgatewayXdsServicePort:           5678,
-				NoListenersDummyPort:                 8443,
-				EnableInferExt:                       true,
-				EnableAgentgatewayModels:             false,
-				EnableXBackend:                       true,
-				LogLevel:                             "debug",
-				DiscoveryNamespaceSelectors:          `[{"matchLabels":{"app":"test"}}]`,
-				EnableBuiltinDefaultMetrics:          true,
-				GlobalPolicyNamespace:                "policy-ns",
-				DisableLeaderElection:                true,
-				XdsAuth:                              false,
-				XdsMode:                              XdsModeTLS,
-				BackendRefGrantMode:                  BackendRefGrantModeRouteAndPolicy,
-				EnableExperimentalGatewayAPIFeatures: false,
-				ProxyImageRegistry:                   "my-registry",
-				ProxyImageRepository:                 "my-repo",
-				ProxyImageTag:                        new("my-tag"),
-				ControllerName:                       "example.com/my-controller",
-				AgentgatewayClassName:                "my-gateway-class",
+				UnsafeAdminBindAddress:      "0.0.0.0",
+				IstioNamespace:              "my-istio-namespace",
+				IstioRevision:               "my-istio-revision",
+				IstioAutoEnabled:            true,
+				IstioClusterId:              "my-cluster",
+				IstioNetwork:                "my-network",
+				IstioCaAddress:              "https://my-istiod:15012",
+				XdsServiceHost:              "my-xds-host",
+				AdditionalXdsTLSHosts:       []string{"localhost", "xds.example.com"},
+				XdsServiceName:              "custom-svc",
+				AgentgatewayXdsServicePort:  5678,
+				NoListenersDummyPort:        8443,
+				EnableInferExt:              true,
+				EnableXBackend:              true,
+				LogLevel:                    "debug",
+				DiscoveryNamespaceSelectors: `[{"matchLabels":{"app":"test"}}]`,
+				EnableBuiltinDefaultMetrics: true,
+				DisableLeaderElection:       true,
+				XdsAuth:                     false,
+				XdsMode:                     XdsModeTLS,
+				BackendRefGrantMode:         BackendRefGrantModeRouteAndPolicy,
+				ProxyImageRegistry:          "my-registry",
+				ProxyImageRepository:        "my-repo",
+				ProxyImageTag:               new("my-tag"),
+				ControllerName:              "example.com/my-controller",
+				AgentgatewayClassName:       "my-gateway-class",
 				GatewayClassParametersRefs: GatewayClassParametersRefs{
 					"kgateway": {
 						Name:      "custom-gwp",
@@ -156,25 +145,11 @@ func TestSettings(t *testing.T) {
 			expectedErrorStr: "invalid syntax",
 		},
 		{
-			name: "errors on invalid bool",
-			envVars: map[string]string{
-				"AGW_LISTENER_BIND_IPV6": "true123",
-			},
-			expectedErrorStr: "invalid syntax",
-		},
-		{
 			name: "errors on invalid port",
 			envVars: map[string]string{
 				"AGW_AGENTGATEWAY_XDS_SERVICE_PORT": "a123",
 			},
 			expectedErrorStr: "invalid syntax",
-		},
-		{
-			name: "errors on invalid dns lookup family",
-			envVars: map[string]string{
-				"AGW_DNS_LOOKUP_FAMILY": "invalid",
-			},
-			expectedErrorStr: `invalid DNS lookup family: "invalid"`,
 		},
 		{
 			name: "errors on invalid backend reference grant mode",
@@ -205,29 +180,25 @@ func TestSettings(t *testing.T) {
 				"AGW_ENABLE_ISTIO_AUTO_MTLS": "true",
 			},
 			expectedSettings: &Settings{
-				DnsLookupFamily:                      DnsLookupFamilyV4Preferred,
-				ListenerBindIpv6:                     true,
-				IstioNamespace:                       "istio-system",
-				IstioRevision:                        "default",
-				XdsServiceName:                       "agentgateway",
-				AgentgatewayXdsServicePort:           9978,
-				EnableInferExt:                       false,
-				EnableAgentgatewayModels:             true,
-				NoListenersDummyPort:                 443,
-				LogLevel:                             "info",
-				DiscoveryNamespaceSelectors:          "[]",
-				EnableBuiltinDefaultMetrics:          false,
-				GlobalPolicyNamespace:                "",
-				DisableLeaderElection:                false,
-				XdsAuth:                              true,
-				XdsMode:                              XdsModePlaintext,
-				BackendRefGrantMode:                  BackendRefGrantModeRoute,
-				EnableExperimentalGatewayAPIFeatures: true,
-				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
-				ProxyImageRegistry:                   "cr.agentgateway.dev",
-				ProxyImageRepository:                 "agentgateway",
-				ControllerName:                       "agentgateway.dev/agentgateway",
-				AgentgatewayClassName:                "agentgateway",
+				UnsafeAdminBindAddress:      "localhost",
+				IstioNamespace:              "istio-system",
+				IstioRevision:               "default",
+				XdsServiceName:              "agentgateway",
+				AgentgatewayXdsServicePort:  9978,
+				EnableInferExt:              false,
+				NoListenersDummyPort:        443,
+				LogLevel:                    "info",
+				DiscoveryNamespaceSelectors: "[]",
+				EnableBuiltinDefaultMetrics: false,
+				DisableLeaderElection:       false,
+				XdsAuth:                     true,
+				XdsMode:                     XdsModePlaintext,
+				BackendRefGrantMode:         BackendRefGrantModeRoute,
+				GatewayClassParametersRefs:  GatewayClassParametersRefs{},
+				ProxyImageRegistry:          "cr.agentgateway.dev",
+				ProxyImageRepository:        "agentgateway",
+				ControllerName:              "agentgateway.dev/agentgateway",
+				AgentgatewayClassName:       "agentgateway",
 			},
 		},
 	}
@@ -257,6 +228,43 @@ func TestSettings(t *testing.T) {
 			require.Emptyf(t, diff, "Settings do not match expected values (-expected +got):\n%s", diff)
 		})
 	}
+}
+
+func TestUnsafeAdminBindAddressRejectsInvalidAddresses(t *testing.T) {
+	for _, address := range []string{"", " ", "http://localhost", "localhost:9095", "0.0.0.0:9095", "[::]", "[::]:9095", "bad host", "-localhost", "localhost/path", "agwadmin.local", "debug.example.com", "DEBUG.example.com.", "controller-0", "LOCALHOST", "localhost.", "999.999.1.1", "::gg"} {
+		t.Run(address, func(t *testing.T) {
+			t.Setenv("AGW_UNSAFE_ADMIN_BIND_ADDRESS", address)
+			_, err := BuildSettings()
+			require.ErrorContains(t, err, "AGW_UNSAFE_ADMIN_BIND_ADDRESS")
+		})
+	}
+}
+
+func TestUnsafeAdminBindAddress(t *testing.T) {
+	for _, address := range []string{"localhost", "0.0.0.0", "127.0.0.1", "::", "::1", "192.0.2.10", "2001:db8::10"} {
+		t.Run(address, func(t *testing.T) {
+			t.Setenv("AGW_UNSAFE_ADMIN_BIND_ADDRESS", address)
+			settings, err := BuildSettings()
+			require.NoError(t, err)
+			require.Equal(t, address, settings.UnsafeAdminBindAddress)
+		})
+	}
+	t.Run("default is loopback", func(t *testing.T) {
+		original, present := os.LookupEnv("AGW_UNSAFE_ADMIN_BIND_ADDRESS")
+		require.NoError(t, os.Unsetenv("AGW_UNSAFE_ADMIN_BIND_ADDRESS"))
+		t.Cleanup(func() {
+			if present {
+				require.NoError(t, os.Setenv("AGW_UNSAFE_ADMIN_BIND_ADDRESS", original))
+			}
+		})
+		settings, err := BuildSettings()
+		require.NoError(t, err)
+		require.Equal(t, "localhost", settings.UnsafeAdminBindAddress)
+		address, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(settings.UnsafeAdminBindAddress, "9095"))
+		require.NoError(t, err)
+		require.True(t, address.IP.IsLoopback())
+		require.Equal(t, 9095, address.Port)
+	})
 }
 
 // TestEnvVarCoverage tests that all settings are tested with non-default values.

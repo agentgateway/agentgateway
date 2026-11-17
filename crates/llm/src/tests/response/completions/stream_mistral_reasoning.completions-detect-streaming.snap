@@ -1,0 +1,33 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream_mistral_reasoning.json
+---
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"role":"assistant","index":0,"content":""},"finish_reason":null,"logprobs":null}]}
+
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"index":0,"content":[{"type":"thinking","thinking":[{"type":"text","text":"Let"}],"closed":true}]},"finish_reason":null,"logprobs":null}]}
+
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"index":0,"content":[{"type":"thinking","thinking":[{"type":"text","text":" me consider"}],"closed":true}]},"finish_reason":null,"logprobs":null}]}
+
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"index":0,"content":[{"type":"thinking","thinking":[{"type":"text","text":" how to respond."}],"closed":true}]},"finish_reason":null,"logprobs":null}]}
+
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"index":0,"content":"Hi there!"},"finish_reason":null,"logprobs":null}]}
+
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"index":0,"content":" How can I"},"finish_reason":null,"logprobs":null}]}
+
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"index":0,"content":" help you?"},"finish_reason":null,"logprobs":null}]}
+
+data: {"id":"80db9e9b223d4508bf239cb67b524ce4","object":"chat.completion.chunk","created":123,"model":"zai-glm-5-3","choices":[{"index":0,"delta":{"index":0,"content":""},"finish_reason":"stop","logprobs":null,"response_error":{"format_error":null,"content_validation":["valid_think_chunk","valid_text_chunk"],"tool_calls_validation":[],"extra_tags":[]}}],"usage":{"prompt_tokens":13,"total_tokens":246,"completion_tokens":233,"prompt_tokens_details":{"cached_tokens":0}}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 13,
+  "output_tokens": 233,
+  "total_tokens": 246,
+  "cached_input_tokens": 0,
+  "provider_model": "zai-glm-5-3"
+}

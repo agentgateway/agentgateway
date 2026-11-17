@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::fmt::Debug;
-use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -34,14 +33,14 @@ use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::substrate::ateattr;
 use crate::http::substrate::ateattr::{ResumeDisposition, RouteOutcome};
 use crate::http::{Request, health};
-use crate::llm::InputFormat;
 use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
+use crate::llm::{DetectedOperation, InputFormat};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, ErrorTypeLabel, GenAIErrorType, GenAILabels, GenAILabelsTokenUsage,
-	GenAIRequestDurationLabels, HTTPLabels, MCPCall, Metrics, OutboundCallLabels, RouteIdentifier,
-	SubstrateRouteLabels,
+	GenAIRequestDurationLabels, HTTPLabels, MCPCall, Metrics, OutboundCallKind, OutboundCallLabels,
+	RouteIdentifier, SubstrateRouteLabels,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, semconv, trc};
@@ -397,7 +396,7 @@ pub struct Config {
 	pub fields: LoggingFields,
 	/// Compiled standard attributes, replaced on config reload and snapshotted per request.
 	#[serde(skip)]
-	pub database_fields: Arc<arc_swap::ArcSwap<LoggingFields>>,
+	pub standard_attributes: Arc<arc_swap::ArcSwap<LoggingFields>>,
 	/// Compiled `standardAttributes.session`, replaced on config reload.
 	#[serde(skip)]
 	pub session: Arc<arc_swap::ArcSwapOption<cel::Expression>>,
@@ -406,7 +405,7 @@ pub struct Config {
 	/// Format sets the logging format (text or json)
 	pub format: crate::LoggingFormat,
 	/// Optional request log database sink.
-	pub database: Option<crate::telemetry::log_store::Config>,
+	pub database: Option<crate::database::DatabaseConfig>,
 }
 
 #[derive(serde::Serialize, Default, Clone, Debug)]
@@ -573,6 +572,7 @@ pub struct CelLogging {
 	pub fields: LoggingFields,
 	pub otlp_filter: Option<Arc<cel::Expression>>,
 	pub otlp_fields: LoggingFields,
+	pub standard_attributes: LoggingFields,
 	pub database_fields: LoggingFields,
 	pub metric_fields: MetricFields,
 }
@@ -583,6 +583,7 @@ pub struct CelLoggingExecutor<'a> {
 	pub fields: &'a LoggingFields,
 	pub otlp_filter: &'a Option<Arc<cel::Expression>>,
 	pub otlp_fields: &'a LoggingFields,
+	pub standard_attributes: &'a LoggingFields,
 	pub database_fields: &'a LoggingFields,
 	pub metric_fields: &'a MetricFields,
 }
@@ -706,6 +707,10 @@ impl<'a> CelLoggingExecutor<'a> {
 		self.eval(&self.otlp_fields.add)
 	}
 
+	fn eval_standard_attributes(&self) -> Vec<(Cow<str>, Option<Value>)> {
+		self.eval(&self.standard_attributes.add)
+	}
+
 	fn eval_database_additions(&self) -> Vec<(Cow<str>, Option<Value>)> {
 		self.eval(&self.database_fields.add)
 	}
@@ -713,11 +718,7 @@ impl<'a> CelLoggingExecutor<'a> {
 
 impl CelLogging {
 	pub fn new(cfg: Config, metrics: MetricsConfig) -> Self {
-		let database_fields = if cfg.database.is_some() {
-			cfg.database_fields.load().as_ref().clone()
-		} else {
-			LoggingFields::default()
-		};
+		let standard_attributes = cfg.standard_attributes.load().as_ref().clone();
 		let mut cel_context = cel::ContextBuilder::new();
 		if let Some(f) = &cfg.filter {
 			cel_context.register_log_expression(f.as_ref());
@@ -725,7 +726,7 @@ impl CelLogging {
 		for v in cfg.fields.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
-		for v in database_fields.add.values_unordered() {
+		for v in standard_attributes.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
 		for v in metrics.metric_fields.add.values_unordered() {
@@ -741,7 +742,8 @@ impl CelLogging {
 			fields: cfg.fields,
 			otlp_filter: None,
 			otlp_fields: LoggingFields::default(),
-			database_fields,
+			standard_attributes,
+			database_fields: LoggingFields::default(),
 			metric_fields: metrics.metric_fields,
 		}
 	}
@@ -763,6 +765,7 @@ impl CelLogging {
 			fields,
 			otlp_filter,
 			otlp_fields,
+			standard_attributes,
 			database_fields,
 			metric_fields,
 		} = self;
@@ -781,6 +784,7 @@ impl CelLogging {
 				inputs.proxy,
 			)
 		};
+		executor.upstream_calls = inputs.upstream_calls;
 		if let Some(md) = inputs.mcp_guardrails {
 			executor.mcp_guardrails = cel::ExtensionOrDirect::Direct(Some(md));
 		}
@@ -790,6 +794,7 @@ impl CelLogging {
 			fields,
 			otlp_filter,
 			otlp_fields,
+			standard_attributes,
 			database_fields,
 			metric_fields,
 		}
@@ -806,6 +811,7 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub end_time: &'a cel::RequestTime,
 	pub proxy: Option<&'a cel::ProxyContext>,
 	pub source_context: Option<&'a cel::SourceContext>,
+	pub upstream_calls: Option<&'a Vec<crate::telemetry::upstream::UpstreamCall>>,
 }
 
 #[derive(Debug)]
@@ -1114,6 +1120,7 @@ impl RequestLog {
 		tcp_info: TCPConnectionInfo,
 	) -> Self {
 		RequestLog {
+			upstream_calls: Default::default(),
 			cel,
 			access_log_preset: None,
 			database_llm: Default::default(),
@@ -1183,13 +1190,21 @@ impl RequestLog {
 
 	pub fn span_writer(&self) -> SpanWriter {
 		let inner = self.span_writer_inner().map(Arc::new);
-		SpanWriter { inner }
+		let upstream_calls = self
+			.cel
+			.cel_context
+			.needs_upstream_calls()
+			.then(|| self.upstream_calls.get_or_init(Default::default).clone());
+		SpanWriter {
+			inner,
+			upstream_calls,
+		}
 	}
 	pub fn insert_span_writer(&self, extensions: &mut ::http::Extensions) {
-		if let Some(inner) = self.span_writer_inner() {
-			extensions.insert(SpanWriter {
-				inner: Some(Arc::new(inner)),
-			});
+		// Inserted without tracing too, since it carries the `upstreamCalls` recorder.
+		let writer = self.span_writer();
+		if writer.is_enabled() || writer.upstream_calls.is_some() {
+			extensions.insert(writer);
 		}
 	}
 	fn span_writer_inner(&self) -> Option<SpanWriterInner> {
@@ -1261,6 +1276,7 @@ impl RequestLog {
 			mcp_guardrails: None,
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
+			upstream_calls: None,
 			proxy: Some(&proxy_timing),
 		});
 		let Some(rh) = self.request_handle.take() else {
@@ -1272,6 +1288,7 @@ impl RequestLog {
 
 #[derive(Debug)]
 pub struct RequestLog {
+	pub upstream_calls: std::sync::OnceLock<crate::telemetry::upstream::UpstreamCalls>,
 	pub cel: CelLogging,
 	pub access_log_preset: Option<crate::types::frontend::AccessLogPreset>,
 	/// Controls whether normalized LLM prompt/completion content is persisted in the database's
@@ -1349,7 +1366,7 @@ pub struct RequestLog {
 	pub a2a_method: Option<Strng>,
 	pub a2a_response: Option<a2a::ResponseInfo>,
 
-	pub inference_pool: Option<SocketAddr>,
+	pub inference_pool: Option<Target>,
 
 	pub ate_actor_name: Option<String>,
 	pub ate_actor_uid: Option<String>,
@@ -1381,6 +1398,35 @@ fn gen_ai_operation_failed(request: &RequestLog) -> bool {
 		})
 }
 
+fn mcp_outcome(request: &RequestLog, mcp: &MCPInfo) -> super::metrics::MCPOutcome {
+	use super::metrics::MCPOutcome;
+
+	if request.error.is_some()
+		|| request
+			.status
+			.is_some_and(|status| status.is_client_error() || status.is_server_error())
+	{
+		return MCPOutcome::gateway_error;
+	}
+	if mcp.error.is_some() {
+		return MCPOutcome::protocol_error;
+	}
+	if mcp.method_name.as_deref() == Some("tools/call") {
+		return match mcp.tool.as_ref().and_then(|tool| tool.result.as_ref()) {
+			Some(result) if result.get("isError").and_then(serde_json::Value::as_bool) == Some(true) => {
+				MCPOutcome::tool_error
+			},
+			Some(_) => MCPOutcome::success,
+			None => MCPOutcome::unknown,
+		};
+	}
+	if request.status.is_some_and(|status| status.is_success()) {
+		MCPOutcome::success
+	} else {
+		MCPOutcome::unknown
+	}
+}
+
 fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 	match input_format {
 		InputFormat::Completions | InputFormat::Messages | InputFormat::Responses => "chat",
@@ -1389,10 +1435,23 @@ fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 		// These operations have no standard GenAI operation name. Keep the custom values bounded.
 		InputFormat::Realtime => "realtime",
 		InputFormat::Rerank => "rerank",
-		InputFormat::Decisions => "decisions",
+		InputFormat::Decisions | InputFormat::SystemOne => "decisions",
 		InputFormat::CountTokens | InputFormat::GeminiCountTokens => "count_tokens",
-		// Detection has not identified the operation; do not assume it is chat.
-		InputFormat::Detect => "unknown",
+		InputFormat::Detect(Some(operation)) => match operation {
+			DetectedOperation::Chat => "chat",
+			DetectedOperation::GenerateContent => "generate_content",
+			DetectedOperation::Embeddings => "embeddings",
+			DetectedOperation::CountTokens => "count_tokens",
+			DetectedOperation::Rerank => "rerank",
+			DetectedOperation::Decisions => "decisions",
+			DetectedOperation::Image => "image_generation",
+			DetectedOperation::Ocr => "ocr",
+			DetectedOperation::Compaction => "compaction",
+			DetectedOperation::Transcription => "transcription",
+			DetectedOperation::Speech => "speech",
+		},
+		// The path is not a known serving endpoint; do not assume it is chat.
+		InputFormat::Detect(None) => "unknown",
 	}
 }
 
@@ -1485,6 +1544,11 @@ impl Drop for DropOnLog {
 			if let Some(resp) = log.response_snapshot.as_mut() {
 				resp.proxy = Some(proxy_timing.clone());
 			}
+			let upstream_calls = log
+				.upstream_calls
+				.get()
+				.map(|calls| calls.take())
+				.unwrap_or_default();
 			let cel_exec = log.cel.build(CelLoggingBuildInputs {
 				req: log.request_snapshot.as_deref(),
 				resp: log.response_snapshot.as_ref(),
@@ -1495,6 +1559,7 @@ impl Drop for DropOnLog {
 				end_time: &cel_end_time,
 				proxy: Some(&proxy_timing),
 				source_context: log.source_context.as_ref(),
+				upstream_calls: Some(&upstream_calls),
 			});
 			if let Some(rh) = request_handle {
 				log.finish_request_handle(rh, end_time, &cel_exec);
@@ -1586,6 +1651,7 @@ impl Drop for DropOnLog {
 					.mcp_requests
 					.get_or_create(&MCPCall {
 						method: mcp.method_name.clone().map(RichStrng::from).into(),
+						outcome: mcp_outcome(&log, mcp),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
 						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
@@ -1611,7 +1677,11 @@ impl Drop for DropOnLog {
 					|| log
 						.listener_name
 						.as_ref()
-						.is_some_and(|listener| listener.listener_name.as_str() == llm::LOCAL_LISTENER_NAME));
+						.is_some_and(|listener| listener.listener_name.as_str() == llm::LOCAL_LISTENER_NAME)
+					|| log
+						.route_name
+						.as_ref()
+						.is_some_and(|route| route.name.as_str() == llm::LOCAL_ROUTE_NAME));
 			if !maybe_enable_log && !enable_trace && !log_store_enabled && !otlp_log_enabled {
 				return;
 			}
@@ -1637,7 +1707,7 @@ impl Drop for DropOnLog {
 			let usage_cost_total = cost.map(|b| b.total().to_string());
 			let trace_cost_fields = if enable_trace {
 				cost.map(|b| {
-					[
+					let mut fields = vec![
 						("agw.ai.usage.cost.input", b.input.to_string()),
 						("agw.ai.usage.cost.output", b.output.to_string()),
 						("agw.ai.usage.cost.cache_read", b.cache_read.to_string()),
@@ -1646,7 +1716,24 @@ impl Drop for DropOnLog {
 						("agw.ai.usage.cost.input_audio", b.input_audio.to_string()),
 						("agw.ai.usage.cost.output_audio", b.output_audio.to_string()),
 						("agw.ai.usage.cost.pages", b.pages.to_string()),
-					]
+						(
+							"agw.ai.usage.cost.audio_duration",
+							b.audio_duration.to_string(),
+						),
+					];
+					fields.extend(
+						[
+							("agw.ai.usage.cost.cache_write_details.1h", b.cache_write_1h),
+							(
+								"agw.ai.usage.cost.cache_write_details.12h",
+								b.cache_write_12h,
+							),
+						]
+						.into_iter()
+						.filter(|(_, v)| !v.is_zero())
+						.map(|(k, v)| (k, v.to_string())),
+					);
+					fields
 				})
 			} else {
 				None
@@ -1696,6 +1783,7 @@ impl Drop for DropOnLog {
 				.as_ref()
 				.map(|g| serde_json::Value::Array(g.iter().map(cel::GuardrailInfo::minimal).collect()));
 
+			let standard_raws = cel_exec.eval_standard_attributes();
 			let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
 			let mut kv = vec![
 				(
@@ -1926,6 +2014,14 @@ impl Drop for DropOnLog {
 						.and_then(|l| l.output_audio_tokens)
 						.map(Into::into),
 				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.audio_seconds",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.audio_seconds)
+						.map(Into::into),
+				),
 				(
 					"gen_ai.request.temperature",
 					log
@@ -2000,11 +2096,17 @@ impl Drop for DropOnLog {
 				("duration", Some(dur.as_str().into())),
 			];
 
-			let mut extra_kv_capacity = trace_cost_fields.as_ref().map_or(0, |fields| fields.len());
+			let mut extra_kv_capacity =
+				standard_raws.len() + trace_cost_fields.as_ref().map_or(0, |fields| fields.len());
 			if maybe_enable_log || log_store_enabled {
 				extra_kv_capacity += fields.add.len();
 			}
 			kv.reserve_exact(extra_kv_capacity);
+			kv.extend(
+				standard_raws
+					.iter()
+					.map(|(k, v)| (k.as_ref(), v.as_ref().map(json_value_to_value_bag))),
+			);
 			let protocol_span_name = mcp
 				.as_ref()
 				.and_then(|mcp| mcp.method_name.clone())
@@ -2140,6 +2242,11 @@ impl Drop for DropOnLog {
 
 				if log_store_enabled {
 					let mut db_kv = kv.clone();
+					for (k, v) in &mut db_kv {
+						if cel_exec.database_fields.has(k) {
+							*v = None;
+						}
+					}
 					let db_raws = cel_exec.eval_database_additions();
 					let default_db_raws = [
 						(
@@ -2168,11 +2275,24 @@ impl Drop for DropOnLog {
 							("agw.ai.usage.cost.inputAudio", cost.input_audio),
 							("agw.ai.usage.cost.outputAudio", cost.output_audio),
 							("agw.ai.usage.cost.pages", cost.pages),
+							("agw.ai.usage.cost.audioDuration", cost.audio_duration),
 						];
-						db_kv.reserve(cost_raws.len());
-						for (k, v) in &cost_raws {
+						let cache_write_details = [
+							(
+								"agw.ai.usage.cost.cacheWriteDetails.1h",
+								cost.cache_write_1h,
+							),
+							(
+								"agw.ai.usage.cost.cacheWriteDetails.12h",
+								cost.cache_write_12h,
+							),
+						]
+						.into_iter()
+						.filter(|(_, v)| !v.is_zero());
+						db_kv.reserve(cost_raws.len() + 2);
+						for (k, v) in cost_raws.into_iter().chain(cache_write_details) {
 							let eval = v.to_f64().map(ValueBag::from_f64);
-							db_kv.push((*k, eval));
+							db_kv.push((k, eval));
 						}
 					}
 					let attributes = database_attributes(&db_kv);
@@ -2208,6 +2328,21 @@ impl Drop for DropOnLog {
 						input_tokens: u64_to_i64(input_tokens),
 						output_tokens: u64_to_i64(llm_response.as_ref().and_then(|llm| llm.output_tokens)),
 						total_tokens: u64_to_i64(total_tokens),
+						cache_read_input_tokens: u64_to_i64(
+							llm_response
+								.as_ref()
+								.and_then(|llm| llm.cached_input_tokens),
+						),
+						cache_creation_input_tokens: u64_to_i64(
+							llm_response
+								.as_ref()
+								.and_then(|llm| llm.cache_creation_input_tokens),
+						),
+						reasoning_tokens: u64_to_i64(
+							llm_response.as_ref().and_then(|llm| llm.reasoning_tokens),
+						),
+						time_to_first_token_ms: time_to_first_token.map(|seconds| seconds * 1000.0),
+						time_per_output_token_ms: time_per_output_token.map(|seconds| seconds * 1000.0),
 						cost: cost.and_then(|cost| cost.total().to_f64()),
 						agentgateway_user: attributes.agentgateway_user,
 						agentgateway_group: attributes.agentgateway_group,
@@ -2476,6 +2611,9 @@ impl OtelAccessLogger {
 
 		let mut trace_id_val: Option<u128> = None;
 		let mut span_id_val: Option<u64> = None;
+		let mut method = None;
+		let mut path = None;
+		let mut status = None;
 
 		for &(k, ref v) in kv {
 			let Some(v) = v else { continue };
@@ -2487,7 +2625,6 @@ impl OtelAccessLogger {
 					{
 						trace_id_val = Some(id);
 					}
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 				},
 				"span.id" => {
 					if let Some(s) = v.to_str()
@@ -2495,12 +2632,13 @@ impl OtelAccessLogger {
 					{
 						span_id_val = Some(id);
 					}
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 				},
-				_ => {
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
-				},
+				"http.request.method" => method = Some(v),
+				"url.path" => path = Some(v),
+				"http.response.status_code" => status = Some(v),
+				_ => {},
 			}
+			record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 		}
 
 		if let Some(tid) = trace_id_val {
@@ -2513,6 +2651,12 @@ impl OtelAccessLogger {
 			);
 		}
 
+		let body = [method, path, status].into_iter().flatten().join(" ");
+		if !body.is_empty() {
+			record.set_body(AnyValue::String(body.into()));
+		}
+		record.set_timestamp(std::time::SystemTime::now());
+
 		self.inner.logger.emit(record);
 	}
 }
@@ -2520,6 +2664,7 @@ impl OtelAccessLogger {
 // SpanWriter is a construct that can start otel spans
 #[derive(Debug, Default, Clone)]
 pub struct SpanWriter {
+	pub(crate) upstream_calls: Option<crate::telemetry::upstream::UpstreamCalls>,
 	inner: Option<Arc<SpanWriterInner>>,
 }
 
@@ -2534,15 +2679,36 @@ impl SpanWriter {
 		self.inner.is_some()
 	}
 
-	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
-		match &self.inner {
-			Some(i) => i.start(name),
-			None => SpanWriteOnDrop::default(),
+	/// Marks an outbound request to be recorded in `upstreamCalls` when it is sent.
+	pub(crate) fn record_outbound(
+		&self,
+		extensions: &mut ::http::Extensions,
+		labels: OutboundCallLabels,
+	) {
+		// Mirrors run detached and can finish after the request is logged, so they aren't recorded.
+		if matches!(labels.kind, OutboundCallKind::Mirror) {
+			extensions.remove::<crate::telemetry::upstream::OutboundRequest>();
+			return;
+		}
+		if let Some(calls) = &self.upstream_calls {
+			extensions.insert(crate::telemetry::upstream::OutboundRequest {
+				calls: calls.clone(),
+				labels,
+			});
 		}
 	}
 
+	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
+		let mut span = match &self.inner {
+			Some(i) => i.start(name),
+			None => SpanWriteOnDrop::default(),
+		};
+		span.upstream_calls = self.upstream_calls.clone();
+		span
+	}
+
 	pub fn start_outbound(&self, labels: OutboundCallLabels) -> SpanWriteOnDrop {
-		match &self.inner {
+		let mut span = match &self.inner {
 			Some(i) => i.start_with_details(
 				labels.subtype.as_str(),
 				SpanKind::Client,
@@ -2552,7 +2718,9 @@ impl SpanWriter {
 				],
 			),
 			None => SpanWriteOnDrop::default(),
-		}
+		};
+		span.upstream_calls = self.upstream_calls.clone();
+		span
 	}
 }
 
@@ -2577,6 +2745,7 @@ impl SpanWriterInner {
 		let child = self.parent.new_span();
 
 		SpanWriteOnDrop {
+			upstream_calls: None,
 			name: Some(name.into()),
 			span_kind,
 			start_time: Some(SystemTime::now()),
@@ -2590,6 +2759,7 @@ impl SpanWriterInner {
 }
 
 pub struct SpanWriteOnDrop {
+	upstream_calls: Option<crate::telemetry::upstream::UpstreamCalls>,
 	name: Option<Cow<'static, str>>,
 	span_kind: SpanKind,
 	start_time: Option<SystemTime>,
@@ -2602,6 +2772,7 @@ pub struct SpanWriteOnDrop {
 impl Default for SpanWriteOnDrop {
 	fn default() -> Self {
 		Self {
+			upstream_calls: None,
 			name: None,
 			span_kind: SpanKind::Internal,
 			start_time: None,
@@ -2621,7 +2792,10 @@ impl SpanWriteOnDrop {
 				inner: self.inner.clone(),
 			})
 		});
-		SpanWriter { inner }
+		SpanWriter {
+			inner,
+			upstream_calls: self.upstream_calls.clone(),
+		}
 	}
 
 	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
@@ -2804,6 +2978,35 @@ mod tests {
 		assert!(record.target().is_none());
 	}
 
+	#[test]
+	fn otlp_access_log_carries_a_body_and_timestamp() {
+		let exporter = RecordingLogExporter::default();
+		let provider = SdkLoggerProvider::builder()
+			.with_simple_exporter(exporter.clone())
+			.build();
+		let logger = OtelAccessLogger::from_provider(provider);
+
+		let kv = [
+			("http.request.method", Some(ValueBag::from("POST"))),
+			("url.path", Some(ValueBag::from("/v1/messages"))),
+			("http.response.status_code", Some(ValueBag::from(200_i64))),
+		];
+		logger.emit("info", "request", &kv);
+		logger.inner.provider.force_flush().unwrap();
+
+		let records = exporter.records.lock().unwrap();
+		let (record, _) = &records[0];
+		match record.body() {
+			Some(AnyValue::String(body)) => assert_eq!(body.as_ref(), "POST /v1/messages 200"),
+			other => panic!("unexpected body: {other:?}"),
+		}
+		assert!(
+			record
+				.timestamp()
+				.is_some_and(|t| t > std::time::SystemTime::UNIX_EPOCH)
+		);
+	}
+
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
 		spans: Arc<Mutex<Vec<SpanData>>>,
@@ -2850,6 +3053,7 @@ mod tests {
 			otlp_filter: None,
 			otlp_fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
+			standard_attributes: LoggingFields::default(),
 			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();
@@ -2883,6 +3087,7 @@ mod tests {
 			input_format: llm::InputFormat::Responses,
 			cache_convention: Default::default(),
 			request_model: "test-model".into(),
+			original_model: None,
 			provider: "test-provider".into(),
 			streaming: false,
 			params: Default::default(),
@@ -2895,6 +3100,33 @@ mod tests {
 		let mut encoded = String::new();
 		encode(&mut encoded, registry).unwrap();
 		encoded
+	}
+
+	#[test]
+	fn mcp_outcomes() {
+		use crate::telemetry::metrics::MCPOutcome::*;
+		let ok = Some(http::StatusCode::OK);
+		let bad = Some(http::StatusCode::BAD_GATEWAY);
+		for (status, is_error, rpc_error, expected) in [
+			(ok, Some(false), false, success),
+			(ok, Some(true), false, tool_error),
+			(ok, None, true, protocol_error),
+			(bad, Some(true), false, gateway_error),
+			(ok, None, false, unknown),
+		] {
+			let mut log = test_request_log();
+			log.status = status;
+			let mut mcp = MCPInfo {
+				method_name: Some("tools/call".into()),
+				..Default::default()
+			};
+			mcp.set_tool("server".into(), "echo".into());
+			mcp.tool.as_mut().unwrap().result = is_error.map(|e| serde_json::json!({"isError": e}));
+			if rpc_error {
+				mcp.capture_error(&rmcp::ErrorData::invalid_params("bad", None));
+			}
+			assert_eq!(mcp_outcome(&log, &mcp), expected);
+		}
 	}
 
 	#[test]
@@ -3002,6 +3234,7 @@ mod tests {
 			input_format: llm::InputFormat::Responses,
 			cache_convention: Default::default(),
 			request_model: "test-model".into(),
+			original_model: None,
 			provider: "test-provider".into(),
 			streaming: false,
 			params: Default::default(),
@@ -3091,10 +3324,65 @@ mod tests {
 	}
 
 	#[test]
+	fn grpc_refusal_by_the_proxy_logs_its_grpc_status() {
+		use crate::http::jwt::TokenError;
+		use crate::proxy::ProxyError;
+		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
+
+		let refusal = || {
+			Err(ProxyError::JwtAuthenticationFailure(
+				TokenError::UnknownKeyId("rotated".into()),
+			))
+		};
+
+		let mut log = test_request_log();
+		let (mut response, reason) = resolve_response(refusal(), &mut log, true);
+		set_final_response_fields(&mut log, &reason, &mut response);
+		assert_eq!(response.status(), http::StatusCode::OK);
+		assert_eq!(
+			log.grpc_status.load(),
+			Some(tonic::Code::Unauthenticated as u8)
+		);
+
+		let mut log = test_request_log();
+		log.grpc_status.store(Some(tonic::Code::Internal as u8));
+		let (mut response, reason) = resolve_response(refusal(), &mut log, false);
+		set_final_response_fields(&mut log, &reason, &mut response);
+		assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
+		assert_eq!(log.grpc_status.load(), None);
+	}
+
+	#[test]
+	fn mcp_authorization_denial_sets_internal_error_context() {
+		use crate::mcp;
+		use crate::proxy::ProxyError;
+		use crate::proxy::httpproxy::resolve_response;
+
+		let error = ProxyError::MCP(mcp::Error::Authorization(
+			rmcp::model::RequestId::Number(7),
+			"tool".to_string(),
+			"private-item".to_string(),
+		));
+		let mut log = test_request_log();
+		let (response, reason) = resolve_response(Err(error), &mut log, false);
+		let detail = "mcp: authorization denied for tool: private-item";
+		assert_eq!(reason, ProxyResponseReason::Authorization);
+		assert_eq!(log.reason, Some(ProxyResponseReason::Authorization));
+		assert_eq!(log.error.as_deref(), Some(detail));
+		let context = response
+			.extensions()
+			.get::<crate::cel::ProxyContext>()
+			.unwrap();
+		let error = context.error.as_ref().unwrap();
+		assert_eq!(error.reason, "Authorization");
+		assert_eq!(error.message, detail);
+	}
+
+	#[test]
 	fn gen_ai_duration_preserves_response_failures_and_snapshot_metadata() {
 		use crate::http::transformation_cel::TransformationMetadata;
+		use crate::proxy::ProxyError;
 		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
-		use crate::proxy::{ProxyError, ProxyResponse};
 
 		for upstream_failed in [false, true] {
 			for policy in ["none", "error", "direct"] {
@@ -3105,7 +3393,7 @@ mod tests {
 					.ctx()
 					.register_log_expression(&Expression::new_strict("proxy.error").unwrap());
 				let initial = if upstream_failed {
-					Err(ProxyError::NoHealthyEndpoints.into())
+					Err(ProxyError::NoHealthyEndpoints)
 				} else {
 					Ok(::http::Response::new(crate::http::Body::empty()))
 				};
@@ -3119,7 +3407,7 @@ mod tests {
 				match policy {
 					"error" => {
 						(response, reason) = resolve_response(
-							Err(ProxyError::ProcessingString("policy failed".to_string()).into()),
+							Err(ProxyError::ProcessingString("policy failed".to_string())),
 							&mut log,
 							false,
 						);
@@ -3132,7 +3420,7 @@ mod tests {
 							.unwrap();
 						replacement.extensions_mut().insert(metadata.clone());
 						(response, reason) = resolve_response(
-							Err(ProxyResponse::DirectResponse(Box::new(replacement))),
+							Err(ProxyError::direct_response(replacement)),
 							&mut log,
 							false,
 						);
@@ -3223,7 +3511,8 @@ mod tests {
 			(InputFormat::Decisions, "decisions"),
 			(InputFormat::CountTokens, "count_tokens"),
 			(InputFormat::GeminiCountTokens, "count_tokens"),
-			(InputFormat::Detect, "unknown"),
+			(InputFormat::Detect(None), "unknown"),
+			(InputFormat::Detect(Some(DetectedOperation::Chat)), "chat"),
 		] {
 			for streaming in [false, true] {
 				for has_response in [false, true] {
@@ -3593,6 +3882,7 @@ mod tests {
 			input_format: InputFormat::Messages,
 			cache_convention: llm::CacheTokenConvention::InputExcludesCache,
 			request_model: strng::literal!("claude"),
+			original_model: None,
 			provider: strng::literal!("anthropic"),
 			streaming: false,
 			params: llm::LLMRequestParams::default(),
@@ -3681,6 +3971,7 @@ mod tests {
 			input_format: InputFormat::Completions,
 			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
 			request_model: strng::literal!("my-model"),
+			original_model: None,
 			provider: strng::literal!("openai"),
 			streaming: false,
 			params: llm::LLMRequestParams::default(),

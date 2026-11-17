@@ -24,7 +24,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::types::{
 	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
-	ResponseType, vertex_gemini as vg,
+	RequestText, ResponseType, vertex_gemini as vg,
 };
 use crate::{
 	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
@@ -278,6 +278,7 @@ impl RequestType for Request {
 			input_format: InputFormat::Gemini,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
+			original_model: None,
 			provider,
 			streaming: self.streaming,
 			params: LLMRequestParams {
@@ -289,6 +290,15 @@ impl RequestType for Request {
 				max_tokens: gc.and_then(|g| g.max_output_tokens).map(u64::from),
 				encoding_format: None,
 				dimensions: None,
+				reasoning_effort: gc
+					.and_then(|g| {
+						g.rest
+							.get("thinkingConfig")
+							.or_else(|| g.rest.get("thinking_config"))
+					})
+					.and_then(|t| t.get("thinkingLevel").or_else(|| t.get("thinking_level")))
+					.and_then(serde_json::Value::as_str)
+					.and_then(crate::ReasoningEffort::parse),
 			},
 			prompt: Default::default(),
 			provider_state: None,
@@ -315,15 +325,24 @@ impl RequestType for Request {
 		serde_json::to_value(&self.inner)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(RequestText, &mut String)) {
+		// get_messages() omits an empty system instruction, so it takes no index
+		let mut next_message = 0;
 		if let Some(system) = &mut self.inner.system_instruction {
-			visit_content_text(system, &mut |text| f(ContentScope::SystemPrompt, text));
+			let text_ref = if joined_text(system, '\n').is_empty() {
+				ContentScope::SystemPrompt.into()
+			} else {
+				next_message += 1;
+				RequestText::in_message(ContentScope::SystemPrompt, 0)
+			};
+			visit_content_text(system, &mut |text| f(text_ref, text));
 		}
-		for content in &mut self.inner.contents {
+		for (index, content) in self.inner.contents.iter_mut().enumerate() {
 			for part in &mut content.parts {
-				visit_tool_part_text(part, f);
+				visit_tool_part_text(part, &mut |scope, text| f(scope.into(), text));
 			}
-			visit_content_text(content, &mut |text| f(ContentScope::Messages, text));
+			let text_ref = RequestText::in_message(ContentScope::Messages, next_message + index);
+			visit_content_text(content, &mut |text| f(text_ref, text));
 		}
 	}
 }
@@ -447,6 +466,7 @@ impl RequestType for CountTokensRequest {
 			input_format: InputFormat::GeminiCountTokens,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new(self.model.as_deref().unwrap_or_default()),
+			original_model: None,
 			provider,
 			streaming: false,
 			params: Default::default(),
@@ -471,7 +491,7 @@ impl RequestType for CountTokensRequest {
 		serde_json::to_value(self)
 	}
 
-	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(ContentScope, &mut String)) {
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(crate::types::RequestText, &mut String)) {
 		unimplemented!(
 			"visit_text_mut is used for prompt guard; prompt guard is disabled for gemini countTokens."
 		)

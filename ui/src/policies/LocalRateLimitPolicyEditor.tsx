@@ -1,10 +1,9 @@
 import { useState } from 'react';
 
-import { UnsupportedYamlFallback } from '@/components/EditorContracts';
+import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type { RateLimitSpec } from '@/gateway-config';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { LocalRateLimitConfig, LocalRateLimitDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -28,19 +27,13 @@ export function LocalRateLimitPolicyEditor(props: {
 			tokensPerFill: Number(tokensPerFill)
 		}
 	] as LocalRateLimitDraft;
+	const merged = useMergedEdits(props.localRateLimit, preview);
 
-	if (props.localRateLimit && !Array.isArray(props.localRateLimit)) {
-		return (
-			<UnsupportedYamlFallback
-				title="Unsupported rate limit shape"
-				value={props.localRateLimit}
-				schema={props.help.node(['$defs', 'LocalRateLimit'])}
-				help={props.help}
-			>
-				This policy uses conditional rate limit entries. The visual editor currently supports simple
-				rate limits only.
-			</UnsupportedYamlFallback>
-		);
+	if (
+		props.localRateLimit &&
+		(!Array.isArray(props.localRateLimit) || props.localRateLimit.length > 1)
+	) {
+		return <UnsupportedInForm supports="a single rate limit without conditions" />;
 	}
 
 	return (
@@ -50,9 +43,10 @@ export function LocalRateLimitPolicyEditor(props: {
 			onSubmit={event => {
 				event.preventDefault();
 				if (!fillInterval.trim()) return;
-				props.onSave(preview);
+				props.onSave(merged.value);
 			}}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<div className="form-grid">
 				<FieldGroup
 					label="Limit type"
@@ -108,7 +102,6 @@ export function LocalRateLimitPolicyEditor(props: {
 					/>
 				</Field>
 			</div>
-			<ResultingYaml value={preview} />
 		</form>
 	);
 }

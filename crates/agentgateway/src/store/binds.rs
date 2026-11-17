@@ -425,6 +425,7 @@ pub struct RoutePolicies {
 	pub request_mirror: RequestPolicy<Vec<filters::RequestMirror>>,
 	pub cors: RequestPolicy<http::cors::Cors>,
 	pub buffer: RequestPolicy<http::buffer::Buffer>,
+	pub compression: RequestPolicy<http::compression::Compression>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -494,6 +495,7 @@ impl RoutePolicies {
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
 			&self.buffer as &dyn PolicyExpressions,
+			&self.compression as &dyn PolicyExpressions,
 		]
 		.into_iter()
 	}
@@ -750,7 +752,7 @@ impl Store {
 		new.iter().any(|listener| {
 			old
 				.get(&listener.key)
-				.is_some_and(|old_listener| old_listener != listener)
+				.is_some_and(|old_listener| !old_listener.serving_eq(listener))
 		}) || old.iter().any(|listener| !new.contains(&listener.key))
 	}
 
@@ -815,6 +817,13 @@ impl Store {
 				agent::ModelRouteKind::Virtual(model) => virtual_models.push(model.clone()),
 			}
 		}
+
+		// Most specific patterns first, so a wildcard does not shadow exact or prefix matches.
+		models.sort_by_key(|model| {
+			std::cmp::Reverse(crate::llm::model_router::model_match_specificity(
+				&model.name,
+			))
+		});
 
 		if implicit_route && models.is_empty() && virtual_models.is_empty() {
 			return;
@@ -1154,6 +1163,9 @@ impl Store {
 				TrafficPolicy::Buffer(p) => {
 					pol.buffer.set_if_unset(p);
 				},
+				TrafficPolicy::Compression(p) => {
+					pol.compression.merge_with_inheritance(p, lock_inheritance);
+				},
 				TrafficPolicy::SubstrateIngress(p) => {
 					pol
 						.substrate_ingress
@@ -1179,10 +1191,17 @@ impl Store {
 		pol
 	}
 
-	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
+	pub fn gateway_policies(&self, bind: &BindKey, listener: &Listener) -> GatewayPolicies {
+		let name = &listener.name;
+		// The serving listener may be a snapshot from connection setup; use the current inline policies.
+		let current = self.get_bind_listener(bind, &listener.key);
+		let inline = current
+			.as_deref()
+			.map_or(&listener.inline_policies, |l| &l.inline_policies);
 		// Gateway policy fields use first-writer-wins semantics. Visit policies at each
-		// attachment level oldest first so the oldest policy wins.
-		let rules = self
+		// attachment level oldest first so the oldest policy wins. Listener inline policies
+		// take precedence over policies attached to the listener.
+		let attached = self
 			.policies_for_target_oldest_first(&name.as_listener_target_ref())
 			.chain(
 				name
@@ -1198,6 +1217,7 @@ impl Store {
 			)
 			.chain(self.policies_for_target_oldest_first(&name.as_gateway_target_ref()))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
+		let rules = inline.iter().chain(attached);
 
 		let mut authz = Vec::new();
 		let mut pol = GatewayPolicies::default();
@@ -1824,7 +1844,7 @@ impl Store {
 		let listeners = self.listeners.entry(bind_name.clone()).or_default();
 		if listeners
 			.get(&listener_key)
-			.is_some_and(|current| current != &lis)
+			.is_some_and(|current| !current.serving_eq(&lis))
 			&& self.binds.contains_key(&bind_name)
 		{
 			serving_listener_changed = true;
@@ -2125,14 +2145,18 @@ impl StoreUpdater {
 	pub fn new(state: Arc<RwLock<Store>>) -> StoreUpdater {
 		Self { state }
 	}
-	pub fn read(&self) -> std::sync::RwLockReadGuard<'_, Store> {
-		self.state.read().expect("mutex acquired")
+	#[track_caller]
+	pub fn read(&self) -> crate::store::ReadGuard<'_, Store> {
+		thread_local! {
+			static BINDS_READ_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+		}
+		crate::store::ReadGuard::new(&self.state, &BINDS_READ_DEPTH)
 	}
 	pub fn write(&self) -> std::sync::RwLockWriteGuard<'_, Store> {
 		self.state.write().expect("mutex acquired")
 	}
 	pub fn dump(&self) -> Dump {
-		let store = self.state.read().expect("mutex");
+		let store = self.read();
 
 		// Services all have hostname, so use that as the key
 		let binds: Vec<_> = store
@@ -2660,6 +2684,67 @@ mod tests {
 	}
 
 	#[test]
+	fn listener_inline_policies_take_precedence_and_track_store() {
+		fn cors(origin: &str) -> TrafficPolicy {
+			TrafficPolicy::CORS(RequestPolicy::single(
+				http::cors::Cors::try_from(http::cors::CorsSerde {
+					allow_credentials: false,
+					allow_headers: vec![],
+					allow_methods: vec![],
+					allow_origins: vec![origin.to_string()],
+					expose_headers: vec![],
+					max_age: None,
+				})
+				.unwrap(),
+			))
+		}
+		let selected_origin =
+			|pol: &GatewayPolicies| serde_json::to_value(&pol.cors).unwrap()["allowOrigins"][0].clone();
+
+		let bind = strng::literal!("8080/ns/gw");
+		let name = listener();
+		let mut store = Store::with_ipv6_enabled(true);
+		let target = PolicyTarget::Gateway(ListenerTarget {
+			gateway_name: name.gateway_name.clone(),
+			gateway_namespace: name.gateway_namespace.clone(),
+			listener_name: Some(name.listener_name.clone()),
+			port: None,
+		});
+		store.insert_policy(TargetedPolicy {
+			key: strng::literal!("attached"),
+			name: None,
+			target,
+			creation_timestamp: 0,
+			inheritance: Default::default(),
+			policy: (
+				cors("https://attached.example.com"),
+				agent::PolicyPhase::Gateway,
+			)
+				.into(),
+		});
+		let snapshot = Listener {
+			key: strng::literal!("gw.listener"),
+			name,
+			inline_policies: vec![cors("https://inline.example.com")],
+			..Default::default()
+		};
+		store.insert_listener(snapshot.clone(), bind.clone());
+		assert_eq!(
+			selected_origin(&store.gateway_policies(&bind, &snapshot)),
+			"https://inline.example.com"
+		);
+
+		// A connection may hold an older snapshot; the current listener's inline policies apply.
+		let mut updated = snapshot.clone();
+		updated.inline_policies = vec![];
+		store.insert_listener(updated, bind.clone());
+		assert_eq!(
+			selected_origin(&store.gateway_policies(&bind, &snapshot)),
+			"https://attached.example.com"
+		);
+	}
+
+	#[test]
 	fn moving_listener_before_binds_arrive_keeps_only_latest_assignment() {
 		let listener_key = strng::literal!("gw.http");
 		let listener = Listener {
@@ -2672,6 +2757,7 @@ mod tests {
 			},
 			hostname: strng::EMPTY,
 			protocol: ListenerProtocol::HTTP,
+			..Default::default()
 		};
 		let old_bind = strng::literal!("8080/ns/gw");
 		let new_bind = strng::literal!("8443/ns/gw");
@@ -2730,6 +2816,7 @@ mod tests {
 			},
 			hostname: strng::EMPTY,
 			protocol: ListenerProtocol::HTTP,
+			..Default::default()
 		};
 		let tls_listener = Listener {
 			key: tls_key.clone(),
@@ -2741,6 +2828,7 @@ mod tests {
 			},
 			hostname: strng::EMPTY,
 			protocol: ListenerProtocol::TLS(None),
+			..Default::default()
 		};
 		let bind_8080 = strng::literal!("8080/ns/gw");
 		let bind_8443 = strng::literal!("8443/ns/gw");
@@ -3332,6 +3420,7 @@ mod tests {
 				},
 				hostname: strng::literal!("example.com"),
 				protocol: ListenerProtocol::HTTP,
+				..Default::default()
 			}])),
 		};
 		let route = Route {
@@ -3393,6 +3482,7 @@ mod tests {
 				},
 				hostname: strng::literal!("example.com"),
 				protocol: ListenerProtocol::HTTP,
+				..Default::default()
 			}])),
 		}
 	}
@@ -4374,8 +4464,12 @@ mod tests {
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
 				HeaderModifier {
 					add: vec![],
-					set: vec![(strng::new("x-foo"), strng::new("bar"))],
+					set: vec![(
+						::http::HeaderName::from_static("x-foo"),
+						::http::HeaderValue::from_static("bar"),
+					)],
 					remove: vec![],
+					invalid: None,
 				},
 			)),
 		};
@@ -4397,8 +4491,12 @@ mod tests {
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
 				HeaderModifier {
 					add: vec![],
-					set: vec![(strng::new("x-foo"), strng::new("bar3"))],
+					set: vec![(
+						::http::HeaderName::from_static("x-foo"),
+						::http::HeaderValue::from_static("bar3"),
+					)],
 					remove: vec![],
+					invalid: None,
 				},
 			)),
 		};
@@ -4408,8 +4506,12 @@ mod tests {
 		let backend_inline_policies = vec![BackendTrafficPolicy::RequestHeaderModifier(
 			HeaderModifier {
 				add: vec![],
-				set: vec![(strng::new("x-foo"), strng::new("bar2"))],
+				set: vec![(
+					::http::HeaderName::from_static("x-foo"),
+					::http::HeaderValue::from_static("bar2"),
+				)],
 				remove: vec![],
+				invalid: None,
 			},
 		)];
 
@@ -4440,7 +4542,10 @@ mod tests {
 		);
 		assert_eq!(
 			modifier.set[0],
-			(strng::new("x-foo"), strng::new("bar2")),
+			(
+				::http::HeaderName::from_static("x-foo"),
+				::http::HeaderValue::from_static("bar2")
+			),
 			"Inline policy (bar2) should win over backend attached policy (bar)"
 		);
 
@@ -4471,7 +4576,10 @@ mod tests {
 		);
 		assert_eq!(
 			modifier.set[0],
-			(strng::new("x-foo"), strng::new("bar2")),
+			(
+				::http::HeaderName::from_static("x-foo"),
+				::http::HeaderValue::from_static("bar2")
+			),
 			"Inline policy (bar2) should win over section attached policy (bar3)"
 		);
 
@@ -4499,7 +4607,10 @@ mod tests {
 		);
 		assert_eq!(
 			modifier.set[0],
-			(strng::new("x-foo"), strng::new("bar")),
+			(
+				::http::HeaderName::from_static("x-foo"),
+				::http::HeaderValue::from_static("bar")
+			),
 			"Backend attached policy (bar) should be used when no inline policies exist"
 		);
 
@@ -4530,7 +4641,10 @@ mod tests {
 		);
 		assert_eq!(
 			modifier.set[0],
-			(strng::new("x-foo"), strng::new("bar3")),
+			(
+				::http::HeaderName::from_static("x-foo"),
+				::http::HeaderValue::from_static("bar3")
+			),
 			"Section attached policy (bar3) should win over backend attached policy (bar)"
 		);
 	}

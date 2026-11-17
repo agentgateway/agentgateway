@@ -453,3 +453,29 @@ async fn test_sse_json_transform_multi_propagates_decoder_error_after_output() {
 		.expect_err("decoder error after valid output must propagate");
 	assert!(*saw_error.lock().unwrap(), "decoder error was not observed");
 }
+
+#[tokio::test]
+async fn test_sse_json_passthrough_unterminated_final_event() {
+	for done in ["data: [DONE]", "data: [DONE]\n", "data: [DONE]\r\n"] {
+		let input = format!("data: {{\"msg\":1}}\n\n{done}");
+
+		let observed = Arc::new(Mutex::new(vec![]));
+		let obs = observed.clone();
+		let body = sse::json_passthrough::<Test>(Body::from(input.clone()), 1024, move |o| {
+			obs.lock().unwrap().push(o.map(|r| r.unwrap().msg));
+		});
+		let got = body.collect().await.unwrap().to_bytes();
+		assert_eq!(
+			got,
+			input.as_bytes(),
+			"passthrough must forward bytes unmodified"
+		);
+		assert_eq!(*observed.lock().unwrap(), [Some(1), None], "{done:?}");
+	}
+
+	let body = sse::json_passthrough::<Test>(Body::from("data: {\"msg\":1}"), 1024, |_| {});
+	body
+		.collect()
+		.await
+		.expect_err("an unterminated non-[DONE] event must still fail");
+}

@@ -4,11 +4,6 @@ metadata:
   name: datadog-observability
   namespace: agentgateway-system
 spec:
-  modelCatalog:
-    sources:
-    - configMap:
-        name: datadog-model-catalog
-        key: catalog.json
   deployment:
     spec:
       template:

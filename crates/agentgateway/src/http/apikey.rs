@@ -10,8 +10,8 @@ use subtle::ConstantTimeEq;
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::http::budget::{Budget, BudgetLimitUnit, MatchedBudgets, NANODOLLARS_PER_USD};
+use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
-use crate::proxy::{ProxyError, ProxyResponse};
 use crate::{apply, *};
 
 #[cfg(test)]
@@ -418,10 +418,10 @@ impl crate::store::RequestPolicyTrait for APIKeyAuthentication {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<crate::http::PolicyResponse, ProxyResponse> {
-		let res = self.verify(req).await.map_err(ProxyResponse::from)?;
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
+		let res = self.verify(req).await?;
 		if let Some(authenticated) = res {
-			self.location.remove(req).map_err(ProxyResponse::from)?;
+			self.location.remove(req)?;
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(authenticated.claims);
 			req.extensions_mut().insert(authenticated.model_access);
@@ -461,6 +461,7 @@ pub enum LocalAPIKey {
 		metadata: Option<UserMetadata>,
 		/// Model patterns this key is allowed to access.
 		/// Omitted means no additional constraint; an empty list denies all models.
+		/// Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.
 		#[serde(rename = "allowedModels", default)]
 		allowed_models: Option<Vec<String>>,
 		/// Independent budgets charged after LLM responses. A request is not charged when its provider
@@ -476,6 +477,7 @@ pub enum LocalAPIKey {
 		metadata: Option<UserMetadata>,
 		/// Model patterns this key is allowed to access.
 		/// Omitted means no additional constraint; an empty list denies all models.
+		/// Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.
 		#[serde(rename = "allowedModels", default)]
 		allowed_models: Option<Vec<String>>,
 		/// Independent budgets charged after LLM responses. A request is not charged when its provider
@@ -519,15 +521,17 @@ impl LocalAPIKey {
 				budget.name,
 				api_key.as_deref().unwrap_or_default(),
 			);
-			let window_ms = budget.window.rolling.as_millis();
-			anyhow::ensure!(
-				window_ms > 0,
-				"budget rolling windows must be greater than zero"
-			);
-			anyhow::ensure!(
-				window_ms <= i64::MAX as u128,
-				"budget rolling window is too large"
-			);
+			if let Some(window) = &budget.window {
+				let window_ms = window.rolling.as_millis();
+				anyhow::ensure!(
+					window_ms > 0,
+					"budget rolling windows must be greater than zero"
+				);
+				anyhow::ensure!(
+					window_ms <= i64::MAX as u128,
+					"budget rolling window is too large"
+				);
+			}
 			let amount = budget.limit.amount.decimal().normalize();
 			let multiplier = match budget.limit.unit {
 				BudgetLimitUnit::Usd => {

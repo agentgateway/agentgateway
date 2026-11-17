@@ -117,10 +117,17 @@ func (c *client) AgentgatewayRequest(ctx context.Context, podName, podNamespace,
 	if err != nil {
 		return nil, err
 	}
-	if err = fw.Start(); err != nil {
-		return nil, formatError(err)
-	}
 	defer fw.Close()
+	started := make(chan error, 1)
+	go func() { started <- fw.Start() }()
+	select {
+	case err := <-started:
+		if err != nil {
+			return nil, formatError(err)
+		}
+	case <-ctx.Done():
+		return nil, formatError(ctx.Err())
+	}
 
 	req, err := http.NewRequestWithContext(ctx, method, fmt.Sprintf("http://%s/%s", fw.Address(), path), nil)
 	if err != nil {

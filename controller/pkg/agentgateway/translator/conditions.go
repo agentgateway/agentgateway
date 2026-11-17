@@ -7,6 +7,7 @@ import (
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -62,15 +63,12 @@ type Condition struct {
 
 // SetConditions sets the existingConditions with the new conditions
 func SetConditions(generation int64, existingConditions []metav1.Condition, conditions map[string]*Condition) []metav1.Condition {
+	// Copy once up front and update in place; the caller's slice is never mutated.
+	out := make([]metav1.Condition, len(existingConditions), len(existingConditions)+len(conditions))
+	copy(out, existingConditions)
 	// Sort keys for deterministic ordering
 	for _, k := range slices.Sort(maps.Keys(conditions)) {
 		cond := conditions[k]
-		setter := kstatus.UpdateConditionIfChanged
-		if cond.SetOnce != "" {
-			setter = func(conditions []metav1.Condition, condition metav1.Condition) []metav1.Condition {
-				return kstatus.CreateCondition(conditions, condition, cond.SetOnce)
-			}
-		}
 		// A condition can be "negative polarity" (ex: ListenerInvalid) or "positive polarity" (ex:
 		// ListenerValid), so in order to determine the status we should set each `condition` defines its
 		// default positive status. When there is an error, we will invert that. Example: If we have
@@ -78,42 +76,59 @@ func SetConditions(generation int64, existingConditions []metav1.Condition, cond
 		// will be inverted to StatusTrue to indicate listeners are invalid. See
 		// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
 		// for more information
+		c := metav1.Condition{
+			Type:               k,
+			ObservedGeneration: generation,
+			LastTransitionTime: metav1.Now(),
+		}
 		if cond.Error != nil {
-			existingConditions = setter(existingConditions, metav1.Condition{
-				Type:               k,
-				Status:             kstatus.InvertStatus(cond.Status),
-				ObservedGeneration: generation,
-				LastTransitionTime: metav1.Now(),
-				Reason:             cond.Error.Reason,
-				Message:            cond.Error.Message,
-			})
+			c.Status = kstatus.InvertStatus(cond.Status)
+			c.Reason = cond.Error.Reason
+			c.Message = cond.Error.Message
 		} else {
-			status := cond.Status
-			if status == "" {
-				status = kstatus.StatusTrue
+			c.Status = cond.Status
+			if c.Status == "" {
+				c.Status = kstatus.StatusTrue
 			}
-			existingConditions = setter(existingConditions, metav1.Condition{
-				Type:               k,
-				Status:             status,
-				ObservedGeneration: generation,
-				LastTransitionTime: metav1.Now(),
-				Reason:             cond.Reason,
-				Message:            cond.Message,
-			})
+			c.Reason = cond.Reason
+			c.Message = cond.Message
+		}
+
+		idx := slices.IndexFunc(out, func(e metav1.Condition) bool {
+			return e.Type == k
+		})
+		switch {
+		case idx == -1:
+			out = append(out, c)
+		case cond.SetOnce != "":
+			// Only overwrite a condition still holding its default (SetOnce) reason.
+			if out[idx].Reason == cond.SetOnce {
+				out[idx] = c
+			}
+		default:
+			existing := out[idx]
+			if existing.Status == c.Status {
+				if existing.Message == c.Message && existing.ObservedGeneration == c.ObservedGeneration {
+					continue
+				}
+				// retain LastTransitionTime if status is not changed
+				c.LastTransitionTime = existing.LastTransitionTime
+			}
+			out[idx] = c
 		}
 	}
-	return existingConditions
+	return out
 }
 
 func reportListenerCondition(index int, l gwv1.Listener, obj controllers.Object,
 	statusListeners []gwv1.ListenerStatus, conditions map[string]*Condition,
-	enableAgentgatewayModels bool,
+	modelKinds []schema.GroupVersionKind,
 ) []gwv1.ListenerStatus {
 	for index >= len(statusListeners) {
 		statusListeners = append(statusListeners, gwv1.ListenerStatus{})
 	}
 	cond := statusListeners[index].Conditions
-	supported, valid := GenerateSupportedKinds(l, enableAgentgatewayModels)
+	supported, valid := GenerateSupportedKinds(l, modelKinds)
 	if !valid {
 		conditions[string(gwv1.ListenerConditionResolvedRefs)] = &Condition{
 			Reason:  string(gwv1.ListenerReasonInvalidRouteKinds),
@@ -129,8 +144,9 @@ func reportListenerCondition(index int, l gwv1.Listener, obj controllers.Object,
 	return statusListeners
 }
 
-// GenerateSupportedKinds returns the supported kinds for the listener.
-func GenerateSupportedKinds(l gwv1.Listener, enableAgentgatewayModels bool) ([]gwv1.RouteGroupKind, bool) {
+// GenerateSupportedKinds returns the supported kinds for the listener. modelKinds
+// lists the model route kinds a listener may opt into.
+func GenerateSupportedKinds(l gwv1.Listener, modelKinds []schema.GroupVersionKind) ([]gwv1.RouteGroupKind, bool) {
 	supported := []gwv1.RouteGroupKind{}
 	switch l.Protocol {
 	case gwv1.HTTPProtocolType, gwv1.HTTPSProtocolType:
@@ -139,16 +155,11 @@ func GenerateSupportedKinds(l gwv1.Listener, enableAgentgatewayModels bool) ([]g
 			toRouteKind(wellknown.HTTPRouteGVK),
 			toRouteKind(wellknown.GRPCRouteGVK),
 		}
-		// AgentgatewayModel is opt-in. Listing it in allowedRoutes enables the
-		// listener's built-in LLM routes; it is not enabled by the default route
-		// kinds.
-		if enableAgentgatewayModels && l.AllowedRoutes != nil {
-			modelKind := toRouteKind(wellknown.AgentgatewayModelGVK)
-			for _, kind := range l.AllowedRoutes.Kinds {
-				if routeGroupKindEqual(modelKind, kind) {
-					supported = append(supported, modelKind)
-					break
-				}
+		// Models are opt-in: they are not part of the default route kinds. Listing any
+		// model kind in allowedRoutes admits every model kind.
+		if listsModelKind(l, modelKinds) {
+			for _, gvk := range modelKinds {
+				supported = append(supported, toRouteKind(gvk))
 			}
 		}
 	case gwv1.TCPProtocolType:
@@ -165,16 +176,32 @@ func GenerateSupportedKinds(l gwv1.Listener, enableAgentgatewayModels bool) ([]g
 	}
 	if l.AllowedRoutes != nil && len(l.AllowedRoutes.Kinds) > 0 {
 		// We need to filter down to only ones we actually support
+		// Model kinds are only in supported when one is listed, and then all are kept.
 		intersection := []gwv1.RouteGroupKind{}
 		for _, s := range supported {
-			for _, kind := range l.AllowedRoutes.Kinds {
-				if routeGroupKindEqual(s, kind) {
-					intersection = append(intersection, s)
-					break
-				}
+			if isRouteKind(modelKinds, s) || slices.ContainsFunc(l.AllowedRoutes.Kinds, func(kind gwv1.RouteGroupKind) bool {
+				return routeGroupKindEqual(s, kind)
+			}) {
+				intersection = append(intersection, s)
 			}
 		}
-		return intersection, len(intersection) == len(l.AllowedRoutes.Kinds)
+		valid := !slices.ContainsFunc(l.AllowedRoutes.Kinds, func(kind gwv1.RouteGroupKind) bool {
+			return !slices.ContainsFunc(intersection, func(s gwv1.RouteGroupKind) bool { return routeGroupKindEqual(s, kind) })
+		})
+		return intersection, valid
 	}
 	return supported, true
+}
+
+// listsModelKind reports whether the listener's allowedRoutes lists any model kind.
+func listsModelKind(l gwv1.Listener, modelKinds []schema.GroupVersionKind) bool {
+	return l.AllowedRoutes != nil && slices.ContainsFunc(l.AllowedRoutes.Kinds, func(kind gwv1.RouteGroupKind) bool {
+		return isRouteKind(modelKinds, kind)
+	})
+}
+
+func isRouteKind(kinds []schema.GroupVersionKind, kind gwv1.RouteGroupKind) bool {
+	return slices.ContainsFunc(kinds, func(gvk schema.GroupVersionKind) bool {
+		return routeGroupKindEqual(toRouteKind(gvk), kind)
+	})
 }

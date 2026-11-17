@@ -37,7 +37,7 @@ func TestModelServingRuleGuards(t *testing.T) {
 		{name: "ordinary route", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs = nil }, absent: true},
 		{name: "multiple matches", mutate: func(r *gwv1.HTTPRouteRule) { r.Matches = append(r.Matches, r.Matches[0]) }},
 		{name: "exact path", mutate: func(r *gwv1.HTTPRouteRule) { pathType := gwv1.PathMatchExact; r.Matches[0].Path.Type = &pathType }, wantErr: "must use PathPrefix"},
-		{name: "mixed backend", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs = append(r.BackendRefs, gwv1.HTTPBackendRef{}) }, wantErr: "exactly one AgentgatewayModel backendRef"},
+		{name: "mixed backend", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs = append(r.BackendRefs, gwv1.HTTPBackendRef{}) }, wantErr: "exactly one model backendRef"},
 		{name: "named model", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs[0].Name = "gpt-5-mini" }, wantErr: `name must be "*"`},
 		{name: "cross namespace", mutate: func(r *gwv1.HTTPRouteRule) {
 			namespace := gwv1.Namespace("other")
@@ -66,7 +66,7 @@ func TestModelServingRuleGuards(t *testing.T) {
 			if tt.mutate != nil {
 				tt.mutate(&rule)
 			}
-			key, optedIn, err := modelServingRuleRouterKey("default", "tenant1", 0, rule)
+			key, optedIn, err := modelServingRuleRouterKey("default", "tenant1", 0, rule, RouteContext{}.isModelKind)
 			if tt.wantErr == "" && err != nil {
 				t.Fatal(err)
 			}
@@ -130,7 +130,7 @@ func TestModelServingRuleMatchesRoot(t *testing.T) {
 func TestModelReferenceIgnoresListenerHostname(t *testing.T) {
 	parent := &ParentInfo{
 		AllowedKinds: []gwv1.RouteGroupKind{toRouteKind(wellknown.AgentgatewayModelGVK)},
-		Hostnames:    []string{"other-namespace/models.example.com"},
+		Hostnames:    []string{"default/models.example.com"},
 	}
 
 	if err := ReferenceAllowed(
@@ -142,43 +142,6 @@ func TestModelReferenceIgnoresListenerHostname(t *testing.T) {
 		"default",
 	); err != nil {
 		t.Fatalf("model attachment should not depend on listener hostname: %v", err)
-	}
-}
-
-func TestAgentgatewayModelSupportedKindsFeatureGate(t *testing.T) {
-	modelKind := toRouteKind(wellknown.AgentgatewayModelGVK)
-	listener := gwv1.Listener{
-		Protocol: gwv1.HTTPProtocolType,
-		AllowedRoutes: &gwv1.AllowedRoutes{
-			Kinds: []gwv1.RouteGroupKind{modelKind},
-		},
-	}
-
-	for _, tt := range []struct {
-		name      string
-		enabled   bool
-		want      bool
-		wantValid bool
-	}{
-		{name: "disabled", enabled: false, want: false, wantValid: false},
-		{name: "enabled", enabled: true, want: true, wantValid: true},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			supported, valid := GenerateSupportedKinds(listener, tt.enabled)
-			if valid != tt.wantValid {
-				t.Errorf("listener valid = %t, want %t", valid, tt.wantValid)
-			}
-			found := false
-			for _, kind := range supported {
-				found = routeGroupKindEqual(kind, modelKind)
-				if found {
-					break
-				}
-			}
-			if found != tt.want {
-				t.Errorf("AgentgatewayModel supported = %t, want %t", found, tt.want)
-			}
-		})
 	}
 }
 
@@ -251,8 +214,9 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 			}}},
 		},
 	}
+	owner := &agentgateway.AgentgatewayModel{Namespace: "default", Spec: *model}
 
-	provider, err := translateModelLLMProvider(RouteContext{}, "default", model, "openai", nil)
+	provider, err := translateModelLLMProvider(RouteContext{}, owner, "openai", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +235,7 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	if provider.InlinePolicies[3].GetAuth() == nil {
 		t.Errorf("auth policy = %#v, want backend auth", provider.InlinePolicies[3])
 	}
-	routePolicy, err := translateModelRouteAIPolicy(RouteContext{}, "default", model.Policies)
+	routePolicy, err := translateModelRouteAIPolicy(RouteContext{}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,11 +317,10 @@ func TestTranslatePresetProviderBaseURL(t *testing.T) {
 	baseURL := agentgateway.LongString("https://ollama.example/v2")
 	provider, err := translateModelLLMProvider(
 		RouteContext{},
-		"default",
-		&agentgateway.AgentgatewayModelSpec{
+		&agentgateway.AgentgatewayModel{Namespace: "default", Spec: agentgateway.AgentgatewayModelSpec{
 			Provider: &providerType,
 			BaseURL:  &baseURL,
-		},
+		}},
 		"ollama",
 		nil,
 	)

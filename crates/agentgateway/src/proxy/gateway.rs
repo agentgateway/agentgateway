@@ -26,12 +26,14 @@ use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
 use crate::http::substrate::{self, ActorIdentity, EgressTlsMode};
+use crate::management::metrics_server::MetricsService;
 use crate::proxy::{ProxyError, WaypointService, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::{AdmissionLabels, TCPLabels};
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
-	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
+	ConnectAuthority, ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo,
+	TLSConnectionInfo,
 };
 use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
@@ -39,6 +41,10 @@ use crate::types::agent::{
 use crate::types::discovery::Service;
 use crate::types::frontend;
 use crate::{ProxyInputs, Stores, client};
+
+// Every in-flight request holds this future until it completes, so its size is paid per
+// concurrent request. A larger future usually means some value is now held across an await.
+const PROXY_REQUEST_FUTURE_SIZE: usize = 18 * 1024;
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
@@ -743,12 +749,12 @@ impl Gateway {
 					crate::http::mark_sensitive_headers(&mut req, &inputs.cfg.sensitive_headers);
 					let connect_headers = req.headers().clone();
 					let authority = match req.uri().authority() {
-						Some(authority) => authority.as_str(),
+						Some(authority) => authority.clone(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
 					};
 					let (target_address, bind) = {
 						let binds = inputs.stores.read_binds();
-						if let Ok(addr) = authority.parse::<SocketAddr>() {
+						if let Ok(addr) = authority.as_str().parse::<SocketAddr>() {
 							// CONNECT re-entry must not expose a bind scoped to a concrete address
 							// (for example, a loopback-only listener). Match only an unspecified-address
 							// bind for this port; otherwise fall back to the explicit internal wildcard
@@ -789,12 +795,7 @@ impl Gateway {
 							.await
 						{
 							Ok(identity) => Some(identity),
-							Err(error) => {
-								return Ok(match error {
-									crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
-									crate::proxy::ProxyResponse::DirectResponse(response) => *response,
-								});
-							},
+							Err(error) => return Ok(error.into_response_with_grpc(false)),
 						}
 					} else {
 						None
@@ -828,6 +829,7 @@ impl Gateway {
 							downstream.ext_mut().insert(policy);
 						}
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
+						downstream.ext_mut().insert(ConnectAuthority(authority));
 						if let Some(buffer) = buffer {
 							downstream.ext_mut().insert(BufferLimit::new(buffer));
 						}
@@ -907,15 +909,12 @@ impl Gateway {
 		if let Some(ch) = stream.ext_mut().remove::<ConnectHeaders>() {
 			src.connect_headers = ch.0;
 		}
-		// A denied TLS destination only serves an HTTP denial; it must not call auth services.
-		let egress_denied = stream.ext::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied);
-		if !egress_denied
-			&& let Some(network_authorization) = policies.network_authorization.as_ref()
+		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&crate::cel::Executor::new_tcp(Some(&src), &dst))
 		{
 			anyhow::bail!("network authorization denied: {e}");
 		}
-		if !egress_denied && let Some(authz) = policies.network_ext_authz.as_ref() {
+		if let Some(authz) = policies.network_ext_authz.as_ref() {
 			authz
 				.check_network(
 					super::httpproxy::PolicyClient::new(inputs.clone()),
@@ -1007,7 +1006,7 @@ impl Gateway {
 						dtrace::DebugTracer::maybe_scope(req, |req| async move {
 							proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
 						})
-						.assert_size::<{ 18 * 1024 }>(),
+						.assert_size::<{ PROXY_REQUEST_FUTURE_SIZE }>(),
 					)
 					.await?;
 					close_if_draining(
@@ -1194,7 +1193,7 @@ impl Gateway {
 			.read_binds()
 			.get_bind_listener(bind_name, &serving_listener.key)
 		{
-			Some(current) => current.as_ref() != serving_listener,
+			Some(current) => !current.serving_eq(serving_listener),
 			None => true,
 		}
 	}
@@ -1249,7 +1248,7 @@ impl Gateway {
 			.await?;
 			let best = listeners
 				.best_match_filtered(sni, |protocol| match egress_mode {
-					Some(EgressTlsMode::Intercept | EgressTlsMode::InterceptDenied) => {
+					Some(EgressTlsMode::Intercept) => {
 						matches!(protocol, ListenerProtocol::HTTPS(_))
 					},
 					Some(EgressTlsMode::Passthrough) => matches!(protocol, ListenerProtocol::TLS(None)),
@@ -1535,6 +1534,7 @@ impl Gateway {
 					},
 					hostname: Default::default(),
 					protocol: ListenerProtocol::HBONE,
+					..Default::default()
 				})
 			});
 
@@ -1680,6 +1680,9 @@ impl Gateway {
 		// HBONE re-entry bypasses the listening socket, so it must not expose binds
 		// scoped to a concrete address (for example, a loopback-only listener).
 		let Some(bind) = pi.stores.read_binds().find_bind_by_port(socket_addr.port()) else {
+			if let Some(stats) = Self::stats_for_port(&pi, socket_addr.port()) {
+				return Self::serve_stats(stats, req).await;
+			}
 			warn!("no bind for {hbone_addr}");
 			let Ok(_) = req
 				.send_response(build_response(StatusCode::NOT_FOUND))
@@ -1708,6 +1711,29 @@ impl Gateway {
 			drain,
 		)
 		.await
+	}
+
+	fn stats_for_port(pi: &ProxyInputs, port: u16) -> Option<MetricsService> {
+		pi.stats
+			.clone()
+			.filter(|_| pi.cfg.stats_addr.wildcard_port() == Some(port))
+	}
+
+	/// Serves the metrics endpoint over an HBONE tunnel addressed to the stats port, as ztunnel
+	/// exposes a captured pod's own ports to the mesh. No bind, so no routes or policies apply.
+	async fn serve_stats(stats: MetricsService, req: H2Request) {
+		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
+			warn!("failed to send response");
+			return;
+		};
+		let con = agent_hbone::RWStream {
+			stream: resp,
+			buf: Bytes::new(),
+			drain_tx: None,
+		};
+		if let Err(e) = stats.serve_connection(con).await {
+			debug!("hbone stats connection closed: {e}");
+		}
 	}
 }
 
@@ -1783,6 +1809,7 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		http2_keepalive_timeout,
 		max_connection_duration: _, // Not handled here
 		max_concurrent_requests: _, // Not handled here
+		normalize: _,               // Not handled here
 	} = c.unwrap_or(&def);
 
 	if let Some(m) = http1_max_headers {

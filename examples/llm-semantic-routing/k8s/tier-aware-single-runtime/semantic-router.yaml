@@ -16,8 +16,8 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: router
-          image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
-          imagePullPolicy: Always
+          image: ghcr.io/vllm-project/semantic-router/vllm-sr:${VSR_IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
           args: ["/app/config/config.yaml"]
           ports:
             - name: grpc

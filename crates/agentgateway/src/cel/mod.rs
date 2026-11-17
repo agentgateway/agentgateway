@@ -165,6 +165,14 @@ impl ContextBuilder {
 		self.any_has(Attributes::Llm)
 	}
 
+	pub fn needs_llm_request_context(&self) -> bool {
+		self.request_attributes.contains(Attributes::Llm) || self.needs_llm_request()
+	}
+
+	pub fn needs_llm_request(&self) -> bool {
+		self.request_attributes.contains(Attributes::LlmRequest)
+	}
+
 	pub fn needs_llm_prompt(&self) -> bool {
 		self.any_has(Attributes::LlmPrompt)
 	}
@@ -173,6 +181,10 @@ impl ContextBuilder {
 	}
 	pub fn needs_llm_tool_calls(&self) -> bool {
 		self.any_has(Attributes::LlmToolCalls)
+	}
+
+	pub fn needs_upstream_calls(&self) -> bool {
+		self.any_has(Attributes::UpstreamCalls)
 	}
 
 	pub fn needs_mcp(&self) -> bool {

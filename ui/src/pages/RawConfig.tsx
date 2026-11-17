@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import { Clipboard, Download, FileText, RotateCcw, Save, Trash2 } from 'lucide-react';
-import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useRef, useState } from 'react';
 
 import type { ConfigResource } from '@/api/configResourcesApi';
 import { ConfigDiffDrawer, ConfigSaveButton } from '@/components/ConfigDiffDrawer';
@@ -19,11 +19,12 @@ import {
 	useConfigResources,
 	useDeleteConfigResource,
 	useHybridFileWriteOverrideKeys,
-	useRawGatewayConfig,
+	useRawConfigText,
 	useRuntimeInfo,
-	useUpdateConfig
+	useUpdateRawConfig
 } from '@/hooks';
-import { parseYamlText, toYamlText } from '@/policies/policyUtils';
+import { detectLineEnding } from '@/lineEnding';
+import { parseYamlText } from '@/policies/policyUtils';
 import type { GatewayConfig } from '@/types';
 
 const LazyRawConfigEditor = lazy(() =>
@@ -52,13 +53,13 @@ export function RawConfigPage() {
 }
 
 function RawConfigEditorPage() {
-	const config = useRawGatewayConfig();
+	const config = useRawConfigText();
 	const runtime = useRuntimeInfo();
 	const hybrid = runtime.data?.ui.configStoreMode === 'hybrid';
 	const resources = useConfigResources({ enabled: hybrid });
 	const [view, setView] = useState<'file' | 'database'>('file');
-	const update = useUpdateConfig();
-	const initialText = useMemo(() => (config.data ? toYamlText(config.data) : ''), [config.data]);
+	const update = useUpdateRawConfig();
+	const initialText = config.data ?? '';
 	const [text, setText] = useState(initialText);
 	const [error, setError] = useState<string | null>(null);
 	const [savedText, setSavedText] = useState<string | null>(null);
@@ -91,7 +92,7 @@ function RawConfigEditorPage() {
 				throw new Error('Configuration must be a YAML object.');
 			}
 			await validateGatewayConfig(parsed as GatewayConfig);
-			await update.mutateAsync(() => parsed as GatewayConfig);
+			await update.mutateAsync(text);
 			setSavedText(text);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Invalid configuration YAML.');
@@ -201,6 +202,7 @@ function RawConfigEditorPage() {
 					>
 						<LazyRawConfigEditor
 							invalid={Boolean(error)}
+							lineEnding={detectLineEnding(initialText)}
 							value={text}
 							onChange={updateText}
 							onSave={() => void save()}

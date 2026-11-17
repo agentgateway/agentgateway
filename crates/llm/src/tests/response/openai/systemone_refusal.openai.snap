@@ -1,0 +1,19 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/openai/systemone_refusal.json
+info:
+  model: gpt-6-luna
+  answers:
+    - type: predicate
+      name: refund
+      probability: 0.93
+    - type: refusal
+      name: policy
+  usage:
+    input_tokens: 212
+    output_tokens: 0
+    total_tokens: 212
+---
+{
+  "error": "unsupported conversion: decisions refusal for question \"policy\" has no SystemOne equivalent"
+}

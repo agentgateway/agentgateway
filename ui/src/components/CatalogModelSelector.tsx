@@ -5,10 +5,14 @@ import { listCostModels } from '@/api/costsApi';
 import { FreeformCombobox } from '@/components/FreeformCombobox';
 
 export function CatalogModelSelector(props: {
+	id?: string;
 	ariaLabel: string;
+	'aria-describedby'?: string;
 	value: string;
 	onChange: (value: string) => void;
 	provider?: string | null;
+	/** Maps a catalog model ID to the option shown for it, or drops it when undefined. */
+	mapOption?: (model: string) => string | undefined;
 	placeholder?: string;
 }) {
 	const catalog = useQuery({
@@ -31,9 +35,11 @@ export function CatalogModelSelector(props: {
 
 	return (
 		<FreeformCombobox
+			id={props.id}
 			ariaLabel={props.ariaLabel}
+			aria-describedby={props['aria-describedby']}
 			value={props.value}
-			options={options}
+			options={props.mapOption ? options.flatMap(model => props.mapOption?.(model) ?? []) : options}
 			onChange={props.onChange}
 			placeholder={props.placeholder ?? 'Select or type a model'}
 			emptyText={

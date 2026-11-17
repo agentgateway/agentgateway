@@ -113,6 +113,32 @@ impl From<ContentScope> for ResponseText {
 	}
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct RequestText {
+	pub scope: ContentScope,
+	// allows associating a RequestText to the index of the message in the
+	// simplified view of the request message list `RequestType::get_messages()`
+	pub get_messages_idx: Option<usize>,
+}
+
+impl RequestText {
+	pub(crate) fn in_message(scope: ContentScope, message: usize) -> Self {
+		Self {
+			scope,
+			get_messages_idx: Some(message),
+		}
+	}
+}
+
+impl From<ContentScope> for RequestText {
+	fn from(scope: ContentScope) -> Self {
+		Self {
+			scope,
+			get_messages_idx: None,
+		}
+	}
+}
+
 /// Which category of request or response content a prompt guard inspects.
 /// Encrypted payloads are excluded. Signed response payloads are scanned but
 /// a mask that would change them rejects the response instead.
@@ -250,7 +276,7 @@ pub trait RequestType: Send + Sync {
 	}
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
 	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String));
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(RequestText, &mut String));
 }
 
 /// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans
@@ -295,6 +321,10 @@ pub(crate) fn scan_text_runs<T>(
 		f(&mut joined);
 		if joined == original {
 			i = end;
+			continue;
+		}
+		if joined.is_empty() {
+			parts.drain(i..end);
 			continue;
 		}
 

@@ -19,7 +19,6 @@ env:
   CARGO_TERM_COLOR: always
   CI: true
   CARGO_BUILD_WARNINGS: deny
-  GO_VERSION: "1.27.2"
 
 jobs:
   #### Proxy jobs ####
@@ -132,8 +131,6 @@ jobs:
         persist-credentials: false
     - name: Set up controller toolchain
       uses: ./.github/actions/controller-build-cache
-      with:
-        go-version: "${{ env.GO_VERSION }}"
     - name: Test
       env:
         # The race detector otherwise sleeps 1s when each test binary exits.
@@ -150,8 +147,6 @@ jobs:
         persist-credentials: false
     - name: Set up controller toolchain
       uses: ./.github/actions/controller-build-cache
-      with:
-        go-version: "${{ env.GO_VERSION }}"
     - name: Lint
       run: make -C controller analyze
     - name: go mod tidy
@@ -175,7 +170,6 @@ jobs:
       uses: ./.github/actions/controller-build-cache
       with:
         rust: "true"
-        go-version: "${{ env.GO_VERSION }}"
         # Only postsubmit rolls the Rust build cache forward.
         save: ${{ github.ref == 'refs/heads/main' }}
     - name: Setup
@@ -215,7 +209,6 @@ jobs:
       uses: ./.github/actions/controller-build-cache
       with:
         rust: "true"
-        go-version: "${{ env.GO_VERSION }}"
     - name: Setup
       run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
     - name: Conformance
@@ -269,7 +262,6 @@ jobs:
       uses: ./.github/actions/controller-build-cache
       with:
         rust: "true"
-        go-version: "${{ env.GO_VERSION }}"
     - name: Setup
       run: TEST_MODE=gie-conformance ./controller/test/setup/setup-kind-ci.sh
     - name: GIE Conformance

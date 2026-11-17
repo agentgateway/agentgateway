@@ -45,7 +45,7 @@ impl CallbackTransactionState {
 pub(super) fn start_login(
 	policy: &OidcPolicy,
 	req: &Request,
-) -> Result<crate::http::PolicyResponse, Error> {
+) -> Result<super::OidcResponse, Error> {
 	let transaction_id = generate_transaction_id();
 	let csrf_state = generate_state();
 	let nonce = generate_nonce();
@@ -102,14 +102,14 @@ pub(super) fn start_login(
 		],
 	);
 	let response = build_redirect_response(&location, &[cookie])?;
-	Ok(crate::http::PolicyResponse::default().with_response(response))
+	Ok(super::OidcResponse::default().with_response(response))
 }
 
 pub(super) async fn handle_callback(
 	policy: &OidcPolicy,
 	context: CallbackRequestContext,
 	client: PolicyClient,
-) -> Result<crate::http::PolicyResponse, Error> {
+) -> Result<super::OidcResponse, Error> {
 	let transaction = policy
 		.session
 		.decode_transaction(&context.transaction_cookie)?;
@@ -186,7 +186,7 @@ pub(super) async fn handle_callback(
 		&location,
 		&[session_cookie, refresh_cookie, clear_transaction],
 	)?;
-	Ok(crate::http::PolicyResponse::default().with_response(response))
+	Ok(super::OidcResponse::default().with_response(response))
 }
 
 fn with_query(uri: &super::ProviderEndpoint, params: &[(&str, String)]) -> String {

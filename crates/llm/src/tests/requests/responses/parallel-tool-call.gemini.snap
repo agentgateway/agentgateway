@@ -18,12 +18,19 @@ info:
       call_id: call_2
       name: get_weather
       arguments: "{\"location\":\"New York, NY\"}"
+    - type: function_call
+      call_id: call_3
+      name: get_weather
+      arguments: "{\"location\":\"Bos"
     - type: function_call_output
       call_id: call_1
       output: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
     - type: function_call_output
       call_id: call_2
       output: "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+    - type: function_call_output
+      call_id: call_3
+      output: invalid arguments
 ---
 {
   "request": {
@@ -55,6 +62,14 @@ info:
               "name": "get_weather",
               "arguments": "{\"location\":\"New York, NY\"}"
             }
+          },
+          {
+            "type": "function",
+            "id": "call_3",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\"location\":\"Bos"
+            }
           }
         ]
       },
@@ -67,6 +82,11 @@ info:
         "role": "tool",
         "content": "{ \"temperature\": 22, \"condition\": \"Sunny\" }",
         "tool_call_id": "call_2"
+      },
+      {
+        "role": "tool",
+        "content": "invalid arguments",
+        "tool_call_id": "call_3"
       }
     ],
     "model": "gpt-4o",

@@ -1,0 +1,98 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/tool.json
+info:
+  id: resp_tool
+  object: response
+  created_at: 123
+  status: completed
+  model: gpt-4.1-mini
+  service_tier: default
+  output:
+    - type: message
+      id: msg_text
+      role: assistant
+      status: completed
+      content:
+        - type: output_text
+          text: I will check that.
+          annotations: []
+    - type: function_call
+      id: fc_1
+      call_id: call_weather
+      name: get_weather
+      arguments: "{\"location\":\"San Francisco\"}"
+      status: completed
+  usage:
+    input_tokens: 30
+    input_tokens_details:
+      cached_tokens: 4
+      cache_write_tokens: 6
+      cache_write_tokens_details:
+        ttl_30m_tokens: 2
+        ttl_12h_tokens: 4
+    output_tokens: 5
+    output_tokens_details:
+      reasoning_tokens: 0
+    total_tokens: 35
+---
+{
+  "response": {
+    "id": "[id]",
+    "object": "response",
+    "created_at": "[date]",
+    "status": "completed",
+    "model": "gpt-4.1-mini",
+    "service_tier": "default",
+    "output": [
+      {
+        "type": "message",
+        "id": "[id]",
+        "role": "assistant",
+        "status": "completed",
+        "content": [
+          {
+            "type": "output_text",
+            "text": "I will check that.",
+            "annotations": []
+          }
+        ]
+      },
+      {
+        "type": "function_call",
+        "id": "[id]",
+        "call_id": "call_weather",
+        "name": "get_weather",
+        "arguments": "{\"location\":\"San Francisco\"}",
+        "status": "completed"
+      }
+    ],
+    "usage": {
+      "input_tokens": 30,
+      "input_tokens_details": {
+        "cached_tokens": 4,
+        "cache_write_tokens": 6,
+        "cache_write_tokens_details": {
+          "ttl_30m_tokens": 2,
+          "ttl_12h_tokens": 4
+        }
+      },
+      "output_tokens": 5,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 35
+    }
+  },
+  "parsed": {
+    "input_tokens": 30,
+    "output_tokens": 5,
+    "total_tokens": 35,
+    "reasoning_tokens": 0,
+    "cache_creation_input_tokens": 6,
+    "cache_creation_12h_input_tokens": 4,
+    "cached_input_tokens": 4,
+    "service_tier": "default",
+    "provider_model": "gpt-4.1-mini"
+  }
+}

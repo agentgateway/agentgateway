@@ -17,7 +17,7 @@ func TestBackendKindsUseDistinctKeys(t *testing.T) {
 		Name: "shared", Namespace: "default",
 		Spec: gwxv1a1.BackendSpec{
 			Type: gwxv1a1.BackendTypeExternalHostname,
-			Port: gwxv1a1.BackendPort{Port: 8443},
+			Port: gwxv1a1.BackendPort{Number: 8443},
 			ExternalHostname: &gwxv1a1.ExternalHostnameBackend{
 				Hostname: "api.example.com",
 			},

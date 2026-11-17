@@ -14,6 +14,7 @@
 | --- | --- | --- | --- |
 | `agentgateway_request_duration_seconds` | Histogram | seconds | Duration of HTTP requests (seconds). |
 | `agentgateway_request_processing_seconds` | Histogram | seconds | Duration from receiving an HTTP request to sending the primary outbound call (seconds). |
+| `agentgateway_requests_active` | Gauge | — | Number of HTTP requests to a backend currently awaiting a complete response. |
 | `agentgateway_requests_shed_total` | Counter | — | Total downstream requests rejected by the in-flight request limit. |
 | `agentgateway_requests_total` | Counter | — | The total number of HTTP requests sent. |
 | `agentgateway_response_bytes_total` | Counter | bytes | Total HTTP response bytes received. |
@@ -59,3 +60,4 @@
 | `agentgateway_config_synchronized` | Gauge | — | Whether the last configuration load/reload was successful or not, being synchronized with the on-disk configuration. |
 | `agentgateway_substrate_request_parking_active` | Gauge | — | Number of requests waiting for a Substrate actor to become routable. |
 | `agentgateway_upstream_call_duration_seconds` | Histogram | seconds | Duration of outbound calls made by agentgateway (seconds). |
+| `agentgateway_upstream_connections_active` | Gauge | — | Number of currently open upstream connections. |

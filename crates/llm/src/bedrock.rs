@@ -11,10 +11,14 @@ pub struct AwsRegion {
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum BedrockEndpointPreference {
+	/// Use Runtime, except for models the catalog lists as available only on Mantle.
 	#[default]
 	RuntimePreferred,
+	/// Use Mantle, except for models the catalog lists as available only on Runtime.
 	MantlePreferred,
+	/// Always use Mantle for chat; unsupported models fail.
 	MantleOnly,
+	/// Always use Runtime for chat; unsupported models fail.
 	RuntimeOnly,
 }
 
@@ -26,6 +30,12 @@ pub enum BedrockEndpoint {
 
 // Mantle signs SigV4 under this name instead of the default "bedrock".
 const MANTLE_SIGNING_SERVICE_NAME: &str = "bedrock-mantle";
+
+// Runtime chat uses Converse unless AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE=false, in which case it
+// uses the native OpenAI/Anthropic APIs, like Mantle. Temporary until native becomes the default.
+static RUNTIME_CONVERSE: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+	std::env::var("AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE").map_or(true, |v| v != "false")
+});
 
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "BedrockProviderConfig"))]
@@ -110,6 +120,90 @@ impl Provider {
 		}
 	}
 
+	/// Whether chat on the endpoint uses the native OpenAI/Anthropic APIs rather than Converse.
+	pub fn native_chat(&self, endpoint: BedrockEndpoint) -> bool {
+		match endpoint {
+			BedrockEndpoint::Mantle => true,
+			BedrockEndpoint::Runtime => !*RUNTIME_CONVERSE,
+		}
+	}
+
+	/// Adjusts the inbound request for what Runtime's native APIs reject:
+	/// * `metadata` values outside the Converse requestMetadata pattern
+	///   `[a-zA-Z0-9\s:_@$#=/+,.-]{0,256}`, unlike InvokeModel and Mantle. Claude Code sends JSON as
+	///   `metadata.user_id`, which also flows into the metadata of a request translated to Responses,
+	///   so strip the disallowed characters. Completions `user` becomes `metadata.user_id` when
+	///   translated to Messages, so it gets the same treatment.
+	/// * Responses `web_search` tools, which Codex sends by default, and Messages `web_search_*`
+	///   server tools, which Claude Code sends. Drop them like other server tools Bedrock cannot
+	///   execute.
+	pub fn sanitize_runtime_request(
+		&self,
+		req: &mut crate::types::ChatRequest,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) {
+		use crate::types::ChatRequest;
+		let (model, rest) = match req {
+			ChatRequest::Messages(r) => (r.model.as_deref(), &mut r.rest),
+			ChatRequest::Completions(r) => (r.model.as_deref(), &mut r.rest),
+			ChatRequest::Responses(r) => (r.model.as_deref(), &mut r.rest),
+			ChatRequest::Gemini(_) => return,
+		};
+		let endpoint = self.resolve_endpoint(super::RouteType::Messages, model, catalog);
+		if endpoint != BedrockEndpoint::Runtime || !self.native_chat(endpoint) {
+			return;
+		}
+		let clean = |s: &mut String| {
+			s.retain(|c| {
+				c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || ":_@$#=/+,.-".contains(c)
+			});
+			s.truncate(256);
+		};
+		if let Some(serde_json::Value::Object(metadata)) = rest.get_mut("metadata") {
+			for value in metadata.values_mut() {
+				if let serde_json::Value::String(s) = value {
+					clean(s);
+				}
+			}
+		}
+		if let ChatRequest::Completions(r) = req
+			&& let Some(user) = r.user.as_mut()
+		{
+			clean(user);
+		}
+		let is_web_search = |t: &serde_json::Value| {
+			t.get("type")
+				.and_then(|t| t.as_str())
+				.is_some_and(|t| t.starts_with("web_search"))
+		};
+		if let ChatRequest::Responses(r) = req
+			&& let Some(serde_json::Value::Array(tools)) = r.rest.get_mut("tools")
+		{
+			tools.retain(|t| !is_web_search(t));
+			if tools.is_empty() {
+				r.rest.as_object_mut().map(|o| o.remove("tools"));
+			}
+		}
+		if let ChatRequest::Messages(r) = req
+			&& let Some(tools) = r.tools.take()
+		{
+			let mut kept: Vec<crate::types::messages::Tool> = Vec::with_capacity(tools.len());
+			for tool in tools {
+				if !is_web_search(&tool.rest) {
+					kept.push(tool);
+					continue;
+				}
+				// Keep a dropped tool's cache breakpoint on the preceding tool, like Converse does.
+				if let Some(prev) = kept.last_mut()
+					&& prev.cache_control.is_none()
+				{
+					prev.cache_control = tool.cache_control;
+				}
+			}
+			r.tools = (!kept.is_empty()).then_some(kept);
+		}
+	}
+
 	/// SigV4 signing-service override for the endpoint (`Some` for Mantle, else the default `bedrock`).
 	pub fn signing_service_name(&self, endpoint: BedrockEndpoint) -> Option<&'static str> {
 		match endpoint {
@@ -124,36 +218,54 @@ impl Provider {
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Vec<super::ChatFormat> {
 		use super::ChatFormat;
+		// all chat runtime models seem to support converse
+		let endpoint = self.chat_endpoint(Some(request_model), catalog);
+		if !self.native_chat(endpoint) {
+			return vec![ChatFormat::BedrockConverse];
+		}
+		let mut formats = self.native_chat_formats(request_model, catalog, endpoint);
+		// Runtime still serves Converse alongside the native APIs, so it backs translations the native
+		// APIs lack (e.g. Responses to Claude).
+		if endpoint == BedrockEndpoint::Runtime {
+			formats.push(ChatFormat::BedrockConverse);
+		}
+		formats
+	}
+
+	fn native_chat_formats(
+		&self,
+		request_model: &str,
+		catalog: crate::model_catalog::Catalog<'_>,
+		endpoint: BedrockEndpoint,
+	) -> Vec<super::ChatFormat> {
+		use super::ChatFormat;
 		const NATIVE: [ChatFormat; 3] = [
 			ChatFormat::OpenAICompletions,
 			ChatFormat::AnthropicMessages,
 			ChatFormat::OpenAIResponses,
 		];
-		match self.chat_endpoint(Some(request_model), catalog) {
-			// all chat runtime models seem to support converse
-			BedrockEndpoint::Runtime => vec![ChatFormat::BedrockConverse],
-			BedrockEndpoint::Mantle => {
-				// Short circuit tag checks as we should just use the message endpoint
-				if self.is_anthropic_model(request_model) {
-					return vec![ChatFormat::AnthropicMessages];
-				}
-				if let Some(tags) = catalog.and_then(|c| c.get_model_tags(request_model)) {
-					let declared: Vec<ChatFormat> = NATIVE
-						.into_iter()
-						.filter(|f| tags.contains(f.tag()))
-						.collect();
-					if !declared.is_empty() {
-						return declared;
-					}
-				}
-				// fallback for entries that havent gotten into loaded to catalog yet
-				let basemodelname = request_model.to_ascii_lowercase();
-				if basemodelname.contains("openai") || basemodelname.contains("grok") {
-					vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
-				} else {
-					vec![ChatFormat::OpenAICompletions]
-				}
-			},
+		// Short circuit tag checks as we should just use the message endpoint
+		if self.is_anthropic_model(request_model) {
+			return vec![ChatFormat::AnthropicMessages];
+		}
+		if let Some(tags) = catalog.and_then(|c| c.get_model_tags(request_model)) {
+			let declared: Vec<ChatFormat> = NATIVE
+				.into_iter()
+				.filter(|f| tags.contains(f.tag()))
+				.collect();
+			if !declared.is_empty() {
+				return declared;
+			}
+		}
+		// fallback for entries that havent gotten into loaded to catalog yet
+		let basemodelname = request_model.to_ascii_lowercase();
+		if basemodelname.contains("openai") || basemodelname.contains("grok") {
+			vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
+		} else if endpoint == BedrockEndpoint::Runtime {
+			// Most Runtime models (Nova, Llama, Mistral, ...) only serve Converse.
+			vec![]
+		} else {
+			vec![ChatFormat::OpenAICompletions]
 		}
 	}
 
@@ -163,6 +275,7 @@ impl Provider {
 		streaming: bool,
 		model: &str,
 		endpoint: BedrockEndpoint,
+		native_chat: bool,
 	) -> Strng {
 		if matches!(endpoint, BedrockEndpoint::Mantle) {
 			return match route_type {
@@ -174,6 +287,17 @@ impl Provider {
 				super::RouteType::Models => strng::literal!("/v1/models"),
 				_ => strng::literal!("/v1/chat/completions"),
 			};
+		}
+
+		if native_chat {
+			match route_type {
+				super::RouteType::Responses => return strng::literal!("/openai/v1/responses"),
+				super::RouteType::Messages => return strng::literal!("/anthropic/v1/messages"),
+				super::RouteType::Completions => {
+					return strng::literal!("/openai/v1/chat/completions");
+				},
+				_ => {},
+			}
 		}
 
 		const MODEL_SEGMENT: &percent_encoding::AsciiSet =
@@ -322,17 +446,17 @@ mod tests {
 		);
 		assert_eq!(p.signing_service_name(ep), Some("bedrock-mantle"));
 		assert_eq!(
-			p.get_path_for_route(RouteType::Messages, false, "m", ep)
+			p.get_path_for_route(RouteType::Messages, false, "m", ep, p.native_chat(ep))
 				.as_str(),
 			"/anthropic/v1/messages"
 		);
 		assert_eq!(
-			p.get_path_for_route(RouteType::Responses, false, "m", ep)
+			p.get_path_for_route(RouteType::Responses, false, "m", ep, p.native_chat(ep))
 				.as_str(),
 			"/v1/responses"
 		);
 		assert_eq!(
-			p.get_path_for_route(RouteType::Completions, false, "m", ep)
+			p.get_path_for_route(RouteType::Completions, false, "m", ep, p.native_chat(ep))
 				.as_str(),
 			"/v1/chat/completions"
 		);
@@ -352,7 +476,8 @@ mod tests {
 				RouteType::Messages,
 				false,
 				"anthropic.claude-3-5-haiku-20241022-v1:0",
-				ep
+				ep,
+				p.native_chat(ep)
 			)
 			.as_str(),
 			"/model/anthropic.claude-3-5-haiku-20241022-v1:0/converse"
@@ -524,7 +649,7 @@ mod tests {
 			"bedrock-runtime.us-east-1.amazonaws.com"
 		);
 		assert_eq!(
-			p.get_path_for_route(RouteType::Embeddings, false, "m", ep)
+			p.get_path_for_route(RouteType::Embeddings, false, "m", ep, p.native_chat(ep))
 				.as_str(),
 			"/model/m/invoke"
 		);
@@ -538,7 +663,13 @@ mod tests {
 		assert_eq!(runtime_ep, BedrockEndpoint::Runtime);
 		assert_eq!(
 			runtime
-				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", runtime_ep)
+				.get_path_for_route(
+					RouteType::AnthropicTokenCount,
+					false,
+					"m",
+					runtime_ep,
+					runtime.native_chat(runtime_ep)
+				)
 				.as_str(),
 			"/model/m/count-tokens"
 		);
@@ -558,7 +689,13 @@ mod tests {
 		);
 		assert_eq!(
 			mantle
-				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", mantle_ep)
+				.get_path_for_route(
+					RouteType::AnthropicTokenCount,
+					false,
+					"m",
+					mantle_ep,
+					mantle.native_chat(mantle_ep)
+				)
 				.as_str(),
 			"/anthropic/v1/messages/count_tokens"
 		);

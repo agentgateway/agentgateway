@@ -1,5 +1,6 @@
 use ::http::HeaderMap;
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use http_body_util::BodyExt as _;
 use itertools::Itertools;
 use serde::de::DeserializeOwned;
@@ -458,10 +459,14 @@ enum ResponseGuardMutation {
 ///
 /// The trait is object-safe and `Send` so it can be boxed and driven from the
 /// `GuardedSseBody` future.
-#[async_trait::async_trait]
 pub trait StreamingEvaluator: Send {
 	/// Evaluate a text window. Returns `Some(Blocked)` if the content should be blocked.
-	async fn evaluate(&mut self, window: &str) -> anyhow::Result<Option<StreamingGuardrailOutcome>>;
+	// One lifetime avoids async_trait outlives bounds that make rustc repeat expensive Send proofs.
+	// https://github.com/rust-lang/rust/issues/157595
+	fn evaluate<'a>(
+		&'a mut self,
+		window: &'a str,
+	) -> BoxFuture<'a, anyhow::Result<Option<StreamingGuardrailOutcome>>>;
 
 	/// Returns the failure mode to apply when `evaluate` returns an error.
 	/// Guard types without an explicit `failure_mode` field default to `FailClosed`.
@@ -572,8 +577,14 @@ impl crate::llm::RequestType for TextRequest {
 		}
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
-		f(ContentScope::Messages, &mut self.content);
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::llm::RequestText, &mut String)) {
+		f(
+			crate::llm::RequestText {
+				scope: ContentScope::Messages,
+				get_messages_idx: Some(0),
+			},
+			&mut self.content,
+		);
 	}
 }
 
@@ -1061,7 +1072,7 @@ impl Policy {
 				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
 			},
 			RequestGuardKind::OpenAIModeration(m) => {
-				Self::evaluate_moderation(req, claims, client, m, &guard.rejection).await
+				Self::evaluate_moderation(req, claims, client, m, &guard.rejection, &guard.scope).await
 			},
 			RequestGuardKind::BedrockGuardrails(bg) => {
 				Self::evaluate_bedrock_guardrails_request(
@@ -1075,11 +1086,26 @@ impl Policy {
 				.await
 			},
 			RequestGuardKind::GoogleModelArmor(gma) => {
-				Self::evaluate_google_model_armor_request(req, claims, client, gma, &guard.rejection).await
+				Self::evaluate_google_model_armor_request(
+					req,
+					claims,
+					client,
+					gma,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 			RequestGuardKind::AzureContentSafety(acs) => {
-				Self::evaluate_azure_content_safety_request(req, claims, client, acs, &guard.rejection)
-					.await
+				Self::evaluate_azure_content_safety_request(
+					req,
+					claims,
+					client,
+					acs,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 		}
 	}
@@ -1090,8 +1116,13 @@ impl Policy {
 		client: &PolicyClient,
 		moderation: &Moderation,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
-		let resp = moderation::send_request(req, claims, client, moderation).await?;
+		let (content, _) = Self::scoped_request_texts(req, guard_scope);
+		if content.is_empty() {
+			return Ok((GuardrailOutcome::None, None));
+		}
+		let resp = moderation::send_request(content, claims, client, moderation).await?;
 		Ok(Self::moderation_outcome(
 			resp,
 			rejection,
@@ -1261,8 +1292,13 @@ impl Policy {
 		client: &PolicyClient,
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
-		let resp = google_model_armor::send_request(req, claims, client, model_armor).await?;
+		let (content, _) = Self::scoped_request_texts(req, guard_scope);
+		if content.is_empty() {
+			return Ok((GuardrailOutcome::None, None));
+		}
+		let resp = google_model_armor::send_request(content, claims, client, model_armor).await?;
 		Ok(Self::model_armor_outcome(resp, model_armor, rejection))
 	}
 
@@ -1291,15 +1327,21 @@ impl Policy {
 		client: &PolicyClient,
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
+		let (content, _) = Self::scoped_request_texts(req, guard_scope);
+		if content.is_empty() {
+			return Ok((GuardrailOutcome::None, None));
+		}
+		let content = content.join("\n");
 		let audit = config.action == RejectAuditAction::Audit;
 		if let Some(ref analyze_text) = config.analyze_text {
-			let resp = azure_content_safety::send_analyze_text_for_request(
-				req,
-				claims.clone(),
+			let resp = azure_content_safety::send_analyze_text(
 				client,
+				claims.clone(),
 				config,
 				analyze_text,
+				&content,
 			)
 			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
@@ -1311,12 +1353,12 @@ impl Policy {
 			}
 		}
 		if let Some(ref detect_jailbreak) = config.detect_jailbreak {
-			let resp = azure_content_safety::send_detect_jailbreak_for_request(
-				req,
-				claims.clone(),
+			let resp = azure_content_safety::send_detect_jailbreak(
 				client,
+				claims.clone(),
 				config,
 				detect_jailbreak,
+				&content,
 			)
 			.await?;
 			if resp.jailbreak_detected() {
@@ -1363,8 +1405,9 @@ impl Policy {
 		client: &PolicyClient,
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
-		let content = Self::webhook_choice_texts(resp);
+		let (content, _) = Self::scoped_response_texts(resp, guard_scope);
 
 		if content.is_empty() {
 			return Ok((GuardrailOutcome::None, None));
@@ -1385,20 +1428,21 @@ impl Policy {
 		client: &PolicyClient,
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
-		let content = Self::webhook_choice_texts(resp);
+		let (content, _) = Self::scoped_response_texts(resp, guard_scope);
 
 		if content.is_empty() {
 			return Ok((GuardrailOutcome::None, None));
 		}
 
 		if let Some(ref analyze_text) = config.analyze_text {
-			let guardrail_resp = azure_content_safety::send_analyze_text_for_response(
-				content,
-				claims,
+			let guardrail_resp = azure_content_safety::send_analyze_text(
 				client,
+				claims,
 				config,
 				analyze_text,
+				&content.join("\n"),
 			)
 			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
@@ -1424,16 +1468,6 @@ impl Policy {
 		(GuardrailOutcome::Audit, Some(detail))
 	}
 
-	/// One flattened text per choice; masking guards must use `scoped_response_texts`
-	/// instead so counts align with `visit_text_mut` order.
-	fn webhook_choice_texts(resp: &dyn ResponseType) -> Vec<String> {
-		resp
-			.to_webhook_choices()
-			.into_iter()
-			.map(|c| c.message.content.to_string())
-			.collect()
-	}
-
 	#[cfg(test)]
 	fn collect_texts(visit: impl FnOnce(&mut dyn FnMut(&mut String))) -> Vec<String> {
 		let mut texts = Vec::new();
@@ -1452,8 +1486,8 @@ impl Policy {
 	) -> (Vec<String>, Vec<bool>) {
 		let mut texts = Vec::new();
 		let mut in_scope = Vec::new();
-		req.visit_text_mut(&mut |content_scope, text| {
-			let keep = guard_scope.contains(&content_scope);
+		req.visit_text_mut(&mut |content, text| {
+			let keep = guard_scope.contains(&content.scope);
 			in_scope.push(keep);
 			if keep {
 				texts.push(text.clone());
@@ -1499,12 +1533,12 @@ impl Policy {
 		let mut replacements = Vec::new();
 		let mut rejected = false;
 		let mut audited = false;
-		req.visit_text_mut(&mut |content_scope, text| {
+		req.visit_text_mut(&mut |content, text| {
 			if rejected || audited {
 				return;
 			}
 			// out-of-scope texts still occupy a slot so the mask replay stays aligned
-			if !guard_scope.contains(&content_scope) {
+			if !guard_scope.contains(&content.scope) {
 				replacements.push(None);
 				return;
 			}
@@ -1604,9 +1638,9 @@ impl Policy {
 			.then(|| req.to_value())
 			.transpose()?;
 		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
-		let messages = req.get_messages();
+		let sent = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = webhook::send_request(client, webhook, context, &headers, messages).await?;
+		let whr = webhook::send_request(client, webhook, context, &headers, sent.clone()).await?;
 		if webhook.action == RejectAuditAction::Audit {
 			let (would_action, reason) = match whr.action {
 				RequestAction::Mask(m) => ("mask", m.reason),
@@ -1622,11 +1656,64 @@ impl Policy {
 				}),
 			));
 		}
-		Self::webhook_request_outcome(whr.action)
+		Self::webhook_request_outcome(whr.action, &sent, req)
+	}
+
+	/// Apply a same-shape Mask as text patches so request structure survives. The reply is one
+	/// string per message, so it goes in the message's last text slot and the others are cleared.
+	/// Any other shape keeps the v1 meaning of "here is the new conversation".
+	fn webhook_mask_mutation(
+		sent: &[crate::llm::SimpleChatCompletionMessage],
+		reply: Vec<crate::llm::SimpleChatCompletionMessage>,
+		req: &mut dyn RequestType,
+	) -> RequestGuardMutation {
+		let same_shape =
+			reply.len() == sent.len() && reply.iter().zip(sent).all(|(r, s)| r.role == s.role);
+		if !same_shape {
+			debug!("webhook mask changed the message count or roles; rebuilding the request");
+			return RequestGuardMutation::Messages(reply);
+		}
+
+		let changed: Vec<bool> = reply.iter().zip(sent).map(|(r, s)| r != s).collect();
+		let mut slots: Vec<Vec<(usize, String)>> = vec![Vec::new(); sent.len()];
+		let mut replacements = Vec::new();
+		req.visit_text_mut(&mut |content, text| {
+			if let Some(message) = content.get_messages_idx
+				&& changed.get(message).copied().unwrap_or_default()
+			{
+				slots[message].push((replacements.len(), text.clone()));
+			}
+			replacements.push(None);
+		});
+
+		// signed text isn't visited, so patching around it would forward what the webhook masked
+		let all_editable = (0..sent.len()).filter(|&i| changed[i]).all(|i| {
+			slots[i]
+				.iter()
+				.flat_map(|(_, text)| text.split_whitespace())
+				.eq(sent[i].content.split_whitespace())
+		});
+		if !all_editable {
+			debug!("webhook masked text that cannot be patched; rebuilding the request");
+			return RequestGuardMutation::Messages(reply);
+		}
+
+		for (masked, slots) in reply.iter().zip(&slots) {
+			let Some(((last, _), others)) = slots.split_last() else {
+				continue;
+			};
+			for (position, _) in others {
+				replacements[*position] = Some(String::new());
+			}
+			replacements[*last] = Some(masked.content.to_string());
+		}
+		RequestGuardMutation::Texts(TextReplacements(replacements))
 	}
 
 	fn webhook_request_outcome(
 		action: RequestAction,
+		sent: &[crate::llm::SimpleChatCompletionMessage],
+		req: &mut dyn RequestType,
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		match action {
 			RequestAction::Mask(mask) => {
@@ -1638,7 +1725,7 @@ impl Policy {
 					anyhow::bail!("invalid webhook response");
 				};
 				Ok((
-					GuardrailOutcome::Masked(RequestGuardMutation::Messages(body.messages)),
+					GuardrailOutcome::Masked(Self::webhook_mask_mutation(sent, body.messages, req)),
 					Some(GuardDetail {
 						action_reason: mask.reason,
 						..Default::default()
@@ -2000,11 +2087,26 @@ impl Policy {
 				.await
 			},
 			ResponseGuardKind::GoogleModelArmor(gma) => {
-				Self::evaluate_google_model_armor_response(resp, None, client, gma, &guard.rejection).await
+				Self::evaluate_google_model_armor_response(
+					resp,
+					None,
+					client,
+					gma,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 			ResponseGuardKind::AzureContentSafety(acs) => {
-				Self::evaluate_azure_content_safety_response(resp, None, client, acs, &guard.rejection)
-					.await
+				Self::evaluate_azure_content_safety_response(
+					resp,
+					None,
+					client,
+					acs,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 		}
 	}
@@ -2034,7 +2136,11 @@ pub struct RequestGuard {
 }
 
 pub fn default_content_scope() -> Vec<ContentScope> {
-	vec![ContentScope::SystemPrompt, ContentScope::Messages]
+	vec![
+		ContentScope::SystemPrompt,
+		ContentScope::Messages,
+		ContentScope::ToolOutput,
+	]
 }
 
 // disallow explicitly empty scope (effectively disables the guard)
@@ -2044,32 +2150,29 @@ fn de_content_scope<'de, D: serde::Deserializer<'de>>(
 	let scope = <Vec<ContentScope> as serde::Deserialize>::deserialize(deserializer)?;
 	if scope.is_empty() {
 		return Err(serde::de::Error::custom(
-			"scope must not be empty; omit it to use the default (systemPrompt + messages)",
+			"scope must not be empty; omit it to use the default (systemPrompt + messages + toolOutput)",
 		));
 	}
 	Ok(scope)
 }
 
 impl RequestGuard {
-	/// TODO not all guard types properly scan all scopes
-	/// avoids silently ignoring configured scopes
+	/// Webhooks always inspect systemPrompt + messages; reject any other explicit scope rather than
+	/// silently ignore it. The (omitted) default scope is accepted as well.
 	pub(crate) fn validate_scope(&self) -> Result<(), String> {
-		if matches!(
-			self.kind,
-			RequestGuardKind::Regex(_) | RequestGuardKind::BedrockGuardrails(_)
-		) {
+		if !matches!(self.kind, RequestGuardKind::Webhook(_)) {
 			return Ok(());
 		}
-		let default = default_content_scope();
-		let is_default =
-			self.scope.len() == default.len() && default.iter().all(|s| self.scope.contains(s));
-		if is_default {
+		let is = |want: &[ContentScope]| {
+			self.scope.len() == want.len() && want.iter().all(|s| self.scope.contains(s))
+		};
+		if is(&default_content_scope()) || is(&[ContentScope::SystemPrompt, ContentScope::Messages]) {
 			return Ok(());
 		}
-		Err(format!(
-			"scope: only regex and bedrockGuardrails guards support a non-default scope; {} guards always inspect the default (systemPrompt + messages)",
-			self.kind.name(),
-		))
+		Err(
+			"scope: webhook guards do not support scope; they always inspect systemPrompt + messages"
+				.into(),
+		)
 	}
 
 	/// Returns the configured failure mode, defaulting to `FailClosed`.
@@ -2479,19 +2582,16 @@ fn de_response_scope<'de, D: serde::Deserializer<'de>>(
 }
 
 impl ResponseGuard {
-	/// Only regex and bedrockGuardrails walk scoped response text; others always inspect messages.
+	/// Webhooks always inspect messages; other guards walk scoped response text.
 	pub(crate) fn validate_scope(&self) -> Result<(), String> {
-		if matches!(
-			self.kind,
-			ResponseGuardKind::Regex(_) | ResponseGuardKind::BedrockGuardrails(_)
-		) || self.scope == default_response_scope()
+		if !matches!(self.kind, ResponseGuardKind::Webhook(_)) || self.scope == default_response_scope()
 		{
 			return Ok(());
 		}
-		Err(format!(
-			"scope: only regex and bedrockGuardrails response guards support a non-default scope; {} guards always inspect messages",
-			self.kind.name(),
-		))
+		Err(
+			"scope: webhook response guards do not support a non-default scope; they always inspect messages"
+				.into(),
+		)
 	}
 
 	fn failure_mode(&self) -> FailureMode {

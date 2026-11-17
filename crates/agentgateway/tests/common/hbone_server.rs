@@ -198,6 +198,59 @@ where
 // This isolated integration-test server does not use production TLS construction.
 #[allow(clippy::disallowed_methods)]
 fn generate_test_certs(name: &str) -> rustls::ServerConfig {
+	let (cert_der, key_der) = test_identity(name);
+	let client_verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(test_roots()))
+		.build()
+		.unwrap();
+
+	let mut config = rustls::ServerConfig::builder()
+		.with_client_cert_verifier(client_verifier)
+		.with_single_cert(vec![cert_der], key_der)
+		.unwrap();
+
+	config.alpn_protocols = vec![b"h2".to_vec()];
+	config
+}
+
+/// mTLS client config for connecting to an HBONE server, as a meshed workload named `name` would.
+pub fn client_tls_config(name: &str) -> rustls::ClientConfig {
+	let (cert_der, key_der) = test_identity(name);
+	let provider = agentgateway::transport::tls::provider();
+	let webpki = rustls::client::WebPkiServerVerifier::builder_with_provider(
+		Arc::new(test_roots()),
+		provider.clone(),
+	)
+	.build()
+	.unwrap();
+	let mut config = rustls::ClientConfig::builder_with_provider(provider)
+		.with_protocol_versions(agentgateway::transport::tls::ALL_TLS_VERSIONS)
+		.unwrap()
+		.dangerous()
+		.with_custom_certificate_verifier(Arc::new(
+			agentgateway::transport::tls::insecure::NoServerNameVerification::new(webpki),
+		))
+		.with_client_auth_cert(vec![cert_der], key_der)
+		.unwrap();
+	config.alpn_protocols = vec![b"h2".to_vec()];
+	config
+}
+
+fn test_roots() -> rustls::RootCertStore {
+	use rustls::pki_types::CertificateDer;
+	use rustls_pki_types::pem::PemObject;
+
+	let ca_der = CertificateDer::from_pem_slice(super::shared_ca::TEST_ROOT).unwrap();
+	let mut root_store = rustls::RootCertStore::empty();
+	root_store.add(ca_der).unwrap();
+	root_store
+}
+
+fn test_identity(
+	name: &str,
+) -> (
+	rustls::pki_types::CertificateDer<'static>,
+	rustls::pki_types::PrivateKeyDer<'static>,
+) {
 	// Generate certificates using rcgen with static test keys
 	use std::time::{Duration, SystemTime};
 
@@ -254,24 +307,7 @@ fn generate_test_certs(name: &str) -> rustls::ServerConfig {
 	// Convert to DER for rustls
 	let cert_der = CertificateDer::from(server_cert.der().to_vec());
 	let key_der = PrivateKeyDer::from_pem_slice(key_pem.as_bytes()).unwrap();
-
-	// Load CA cert for trust store
-	let ca_der = CertificateDer::from_pem_slice(super::shared_ca::TEST_ROOT).unwrap();
-
-	let mut root_store = rustls::RootCertStore::empty();
-	root_store.add(ca_der).unwrap();
-
-	let client_verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
-		.build()
-		.unwrap();
-
-	let mut config = rustls::ServerConfig::builder()
-		.with_client_cert_verifier(client_verifier)
-		.with_single_cert(vec![cert_der], key_der)
-		.unwrap();
-
-	config.alpn_protocols = vec![b"h2".to_vec()];
-	config
+	(cert_der, key_der)
 }
 
 fn create_tls_acceptor(config: rustls::ServerConfig) -> tokio_rustls::TlsAcceptor {

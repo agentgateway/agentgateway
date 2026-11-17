@@ -34,6 +34,7 @@ use crate::http::{
 	timeout,
 };
 use crate::mcp::{FailureMode, McpAuthorization};
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
@@ -64,7 +65,7 @@ impl Bind {
 	}
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct BindSnapshot {
 	#[cfg_attr(feature = "schema", schemars(flatten))]
@@ -114,7 +115,7 @@ impl std::ops::DerefMut for BindSnapshot {
 pub type BindKey = Strng;
 
 #[apply(schema_ser_schema!)]
-#[derive(Eq, PartialEq)]
+#[derive(Default)]
 pub struct Listener {
 	pub key: ListenerKey,
 	// User facing name
@@ -124,14 +125,37 @@ pub struct Listener {
 	/// Can be a wildcard
 	pub hostname: Strng,
 	pub protocol: ListenerProtocol,
+	/// Gateway phase traffic policies applied to all requests on the listener.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
+	pub inline_policies: Vec<TrafficPolicy>,
+	/// If set, the listener's configuration is invalid, and every request on it fails.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub error: Option<Strng>,
 }
 
 impl Listener {
-	pub fn matches(&self, hostname: &str) -> bool {
-		self.hostname == hostname
-			|| self.hostname.is_empty()
-			|| (self.hostname.starts_with("*") && hostname.ends_with(&self.hostname[1..]))
+	/// Reports whether the parts of the listener that affect how it is served are equal.
+	/// Inline policies and the error are excluded: they are resolved per request, so changing them
+	/// must not restart the serving listener.
+	pub fn serving_eq(&self, other: &Self) -> bool {
+		self.key == other.key
+			&& self.name == other.name
+			&& self.hostname == other.hostname
+			&& self.protocol == other.protocol
 	}
+
+	pub fn matches(&self, hostname: &str) -> bool {
+		self.hostname.eq_ignore_ascii_case(hostname)
+			|| self.hostname.is_empty()
+			|| (self.hostname.starts_with("*")
+				&& ends_with_ignore_ascii_case(hostname, &self.hostname[1..]))
+	}
+}
+
+fn ends_with_ignore_ascii_case(s: &str, suffix: &str) -> bool {
+	s.len() >= suffix.len()
+		&& s.as_bytes()[s.len() - suffix.len()..].eq_ignore_ascii_case(suffix.as_bytes())
 }
 
 type Alpns = Vec<Vec<u8>>;
@@ -697,10 +721,11 @@ pub fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
 	}
 	parsed.ok_or_else(|| anyhow!("no key"))
 }
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum ListenerProtocol {
 	/// HTTP
+	#[default]
 	HTTP,
 	/// HTTPS, terminating TLS then treating as HTTP
 	HTTPS(ServerTLSConfig),
@@ -1296,9 +1321,17 @@ mod serde_path_regex {
 #[derive(Eq, PartialEq)]
 pub enum HostRedirect {
 	/// Replace the full authority, including host and optional port.
-	Full(Strng),
+	Full(
+		#[serde(serialize_with = "ser_display", deserialize_with = "de_parse")]
+		#[cfg_attr(feature = "schema", schemars(with = "String"))]
+		::http::uri::Authority,
+	),
 	/// Replace only the host and preserve the effective port.
-	Host(Strng),
+	Host(
+		#[serde(serialize_with = "ser_display", deserialize_with = "de_parse")]
+		#[cfg_attr(feature = "schema", schemars(with = "String"))]
+		::http::uri::Authority,
+	),
 	/// Replace only the port.
 	Port(NonZeroU16),
 	/// Use the selected backend host when possible.
@@ -1320,9 +1353,20 @@ pub enum HostRedirectOverride {
 #[derive(Eq, PartialEq)]
 pub enum PathRedirect {
 	/// Replace the full request path.
-	Full(Strng),
+	Full(#[serde(deserialize_with = "de_redirect_path")] Strng),
 	/// Replace only the matched path prefix.
-	Prefix(Strng),
+	Prefix(#[serde(deserialize_with = "de_redirect_path")] Strng),
+}
+
+fn de_redirect_path<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Strng, D::Error> {
+	let path = <std::borrow::Cow<'de, str> as serde::Deserialize>::deserialize(d)?;
+	if !path.is_empty() && !path.starts_with('/') {
+		return Err(serde::de::Error::custom(format!(
+			"path {path:?} must start with '/'"
+		)));
+	}
+	::http::uri::PathAndQuery::try_from(path.as_ref()).map_err(serde::de::Error::custom)?;
+	Ok(strng::new(path))
 }
 
 #[apply(schema_ser_schema!)]
@@ -2074,9 +2118,11 @@ pub struct OpenAPITarget {
 	#[serde(skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	pub schema: Arc<OpenAPI>,
+	/// Path prepended to each operation path.
+	pub prefix: String,
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(
 	feature = "schema",
@@ -2129,7 +2175,7 @@ impl ListenerSet {
 			.inner
 			.values()
 			.filter(|l| filter(&l.protocol))
-			.find(|l| l.hostname == host)
+			.find(|l| l.hostname.eq_ignore_ascii_case(host))
 		{
 			trace!("found best match for {host} (exact)");
 			return Some(best.clone());
@@ -2140,7 +2186,7 @@ impl ListenerSet {
 			.filter(|l| {
 				filter(&l.protocol)
 					&& l.hostname.starts_with("*")
-					&& host.ends_with(&l.hostname.as_str()[1..])
+					&& ends_with_ignore_ascii_case(host, &l.hostname.as_str()[1..])
 			})
 			.max_by_key(|l| l.hostname.len())
 		{
@@ -2222,10 +2268,12 @@ impl<'a> From<&'a HostnameMatch> for HostnameMatchRef<'a> {
 
 impl From<Strng> for HostnameMatch {
 	fn from(s: Strng) -> Self {
+		// Hostnames are case-insensitive; requests are looked up lowercased.
+		let s = s.to_ascii_lowercase();
 		if let Some(s) = s.strip_prefix("*.") {
 			HostnameMatch::Wildcard(strng::new(s))
 		} else {
-			HostnameMatch::Exact(s.clone())
+			HostnameMatch::Exact(strng::new(s))
 		}
 	}
 }
@@ -2671,8 +2719,10 @@ where
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 pub enum TracingProtocol {
+	/// Export over OTLP/gRPC.
 	#[default]
 	Grpc,
+	/// Export over OTLP/HTTP.
 	Http,
 }
 
@@ -2941,6 +2991,7 @@ pub enum TrafficPolicy {
 	JwtAuth(RequestPolicy<JwtAuthentication>),
 	Oidc(RequestPolicy<crate::http::oidc::OidcPolicy>),
 	BasicAuth(RequestPolicy<crate::http::basicauth::BasicAuthentication>),
+	#[serde(rename = "apiKey")]
 	APIKey(RequestPolicy<crate::http::apikey::APIKeyAuthentication>),
 	Budget(RequestPolicy<crate::http::budget::BudgetPolicy>),
 	Transformation(RequestPolicy<crate::http::transformation_cel::Transformation>),
@@ -2954,6 +3005,7 @@ pub enum TrafficPolicy {
 	RequestMirror(Vec<filters::RequestMirror>),
 	DirectResponse(RequestPolicy<filters::DirectResponse>),
 	Buffer(RequestPolicy<http::buffer::Buffer>),
+	Compression(RequestPolicy<http::compression::Compression>),
 	#[serde(rename = "cors")]
 	CORS(RequestPolicy<http::cors::Cors>),
 }
@@ -3063,20 +3115,20 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 		client: &crate::proxy::httpproxy::PolicyClient,
 		log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		if let Some(auth) = &self.mcp {
 			if !crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
 				self.jwt.apply(Some(log), req).await.map_err(|e| {
-					crate::proxy::ProxyResponse::from(crate::mcp::auth::create_auth_required_response(
+					crate::mcp::auth::create_auth_required_response(
 						crate::proxy::ProxyError::JwtAuthenticationFailure(e),
 						req,
 						auth,
-					))
+					)
 				})?;
 			}
 
 			if let Some(resp) = crate::mcp::auth::handle_mcp_request(req, auth, client).await? {
-				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
+				return Err(ProxyError::direct_response(resp));
 			}
 			return Ok(crate::http::PolicyResponse::default());
 		}
@@ -3085,8 +3137,7 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 			.jwt
 			.apply(Some(log), req)
 			.await
-			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)
-			.map_err(crate::proxy::ProxyResponse::from)?;
+			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)?;
 		Ok(crate::http::PolicyResponse::default())
 	}
 
@@ -3318,6 +3369,10 @@ impl TryFrom<&str> for Target {
 		// Check for unix socket prefix
 		if let Some(path) = hostport.strip_prefix("unix:") {
 			return Ok(Target::UnixSocket(PathBuf::from(path)));
+		}
+		// Handles bracketed IPv6 (e.g. [::1]:80), which a plain split on ':' cannot.
+		if let Ok(addr) = hostport.parse::<SocketAddr>() {
+			return Ok(Target::Address(addr));
 		}
 		let Some((host, port)) = hostport.split_once(":") else {
 			anyhow::bail!("invalid host:port: {hostport}");
@@ -3728,6 +3783,15 @@ InvalidKeyData
 		// Ensure hostname:port still works
 		let target = Target::try_from("example.com:443").unwrap();
 		assert!(matches!(target, Target::Hostname(h, 443) if h.as_str() == "example.com"));
+	}
+
+	#[test]
+	fn test_target_ipv6_roundtrip() {
+		let target = Target::try_from("[::1]:8080").unwrap();
+		assert!(matches!(target, Target::Address(addr) if addr.to_string() == "[::1]:8080"));
+		let json = serde_json::to_value(&target).unwrap();
+		let target: Target = serde_json::from_value(json).unwrap();
+		assert_eq!(target.to_string(), "[::1]:8080");
 	}
 
 	#[test]
@@ -4160,6 +4224,7 @@ jwtValidationOptions:
 			name: ListenerName::default(),
 			hostname: strng::new(hostname),
 			protocol,
+			..Default::default()
 		}
 	}
 

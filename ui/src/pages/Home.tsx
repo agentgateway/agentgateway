@@ -3,9 +3,9 @@ import { Bot, Network, Server, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
-import type { McpSettingsResource } from '@/api/configResourcesApi';
+import type { LlmSettingsResource, McpSettingsResource } from '@/api/configResourcesApi';
 import { PageHeader, StatusBanner } from '@/components/Primitives';
-import { ensureLlm, fileOwnedMcpSettingFields } from '@/config';
+import { ensureLlm, fileOwnedLlmSettingFields, fileOwnedMcpSettingFields } from '@/config';
 import {
 	useConfigDumpMode,
 	useEnableSurface,
@@ -65,6 +65,7 @@ export function HomePage() {
 	);
 	const hasBinds = Boolean(config.data?.binds?.length);
 	const mcpServers = mcpData.data?.mcp?.targets ?? [];
+	const fileOwnedLlmSettings = fileOwnedLlmSettingFields(rawConfig.data, hybrid);
 	const fileOwnedMcpSettings = fileOwnedMcpSettingFields(rawConfig.data, hybrid);
 	const pageDataLoading = configDataLoading || mcpData.isLoading || trafficData.isLoading;
 	const pageDataError = configDataError ?? mcpData.error ?? trafficData.error;
@@ -125,9 +126,11 @@ export function HomePage() {
 
 	if (showStartup) {
 		return (
-			// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
 			<div
 				className="startup-shell"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="startup-title"
 				onClick={event => {
 					if (event.target === event.currentTarget) setStartupFlow(false);
 				}}
@@ -135,12 +138,7 @@ export function HomePage() {
 					if (event.key === 'Escape') setStartupFlow(false);
 				}}
 			>
-				<section
-					className="startup-panel"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="startup-title"
-				>
+				<section className="startup-panel">
 					<div className="startup-copy">
 						<h2 id="startup-title">Welcome to Agentgateway</h2>
 						<p>Choose what this gateway will serve. Anything skipped can be enabled later.</p>
@@ -337,20 +335,28 @@ export function HomePage() {
 				<LlmSettingsDrawer
 					config={config.data}
 					llm={config.data?.llm}
+					databaseBacked={hybrid}
+					readOnlyFields={fileOwnedLlmSettings}
 					help={help}
-					saving={update.isPending}
-					saveError={update.isError ? update.error.message : null}
+					saving={update.isPending || upsertResource.isPending}
+					saveError={update.error?.message ?? upsertResource.error?.message ?? null}
 					onClose={() => setLlmSettingsOpen(false)}
-					onSave={settings =>
-						update.mutate(
-							next => {
-								Object.assign(ensureLlm(next), settings);
-							},
-							{
-								onSuccess: () => setLlmSettingsOpen(false)
-							}
-						)
-					}
+					onSave={settings => {
+						const onSuccess = () => setLlmSettingsOpen(false);
+						if (hybrid) {
+							upsertResource.mutate(
+								{ kind: 'llm.settings', value: settings as LlmSettingsResource },
+								{ onSuccess }
+							);
+						} else {
+							update.mutate(
+								next => {
+									Object.assign(ensureLlm(next), settings);
+								},
+								{ onSuccess }
+							);
+						}
+					}}
 				/>
 			) : null}
 			{mcpSettingsOpen ? (

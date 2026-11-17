@@ -61,6 +61,9 @@ impl<IO> Parser<IO> {
 				// also, the model can change... so what do we report??
 				self.log.non_atomic_mutate(|r| {
 					r.response = LLMResponse {
+						cache_creation_1h_input_tokens: None,
+						cache_creation_12h_input_tokens: None,
+						usage_lines: Vec::new(),
 						input_tokens: Some(usage.input_tokens as u64),
 						input_image_tokens: None,
 						input_text_tokens: None,
@@ -79,6 +82,7 @@ impl<IO> Parser<IO> {
 						inter_chunk_latencies: TokenGapSummary::default(),
 						count_tokens: None,
 						pages: None,
+						audio_seconds: None,
 						reasoning_tokens: None,
 						cache_creation_input_tokens: None,
 						cached_input_tokens: usage
@@ -546,6 +550,9 @@ pub async fn guarded_realtime_proxy<C, S>(
 										let usage_clone = usage.clone();
 										log_clone.non_atomic_mutate(|r| {
 											r.response = LLMResponse {
+												cache_creation_1h_input_tokens: None,
+												cache_creation_12h_input_tokens: None,
+												usage_lines: Vec::new(),
 												input_tokens: Some(usage_clone.input_tokens as u64),
 												input_image_tokens: None,
 												input_text_tokens: None,
@@ -564,6 +571,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 												inter_chunk_latencies: TokenGapSummary::default(),
 												count_tokens: None,
 												pages: None,
+												audio_seconds: None,
 												reasoning_tokens: None,
 												cache_creation_input_tokens: None,
 												cached_input_tokens: usage_clone

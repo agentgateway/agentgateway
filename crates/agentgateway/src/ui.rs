@@ -1,9 +1,10 @@
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
 use agent_core::version::BuildInfo;
 use axum::extract::{Path, Query, State};
-use axum::http::{StatusCode, Uri};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::Event;
 use axum::response::{IntoResponse, Redirect, Response, Sse};
 use axum::routing::{get, post, put};
@@ -16,6 +17,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tower::ServiceExt;
 use tower_serve_static::ServeDir;
+use tracing::debug;
 
 use crate::cel::{self, ExecutorSerde};
 use crate::config_store::{
@@ -88,9 +90,18 @@ pub fn router(
 	};
 	let router = Router::new()
 		// OIDC intercepts this path to start login; without OIDC, return to the UI.
-		.route("/api/auth/login", get(|| async { Redirect::to("/ui") }))
+		.route(
+			"/api/auth/login",
+			get(|base_path: Option<Extension<UiBasePath>>| async move {
+				Redirect::to(&format!("{}/ui", ui_base_path(base_path.as_deref())))
+			}),
+		)
 		.route("/api/runtime", get(get_runtime))
 		.route("/api/config", get(get_config).post(write_config))
+		.route(
+			"/api/config/raw",
+			get(get_raw_config).post(write_raw_config),
+		)
 		.route("/api/config/effective", get(get_effective_config))
 		.route("/api/config/resources", get(list_config_resources))
 		.route(
@@ -114,10 +125,21 @@ pub fn router(
 	let router = if assets_dir.entries().is_empty() {
 		router.route("/", get(crate::management::admin::handle_dashboard))
 	} else {
-		let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
-		router
-			.nest_service("/ui", ui_service)
-			.route("/", get(|| async { Redirect::permanent("/ui") }))
+		// Split once so each index request only inserts its <base>.
+		let index = assets_dir.get_file("index.html").map(|index| {
+			let html = String::from_utf8_lossy(index.contents());
+			let (head, rest) = html
+				.split_once("<head>")
+				.expect("UI index.html must contain <head>");
+			Arc::new((format!("{head}<head>"), rest.to_string()))
+		});
+		let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir, index.clone()));
+		router.nest_service("/ui", ui_service).route(
+			"/",
+			get(|base_path: Option<Extension<UiBasePath>>| async move {
+				Redirect::permanent(&format!("{}/ui/", ui_base_path(base_path.as_deref())))
+			}),
+		)
 	};
 	router
 		.layer(axum::middleware::from_fn_with_state(
@@ -167,7 +189,7 @@ async fn authorize_route(
 	next: axum::middleware::Next,
 ) -> Result<Response, ErrorResponse> {
 	let request = request.map(crate::http::Body::new);
-	let attributes = app.state.logging.database_fields.load();
+	let attributes = app.state.logging.standard_attributes.load();
 	let executor = cel::Executor::new_request(&request);
 	let user = attributes
 		.add
@@ -241,23 +263,39 @@ enum GatewayRuntimeMode {
 	Xds,
 }
 
+/// A configuration resource.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UiConfigResource {
+	/// The resource kind.
 	kind: ConfigResourceKind,
+	/// The resource id, unique within its kind.
 	id: String,
+	/// The resource, in the configuration file format of its kind. The value is an object for
+	/// non-policy kinds. For policy kinds, it has the policy's configuration shape, which can be an
+	/// array or null for some IDs.
 	value: Value,
+	/// The stored revision, incremented on each change. Present only for stored resources.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	revision: Option<i64>,
+	/// When the resource was first stored. Present only for stored resources.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	created_at: Option<chrono::DateTime<Utc>>,
+	/// When the resource was last changed. Present only for stored resources.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	updated_at: Option<chrono::DateTime<Utc>>,
+	/// What the write did. Present only on resources returned by a `PUT` in `hybrid` mode;
+	/// `file`-mode `PUT` responses and lists omit it. Rewriting a stored resource with an
+	/// unchanged value reports `unchanged` and does not increment its `revision`.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	result: Option<crate::config_store::WriteResult>,
 }
 
+/// A list of configuration resources.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UiConfigResourcesResponse {
+	/// The resources.
 	resources: Vec<UiConfigResource>,
 }
 
@@ -270,6 +308,7 @@ impl From<ConfigResource> for UiConfigResource {
 			revision: Some(resource.revision),
 			created_at: Some(resource.created_at),
 			updated_at: Some(resource.updated_at),
+			result: resource.result,
 		}
 	}
 }
@@ -283,6 +322,7 @@ impl From<PreparedResource> for UiConfigResource {
 			revision: None,
 			created_at: None,
 			updated_at: None,
+			result: None,
 		}
 	}
 }
@@ -303,7 +343,7 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 	let req = req.map(crate::http::Body::new);
 	// Use the same compiled, reloadable mapping as request logs, even when log
 	// storage is disabled. This is display metadata, not an authentication check.
-	let attributes = app.state.logging.database_fields.load();
+	let attributes = app.state.logging.standard_attributes.load();
 	let executor = cel::Executor::new_request(&req);
 	let session = req
 		.extensions()
@@ -381,31 +421,60 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 async fn serve_ui_asset(
 	req: http::Request<axum::body::Body>,
 	assets: &'static Dir<'static>,
+	index: Option<Arc<(String, String)>>,
 ) -> Result<Response, std::convert::Infallible> {
-	let req = if should_serve_ui_index(req.uri().path()) {
-		request_with_path(req, "/index.html")
-	} else {
-		req
-	};
+	if should_serve_ui_index(req.uri().path()) {
+		let Some(index) = index else {
+			return Ok(StatusCode::NOT_FOUND.into_response());
+		};
+		let (head, rest) = &*index;
+		// Assets are relative; <base> anchors them and tells the UI where it lives.
+		let html = format!(
+			"{head}<base href=\"{}/ui/\">{rest}",
+			ui_base_path(req.extensions().get())
+		);
+		return Ok(
+			(
+				[(http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+				html,
+			)
+				.into_response(),
+		);
+	}
 	ServeDir::new(assets)
 		.oneshot(req)
 		.await
 		.map(|response| response.map(axum::body::Body::new))
 }
 
+/// Set by the gateway route the UI is attached to, from `ui.basePath`.
+#[derive(Clone)]
+pub(crate) struct UiBasePath(pub agent_core::strng::Strng);
+
+fn ui_base_path(base_path: Option<&UiBasePath>) -> &str {
+	base_path.map_or("", |v| v.0.as_str())
+}
+
+pub(crate) fn validate_ui_base_path(path: &str) -> anyhow::Result<()> {
+	// Goes into HTML and Location headers, so only plain path characters.
+	if !path.is_empty()
+		&& (!path.starts_with('/')
+			|| path.ends_with('/')
+			|| path.contains("//")
+			|| !path
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || "/-._~%".contains(c)))
+	{
+		anyhow::bail!(
+			"must be a path such as /agentgateway, without a trailing '/', using only letters, digits, '/', '-', '.', '_', '~' and '%'; got {path:?}"
+		);
+	}
+	Ok(())
+}
+
 fn should_serve_ui_index(path: &str) -> bool {
 	let path = path.trim_start_matches('/');
 	path.is_empty() || (!path.starts_with("assets/") && !path.contains('.'))
-}
-
-fn request_with_path<B>(mut req: http::Request<B>, path: &str) -> http::Request<B> {
-	let mut parts = req.uri().clone().into_parts();
-	parts.path_and_query = Some(match req.uri().query() {
-		Some(query) => format!("{path}?{query}").parse().expect("valid UI path"),
-		None => path.parse().expect("valid UI path"),
-	});
-	*req.uri_mut() = Uri::from_parts(parts).expect("valid UI uri");
-	req
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -416,6 +485,8 @@ enum ErrorResponse {
 	Status(StatusCode, String),
 	#[error("{0}")]
 	Anyhow(#[from] anyhow::Error),
+	#[error("{0}")]
+	GenerationConflict(String),
 }
 
 impl Serialize for ErrorResponse {
@@ -431,9 +502,20 @@ impl IntoResponse for ErrorResponse {
 	fn into_response(self) -> Response {
 		let status = match &self {
 			Self::Status(status, _) => *status,
+			Self::GenerationConflict(_) => StatusCode::CONFLICT,
 			Self::String(_) | Self::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
 		};
 		(status, Json(self)).into_response()
+	}
+}
+
+/// Parses a resource kind from an API path. `session.key` is internal and never exposed.
+fn parse_api_kind(kind: &str) -> Result<ConfigResourceKind, ErrorResponse> {
+	match kind.parse::<ConfigResourceKind>() {
+		Ok(ConfigResourceKind::SessionKey) => Err(resource_api_error(
+			ConfigResourceError::InvalidRequest(format!("unsupported config resource kind: {kind}")),
+		)),
+		res => res.map_err(resource_api_error),
 	}
 }
 
@@ -468,18 +550,31 @@ async fn write_config(
 	))
 }
 
-async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), ErrorResponse> {
-	let config_source = app.cfg()?;
+/// Returns the configuration file exactly as it is on disk, comments included.
+async fn get_raw_config(State(app): State<App>) -> Result<String, ErrorResponse> {
+	Ok(app.cfg()?.read_to_string().await?)
+}
 
-	let file_path = match &config_source {
-		ConfigSource::File(path) => path,
-		ConfigSource::Static(_) => {
-			return Err(ErrorResponse::String(
-				"Cannot write to static config".to_string(),
-			));
-		},
-	};
-	let current = fs_err::tokio::read_to_string(file_path)
+/// Writes the request body verbatim as the configuration file after validating it.
+///
+/// Requiring `application/yaml` prevents cross-origin writes without a CORS preflight.
+async fn write_raw_config(
+	State(app): State<App>,
+	headers: HeaderMap,
+	body: String,
+) -> Result<Json<Value>, ErrorResponse> {
+	ensure_yaml_content_type(&headers)?;
+	app.ensure_writable()?;
+	let file_path = config_file_path(&app)?;
+	write_validated_config(&app, &file_path, body).await?;
+	Ok(Json(
+		serde_json::json!({"status": "success", "message": "Configuration written successfully"}),
+	))
+}
+
+async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), ErrorResponse> {
+	let file_path = config_file_path(app)?;
+	let current = fs_err::tokio::read_to_string(&file_path)
 		.await
 		.map_err(anyhow::Error::from)?;
 	let yaml_file_content = {
@@ -500,12 +595,46 @@ async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), Error
 			format!("{CONFIG_SCHEMA_HEADER}{content}")
 		}
 	};
+	write_validated_config(app, &file_path, yaml_file_content).await
+}
 
-	if let Err(e) = validate_config_in_task(app, yaml_file_content.clone()).await {
+const RAW_CONFIG_CONTENT_TYPE: &str = "application/yaml";
+
+fn ensure_yaml_content_type(headers: &HeaderMap) -> Result<(), ErrorResponse> {
+	let mime = headers
+		.get(http::header::CONTENT_TYPE)
+		.and_then(|value| value.to_str().ok())
+		.map(|value| value.split(';').next().unwrap_or_default().trim())
+		.unwrap_or_default();
+	if mime.eq_ignore_ascii_case(RAW_CONFIG_CONTENT_TYPE) {
+		return Ok(());
+	}
+	Err(ErrorResponse::Status(
+		StatusCode::UNSUPPORTED_MEDIA_TYPE,
+		format!("raw configuration must be sent as {RAW_CONFIG_CONTENT_TYPE}"),
+	))
+}
+
+fn config_file_path(app: &App) -> Result<std::path::PathBuf, ErrorResponse> {
+	match app.cfg()? {
+		ConfigSource::File(path) => Ok(path),
+		ConfigSource::Static(_) => Err(ErrorResponse::String(
+			"Cannot write to static config".to_string(),
+		)),
+	}
+}
+
+/// Validates the full YAML text and writes it to the configuration file only if it loads.
+async fn write_validated_config(
+	app: &App,
+	file_path: &std::path::Path,
+	yaml_file_content: String,
+) -> Result<(), ErrorResponse> {
+	let expanded = crate::types::local::expand_env(&yaml_file_content)?;
+	if let Err(e) = validate_config_in_task(app, expanded).await {
 		return Err(ErrorResponse::String(e.to_string()));
 	}
 
-	// Write the YAML content to the file
 	fs_err::tokio::write(file_path, yaml_file_content)
 		.await
 		.map_err(|e| ErrorResponse::Anyhow(e.into()))?;
@@ -522,9 +651,7 @@ async fn list_config_resources_by_kind(
 	State(app): State<App>,
 	Path(kind): Path<String>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
-	let kind = kind
-		.parse::<ConfigResourceKind>()
-		.map_err(resource_api_error)?;
+	let kind = parse_api_kind(&kind)?;
 	list_stored_config_resources(&app, Some(kind))
 		.await
 		.map(Json)
@@ -535,8 +662,14 @@ async fn list_stored_config_resources(
 	kind: Option<ConfigResourceKind>,
 ) -> Result<UiConfigResourcesResponse, ErrorResponse> {
 	if app.state.storage.mode != ConfigStoreMode::Hybrid {
+		let resources = if app.state.xds.local_config.is_some() {
+			let config = read_file_config(app).await?;
+			crate::config_store::file_config_resources(&config, kind)
+		} else {
+			Vec::new()
+		};
 		return Ok(UiConfigResourcesResponse {
-			resources: Vec::new(),
+			resources: resources.into_iter().map(UiConfigResource::from).collect(),
 		});
 	}
 	let resources = app
@@ -544,7 +677,9 @@ async fn list_stored_config_resources(
 		.list(kind)
 		.await
 		.map_err(resource_api_error)?;
-	Ok(ConfigResourcesResponse { resources }.into())
+	Ok(UiConfigResourcesResponse {
+		resources: resources.into_iter().map(UiConfigResource::from).collect(),
+	})
 }
 
 async fn read_file_config(app: &App) -> Result<Value, ErrorResponse> {
@@ -559,10 +694,8 @@ async fn upsert_config_resources_by_kind(
 	Json(request): Json<ConfigResourceUpsertRequest>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
 	app.ensure_writable()?;
-	let kind = kind
-		.parse::<ConfigResourceKind>()
-		.map_err(resource_api_error)?;
-	upsert_config_resources(&app, &auth, kind, request)
+	let kind = parse_api_kind(&kind)?;
+	upsert_config_resources(&app, &auth, kind, request, None)
 		.await
 		.map(Json)
 }
@@ -572,6 +705,7 @@ async fn upsert_config_resources(
 	auth: &AuthorizationContext,
 	kind: ConfigResourceKind,
 	mut request: ConfigResourceUpsertRequest,
+	expected: Option<i64>,
 ) -> Result<UiConfigResourcesResponse, ErrorResponse> {
 	if app.state.storage.mode == ConfigStoreMode::Hybrid && kind.settings_fields().is_some() {
 		let file_config = read_file_config(app).await?;
@@ -579,9 +713,9 @@ async fn upsert_config_resources(
 			remove_file_owned_settings(kind, &file_config, &mut resource.value)?;
 		}
 	}
-	let mut prepared =
-		crate::config_store::prepare_resources(kind, request).map_err(resource_api_error)?;
 	if app.state.storage.mode == ConfigStoreMode::File {
+		let mut prepared =
+			crate::config_store::prepare_resources(kind, request).map_err(resource_api_error)?;
 		let mut config = read_file_config(app).await?;
 		for resource in &mut prepared {
 			let old = crate::config_store::file_config_resource(&config, kind, &resource.id);
@@ -597,23 +731,39 @@ async fn upsert_config_resources(
 	}
 
 	let store = app.config_resource_store()?;
-	let resources = store.list(None).await.map_err(resource_api_error)?;
-	for resource in &mut prepared {
-		let old = resources
-			.iter()
-			.find(|old| old.kind == kind && old.id == resource.id);
-		let id = resource.id.clone();
-		auth.authorize_write(resource, &id, old.map(|old| &old.value))?;
-	}
+	with_generation_retry(expected, || async {
+		let mut prepared =
+			crate::config_store::prepare_resources(kind, request.clone()).map_err(resource_api_error)?;
+		let snapshot = store.snapshot(None).await.map_err(resource_api_error)?;
+		ensure_expected_generation(expected, snapshot.generation)?;
+		for resource in &mut prepared {
+			let old = snapshot
+				.resources
+				.iter()
+				.find(|old| old.kind == kind && old.id == resource.id);
+			let id = resource.id.clone();
+			auth.authorize_write(resource, &id, old.map(|old| &old.value))?;
+		}
 
-	let candidate =
-		crate::config_store::apply_prepared_upsert(resources, &prepared).map_err(resource_api_error)?;
-	validate_materialized_config(app, &candidate).await?;
-	let response = store
-		.upsert_prepared(prepared)
-		.await
-		.map_err(resource_api_error)?;
-	Ok(response.into())
+		let candidate = crate::config_store::apply_prepared_upsert(snapshot.resources, &prepared)
+			.map_err(resource_api_error)?;
+		validate_materialized_config(app, &candidate).await?;
+		let response = store
+			.upsert_prepared(prepared, Some(snapshot.generation))
+			.await
+			.map_err(resource_api_error)?;
+		Ok(response.into())
+	})
+	.await
+}
+
+fn ensure_expected_generation(expected: Option<i64>, found: i64) -> Result<(), ErrorResponse> {
+	match expected {
+		Some(expected) if expected != found => Err(ErrorResponse::GenerationConflict(format!(
+			"config store changed since generation {expected} (now {found})"
+		))),
+		_ => Ok(()),
+	}
 }
 
 async fn update_config_resource(
@@ -623,103 +773,17 @@ async fn update_config_resource(
 	Json(mut resource): Json<crate::config_store::ConfigResourceUpsert>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
 	app.ensure_writable()?;
-	let kind = kind
-		.parse::<ConfigResourceKind>()
-		.map_err(resource_api_error)?;
-	let file_config = if app.state.storage.mode == ConfigStoreMode::File {
-		Some(read_file_config(&app).await?)
-	} else {
-		None
-	};
+	let kind = parse_api_kind(&kind)?;
 	if app.state.storage.mode == ConfigStoreMode::Hybrid && kind.settings_fields().is_some() {
 		remove_file_owned_settings(kind, &read_file_config(&app).await?, &mut resource.value)?;
 	}
-	let stored_resources = if app.state.storage.mode == ConfigStoreMode::Hybrid {
-		Some(
-			app
-				.config_resource_store()?
-				.list(None)
-				.await
-				.map_err(resource_api_error)?,
-		)
-	} else {
-		None
-	};
-	let mut prepared = match kind {
-		ConfigResourceKind::LlmApiKey => {
-			if app.state.storage.mode == ConfigStoreMode::Hybrid
-				&& !stored_resources.as_ref().is_some_and(|resources| {
-					resources
-						.iter()
-						.any(|resource| resource.kind == kind && resource.id == id)
-				}) {
-				return Err(resource_api_error(ConfigResourceError::NotFound(format!(
-					"config resource not found: {kind}/{id}"
-				))));
-			}
-			let created_at = if let Some(config) = file_config.as_ref() {
-				crate::config_store::file_api_key_created_at(config, &id)
-			} else {
-				stored_resources
-					.as_ref()
-					.and_then(|resources| {
-						resources
-							.iter()
-							.find(|resource| resource.kind == kind && resource.id == id)
-					})
-					.and_then(|resource| {
-						crate::config_store::api_key_created_at(&resource.value)
-							.or_else(|| Some(resource.created_at.timestamp()))
-					})
-			};
-			vec![if app.state.storage.mode == ConfigStoreMode::File {
-				crate::config_store::prepare_file_api_key_update(id.clone(), resource.value, created_at)
-					.map_err(resource_api_error)?
-			} else {
-				crate::config_store::prepare_api_key_update(id.clone(), resource.value, created_at)
-					.map_err(resource_api_error)?
-			}]
-		},
-		ConfigResourceKind::LlmPolicy
-		| ConfigResourceKind::McpPolicy
-		| ConfigResourceKind::UiPolicy
-		| ConfigResourceKind::FrontendPolicy => vec![
-			crate::config_store::prepare_policy_upsert(kind, id.clone(), resource.value)
-				.map_err(resource_api_error)?,
-		],
-		_ => {
-			vec![crate::config_store::prepare_resource(kind, resource.value).map_err(resource_api_error)?]
-		},
-	};
 	if app.state.storage.mode == ConfigStoreMode::File {
-		let mut config = file_config.expect("file mode loads the file config");
-		for resource in &mut prepared {
-			auth.authorize_write(
-				resource,
-				&id,
-				crate::config_store::file_config_resource(&config, kind, &id),
-			)?;
-			crate::config_store::upsert_file_config_resource(&mut config, resource, Some(id.as_str()))
-				.map_err(resource_api_error)?;
-		}
-		persist_file_config(&app, &config).await?;
-		return Ok(Json(UiConfigResourcesResponse {
-			resources: prepared.into_iter().map(UiConfigResource::from).collect(),
-		}));
+		return update_file_config_resource(&app, &auth, kind, &id, resource.value)
+			.await
+			.map(Json);
 	}
 
 	let store = app.config_resource_store()?;
-	let resources = stored_resources.expect("hybrid mode loads stored resources");
-	for resource in &mut prepared {
-		let old = resources
-			.iter()
-			.find(|old| old.kind == kind && old.id == id);
-		auth.authorize_write(resource, &id, old.map(|old| &old.value))?;
-	}
-
-	let exists = resources
-		.iter()
-		.any(|resource| resource.kind == kind && resource.id == id);
 	let is_policy = matches!(
 		kind,
 		ConfigResourceKind::LlmPolicy
@@ -727,39 +791,117 @@ async fn update_config_resource(
 			| ConfigResourceKind::UiPolicy
 			| ConfigResourceKind::FrontendPolicy
 	);
-	if !exists && !is_policy {
-		return Err(resource_api_error(ConfigResourceError::Conflict(format!(
-			"file-owned config resource cannot be updated in hybrid mode: {kind}/{id}"
-		))));
-	}
-	let renamed = prepared.first().is_some_and(|resource| resource.id != id);
-	let candidate = if renamed {
-		crate::config_store::apply_delete(resources.clone(), kind, &id)
-	} else {
-		resources
+	with_generation_retry(None, || async {
+		let snapshot = store.snapshot(None).await.map_err(resource_api_error)?;
+		let old = snapshot
+			.resources
+			.iter()
+			.find(|old| old.kind == kind && old.id == id);
+		let mut prepared = prepare_stored_update(old, kind, &id, resource.value.clone())?;
+		auth.authorize_write(&mut prepared, &id, old.map(|old| &old.value))?;
+
+		if old.is_none() && !is_policy {
+			return Err(resource_api_error(ConfigResourceError::Conflict(format!(
+				"file-owned config resource cannot be updated in hybrid mode: {kind}/{id}"
+			))));
+		}
+		let renamed = prepared.id != id;
+		let candidate = if renamed {
+			crate::config_store::apply_delete(snapshot.resources, kind, &id)
+		} else {
+			snapshot.resources
+		};
+		let candidate =
+			crate::config_store::apply_prepared_upsert(candidate, std::slice::from_ref(&prepared))
+				.map_err(resource_api_error)?;
+		validate_materialized_config(&app, &candidate).await?;
+		let response = if renamed {
+			store
+				.rename_prepared(kind, &id, prepared, Some(snapshot.generation))
+				.await
+				.map_err(resource_api_error)?
+		} else {
+			store
+				.upsert_prepared(vec![prepared], Some(snapshot.generation))
+				.await
+				.map_err(resource_api_error)?
+		};
+		Ok(response.into())
+	})
+	.await
+	.map(Json)
+}
+
+async fn update_file_config_resource(
+	app: &App,
+	auth: &AuthorizationContext,
+	kind: ConfigResourceKind,
+	id: &str,
+	value: Value,
+) -> Result<UiConfigResourcesResponse, ErrorResponse> {
+	let mut config = read_file_config(app).await?;
+	let mut prepared = match kind {
+		ConfigResourceKind::LlmApiKey => crate::config_store::prepare_file_api_key_update(
+			id.to_string(),
+			value,
+			crate::config_store::file_api_key_created_at(&config, id),
+			crate::config_store::file_config_resource(&config, kind, id),
+		)
+		.map_err(resource_api_error)?,
+		ConfigResourceKind::LlmPolicy
+		| ConfigResourceKind::McpPolicy
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => {
+			crate::config_store::prepare_policy_upsert(kind, id.to_string(), value)
+				.map_err(resource_api_error)?
+		},
+		_ => crate::config_store::prepare_resource(kind, value).map_err(resource_api_error)?,
 	};
-	let candidate =
-		crate::config_store::apply_prepared_upsert(candidate, &prepared).map_err(resource_api_error)?;
-	validate_materialized_config(&app, &candidate).await?;
-	let response = if renamed {
-		store
-			.rename_prepared(
-				kind,
-				&id,
-				prepared
-					.into_iter()
-					.next()
-					.expect("item updates prepare exactly one resource"),
+	auth.authorize_write(
+		&mut prepared,
+		id,
+		crate::config_store::file_config_resource(&config, kind, id),
+	)?;
+	crate::config_store::upsert_file_config_resource(&mut config, &prepared, Some(id))
+		.map_err(resource_api_error)?;
+	persist_file_config(app, &config).await?;
+	Ok(UiConfigResourcesResponse {
+		resources: vec![UiConfigResource::from(prepared)],
+	})
+}
+
+fn prepare_stored_update(
+	existing: Option<&ConfigResource>,
+	kind: ConfigResourceKind,
+	id: &str,
+	value: Value,
+) -> Result<PreparedResource, ErrorResponse> {
+	match kind {
+		ConfigResourceKind::LlmApiKey => {
+			let existing = existing.ok_or_else(|| {
+				resource_api_error(ConfigResourceError::NotFound(format!(
+					"config resource not found: {kind}/{id}"
+				)))
+			})?;
+			let created_at = crate::config_store::api_key_created_at(&existing.value)
+				.or_else(|| Some(existing.created_at.timestamp()));
+			crate::config_store::prepare_api_key_update(
+				id.to_string(),
+				value,
+				created_at,
+				Some(&existing.value),
 			)
-			.await
-			.map_err(resource_api_error)?
-	} else {
-		store
-			.upsert_prepared(prepared)
-			.await
-			.map_err(resource_api_error)?
-	};
-	Ok(Json(response.into()))
+			.map_err(resource_api_error)
+		},
+		ConfigResourceKind::LlmPolicy
+		| ConfigResourceKind::McpPolicy
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => {
+			crate::config_store::prepare_policy_upsert(kind, id.to_string(), value)
+				.map_err(resource_api_error)
+		},
+		_ => crate::config_store::prepare_resource(kind, value).map_err(resource_api_error),
+	}
 }
 
 fn remove_file_owned_settings(
@@ -793,9 +935,7 @@ async fn delete_config_resource(
 	Path((kind, id)): Path<(String, String)>,
 ) -> Result<Json<Value>, ErrorResponse> {
 	app.ensure_writable()?;
-	let kind = kind
-		.parse::<ConfigResourceKind>()
-		.map_err(resource_api_error)?;
+	let kind = parse_api_kind(&kind)?;
 	if app.state.storage.mode == ConfigStoreMode::File {
 		let mut config = read_file_config(&app).await?;
 		if !crate::config_store::delete_file_config_resource(&mut config, kind, &id)
@@ -812,21 +952,29 @@ async fn delete_config_resource(
 	}
 
 	let store = app.config_resource_store()?;
-	let resources = store.list(None).await.map_err(resource_api_error)?;
-	if !resources
-		.iter()
-		.any(|resource| resource.kind == kind && resource.id == id)
-	{
-		return Err(resource_api_error(ConfigResourceError::NotFound(format!(
-			"config resource not found: {kind}/{id}"
-		))));
-	}
-	let candidate = crate::config_store::apply_delete(resources, kind, &id);
-	validate_materialized_config(&app, &candidate).await?;
-	store.delete(kind, &id).await.map_err(resource_api_error)?;
-	Ok(Json(
-		serde_json::json!({"status": "success", "message": "Configuration resource deleted successfully"}),
-	))
+	with_generation_retry(None, || async {
+		let snapshot = store.snapshot(None).await.map_err(resource_api_error)?;
+		if !snapshot
+			.resources
+			.iter()
+			.any(|resource| resource.kind == kind && resource.id == id)
+		{
+			return Err(resource_api_error(ConfigResourceError::NotFound(format!(
+				"config resource not found: {kind}/{id}"
+			))));
+		}
+		let candidate = crate::config_store::apply_delete(snapshot.resources, kind, &id);
+		validate_materialized_config(&app, &candidate).await?;
+		store
+			.delete(kind, &id, Some(snapshot.generation))
+			.await
+			.map_err(resource_api_error)
+	})
+	.await?;
+	Ok(Json(serde_json::json!({
+		"status": "success",
+		"message": "Configuration resource deleted successfully",
+	})))
 }
 
 async fn validate_materialized_config(
@@ -834,8 +982,9 @@ async fn validate_materialized_config(
 	resources: &[crate::config_store::ConfigResource],
 ) -> Result<(), ErrorResponse> {
 	let base = app.cfg()?.read_to_string().await?;
-	let config_content = crate::config_store::materialize_config(base.as_str(), resources)
-		.map_err(resource_api_error)?;
+	let config_content =
+		crate::config_store::materialize_runtime_config(base.as_str(), resources.to_vec())
+			.map_err(resource_api_error)?;
 	validate_config_in_task(app, config_content)
 		.await
 		.map_err(|err| ErrorResponse::Status(StatusCode::UNPROCESSABLE_ENTITY, err.to_string()))?;
@@ -853,7 +1002,7 @@ async fn validate_config_in_task(app: &App, config: String) -> anyhow::Result<()
 	// builds the generated config-conversion frames are particularly large, so start a new task to
 	// have Tokio poll the conversion from the scheduler root instead.
 	tokio::spawn(async move {
-		crate::types::local::NormalizedLocalConfig::from(&state, &resources, gateway, config.as_str())
+		crate::types::local::NormalizedLocalConfig::from_expanded(&state, &resources, gateway, config)
 			.await
 			.map(|_| ())
 	})
@@ -868,9 +1017,38 @@ fn resource_api_error(err: impl Into<anyhow::Error>) -> ErrorResponse {
 		Some(ConfigResourceError::InvalidRequest(_)) => StatusCode::BAD_REQUEST,
 		Some(ConfigResourceError::Conflict(_)) => StatusCode::CONFLICT,
 		Some(ConfigResourceError::NotFound(_)) => StatusCode::NOT_FOUND,
+		Some(ConfigResourceError::GenerationConflict { .. }) => {
+			return ErrorResponse::GenerationConflict(message);
+		},
 		None => StatusCode::INTERNAL_SERVER_ERROR,
 	};
 	ErrorResponse::Status(status, message)
+}
+
+const MAX_GENERATION_ATTEMPTS: usize = 3;
+
+async fn with_generation_retry<T, F, Fut>(
+	expected: Option<i64>,
+	mut attempt: F,
+) -> Result<T, ErrorResponse>
+where
+	F: FnMut() -> Fut,
+	Fut: Future<Output = Result<T, ErrorResponse>>,
+{
+	let mut remaining = if expected.is_some() {
+		0
+	} else {
+		MAX_GENERATION_ATTEMPTS - 1
+	};
+	loop {
+		match attempt().await {
+			Err(ErrorResponse::GenerationConflict(message)) if remaining > 0 => {
+				remaining -= 1;
+				debug!("{message}; retrying config write against a fresh snapshot");
+			},
+			other => return other,
+		}
+	}
 }
 
 async fn refresh_base_costs(
@@ -887,31 +1065,36 @@ async fn refresh_base_costs(
 	});
 	if configured_file.is_none() && app.state.storage.mode == ConfigStoreMode::Hybrid {
 		let refreshed = crate::llm::catalog::refresh::fetch_base_catalog().await?;
-		let resources = app
-			.config_resource_store()?
-			.list(None)
+		let store = app.config_resource_store()?;
+		// Re-read and merge on every retry so concurrent custom-cost edits are preserved.
+		with_generation_retry(None, || async {
+			let snapshot = store.snapshot(None).await.map_err(resource_api_error)?;
+			let mut value = snapshot
+				.resources
+				.iter()
+				.find(|resource| resource.kind == ConfigResourceKind::ModelCatalog)
+				.map(|resource| resource.value.clone())
+				.unwrap_or_else(|| serde_json::json!({}));
+			let object = value.as_object_mut().ok_or_else(|| {
+				resource_api_error(anyhow::anyhow!("modelCatalog resource must be an object"))
+			})?;
+			object.insert(
+				"base".to_string(),
+				serde_json::to_value(&refreshed.catalog)
+					.map_err(|err| ErrorResponse::Anyhow(err.into()))?,
+			);
+			upsert_config_resources(
+				&app,
+				&auth,
+				ConfigResourceKind::ModelCatalog,
+				ConfigResourceUpsertRequest {
+					resources: vec![crate::config_store::ConfigResourceUpsert { value }],
+				},
+				Some(snapshot.generation),
+			)
 			.await
-			.map_err(resource_api_error)?;
-		let mut value = resources
-			.iter()
-			.find(|resource| resource.kind == ConfigResourceKind::ModelCatalog)
-			.map(|resource| resource.value.clone())
-			.unwrap_or_else(|| serde_json::json!({}));
-		let object = value.as_object_mut().ok_or_else(|| {
-			resource_api_error(anyhow::anyhow!("modelCatalog resource must be an object"))
-		})?;
-		object.insert(
-			"base".to_string(),
-			serde_json::to_value(&refreshed.catalog).map_err(|err| ErrorResponse::Anyhow(err.into()))?,
-		);
-		upsert_config_resources(
-			&app,
-			&auth,
-			ConfigResourceKind::ModelCatalog,
-			ConfigResourceUpsertRequest {
-				resources: vec![crate::config_store::ConfigResourceUpsert { value }],
-			},
-		)
+			.map(|_| ())
+		})
 		.await?;
 		return serde_json::to_value(refreshed)
 			.map(Json)
@@ -1076,7 +1259,7 @@ async fn tail_logs(
 ) -> Result<Sse<ReceiverStream<Result<Event, std::convert::Infallible>>>, ErrorResponse> {
 	if !crate::telemetry::log_store::enabled() {
 		return Err(ErrorResponse::String(
-			"request log database is not configured".to_string(),
+			crate::telemetry::log_store::STORE_DISABLED.to_string(),
 		));
 	}
 	let mut cursor = request
@@ -1140,6 +1323,77 @@ mod tests {
 	use super::*;
 	use crate::client::{self, Client};
 
+	fn status_of(err: ErrorResponse) -> StatusCode {
+		err.into_response().status()
+	}
+
+	#[test]
+	fn a_stale_internal_snapshot_is_a_conflict_and_a_current_one_is_not() {
+		assert!(ensure_expected_generation(None, 7).is_ok());
+		assert!(ensure_expected_generation(Some(7), 7).is_ok());
+
+		let err = ensure_expected_generation(Some(6), 7).expect_err("stale pin");
+		assert!(
+			matches!(err, ErrorResponse::GenerationConflict(_)),
+			"a stale pin must be distinguishable from other conflicts"
+		);
+		assert_eq!(status_of(err), StatusCode::CONFLICT);
+	}
+
+	#[tokio::test]
+	async fn an_unpinned_write_retries_a_generation_conflict() {
+		let attempts = std::cell::Cell::new(0);
+		let result = with_generation_retry(None, || async {
+			attempts.set(attempts.get() + 1);
+			if attempts.get() < 3 {
+				return Err(ErrorResponse::GenerationConflict("stale".to_string()));
+			}
+			Ok(attempts.get())
+		})
+		.await;
+		assert_eq!(result.expect("eventually succeeds"), 3);
+		assert_eq!(attempts.get(), 3);
+	}
+
+	#[tokio::test]
+	async fn generation_retries_are_bounded() {
+		let attempts = std::cell::Cell::new(0);
+		let result: Result<(), _> = with_generation_retry(None, || async {
+			attempts.set(attempts.get() + 1);
+			Err(ErrorResponse::GenerationConflict("stale".to_string()))
+		})
+		.await;
+		assert!(result.is_err());
+		assert_eq!(attempts.get(), MAX_GENERATION_ATTEMPTS);
+	}
+
+	#[tokio::test]
+	async fn an_internal_snapshot_conflict_is_returned_to_the_outer_retry() {
+		let attempts = std::cell::Cell::new(0);
+		let result: Result<(), _> = with_generation_retry(Some(7), || async {
+			attempts.set(attempts.get() + 1);
+			Err(ErrorResponse::GenerationConflict("stale".to_string()))
+		})
+		.await;
+		assert!(result.is_err());
+		assert_eq!(attempts.get(), 1);
+	}
+
+	#[tokio::test]
+	async fn other_conflicts_are_not_retried() {
+		let attempts = std::cell::Cell::new(0);
+		let result: Result<(), _> = with_generation_retry(None, || async {
+			attempts.set(attempts.get() + 1);
+			Err(ErrorResponse::Status(
+				StatusCode::CONFLICT,
+				"config resource already exists".to_string(),
+			))
+		})
+		.await;
+		assert!(result.is_err());
+		assert_eq!(attempts.get(), 1);
+	}
+
 	fn test_app(read_only: bool) -> App {
 		let mut config =
 			crate::config::parse_config("{}".to_string(), None).expect("parse default config");
@@ -1150,6 +1404,7 @@ mod tests {
 			&client::Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+				max_ttl: None,
 			},
 			None,
 			crate::BackendConfig::default(),
@@ -1162,6 +1417,161 @@ mod tests {
 				.expect("resource manager"),
 			model_catalog: Arc::new(crate::llm::catalog::ModelCatalog::default()),
 		}
+	}
+
+	#[tokio::test]
+	async fn config_resource_api_does_not_require_client_generations() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		fs_err::write(&path, "{}").unwrap();
+		let mut app = test_app(false);
+		let state = Arc::get_mut(&mut app.state).unwrap();
+		state.storage.mode = ConfigStoreMode::Hybrid;
+		state.xds.local_config = Some(ConfigSource::File(path));
+		app.config_resource_store = Some(
+			crate::config_store::setup(&crate::database::DatabaseConfig {
+				url: format!("sqlite://{}", dir.path().join("config.db").display()),
+				max_connections: None,
+			})
+			.await
+			.unwrap(),
+		);
+		let router = router(
+			app.state.clone(),
+			app.model_catalog.clone(),
+			app.config_resource_store.clone(),
+			app.resource_manager.clone(),
+			&EMPTY_ASSETS_DIR,
+		);
+		for (method, uri, body) in [
+			("GET", "/api/config/resources", ""),
+			(
+				"PUT",
+				"/api/config/resources/modelCatalog",
+				r#"{"resources":[{"value":{"custom":{}}}]}"#,
+			),
+			(
+				"PUT",
+				"/api/config/resources/modelCatalog/default",
+				r#"{"value":{"custom":{}}}"#,
+			),
+			("DELETE", "/api/config/resources/modelCatalog/default", ""),
+		] {
+			let response = router
+				.clone()
+				.oneshot(
+					axum::extract::Request::builder()
+						.method(method)
+						.uri(uri)
+						.header("content-type", "application/json")
+						.header("if-match", "0")
+						.body(axum::body::Body::from(body))
+						.unwrap(),
+				)
+				.await
+				.unwrap();
+			let status = response.status();
+			let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+				.await
+				.unwrap();
+			assert_eq!(status, StatusCode::OK, "{method} {uri}: {body:?}");
+			let value: Value = serde_json::from_slice(&body).unwrap();
+			assert!(value.get("generation").is_none(), "{method} {uri}: {value}");
+		}
+	}
+
+	#[tokio::test]
+	async fn cel_playground_sample_context_evaluates() {
+		let data: Value =
+			serde_json::from_str(include_str!("../../../ui/src/pages/celSampleContext.json")).unwrap();
+		let resp = handle_cel(Json(CelRequest {
+			expression: "1 + 2".to_string(),
+			data: Some(data),
+		}))
+		.await;
+		let status = resp.status();
+		let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+			.await
+			.unwrap();
+		assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+		let body: Value = serde_json::from_slice(&body).unwrap();
+		assert_eq!(body, serde_json::json!({"result": 3, "error": null}));
+	}
+
+	#[tokio::test]
+	async fn session_keys_are_never_exposed() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		fs_err::write(&path, "{}").unwrap();
+		let mut app = test_app(false);
+		let state = Arc::get_mut(&mut app.state).unwrap();
+		state.storage.mode = ConfigStoreMode::Hybrid;
+		state.xds.local_config = Some(ConfigSource::File(path.clone()));
+		let store = crate::config_store::setup(&crate::database::DatabaseConfig {
+			url: format!("sqlite://{}", dir.path().join("config.db").display()),
+			max_connections: None,
+		})
+		.await
+		.unwrap();
+		let db_key = store.session_key().await.unwrap();
+		app.config_resource_store = Some(store);
+		let router = router(
+			app.state.clone(),
+			app.model_catalog.clone(),
+			app.config_resource_store.clone(),
+			app.resource_manager.clone(),
+			&EMPTY_ASSETS_DIR,
+		);
+		for (method, uri, body, want) in [
+			("GET", "/api/config/resources", "", StatusCode::OK),
+			(
+				"GET",
+				"/api/config/resources/session.key",
+				"",
+				StatusCode::BAD_REQUEST,
+			),
+			(
+				"PUT",
+				"/api/config/resources/session.key/default",
+				r#"{"value":{"key":"x"}}"#,
+				StatusCode::BAD_REQUEST,
+			),
+			(
+				"DELETE",
+				"/api/config/resources/session.key/default",
+				"",
+				StatusCode::BAD_REQUEST,
+			),
+		] {
+			let response = router
+				.clone()
+				.oneshot(
+					axum::extract::Request::builder()
+						.method(method)
+						.uri(uri)
+						.header("content-type", "application/json")
+						.body(axum::body::Body::from(body))
+						.unwrap(),
+				)
+				.await
+				.unwrap();
+			let status = response.status();
+			let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+				.await
+				.unwrap();
+			let body = String::from_utf8_lossy(&body);
+			assert_eq!(status, want, "{method} {uri}: {body}");
+			assert!(!body.contains(&db_key), "{method} {uri}: {body}");
+		}
+		assert_eq!(
+			app
+				.config_resource_store
+				.unwrap()
+				.session_key()
+				.await
+				.unwrap(),
+			db_key
+		);
 	}
 
 	#[tokio::test]
@@ -1220,6 +1630,122 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn raw_config_round_trips_file_text_and_validates_before_writing() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path.clone()));
+
+		let original = "# yaml-language-server: $schema=./custom-schema.json\n# My gateway\nbinds:\n- port: 8080 # inline\n  listeners: []\n";
+		fs_err::write(&path, original).unwrap();
+		assert_eq!(get_raw_config(State(app.clone())).await.unwrap(), original);
+
+		// A comment-only change is written byte for byte.
+		let commented = format!("{original}# typed in the raw editor\n");
+		let _ = write_raw_config(State(app.clone()), yaml_headers(), commented.clone())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), commented);
+
+		// Line endings are kept as well.
+		let crlf = commented.replace('\n', "\r\n");
+		let _ = write_raw_config(State(app.clone()), yaml_headers(), crlf.clone())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), crlf);
+		assert_eq!(get_raw_config(State(app.clone())).await.unwrap(), crlf);
+
+		// The written text is not rewritten: no schema header is added and formatting is kept.
+		let unformatted = "binds:\n-   port: 9090\n    listeners: []\n";
+		let _ = write_raw_config(State(app.clone()), yaml_headers(), unformatted.to_string())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), unformatted);
+
+		// Invalid configuration is rejected without touching the file.
+		for invalid in ["binds:\n- port: invalid\n", "binds: [\n"] {
+			assert!(
+				write_raw_config(State(app.clone()), yaml_headers(), invalid.to_string())
+					.await
+					.is_err()
+			);
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), unformatted);
+		}
+
+		let read_only = test_app(true);
+		assert!(
+			write_raw_config(State(read_only), yaml_headers(), unformatted.to_string())
+				.await
+				.is_err()
+		);
+	}
+
+	#[tokio::test]
+	async fn raw_config_write_rejects_cross_origin_simple_request_content_types() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let original = "binds:\n- port: 8080\n  listeners: []\n";
+		fs_err::write(&path, original).unwrap();
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path.clone()));
+		let router = router(
+			app.state.clone(),
+			app.model_catalog.clone(),
+			app.config_resource_store.clone(),
+			app.resource_manager.clone(),
+			&EMPTY_ASSETS_DIR,
+		);
+		let post = |content_type: Option<&str>, body: &str| {
+			let mut request = axum::extract::Request::builder()
+				.method("POST")
+				.uri("/api/config/raw")
+				.header("origin", "https://attacker.example");
+			if let Some(content_type) = content_type {
+				request = request.header("content-type", content_type);
+			}
+			router.clone().oneshot(
+				request
+					.body(axum::body::Body::from(body.to_string()))
+					.unwrap(),
+			)
+		};
+
+		// CORS-safelisted content types must not reach the file.
+		let rewritten = "binds:\n- port: 9090\n  listeners: []\n";
+		for content_type in [
+			None,
+			Some("text/plain"),
+			Some("text/plain;charset=UTF-8"),
+			Some("application/x-www-form-urlencoded"),
+			Some("multipart/form-data"),
+		] {
+			let response = post(content_type, rewritten).await.unwrap();
+			assert_eq!(
+				response.status(),
+				StatusCode::UNSUPPORTED_MEDIA_TYPE,
+				"{content_type:?}"
+			);
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), original);
+		}
+
+		for content_type in ["application/yaml", "Application/YAML; charset=utf-8"] {
+			fs_err::write(&path, original).unwrap();
+			let response = post(Some(content_type), rewritten).await.unwrap();
+			assert_eq!(response.status(), StatusCode::OK, "{content_type}");
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), rewritten);
+		}
+	}
+
+	fn yaml_headers() -> HeaderMap {
+		let mut headers = HeaderMap::new();
+		headers.insert(
+			http::header::CONTENT_TYPE,
+			RAW_CONFIG_CONTENT_TYPE.parse().unwrap(),
+		);
+		headers
+	}
+
+	#[tokio::test]
 	async fn runtime_user_uses_standard_attributes_without_log_storage() {
 		let app = test_app(false);
 		assert!(app.state.logging.database.is_none());
@@ -1245,7 +1771,7 @@ mod tests {
 			(Some("request.headers['missing']"), true, None, false),
 		] {
 			// Reuse the app to verify updates replace the mapping used by the handler.
-			app.state.logging.database_fields.store(Arc::new(
+			app.state.logging.standard_attributes.store(Arc::new(
 				crate::config::standard_attributes(Some(&crate::RawStandardAttributes {
 					user: expression.map(str::to_owned),
 					group: None,
@@ -1307,5 +1833,90 @@ mod tests {
 	async fn ensure_writable_allows_when_not_read_only() {
 		let app = test_app(false);
 		assert!(app.ensure_writable().is_ok());
+	}
+
+	static TEST_UI_ASSETS: Dir<'static> = Dir::new(
+		"",
+		&[
+			include_dir::DirEntry::File(include_dir::File::new(
+				"index.html",
+				b"<!doctype html><html><head><script src=\"./assets/index.js\"></script></head></html>",
+			)),
+			include_dir::DirEntry::Dir(Dir::new(
+				"assets",
+				&[include_dir::DirEntry::File(include_dir::File::new(
+					"assets/index.js",
+					b"console.log(1)",
+				))],
+			)),
+		],
+	);
+
+	#[tokio::test]
+	async fn ui_is_served_under_the_configured_base_path() {
+		for base_path in ["", "/team/agentgateway"] {
+			let app = test_app(true);
+			let router = router(
+				app.state.clone(),
+				app.model_catalog.clone(),
+				None,
+				app.resource_manager.clone(),
+				&TEST_UI_ASSETS,
+			);
+			let get = |uri: &'static str| {
+				let router = router.clone();
+				async move {
+					let response = router
+						.oneshot(
+							axum::extract::Request::builder()
+								.uri(uri)
+								.extension(UiBasePath(agent_core::strng::new(base_path)))
+								.body(axum::body::Body::empty())
+								.unwrap(),
+						)
+						.await
+						.unwrap();
+					let status = response.status();
+					let location = response
+						.headers()
+						.get(http::header::LOCATION)
+						.map(|v| v.to_str().unwrap().to_string());
+					let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+						.await
+						.unwrap();
+					(status, location, String::from_utf8(body.to_vec()).unwrap())
+				}
+			};
+
+			let (status, location, _) = get("/").await;
+			assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
+			assert_eq!(location, Some(format!("{base_path}/ui/")));
+			let (status, location, _) = get("/api/auth/login").await;
+			assert_eq!(status, StatusCode::SEE_OTHER);
+			assert_eq!(location, Some(format!("{base_path}/ui")));
+			for uri in ["/ui", "/ui/", "/ui/llm/models", "/ui/settings/ui?tab=1"] {
+				let (status, _, body) = get(uri).await;
+				assert_eq!(status, StatusCode::OK, "{uri}");
+				assert!(
+					body.starts_with(&format!(
+						"<!doctype html><html><head><base href=\"{base_path}/ui/\"><script"
+					)),
+					"{uri}: {body}"
+				);
+			}
+			let (status, _, body) = get("/ui/assets/index.js").await;
+			assert_eq!(status, StatusCode::OK);
+			assert_eq!(body, "console.log(1)");
+		}
+	}
+
+	#[test]
+	fn ui_base_path_is_validated() {
+		for input in ["", "/agw", "/team/agw"] {
+			assert!(validate_ui_base_path(input).is_ok(), "{input}");
+		}
+		for input in ["/", "/agw/", "agw", "//agw", "/a\"b", "/a?x=1", "/a b"] {
+			assert!(validate_ui_base_path(input).is_err(), "{input}");
+		}
 	}
 }

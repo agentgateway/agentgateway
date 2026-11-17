@@ -1,8 +1,11 @@
 import { Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
 
-import { Field, FieldGroup } from '@/components/Primitives';
+import { Field, FieldGroup, StatusBanner } from '@/components/Primitives';
+import { parseSchemaYamlEditorValue, SchemaYamlEditor } from '@/components/SchemaYamlEditor';
+import { isRecord, toYamlMappingText } from '@/policies/policyUtils';
 import type { TargetDraft } from '@/policies/types';
+import type { SchemaHelp } from '@/schemaHelp';
 
 export type TargetMode = 'host' | 'service' | 'backend';
 
@@ -18,20 +21,12 @@ export function hasUnsupportedTarget(value: unknown) {
 	return targetMode(value) !== 'host';
 }
 
-export function unsupportedTargetLabel(value: unknown) {
-	const mode = targetMode(value);
-	if (mode === 'service') return 'Kubernetes service';
-	if (mode === 'backend') return 'backend reference';
-	return 'target';
-}
-
 export function TargetEditor(props: {
 	value: TargetDraft;
+	help: SchemaHelp;
 	tooltip?: string;
 	onChange: (value: TargetDraft) => void;
 }) {
-	const host = 'host' in props.value ? props.value.host : '';
-
 	return (
 		<div className="policy-form-section">
 			<div className="policy-form-section-header">
@@ -44,13 +39,18 @@ export function TargetEditor(props: {
 				</div>
 			</div>
 			<div className="policy-form-section-body">
-				<Field label="Host" tooltip={props.tooltip}>
+				<Field label="Host" tooltip={props.tooltip} path="host">
 					<input
-						value={host}
-						onChange={event => props.onChange({ host: event.target.value })}
+						value={props.value.host}
+						onChange={event => props.onChange({ ...props.value, host: event.target.value })}
 						placeholder="host:port or unix:/path/to/socket"
 					/>
 				</Field>
+				<BackendPoliciesField
+					help={props.help}
+					value={props.value.policies}
+					onChange={policies => props.onChange({ ...props.value, policies })}
+				/>
 			</div>
 		</div>
 	);
@@ -159,9 +159,58 @@ export function KeyValueEditor(props: {
 }
 
 export function targetFrom(value: unknown, fallbackHost = '127.0.0.1:9000'): TargetDraft {
-	if (value && typeof value === 'object' && !Array.isArray(value)) {
-		if ('host' in value && typeof (value as { host?: unknown }).host === 'string')
-			return { host: (value as { host: string }).host };
+	const target = isRecord(value) ? value : {};
+	return {
+		host: typeof target.host === 'string' ? target.host : fallbackHost,
+		policies: target.policies
+	};
+}
+
+// Edits SimpleLocalBackendPolicies (backendAuth, backendTLS, ...) used when the
+// gateway calls an external service. Invalid YAML keeps the last valid value.
+export function BackendPoliciesField(props: {
+	help: SchemaHelp;
+	value: unknown;
+	onChange: (value: unknown) => void;
+}) {
+	const [text, setText] = useState(() => toYamlMappingText(props.value));
+	const [error, setError] = useState<string | null>(null);
+
+	function update(next: string) {
+		setText(next);
+		try {
+			const parsed = parseSchemaYamlEditorValue(next);
+			if (!isRecord(parsed)) throw new Error('Backend policies must be a YAML mapping.');
+			setError(null);
+			props.onChange(Object.keys(parsed).length ? parsed : undefined);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'Invalid YAML');
+		}
 	}
-	return { host: fallbackHost };
+
+	return (
+		<FieldGroup
+			label="Backend policies"
+			tooltip={props.help.definition(
+				'SimpleLocalBackendPolicies',
+				'Policies applied when connecting to this service.'
+			)}
+			hint="Optional. For example, backendAuth.key.value for an API key, or backendTLS."
+		>
+			{error ? (
+				<StatusBanner state="bad" title="Invalid YAML">
+					{error}
+				</StatusBanner>
+			) : null}
+			<SchemaYamlEditor
+				className="short"
+				path="agentgateway-backend-policies.yaml"
+				schema={props.help.node(['$defs', 'SimpleLocalBackendPolicies']) ?? {}}
+				showLineNumbers={false}
+				invalid={Boolean(error)}
+				value={text}
+				onChange={update}
+			/>
+		</FieldGroup>
+	);
 }

@@ -1,6 +1,10 @@
 {
   "model": "gpt-5.6",
   "max_tokens": 64,
+  "cache_control": {
+    "type": "ephemeral",
+    "ttl": "1h"
+  },
   "system": "Retained system prefix",
   "messages": [
     {

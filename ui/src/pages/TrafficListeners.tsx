@@ -3,6 +3,7 @@ import { Network, Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import {
 	ConfirmDialog,
@@ -14,8 +15,7 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip,
-	YamlBlock
+	Tooltip
 } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import type { LocalTLSServerConfig } from '@/gateway-config';
@@ -482,10 +482,6 @@ function BindEditor(props: {
 					<input value={port} onChange={event => setPort(event.target.value)} />
 				</Field>
 			</div>
-			<details open>
-				<summary>Resulting YAML</summary>
-				<YamlBlock value={preview} />
-			</details>
 		</Drawer>
 	);
 }
@@ -521,11 +517,27 @@ function ListenerEditor(props: {
 				? { ...(listener.tls ?? {}), cert: cert.trim(), key: key.trim() }
 				: null
 	};
+	const merged = useMergedEdits(
+		typeof props.editing.listenerIndex === 'number' ? props.editing.listener : undefined,
+		preview,
+		['$defs', 'LocalListener']
+	);
 
 	return (
 		<Drawer
 			title={typeof props.editing.listenerIndex === 'number' ? 'Edit listener' : 'Add listener'}
 			onClose={props.onCancel}
+			raw={{
+				schemaPath: ['$defs', 'LocalListener'],
+				value: () => cleanListener(merged.value),
+				onChange: value => {
+					const next = value as TrafficListener;
+					setListener(next);
+					setCert(next.tls?.cert ?? '');
+					setKey(next.tls?.key ?? '');
+					merged.reset(next);
+				}
+			}}
 			dirty={draft !== initialDraft}
 			saving={props.saving}
 			footer={requestClose => (
@@ -536,20 +548,25 @@ function ListenerEditor(props: {
 					saving={props.saving}
 					onCancel={requestClose}
 					onSave={() =>
-						props.onSave(Number(bindIndex), cleanListener(preview), props.editing.listenerIndex)
+						props.onSave(
+							Number(bindIndex),
+							cleanListener(merged.value),
+							props.editing.listenerIndex
+						)
 					}
 					applyDiff={next => {
 						const bind = next.binds?.[Number(bindIndex)];
 						if (!bind) return;
 						if (typeof props.editing.listenerIndex === 'number') {
-							bind.listeners[props.editing.listenerIndex] = cleanListener(preview);
+							bind.listeners[props.editing.listenerIndex] = cleanListener(merged.value);
 						} else {
-							bind.listeners.push(cleanListener(preview));
+							bind.listeners.push(cleanListener(merged.value));
 						}
 					}}
 				/>
 			)}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<div className="form-grid">
 				{typeof props.editing.listenerIndex !== 'number' ? (
 					<FieldGroup label="Bind" tooltip="Bind port this listener is attached to.">
@@ -564,7 +581,11 @@ function ListenerEditor(props: {
 						/>
 					</FieldGroup>
 				) : null}
-				<Field label="Name" tooltip={props.help.field<TrafficListener>('LocalListener', 'name')}>
+				<Field
+					label="Name"
+					path="name"
+					tooltip={props.help.field<TrafficListener>('LocalListener', 'name')}
+				>
 					<input
 						value={listener.name ?? ''}
 						onChange={event => setListener({ ...listener, name: event.target.value })}
@@ -573,6 +594,7 @@ function ListenerEditor(props: {
 				</Field>
 				<Field
 					label="Hostname"
+					path="hostname"
 					tooltip={props.help.field<TrafficListener>(
 						'LocalListener',
 						'hostname',
@@ -587,6 +609,7 @@ function ListenerEditor(props: {
 				</Field>
 				<FieldGroup
 					label="Protocol"
+					path="protocol"
 					tooltip={props.help.field<TrafficListener>('LocalListener', 'protocol')}
 				>
 					<EnumSelector
@@ -603,6 +626,7 @@ function ListenerEditor(props: {
 				<div className="form-grid">
 					<Field
 						label="Certificate"
+						path="tls.cert"
 						tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'cert')}
 					>
 						<input
@@ -613,6 +637,7 @@ function ListenerEditor(props: {
 					</Field>
 					<Field
 						label="Key"
+						path="tls.key"
 						tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'key')}
 					>
 						<input
@@ -629,10 +654,6 @@ function ListenerEditor(props: {
 				policies={listener.policies as Record<string, unknown> | null | undefined}
 				onChange={policies => setListener({ ...listener, policies })}
 			/>
-			<details open>
-				<summary>Resulting YAML</summary>
-				<YamlBlock value={cleanListener(preview)} />
-			</details>
 		</Drawer>
 	);
 }

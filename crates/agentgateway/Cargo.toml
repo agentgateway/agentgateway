@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [features]
 default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
-jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
+jemalloc = ["dep:tikv-jemallocator"]
 mimalloc = ["pprof-alloc/allocator-mimalloc"]
 # Crypto provider selection. `crypto-aws-lc` (the default) backs all crypto with
 # aws-lc-rs. `fips` is an operating-mode modifier; it currently requires the
@@ -20,7 +20,7 @@ mimalloc = ["pprof-alloc/allocator-mimalloc"]
 # Note the linked module version is not necessarily CMVP-validated; check the
 # certificate for the exact AWS-LC-FIPS version before making a compliance claim.
 # `crypto-symcrypt` routes TLS/AEAD/hash/RNG through SymCrypt and falls back to
-# aws-lc-rs for JWT and certificate issuance (no SymCrypt hook there).
+# aws-lc-rs for JWT, certificate issuance, and SQLx (no SymCrypt hook there).
 crypto-aws-lc = ["dep:aws-lc-rs", "rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs", "jsonwebtoken/aws_lc_rs"]
 fips = ["aws-lc-rs?/fips", "rustls/fips", "tokio-rustls/fips"]
 crypto-symcrypt = ["dep:symcrypt", "dep:rustls-symcrypt", "dep:aws-lc-rs", "jsonwebtoken/aws_lc_rs"]
@@ -122,7 +122,7 @@ libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
-rmcp = { version = "3.1.0", features = [
+rmcp = { version = "3.9.0", features = [
     "client",
     "server",
     "base64",
@@ -150,12 +150,15 @@ spiffe.workspace = true
 sse-stream.workspace = true
 subtle.workspace = true
 sqlx.workspace = true
+sqlx-macros.workspace = true
+sqlx-core.workspace = true
 thiserror.workspace = true
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio_sse_codec.workspace = true
 tonic.workspace = true
+tonic-types.workspace = true
 tower-http.workspace = true
 tower-serve-static.workspace = true
 tower.workspace = true
@@ -190,7 +193,6 @@ which.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 tokio = { workspace = true, features = ["taskdump"] }
 tikv-jemallocator = { workspace = true, optional = true }
-jemalloc_pprof = { workspace = true, optional = true }
 
 [target.'cfg(all(target_os = "linux", not(all(target_env = "musl", target_arch = "aarch64"))))'.dependencies]
 pprof-alloc = { workspace = true, features = ["allocator-jemalloc"] }
@@ -213,7 +215,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "3.1.0", features = [
+rmcp = { version = "3.9.0", features = [
     "client",
     "server",
     "base64",

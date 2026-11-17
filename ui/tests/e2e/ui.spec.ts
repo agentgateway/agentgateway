@@ -10,7 +10,7 @@ import {
 	xdsDump,
 	xdsDumpModels,
 	xdsWildcardModel
-} from './fixtures';
+} from '../fixtures';
 
 const pages = [
 	['/', 'Gateway Overview'],
@@ -66,6 +66,17 @@ test('log detail renders the normalized conversation', async ({ page }) => {
 	await expect(page.locator('.log-markdown strong')).toHaveText('pong');
 	await expect(page.locator('.log-markdown a, .log-markdown img')).toHaveCount(0);
 	await expect(page.locator('.log-msg.system .log-markdown')).toContainText('docs [image: probe]');
+	const systemMarkdown = page.locator('.log-msg.system .log-markdown');
+	await expect(systemMarkdown).toContainText('<img src="x" onerror=');
+	await expect(systemMarkdown).toContainText('raw-html-probe<script>');
+	await expect(systemMarkdown.locator('img, script, [onerror], [src]')).toHaveCount(0);
+	expect(await page.evaluate(() => '__logMarkdownProbe' in window)).toBe(false);
+	await expect(systemMarkdown).toHaveClass(/collapsed/);
+	const systemHeading = await systemMarkdown.locator('h1').elementHandle();
+	await page.locator('.log-msg.system .log-msg-toggle').click();
+	await expect(systemMarkdown).not.toHaveClass(/collapsed/);
+	await expect(systemMarkdown.locator('h1')).toHaveCount(1);
+	expect(await systemHeading?.evaluate(node => node.isConnected)).toBe(true);
 	await expect(page.locator('.log-tool-block.call')).toHaveCount(1);
 	await expect(page.locator('.log-tool-block.result')).toHaveCount(1);
 	await expect(page.locator('.log-tool-block.reasoning')).toHaveCount(2);
@@ -375,8 +386,7 @@ test('attaches traffic routes to gateways', async ({ page }) => {
 	expect(gateway.postedConfigs[0].routes).toMatchObject([
 		{
 			gateways: 'default',
-			name: 'api',
-			matches: [{ path: { pathPrefix: '/' } }]
+			name: 'api'
 		}
 	]);
 });
@@ -432,6 +442,60 @@ test('migrates legacy HTTP binds to gateways', async ({ page }) => {
 	);
 	expect(saved.binds).toBeUndefined();
 });
+
+for (const [name, eol] of [
+	['LF', '\n'],
+	['CRLF', '\r\n']
+] as const) {
+	test(`raw configuration round-trips comments in a ${name} configuration file`, async ({
+		page
+	}) => {
+		const original = [
+			'# Workshop gateway',
+			'binds:',
+			'- port: 8080 # inline',
+			'  listeners: []',
+			''
+		].join(eol);
+		const gateway = await mockGateway(page);
+		await page.route('**/api/config/raw', async route => {
+			if (route.request().method() !== 'GET' || gateway.postedRawConfigs.length > 0) {
+				await route.fallback();
+				return;
+			}
+			await route.fulfill({ status: 200, contentType: 'text/plain', body: original });
+		});
+		await page.goto('/raw-config');
+
+		const save = page.getByRole('button', { name: 'Save', exact: true });
+		await expect
+			.poll(async () => page.evaluate(() => window.__rawConfigEditor?.getModel()?.getValue()), {
+				timeout: 15_000
+			})
+			.toBe(original);
+		await expect(save).toBeDisabled();
+		expect(await page.evaluate(() => window.__rawConfigEditor?.getModel()?.getEOL())).toBe(eol);
+
+		// Type a line through the editor so the appended text uses the model's line ending.
+		await page.evaluate(() => {
+			const editor = window.__rawConfigEditor;
+			const model = editor?.getModel();
+			if (!editor || !model) return;
+			const lineNumber = model.getLineCount();
+			editor.setPosition({ lineNumber, column: 1 });
+			editor.focus();
+		});
+		await page.keyboard.type('# typed in Raw Configuration');
+		await page.keyboard.press('Enter');
+		const edited = `${original}# typed in Raw Configuration${eol}`;
+		await expect(save).toBeEnabled();
+		await save.click();
+
+		await expect.poll(() => gateway.postedRawConfigs).toEqual([edited]);
+		await expect(page.getByText('Configuration saved')).toBeVisible();
+		await expect(save).toBeDisabled();
+	});
+}
 
 test('raw configuration editor shows schema diagnostics', async ({ page }) => {
 	await mockGateway(page);
@@ -507,10 +571,96 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 		name: 'balanced',
 		routing: {
 			weighted: {
-				targets: [{ model: 'openai/gpt-5.4-nano', weight: 1 }]
+				targets: [{ model: 'openai/gpt-5.4-nano' }]
 			}
 		}
 	});
+});
+
+test('dropdown menu fits its longest option', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/client-setup');
+	// A compact dropdown whose trigger only fits a short selected label.
+	await page.addStyleTag({ content: '.client-recipe-select { width: 64px; }' });
+
+	await page.getByRole('combobox', { name: 'Integration' }).click();
+	const menu = page.locator('.custom-select-menu');
+	const box = await menu.boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect(box?.width).toBeLessThanOrEqual(420);
+	const truncated = await menu
+		.locator('.custom-select-copy > span')
+		.evaluateAll(labels => labels.filter(label => label.scrollWidth > label.clientWidth).length);
+	expect(truncated).toBe(0);
+
+	// Searching down to one short option keeps the menu steady.
+	await page.getByRole('combobox', { name: 'Search Integration' }).fill('OpenAI JavaScript');
+	await expect(page.getByRole('option')).toHaveCount(1);
+	expect((await menu.boundingBox())?.width).toBe(box?.width);
+});
+
+test('dropdown menu stays on screen at the right edge', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/client-setup');
+	await page.addStyleTag({
+		content: '.client-recipe-select { position: fixed; top: 80px; right: 8px; width: 64px; }'
+	});
+
+	await page.getByRole('combobox', { name: 'Integration' }).click();
+	const box = await page.locator('.custom-select-menu').boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+	expect(box?.x).toBeGreaterThanOrEqual(0);
+});
+
+test('dropdown menu in a drawer', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/models');
+	await page.getByRole('button', { name: 'Add model' }).first().click();
+	const provider = page.getByRole('combobox', { name: 'Provider', exact: true });
+	const menu = page.locator('.custom-select-menu');
+	const drawerBody = page.locator('.drawer-body');
+
+	// A full-width form dropdown keeps a menu matching its trigger.
+	await provider.click();
+	expect((await menu.boundingBox())?.width).toBe((await provider.boundingBox())?.width);
+	await provider.click();
+
+	// A compact one at the drawer's right edge stays inside without adding a horizontal scrollbar.
+	await page.addStyleTag({
+		content:
+			'.drawer-body .custom-select:has(.custom-select-trigger[aria-label="Provider"]) { width: 64px; margin-left: auto; }'
+	});
+	await provider.click();
+	const box = await menu.boundingBox();
+	const bodyBox = await drawerBody.boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+		(bodyBox?.x ?? 0) + (bodyBox?.width ?? 0)
+	);
+	const scrolls = await drawerBody.evaluate(body => body.scrollWidth > body.clientWidth);
+	expect(scrolls).toBe(false);
+});
+
+test('trims whitespace from a new model name and explicit model', async ({ page }) => {
+	const gateway = await mockGateway(page, populatedConfig());
+	await page.goto('/llm/models');
+
+	await page.getByRole('button', { name: 'Add model' }).first().click();
+	await page.getByRole('combobox', { name: 'Provider' }).click();
+	await page.getByRole('option', { name: 'openai-shared configured' }).click();
+	await page.getByLabel('Incoming model match').fill('  my-model ');
+	await page.getByRole('button', { name: 'Explicit', exact: true }).click();
+	await page.getByRole('textbox', { name: 'Explicit outgoing model' }).fill('  gpt-4o-mini ');
+	await page.getByRole('button', { name: 'Save model' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const latest = gateway.postedConfigs[0] as {
+		llm?: { models?: Array<{ name: string; params?: { model?: string | null } }> };
+	};
+	const added = latest.llm?.models?.find(model => model.name.trim() === 'my-model');
+	expect(added?.name).toBe('my-model');
+	expect(added?.params?.model).toBe('gpt-4o-mini');
 });
 
 test('XDS mode lists models from the config dump as read-only', async ({ page }) => {
@@ -560,6 +710,76 @@ test('XDS mode shows an empty model inventory', async ({ page }) => {
 
 	await expect(page.getByText('No models are present in the active gateway dump.')).toBeVisible();
 	await expect(page.locator('.dump-models-table')).toHaveCount(0);
+});
+
+test('XDS mode counts targetRef policies on dump routes', async ({ page }) => {
+	const route = (name: string, ruleName: string | null, path: string) => ({
+		key: `demo-ns/${name}.${ruleName ?? 'default'}.demo-listener`,
+		name,
+		namespace: 'demo-ns',
+		ruleName,
+		kind: 'HTTPRoute',
+		matches: [{ path: { pathPrefix: path } }],
+		backends: []
+	});
+	const routes = [
+		route('demo-route', 'rule-a', '/a'),
+		route('demo-route', 'rule-b', '/b'),
+		route('other-route', null, '/other')
+	];
+	const dump = xdsDump([]);
+	dump.binds = [
+		{
+			key: '8080/demo-ns/demo-gw',
+			address: '[::]:8080',
+			protocol: 'http',
+			tunnelProtocol: 'direct',
+			mode: 'standard',
+			listeners: {
+				'demo-ns/demo-gw.demo-listener': {
+					key: 'demo-ns/demo-gw.demo-listener',
+					gatewayName: 'demo-gw',
+					gatewayNamespace: 'demo-ns',
+					listenerName: 'demo-listener',
+					hostname: '',
+					protocol: 'HTTP',
+					routes: Object.fromEntries(routes.map(r => [r.key, r]))
+				}
+			}
+		}
+	];
+	dump.policies = [
+		{
+			key: 'traffic/demo-ns/demo-route-authz',
+			target: { route: { name: 'demo-route', namespace: 'demo-ns', kind: 'HTTPRoute' } }
+		},
+		{
+			key: 'traffic/demo-ns/demo-rule-a-timeout',
+			target: {
+				route: { name: 'demo-route', namespace: 'demo-ns', ruleName: 'rule-a', kind: 'HTTPRoute' }
+			}
+		}
+	];
+	await mockXdsGateway(page, dump);
+	await page.goto('/traffic/routes');
+
+	const policyCount = (name: string) =>
+		page
+			.getByRole('row')
+			.filter({ has: page.getByText(name, { exact: true }) })
+			.getByRole('cell')
+			.nth(5);
+	await expect(policyCount('rule-a')).toHaveText('2');
+	await expect(policyCount('rule-b')).toHaveText('1');
+	await expect(policyCount('other-route')).toHaveText('0');
+
+	await page.getByRole('button', { name: 'View rule-a' }).click();
+	await expect(
+		page
+			.getByRole('dialog', { name: 'rule-a' })
+			.locator('.drawer-summary-list > div', { hasText: 'Policies' })
+			.locator('strong')
+	).toHaveText('2');
 });
 
 test('XDS mode offers Client Setup with models from the config dump', async ({ page }) => {
@@ -630,6 +850,99 @@ test('Client Setup hides client snippets until the gateway URL is set', async ({
 
 	await expect(page.getByText('Enter the gateway base URL')).toBeVisible();
 	await expect(page.locator('.client-setup-summary')).toContainText('Not set');
+});
+
+test('native Field hint describes its input and label focuses it', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/client-setup');
+
+	const baseUrl = page.getByLabel('Gateway base URL');
+	await expect(baseUrl).toHaveAccessibleDescription('SDK snippets use this URL with /v1 appended.');
+	await page.getByText('Gateway base URL', { exact: true }).click();
+	await expect(baseUrl).toBeFocused();
+});
+
+test('Field without a hint has no description reference', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/playground');
+
+	const userMessage = page.getByLabel('User message');
+	await expect(userMessage).toBeVisible();
+	await expect(userMessage).not.toHaveAttribute('aria-describedby');
+});
+
+test('render-prop Field hint describes its input', async ({ page }) => {
+	await mockXdsGateway(page, xdsDump([...xdsDumpModels(), xdsWildcardModel()]));
+	await page.goto('/llm/client-setup');
+
+	const model = page.getByRole('textbox', { name: 'Model', exact: true });
+	await model.fill('gpt-5-*');
+	await model.press('Escape');
+	await expect(page.getByRole('textbox', { name: 'Specific model' })).toHaveAccessibleDescription(
+		'The dump lists a pattern; clients have to request a concrete model.'
+	);
+});
+
+test('catalog composite describes its focused input and label focuses it', async ({ page }) => {
+	const config = populatedConfig();
+	const llm = config.llm as { models: Array<Record<string, unknown>>; virtualModels: unknown[] };
+	llm.models = llm.models.slice(0, 1);
+	llm.virtualModels = [];
+	await mockGateway(page, config);
+	await page.goto('/llm/client-setup');
+
+	const specificModel = page.getByRole('textbox', { name: 'Specific model' });
+	await expect(specificModel).toHaveAccessibleDescription(
+		'Model uses a wildcard; specify the specific model.'
+	);
+	await page.getByText('Specific model', { exact: true }).click();
+	await expect(specificModel).toBeFocused();
+	await expect(page.getByRole('listbox', { name: 'Specific model' })).toBeVisible();
+});
+
+test('region composite describes its focused input and label focuses it', async ({ page }) => {
+	const config = populatedConfig();
+	const llm = config.llm as { providers: unknown[] };
+	llm.providers = [
+		{
+			name: 'vertex-native',
+			provider: 'vertex',
+			params: { vertexProject: 'project', vertexRegion: 'us-central1' }
+		}
+	];
+	await mockGateway(page, config);
+	await page.goto('/llm/providers');
+	await page
+		.getByRole('row', { name: /vertex-native/ })
+		.getByRole('button', { name: 'Edit provider' })
+		.click();
+
+	const region = page.getByRole('textbox', { name: 'Vertex region' });
+	await expect(region).toHaveAccessibleDescription('Optional. If unset, Vertex uses global.');
+	await page.getByText('Vertex region', { exact: true }).click();
+	await expect(region).toBeFocused();
+});
+
+test('Playground Specific model hint describes the wildcard input', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/playground');
+
+	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('option', { name: 'openai/*' }).click();
+	await expect(page.getByRole('textbox', { name: 'Specific model' })).toHaveAccessibleDescription(
+		'Model uses a wildcard; specify the specific model.'
+	);
+});
+
+test('OIDC empty Issuer validation describes the Issuer input', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/policies');
+
+	await page.getByText('OIDC', { exact: true }).click();
+	await page.getByRole('button', { name: 'Save policy' }).click();
+	await expect(page.getByRole('textbox', { name: 'Issuer' })).toHaveAccessibleDescription(
+		'Required'
+	);
 });
 
 test('hybrid model edits use the unified resource API', async ({ page }) => {
@@ -862,15 +1175,22 @@ test('creates an OpenAPI MCP target', async ({ page }) => {
 
 	await page.getByRole('button', { name: 'Add server' }).first().click();
 	await page.getByLabel('Server name').fill('weather');
-	await page.getByRole('radio', { name: 'OpenAPI' }).click();
-	await page
-		.locator('label.field', { hasText: 'URL' })
-		.getByRole('textbox')
-		.fill('http://localhost:8101/mcp');
-	await page
-		.locator('label.field', { hasText: 'Schema' })
-		.getByRole('textbox')
-		.fill('https://example.com/weather-openapi.json');
+	await page.getByRole('button', { name: 'OpenAPI' }).click();
+	for (const name of ['URL', 'Schema']) {
+		const formControls = await page.evaluate(text => {
+			const span = [...document.querySelectorAll('.field-label')].find(
+				el => el.textContent?.trim() === text
+			);
+			const label = span?.querySelector('label') ?? span?.closest('label');
+			return (
+				label?.querySelectorAll('button, input, meter, output, progress, select, textarea')
+					.length ?? -1
+			);
+		}, name);
+		expect(formControls, `${name} visible label contains no form controls`).toBe(0);
+	}
+	await page.getByLabel('URL', { exact: true }).fill('http://localhost:8101/mcp');
+	await page.getByLabel('Schema', { exact: true }).fill('https://example.com/weather-openapi.json');
 	await page.getByRole('button', { name: 'Save server' }).click();
 
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
@@ -973,6 +1293,7 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	await page.goto('/mcp/servers');
 	await page.getByRole('button', { name: 'Settings' }).click();
 	await expect(page.getByRole('textbox', { name: /Port/ })).toBeDisabled();
+	await page.getByRole('button', { name: /MCP behavior/ }).click();
 	await expect(page.getByRole('combobox', { name: 'State mode' })).toBeEnabled();
 	await page.getByRole('combobox', { name: 'State mode' }).click();
 	await page.getByRole('option', { name: 'Stateful' }).click();
@@ -983,6 +1304,81 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	expect(writes[0]).not.toHaveProperty('port');
 	expect(gateway.postedConfigs).toHaveLength(0);
 });
+
+for (const filePort of [false, true]) {
+	test(`hybrid LLM settings save to the database (filePort=${filePort})`, async ({ page }) => {
+		// The file may set the port; tls only comes from the llm.settings row.
+		const config = populatedConfig();
+		const fileLlm = config.llm as Record<string, unknown>;
+		if (!filePort) delete fileLlm.port;
+		const effective = structuredClone(config);
+		Object.assign(effective.llm as Record<string, unknown>, {
+			port: 4000,
+			tls: { cert: 'cert.pem', key: 'key.pem' }
+		});
+		const gateway = await mockGateway(page, config);
+		const writes: Array<Record<string, unknown>> = [];
+
+		await page.route('**/api/runtime', route =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					build: {},
+					ui: { gatewayMode: 'standalone', configStoreMode: 'hybrid' }
+				})
+			})
+		);
+		await page.route('**/api/config/effective', route =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(effective)
+			})
+		);
+		await page.route('**/api/config/resources**', async route => {
+			if (route.request().method() === 'GET') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ resources: [] })
+				});
+				return;
+			}
+			if (
+				route.request().method() === 'PUT' &&
+				new URL(route.request().url()).pathname.endsWith('/llm.settings')
+			) {
+				const request = route.request().postDataJSON() as {
+					resources: Array<{ value: Record<string, unknown> }>;
+				};
+				writes.push(request.resources[0].value);
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ resources: [] })
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/');
+		await page.getByRole('button', { name: 'Settings' }).first().click();
+		const port = page.getByRole('textbox', { name: /Port/ });
+		if (filePort) {
+			await expect(port).toBeDisabled();
+			await expect(page.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+			expect(writes).toHaveLength(0);
+		} else {
+			await port.fill('4100');
+			await page.getByRole('button', { name: 'Save settings' }).click();
+			await expect.poll(() => writes.length).toBe(1);
+			expect(writes[0]).toEqual({ port: 4100, tls: { cert: 'cert.pem', key: 'key.pem' } });
+		}
+		expect(gateway.postedConfigs).toHaveLength(0);
+	});
+}
 
 test('hybrid file-owned API key policy is read-only', async ({ page }) => {
 	const config = emptyConfig();
@@ -1282,6 +1678,64 @@ test('shows a banner when the last configuration reload failed', async ({ page }
 	await expect(banner).toContainText('still running the previous configuration');
 });
 
+test('LLM playground waits for the listener after applying CORS', async ({ page }) => {
+	const config = populatedConfig();
+	(config.llm as { policies: { cors?: unknown } }).policies.cors = {
+		allowOrigins: ['http://127.0.0.1:19100'],
+		allowHeaders: ['Content-Type'],
+		allowMethods: ['GET', 'POST']
+	};
+	const gateway = await mockGateway(page, config);
+	let listenerReady = false;
+	let probes = 0;
+	await page.route('**/v1/models', async route => {
+		probes++;
+		expect(route.request().method()).toBe('POST');
+		expect(route.request().headers().authorization).toBe('Bearer cors-probe');
+		if (!listenerReady) return route.abort('failed');
+		await route.fulfill({ status: 401, body: 'API key required' });
+	});
+	await page.goto('/llm/playground');
+	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('option', { name: /resilient/ }).click();
+	await page.getByLabel('User message').fill('ping');
+	await page.getByRole('button', { name: 'Apply CORS', exact: true }).click();
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Apply CORS', exact: true })).toBeVisible();
+	await expect.poll(() => probes).toBeGreaterThan(1);
+	expect(gateway.chatRequests).toHaveLength(0);
+	listenerReady = true;
+	await expect(page.getByRole('button', { name: 'Apply CORS', exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect.poll(() => gateway.chatRequests.length).toBe(1);
+});
+
+test('LLM playground can retry when the CORS listener stays unavailable', async ({ page }) => {
+	const config = populatedConfig();
+	(config.llm as { policies: { cors?: unknown } }).policies.cors = undefined;
+	await mockGateway(page, config);
+	let listenerReady = false;
+	await page.route('**/v1/models', async route => {
+		if (!listenerReady) return route.abort('failed');
+		await route.fulfill({ status: 200, body: '{}' });
+	});
+	await page.goto('/llm/playground');
+	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('option', { name: /resilient/ }).click();
+	await page.getByLabel('User message').fill('ping');
+	const apply = page.getByRole('button', { name: 'Apply CORS', exact: true });
+	await apply.click();
+	await expect(
+		page.getByText('The CORS policy was saved, but the LLM listener is not reachable. Try again.')
+	).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+	listenerReady = true;
+	await apply.click();
+	await expect(apply).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+});
+
 test('LLM playground sends selected virtual model name', async ({ page }) => {
 	const gateway = await mockGateway(page);
 	await page.goto('/llm/playground');
@@ -1320,6 +1774,72 @@ test('MCP playground initializes, lists tools, and calls a tool', async ({ page 
 	expect(gateway.mcpHeaders.every(headers => headers.authorization === 'Bearer mcp-secret')).toBe(
 		true
 	);
+});
+
+test('MCP playground displays tool execution errors', async ({ page }) => {
+	await mockGateway(page);
+	await page.route('**/mcp', async route => {
+		const body = route.request().postDataJSON() as { method?: string };
+		if (body.method !== 'tools/call') {
+			await route.fallback();
+			return;
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 3,
+				result: {
+					content: [{ type: 'text', text: 'tool failed' }],
+					isError: true
+				}
+			})
+		});
+	});
+	await page.goto('/mcp/playground');
+
+	await page.getByRole('button', { name: 'Initialize', exact: true }).click();
+	await page.getByLabel('text *').fill('hello');
+	await page.getByRole('button', { name: 'Call tool' }).click();
+
+	const status = page.locator('.mcp-result-status .badge');
+	await expect(status).toHaveText('tool error');
+	await expect(status).toHaveClass(/bad/);
+	await expect(page.locator('.mcp-result-card > strong')).toHaveText('Tool error');
+	await expect(page.locator('.mcp-text-output')).toHaveText('tool failed');
+});
+
+test('MCP playground displays empty tool execution errors', async ({ page }) => {
+	await mockGateway(page);
+	await page.route('**/mcp', async route => {
+		const body = route.request().postDataJSON() as { method?: string };
+		if (body.method !== 'tools/call') {
+			await route.fallback();
+			return;
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 3,
+				result: { isError: true }
+			})
+		});
+	});
+	await page.goto('/mcp/playground');
+
+	await page.getByRole('button', { name: 'Initialize', exact: true }).click();
+	await page.getByLabel('text *').fill('hello');
+	await page.getByRole('button', { name: 'Call tool' }).click();
+
+	const status = page.locator('.mcp-result-status .badge');
+	await expect(status).toHaveText('tool error');
+	await expect(status).toHaveClass(/bad/);
+	const card = page.locator('.mcp-result-card');
+	await expect(page.locator('.mcp-result-card > strong')).toHaveText('Tool error');
+	await expect(card.locator('.json-block')).toContainText('"isError": true');
 });
 
 test('MCP playground uses relative requests when UI shares the gateway', async ({ page }) => {
@@ -1589,4 +2109,81 @@ test('login loads without protected API requests and preserves the return destin
 	await page.getByRole('link', { name: 'Sign in with SSO' }).click();
 	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
 	await expect(page.getByText('OAuth started')).toBeVisible();
+});
+
+test('multiselect shows selected values as chips with an overflow count', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/analytics');
+
+	const field = page.locator('.multi-check', { hasText: 'Group by' });
+	const trigger = field.locator('.multi-check-trigger');
+	const chips = field.locator('.multi-check-values > .multi-check-chip');
+	const count = field.locator('.multi-check-values > .multi-check-count');
+	const widthBefore = (await trigger.boundingBox())?.width;
+
+	await trigger.click();
+	const popover = field.locator('.multi-check-popover');
+	await popover.getByRole('checkbox', { name: 'Model' }).check();
+	await popover.getByRole('checkbox', { name: 'User', exact: true }).check();
+	await expect(chips).toHaveText(['Model', 'User']);
+	await expect(count).toHaveCount(0);
+
+	// Picking everything can't fit: the rest collapse into +n, and hovering still names them all.
+	const labels = ['Model', 'User', 'Group', 'Provider', 'User agent'];
+	for (const label of labels) {
+		await popover.getByRole('checkbox', { name: label, exact: true }).check();
+	}
+	await expect(count).toBeVisible();
+	const shown = await chips.count();
+	expect(shown).toBeGreaterThan(1);
+	await expect(count).toHaveText(`+${labels.length - shown}`);
+	await expect(trigger).toHaveAttribute('title', labels.join(', '));
+
+	// The field keeps its width so the open popover doesn't move while picking.
+	expect((await trigger.boundingBox())?.width).toBe(widthBefore);
+});
+
+test('multiselect popover fits long options inside the filter row', async ({ page }) => {
+	const longModel = 'anthropic/claude-sonnet-4-5-20250929-long-deployment-name';
+	const longProvider = 'azure-openai-eastus2-production-deployment-pool';
+	const tooLong = `${'very-long-model-name-'.repeat(20)}end`;
+	await mockGateway(page);
+	await page.route('**/api/logs/analytics/summary', route =>
+		route.fulfill({
+			json: {
+				timeRange: { from: '2025-01-01T00:00:00Z', to: '2025-01-01T01:00:00Z' },
+				bucketSeconds: 900,
+				buckets: [],
+				groups: [],
+				filterOptions: {
+					requestModel: ['gpt-4o', longModel, tooLong],
+					provider: ['openai', longProvider]
+				}
+			}
+		})
+	);
+	await page.goto('/llm/analytics');
+	const row = page.locator('.analytics-controls-left');
+	await expect(row.locator('.multi-check')).toHaveCount(6);
+	const rowBox = await row.boundingBox();
+	if (!rowBox) throw new Error('filter row is not visible');
+
+	// A long provider reads in full, even from a field near the row's right edge.
+	const providers = row.locator('.multi-check', { hasText: 'Providers' });
+	await providers.locator('.multi-check-trigger').click();
+	const label = providers.locator('.multi-check-option span', { hasText: longProvider });
+	await expect(label).toBeVisible();
+	expect(await label.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+	const popover = await providers.locator('.multi-check-popover').boundingBox();
+	if (!popover) throw new Error('popover is not visible');
+	expect(popover.x + popover.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+	await page.keyboard.press('Escape');
+	await page.mouse.click(5, 5);
+
+	// A name wider than the row is capped at the row, and the tooltip still gives it in full.
+	const models = row.locator('.multi-check', { hasText: 'Models' });
+	await models.locator('.multi-check-trigger').click();
+	const capped = await models.locator('.multi-check-popover').boundingBox();
+	expect(capped?.width).toBeLessThanOrEqual(rowBox.width + 1);
+	await expect(models.locator(`.multi-check-option span[title="${tooLong}"]`)).toBeVisible();
 });

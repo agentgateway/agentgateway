@@ -1,16 +1,14 @@
 use agent_core::strng;
-use itertools::Itertools;
 
 use crate::http::jwt::Claims;
 use crate::json;
-use crate::llm::RequestType;
 use crate::llm::policy::{Moderation, with_default_timeout};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 pub async fn send_request(
-	req: &mut dyn RequestType,
+	content: Vec<String>,
 	claims: Option<Claims>,
 	client: &PolicyClient,
 	moderation: &Moderation,
@@ -24,11 +22,6 @@ pub async fn send_request(
 	)];
 	pols.extend(moderation.policies.iter().cloned());
 	// let auth = BackendAuth::from(moderation.auth.clone());
-	let content = req
-		.get_messages()
-		.into_iter()
-		.map(|t| t.content)
-		.collect_vec();
 	let mut rb = ::http::Request::builder()
 		.uri("https://api.openai.com/v1/moderations")
 		.method(::http::Method::POST)

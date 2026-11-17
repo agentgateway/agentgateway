@@ -10,9 +10,10 @@ use tokio::time::Instant;
 use tracing::debug;
 
 use super::{
-	BrowserSession, Error, OidcPolicy, RefreshSession, cap_session_expiry, now_unix, provider,
+	BrowserSession, Error, OidcPolicy, OidcResponse, RefreshSession, cap_session_expiry, now_unix,
+	provider,
 };
-use crate::http::{PolicyResponse, Request, jwt};
+use crate::http::{Request, jwt};
 use crate::proxy::httpproxy::PolicyClient;
 
 #[derive(Clone, Debug)]
@@ -42,7 +43,7 @@ impl OidcPolicy {
 		req: &mut Request,
 		browser_session: BrowserSession,
 		client: PolicyClient,
-	) -> Result<Option<(jwt::Claims, PolicyResponse)>, Arc<Error>> {
+	) -> Result<Option<(jwt::Claims, OidcResponse)>, Arc<Error>> {
 		let Some(cookie) = crate::http::read_request_cookie(req, &self.session.refresh_cookie_name)
 		else {
 			return Ok(None);
@@ -117,7 +118,7 @@ impl OidcPolicy {
 		}
 		Ok(Some((
 			refreshed.claims.clone(),
-			PolicyResponse {
+			OidcResponse {
 				direct_response: None,
 				response_headers: Some(refreshed.response_headers.clone()),
 			},

@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+llm:
+  port: 3000
+  policies:
+    extProc:
+      host: localhost:50051
+      failureMode: failClosed
+      processingOptions:
+        requestHeaderMode: send
+        requestBodyMode: fullDuplexStreamed
+        responseHeaderMode: send
+        # vSR v0.4.0 caches complete JSON responses; response full-duplex is unsupported.
+        responseBodyMode: buffered
+        requestTrailerMode: send
+        responseTrailerMode: send
+        allowModeOverride: true
+  models:
+  - name: homehub-support
+    provider: openAI
+    params:
+      baseUrl: http://localhost:18080/v1

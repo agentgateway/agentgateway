@@ -159,6 +159,9 @@ output:
       concreteModel:
         backend:
           backend: default/guarded-model/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
       key: default/guarded-model.llm
       listenerKey: default/model-referencegrant.llm
       match:

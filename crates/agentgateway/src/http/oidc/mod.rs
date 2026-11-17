@@ -10,6 +10,7 @@ use serde_json::{Map, Value};
 use tracing::debug;
 
 use crate::http::{Body, PolicyResponse, Request, Response, jwt};
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 
@@ -164,6 +165,23 @@ pub struct ClientConfig {
 	pub token_endpoint_auth: TokenEndpointAuth,
 }
 
+/// The outcome of OIDC for one request: continue, optionally adding response headers (such as
+/// refreshed session cookies), or answer the request directly (such as a login redirect).
+#[derive(Debug, Default)]
+pub struct OidcResponse {
+	pub direct_response: Option<Response>,
+	pub response_headers: Option<::http::HeaderMap>,
+}
+
+impl OidcResponse {
+	fn with_response(self, response: Response) -> Self {
+		OidcResponse {
+			direct_response: Some(response),
+			..self
+		}
+	}
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("missing session")]
@@ -227,33 +245,43 @@ impl OidcPolicy {
 		log: &mut RequestLog,
 		req: &mut Request,
 		client: PolicyClient,
-	) -> Result<PolicyResponse, Error> {
+	) -> Result<OidcResponse, Error> {
 		if let Some(response) = self.maybe_handle_callback(req, client.clone()).await? {
 			return Ok(response);
 		}
 
 		if is_cors_preflight(req) {
-			return Ok(PolicyResponse::default());
+			return Ok(OidcResponse::default());
 		}
 
+		let is_login_path = self
+			.login
+			.as_ref()
+			.is_some_and(|login| req.uri().path() == login.path);
 		let bearer = crate::http::auth::AuthorizationLocation::bearer_header();
-		if self.credentials == OidcCredentials::SessionOrBearer
+		let permissive = self.credentials == OidcCredentials::Permissive;
+		if !is_login_path
+			&& (self.credentials == OidcCredentials::SessionOrBearer || permissive)
 			&& let Some(token) = bearer.extract(req)
 		{
-			let claims = self
-				.provider
-				.id_token_validator
-				.validate_claims(&token)
-				.map_err(|e| {
+			match self.provider.id_token_validator.validate_claims(&token) {
+				Ok(claims) => {
+					if let Some(Value::String(sub)) = claims.inner.get("sub") {
+						log.jwt_sub = Some(sub.clone());
+					}
+					req.extensions_mut().insert(claims);
+					bearer.remove(req).map_err(|e| Error::Http(e.into()))?;
+					return Ok(OidcResponse::default());
+				},
+				Err(e) if permissive => {
+					// The token may be valid for a later authentication policy; leave it in place.
+					debug!(error=%e, "ignoring invalid bearer id token in permissive mode");
+				},
+				Err(e) => {
 					debug!(error=%e, "rejected invalid bearer id token");
-					Error::AuthenticationRequired
-				})?;
-			if let Some(Value::String(sub)) = claims.inner.get("sub") {
-				log.jwt_sub = Some(sub.clone());
+					return Err(Error::AuthenticationRequired);
+				},
 			}
-			req.extensions_mut().insert(claims);
-			bearer.remove(req).map_err(|e| Error::Http(e.into()))?;
-			return Ok(PolicyResponse::default());
 		}
 
 		let mut clear_refresh_cookie = false;
@@ -277,7 +305,7 @@ impl OidcPolicy {
 							.is_some_and(|login| req.uri().path() == login.path)
 						{
 							return Ok(
-								PolicyResponse::default().with_response(build_redirect_response(
+								OidcResponse::default().with_response(build_redirect_response(
 									&self.return_target(req.uri()),
 									&[],
 								)?),
@@ -287,7 +315,7 @@ impl OidcPolicy {
 							can_logout: self.logout.is_some(),
 						});
 						req.extensions_mut().insert(claims);
-						return Ok(PolicyResponse::default());
+						return Ok(OidcResponse::default());
 					} else {
 						match self
 							.refresh_browser_session(req, browser_session, client)
@@ -338,7 +366,10 @@ impl OidcPolicy {
 			.login
 			.as_ref()
 			.and_then(|login| login.redirect.as_deref());
-		let mut response = if non_navigation {
+		let mut response = if permissive && !is_login_path && !is_browser_navigation(req) {
+			// Only browser navigations enter login; other requests continue to later policies.
+			OidcResponse::default()
+		} else if non_navigation {
 			if !clear_refresh_cookie && login_redirect.is_none() {
 				return Err(Error::AuthenticationRequired);
 			}
@@ -353,7 +384,7 @@ impl OidcPolicy {
 					.headers_mut()
 					.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
 			}
-			PolicyResponse::default().with_response(response)
+			OidcResponse::default().with_response(response)
 		} else if let Some(login) = &self.login
 			&& let Some(destination) = &login.redirect
 			&& req.uri().path() != login.path
@@ -370,8 +401,7 @@ impl OidcPolicy {
 				)],
 				std::iter::empty::<&str>(),
 			)?;
-			PolicyResponse::default()
-				.with_response(build_redirect_response(&destination.to_string(), &[])?)
+			OidcResponse::default().with_response(build_redirect_response(&destination.to_string(), &[])?)
 		} else {
 			// OIDC is an interactive browser policy: unauthenticated non-callback requests enter login.
 			callback::start_login(self, req)?
@@ -393,7 +423,7 @@ impl OidcPolicy {
 		&self,
 		req: &mut Request,
 		client: PolicyClient,
-	) -> Result<Option<PolicyResponse>, Error> {
+	) -> Result<Option<OidcResponse>, Error> {
 		if req.method() != ::http::Method::GET
 			|| req.uri().path() != self.redirect_uri.callback_path.path()
 		{
@@ -436,18 +466,45 @@ impl crate::store::RequestPolicyTrait for OidcPolicy {
 		client: &PolicyClient,
 		log: &mut RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
-		if let Some(response) = self
-			.handle_logout(req)
-			.map_err(crate::proxy::ProxyResponse::from)?
-		{
-			return Ok(response);
+	) -> Result<PolicyResponse, ProxyError> {
+		let response = match self.handle_logout(req)? {
+			Some(response) => response,
+			None => self
+				.apply(log, req, client.clone())
+				.await
+				.map_err(ProxyError::OidcFailure)?,
+		};
+		match response.direct_response {
+			Some(mut direct) => {
+				crate::http::merge_in_headers(response.response_headers, direct.headers_mut());
+				Err(ProxyError::direct_response(direct))
+			},
+			None => Ok(PolicyResponse {
+				response_headers: response.response_headers,
+			}),
 		}
-		self
-			.apply(log, req, client.clone())
-			.await
-			.map_err(|e| crate::proxy::ProxyResponse::from(crate::proxy::ProxyError::OidcFailure(e)))
 	}
+}
+
+/// Detects browser navigation. Fetch metadata is authoritative; `Accept` is the fallback when absent.
+fn is_browser_navigation(req: &Request) -> bool {
+	match req.headers().get("sec-fetch-mode") {
+		Some(mode) => mode == "navigate",
+		None => accepts_html(req),
+	}
+}
+
+/// Whether any `Accept` media range is `text/html`, ignoring parameters and case, across every
+/// `Accept` header line.
+fn accepts_html(req: &Request) -> bool {
+	req
+		.headers()
+		.get_all(header::ACCEPT)
+		.iter()
+		.filter_map(|accept| accept.to_str().ok())
+		.flat_map(|accept| accept.split(','))
+		.filter_map(|range| range.split(';').next())
+		.any(|media_type| media_type.trim().eq_ignore_ascii_case("text/html"))
 }
 
 fn is_cors_preflight(req: &Request) -> bool {

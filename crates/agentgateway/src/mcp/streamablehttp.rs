@@ -19,6 +19,10 @@ use crate::mcp::{REMOVED_METHODS_2026_07_28, is_modern_version};
 use crate::proxy::ProxyError;
 use crate::*;
 
+// Every streamable HTTP POST boxes this future and holds it until the response is ready.
+// A larger future usually means some value is now held across an await.
+const HANDLE_POST_FUTURE_SIZE: usize = 4 * 1024;
+
 #[derive(Debug, Clone)]
 pub struct StreamableHttpServerConfig {
 	/// If true, the server will create a session for each request and keep it alive.
@@ -89,13 +93,13 @@ impl StreamableHttpService {
 				Box::pin(
 					self
 						.handle_post(request, inputs)
-						.assert_size::<{ 4 * 1024 }>(),
+						.assert_size::<{ HANDLE_POST_FUTURE_SIZE }>(),
 				)
 				.await
 			},
 			// if we're not in stateful mode, we don't support GET or DELETE because there is no session
 			(http::Method::GET, true) => self.handle_get(request, inputs).await,
-			(http::Method::DELETE, true) => self.handle_delete(request, inputs).await,
+			(http::Method::DELETE, true) => Box::pin(self.handle_delete(request, inputs)).await,
 			_ => Err(ProxyError::MCP(mcp::Error::MethodNotAllowed)),
 		}
 	}
@@ -151,6 +155,7 @@ impl StreamableHttpService {
 				};
 			},
 		};
+		mcp::validate_client_message(&message)?;
 		let request_id = request_id(&message);
 		let protocol = validate_request_protocol(&part.headers, &message, request_id.clone())?;
 		validate_standard_headers(&part.headers, &message, &protocol)?;
@@ -265,19 +270,23 @@ impl StreamableHttpService {
 			return mcp::Error::InvalidAcceptGet.into();
 		}
 
-		let Some(session_id) = request
-			.headers()
+		let (parts, _) = request.into_parts();
+		let Some(session_id) = parts
+			.headers
 			.get(HEADER_SESSION_ID)
 			.and_then(|v| v.to_str().ok())
 		else {
 			return mcp::Error::SessionIdRequired.into();
 		};
 
-		let Some(session) = self.session_manager.get_session(session_id, inputs) else {
+		let ctx = crate::mcp::upstream::IncomingRequestContext::new(&parts);
+		let Some(session) = self
+			.session_manager
+			.get_or_resume_session(session_id, inputs, &ctx)?
+		else {
 			return mcp::Error::UnknownSession.into();
 		};
 
-		let (parts, _) = request.into_parts();
 		session.get_stream(parts).await
 	}
 
@@ -301,8 +310,8 @@ impl StreamableHttpService {
 		Ok(
 			self
 				.session_manager
-				.delete_session(&inputs.backend_id, &session_id, parts)
-				.await
+				.delete_session(&session_id, inputs, parts)
+				.await?
 				.unwrap_or_else(accepted_response),
 		)
 	}

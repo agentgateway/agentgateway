@@ -1,15 +1,15 @@
-# RFC 8693 token exchange (`backendAuth.oauth`)
+# RFC 8693 token exchange (`backendAuth.oauthTokenExchange`)
 
-The `backendAuth.oauth` policy makes the gateway exchange the inbound user
-credential for a per-upstream token at an OAuth authorization server before
-forwarding the request. This example runs the default grant — **RFC 8693 token
-exchange** — against Keycloak: the inbound token is sent as `subject_token`,
-and the response token is forwarded upstream.
+The `backendAuth.oauthTokenExchange` policy makes the gateway exchange the
+inbound user credential for a per-upstream token at an OAuth authorization
+server before forwarding the request. This example runs the default grant —
+**RFC 8693 token exchange** — against Keycloak: the inbound token is sent as
+`subject_token`, and the response token is forwarded upstream.
 
 The sibling [`extauthz`](../extauthz/README.md) example reaches the same goal a
 different way — building the token request by hand with `extAuthz` + CEL. Use
-`backendAuth.oauth` when you want the built-in policy rather than a
-hand-written request. For the **RFC 7523 JWT bearer** grant (`grantType:
+`backendAuth.oauthTokenExchange` when you want the built-in policy rather than
+a hand-written request. For the **RFC 7523 JWT bearer** grant (`grantType:
 jwtBearer`, including Microsoft Entra on-behalf-of), see
 [`jwt-authz-grant`](../jwt-authz-grant/README.md).
 
@@ -93,9 +93,11 @@ Edit `config.yaml` and re-`curl` (hot-reloaded):
   puts the exchanged token in a custom header instead of `Authorization`.
 - **Client auth method** — flip `clientSecretBasic` ↔ `clientSecretPost` and watch
   the credentials move between the `Authorization` header and the form body.
-- **Caching** — `cache: { inMemory: { maxEntries: 0 } }` disables caching so every
+- **Caching** — `cache: { maxEntries: 0 }` disables caching so every
   request hits the token endpoint; otherwise tokens are cached per request
   (subject + type + actor + extra params), TTL capped by the subject JWT `exp`.
+  `cache: { defaultTtl: 60s }` sets the TTL used when the token endpoint omits
+  `expires_in` (default `300s`).
 - **Delegation** — add `actorToken: { source: { header: { name: x-actor-token } }, tokenType: ... }`
   to emit `actor_token` / `actor_token_type` (RFC 8693 delegation; the source
   must be set explicitly).
@@ -107,6 +109,10 @@ Edit `config.yaml` and re-`curl` (hot-reloaded):
 
   ```yaml
   routes:
+  - name: token-exchange
+    matches:
+    - path:
+        pathPrefix: /exchange
     policies:
       jwtAuth:
         issuer: https://idp.example.com
@@ -114,9 +120,11 @@ Edit `config.yaml` and re-`curl` (hot-reloaded):
         jwks:
           url: https://idp.example.com/.well-known/jwks.json
     backends:
+    - host: localhost:18080
       policies:
         backendAuth:
           oauthTokenExchange:
+            # host, path, clientAuth, and audiences as above...
             subjectToken:
               source:
                 expression: jwt.rawToken.unredacted()

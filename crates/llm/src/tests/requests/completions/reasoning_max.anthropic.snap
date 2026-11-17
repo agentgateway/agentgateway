@@ -36,7 +36,9 @@ info:
     "request_model": "claude-opus-4-6",
     "provider": "anthropic",
     "streaming": false,
-    "params": {},
+    "params": {
+      "reasoning_effort": "xhigh"
+    },
     "prompt": [
       {
         "role": "user",

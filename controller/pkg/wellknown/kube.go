@@ -3,6 +3,7 @@ package wellknown
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -14,6 +15,8 @@ var (
 	DaemonSetGVK               = appsv1.SchemeGroupVersion.WithKind("DaemonSet")
 	SecretGVK                  = corev1.SchemeGroupVersion.WithKind("Secret")
 	ConfigMapGVK               = corev1.SchemeGroupVersion.WithKind("ConfigMap")
+	ClusterTrustBundleGVK      = certificatesv1.SchemeGroupVersion.WithKind("ClusterTrustBundle")
+	ClusterTrustBundleGVR      = certificatesv1.SchemeGroupVersion.WithResource("clustertrustbundles")
 	ServiceGVK                 = corev1.SchemeGroupVersion.WithKind("Service")
 	ServiceAccountGVK          = corev1.SchemeGroupVersion.WithKind("ServiceAccount")
 	ClusterRoleBindingGVK      = rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding")

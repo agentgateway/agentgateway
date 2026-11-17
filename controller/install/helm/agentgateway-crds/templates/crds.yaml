@@ -1,0 +1,6 @@
+{{- range $path, $_ := .Files.Glob "files/crds/*.yaml" }}
+{{- $crd := $.Files.Get $path | fromYaml }}
+{{- if hasKey $crd "Error" }}{{ fail (printf "%s: %s" $path $crd.Error) }}{{ end }}
+---
+{{ $crd | toJson }}
+{{- end }}

@@ -43,6 +43,7 @@ type ReferenceTypes struct {
 	PolicyTargetsBySelector func(krtctx krt.HandlerContext, policyNamespace string, selector agentgateway.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget
 	PolicyBackend           func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 	RouteBackend            func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
+	// Parent kinds must be unique across groups; built-in parent kind names are reserved.
 	AllowedParentReferences sets.Set[schema.GroupKind]
 }
 
@@ -92,6 +93,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 	knownToReferences := sets.New(
 		wellknown.ServiceGVK.GroupKind(),
 		wellknown.SecretGVK.GroupKind(),
+		wellknown.ConfigMapGVK.GroupKind(),
 		wellknown.AgentgatewayBackendGVK.GroupKind(),
 		wellknown.HTTPRouteGVK.GroupKind(),
 		wellknown.InferencePoolGVK.GroupKind(),
@@ -405,7 +407,7 @@ func resolveXBackend(
 type RouteAttachment struct {
 	// Route
 	From utils.TypedNamespacedName
-	// Immediate parent (Gateway or ListenerSet)
+	// Immediate parent (Gateway, ListenerSet, or extension). Service parents use the eventual Gateway.
 	To           utils.TypedNamespacedName
 	ListenerName string
 	// Eventual parent (always Gateway)

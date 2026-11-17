@@ -449,7 +449,7 @@ impl RemoteRateLimit {
 		if let Some(span) = span.as_deref_mut() {
 			span.record_grpc_result(&resp);
 		}
-		trace!("check response: {:?}", resp);
+		trace!(overall_code = ?resp.as_ref().map(|r| r.get_ref().overall_code()).map_err(|e| e.code()), "check response");
 		if let Err(ref error) = resp {
 			let ignore = self.failure_mode == FailureMode::FailOpen;
 			warn!(
@@ -578,8 +578,8 @@ impl crate::store::RequestPolicyTrait for RemoteRateLimit {
 		client: &PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
-		Ok(self.check(client.clone(), req).await?)
+	) -> Result<PolicyResponse, ProxyError> {
+		self.check(client.clone(), req).await
 	}
 
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {

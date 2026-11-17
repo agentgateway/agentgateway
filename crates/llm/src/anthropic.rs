@@ -19,6 +19,10 @@ pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 
 pub const OAUTH_TOKEN_PREFIX: &str = "sk-ant-oat";
 
+/// Default anthropic-version when the client sends none.
+// TODO should this be configurable?
+pub const ANTHROPIC_VERSION: &str = "2023-06-01";
+
 pub const DEFAULT_BASE_PATH: &str = "/v1";
 
 pub fn path_suffix(route: RouteType) -> &'static str {

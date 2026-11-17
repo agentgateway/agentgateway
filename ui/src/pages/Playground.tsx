@@ -1,3 +1,4 @@
+import { useMutation } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
 	Bot,
@@ -16,7 +17,6 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
 import { sendChatCompletion, sendMcpJsonRpc } from '@/api/playgroundApi';
 import { claudeSubscriptionWarning } from '@/claudeSubscription';
-import { CatalogModelSelector } from '@/components/CatalogModelSelector';
 import {
 	Dropdown,
 	Field,
@@ -27,8 +27,9 @@ import {
 	StatusBanner
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
+import { WildcardModelSelector } from '@/components/WildcardModelSelector';
 import { providerLabel } from '@/config';
-import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from '@/cors';
+import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy, waitForLlmCors } from '@/cors';
 import { hasKeyValue, keyLabel } from '@/credentialDisplay';
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from '@/gatewayUrls';
 import {
@@ -38,12 +39,12 @@ import {
 	useUpsertPolicyResource
 } from '@/hooks';
 import { extractMcpTools, initializeMcpSession, type McpTool, nextRpcId } from '@/mcp';
+import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	isWildcardModelName,
 	modelProviderLabel,
 	resolveModelName,
-	wildcardModelPrefix,
-	wildcardResolvedSuffix
+	wildcardMatchesModel
 } from '@/modelResolution';
 import type { CorsPolicy, LlmModel, LlmProvider, ProviderName } from '@/types';
 
@@ -127,9 +128,11 @@ export function PlaygroundPage() {
 	const upsertPolicy = useUpsertPolicyResource();
 	const modelOptions = useMemo(
 		() => [
-			...models.map(item => ({
+			...models.map((item, index) => ({
 				kind: 'model' as const,
 				name: item.name,
+				value: modelOptionValue(models, index),
+				description: modelSubtitle(item) || undefined,
 				icon: <ProviderIcon provider={modelProviderLabel(item, providers) as ProviderName} />,
 				searchText: `${item.name} ${modelProviderLabel(item, providers)} ${providerLabel(item.provider)}`,
 				config: item
@@ -137,6 +140,8 @@ export function PlaygroundPage() {
 			...virtualModels.map(item => ({
 				kind: 'virtual' as const,
 				name: item.name,
+				value: item.name,
+				description: 'Virtual model',
 				icon: <GitBranch size={16} />,
 				searchText: `${item.name} virtual`,
 				config: item
@@ -171,9 +176,9 @@ export function PlaygroundPage() {
 		for (const key of legacySecretStorageKeys) localStorage.removeItem(key);
 	}, []);
 
-	const savedModelExists = modelOptions.some(item => item.name === model);
-	const selectedModel = (savedModelExists ? model : '') || modelOptions[0]?.name || '';
-	const selectedModelOption = modelOptions.find(item => item.name === selectedModel);
+	const savedModelExists = modelOptions.some(item => item.value === model);
+	const selectedModel = (savedModelExists ? model : '') || modelOptions[0]?.value || '';
+	const selectedModelOption = modelOptions.find(item => item.value === selectedModel);
 	const selectedModelConfig =
 		selectedModelOption?.kind === 'model' ? selectedModelOption.config : undefined;
 	const displayRequestModel = playgroundRequestModel(
@@ -182,14 +187,6 @@ export function PlaygroundPage() {
 		specificModel,
 		providers
 	);
-	const wildcardPrefix =
-		selectedModelConfig && isWildcardModelName(selectedModelConfig.name)
-			? wildcardModelPrefix(selectedModelConfig.name)
-			: '';
-	const specificModelSuffix =
-		selectedModelConfig && isWildcardModelName(selectedModelConfig.name)
-			? wildcardResolvedSuffix(displayRequestModel, selectedModelConfig.name, wildcardPrefix)
-			: specificModel;
 	const selectedCatalogProvider = selectedModelConfig
 		? modelProviderLabel(selectedModelConfig, providers)
 		: null;
@@ -207,15 +204,27 @@ export function PlaygroundPage() {
 		'';
 	const selectedKeyValue = apiKeyMode === 'saved' && rawVirtualKeys.length > 0 ? savedKey : apiKey;
 	const llmCors = policies.cors as CorsPolicy | null | undefined;
+	const applyCors = useMutation({
+		mutationFn: async () => {
+			await upsertPolicy.mutateAsync({
+				kind: 'llm.policy',
+				id: 'cors',
+				value: playgroundCorsPolicy(llmCors, 'llm')
+			});
+			await waitForLlmCors(llmBaseUrl);
+		}
+	});
 	const fileCorsOwned = Object.hasOwn(filePolicies, 'cors');
 	const fileMcpCorsOwned = Boolean(
 		mcpData.rawConfig.data?.mcp?.policies &&
 			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
 	);
 	const needsCors =
-		!configDataLoading && !configDataError && config.data && !llmEndpoint.sameOrigin
+		applyCors.isPending ||
+		applyCors.isError ||
+		(!configDataLoading && !configDataError && config.data && !llmEndpoint.sameOrigin
 			? corsNeedsUpdate(llmCors, 'llm')
-			: false;
+			: false);
 	const needsMcpCors =
 		mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin
 			? corsNeedsUpdate(mcpData.data.mcp?.policies?.cors, 'mcp')
@@ -229,15 +238,13 @@ export function PlaygroundPage() {
 		apiKeyMode,
 		virtualKeysCount: rawVirtualKeys.length
 	});
-	const corsSaving = upsertPolicy.isPending;
-	const corsSaveError = upsertPolicy.error?.message ?? null;
+	if (applyCors.isPending || applyCors.isError)
+		sendBlockers.push('Waiting for the LLM CORS policy.');
+	const corsSaving = upsertPolicy.isPending || applyCors.isPending;
+	const corsSaveError = applyCors.error?.message ?? upsertPolicy.error?.message ?? null;
 
 	function applyLlmCors() {
-		upsertPolicy.mutate({
-			kind: 'llm.policy',
-			id: 'cors',
-			value: playgroundCorsPolicy(llmCors, 'llm')
-		});
+		applyCors.mutate();
 	}
 
 	function applyMcpCors() {
@@ -359,7 +366,8 @@ export function PlaygroundPage() {
 				model: requestModel,
 				apiKey: selectedKeyValue,
 				messages: toOpenAiMessages(outboundMessages),
-				tools
+				tools,
+				headers: selectedModelConfig && modelMatchHeaders(selectedModelConfig)
 			});
 			const firstLatencyMs = Math.round(performance.now() - started);
 			setRunSteps([
@@ -430,7 +438,8 @@ export function PlaygroundPage() {
 					model: requestModel,
 					apiKey: selectedKeyValue,
 					messages: toOpenAiMessages(followUpMessages),
-					tools
+					tools,
+					headers: selectedModelConfig && modelMatchHeaders(selectedModelConfig)
 				});
 				const finalLatencyMs = Math.round(performance.now() - finalStarted);
 				setRunSteps([
@@ -570,13 +579,16 @@ export function PlaygroundPage() {
 									placeholder="No models"
 									searchable
 									options={modelOptions.map(item => ({
-										value: item.name,
-										label: item.name,
-										description: item.kind === 'virtual' ? 'Virtual model' : undefined,
+										value: item.value,
+										label: item.kind === 'model' ? modelLabel(item.config) : item.name,
+										description: item.description,
 										icon: item.icon,
 										searchText: item.searchText
 									}))}
-									onChange={setModel}
+									onChange={value => {
+										setModel(value);
+										setSpecificModel('');
+									}}
 								/>
 							</FieldGroup>
 							{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
@@ -584,17 +596,17 @@ export function PlaygroundPage() {
 									label="Specific model"
 									hint="Model uses a wildcard; specify the specific model."
 								>
-									<div className="target-resolved-composite">
-										{wildcardPrefix ? (
-											<span className="target-prefix">{wildcardPrefix}</span>
-										) : null}
-										<CatalogModelSelector
+									{(id, hintId) => (
+										<WildcardModelSelector
+											id={id}
 											ariaLabel="Specific model"
-											value={specificModelSuffix}
+											aria-describedby={hintId}
+											model={selectedModelConfig}
+											value={specificModel}
 											provider={selectedCatalogProvider}
-											onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}
+											onChange={setSpecificModel}
 										/>
-									</div>
+									)}
 								</Field>
 							) : (
 								<div aria-hidden="true" />
@@ -799,10 +811,7 @@ function playgroundRequestModel(
 function normalizedSpecificModel(model: LlmModel, specificModel: string) {
 	if (!isWildcardModelName(model.name)) return specificModel;
 	const trimmed = specificModel.trim();
-	const prefix = wildcardModelPrefix(model.name);
-	if (!trimmed || trimmed === prefix) return '';
-	if (prefix && !trimmed.startsWith(prefix)) return '';
-	return trimmed;
+	return wildcardMatchesModel(model.name, trimmed) ? trimmed : '';
 }
 
 function ChatMessageView(props: { message: ChatMessage }) {

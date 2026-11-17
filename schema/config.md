@@ -7,6 +7,7 @@
 |`config.dns`|object|DNS resolver settings.|
 |`config.dns.lookupFamily`|enum|Controls which IP address families the DNS resolver will query for<br>upstream connections.<br>Accepted values: All, Auto, V4Preferred, V4Only, V6Only.<br>Defaults to Auto (IPv4-only when enableIpv6 is false, both when true).|
 |`config.dns.edns0`|boolean|Whether to enable EDNS0 (Extension Mechanisms for DNS) in the resolver.<br>When `None`, the system-provided resolver setting is preserved.<br>Can also be set via the `DNS_EDNS0` environment variable.|
+|`config.dns.maxTtl`|string|Maximum interval between DNS refreshes, regardless of the TTL returned by the server.<br>Useful when upstream IPs change faster than their advertised TTL. Zero disables caching.|
 |`config.localXdsPath`|string|Local XDS path. If not specified, the current configuration file will be used.|
 |`config.modelCatalog`|[]object|Model cost catalog sources; entries are merged in order, with later entries taking precedence.|
 |`config.modelCatalog[].file`|string|Path to a file on disk containing the model cost catalog.|
@@ -17,30 +18,56 @@
 |`config.modelCatalog[].inline.metadata.generatedAt`|string|Time the generated catalog contents last changed.|
 |`config.modelCatalog[].inline.providers`|object|Map of provider name to its supported models and pricing.|
 |`config.modelCatalog[].inline.providers.*.models`|object|Map of model ID to its pricing rates and tiers.|
+|`config.modelCatalog[].inline.providers.*.models.*.name`|string|Human-readable display name.|
+|`config.modelCatalog[].inline.providers.*.models.*.status`|string|Lifecycle stage (alpha, beta, deprecated); absent means generally available.|
+|`config.modelCatalog[].inline.providers.*.models.*.released`|string|Release date, as YYYY-MM-DD or YYYY-MM.|
+|`config.modelCatalog[].inline.providers.*.models.*.endpoints`|[]string|Client endpoints the model serves; absent means a chat model.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates`|object|Base pricing rates for this model.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheRead`|string|Cost per 1M tokens read from cache.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWrite`|string|Cost per 1M tokens written to cache.|
+|`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWriteDetails`|object|Cost per 1M tokens written to cache, keyed by non-default TTL (`1h`, `12h`). TTLs not set fall back to cacheWrite.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.perPage`|string|Cost per page, for document/OCR models.|
+|`config.modelCatalog[].inline.providers.*.models.*.rates.perAudioMinute`|string|Cost per minute of input audio, for models billed by duration (such as `whisper-1`).|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers`|[]object|Pricing rules ordered by increasing context threshold within each service tier.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].contextOver`|integer|Context-token threshold above which this rule applies. Defaults to zero.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers[].serviceTier`|enum|Normalized served service tier; absent matches any service tier.<br>Possible values: `standard`, `flex`, `priority`, `reserved`.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].serviceTier`|enum|Normalized served service tier; absent matches any service tier.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `ultrafast`, `fast`.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates`|object|Pricing rates for this tier, overlaid on the base model rates.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheRead`|string|Cost per 1M tokens read from cache.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWrite`|string|Cost per 1M tokens written to cache.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWriteDetails`|object|Cost per 1M tokens written to cache, keyed by non-default TTL (`1h`, `12h`). TTLs not set fall back to cacheWrite.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.perPage`|string|Cost per page, for document/OCR models.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.perAudioMinute`|string|Cost per minute of input audio, for models billed by duration (such as `whisper-1`).|
 |`config.modelCatalog[].inline.providers.*.models.*.tags`|[]string|Freeform capability/routing tags for this model.|
-|`config.database`|object|Primary database used by local runtime features.|
-|`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits`|object|Token limits.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits.context`|integer|Total context window, shared by input and output.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits.input`|integer|Maximum input tokens, when tighter than the context window allows.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits.output`|integer|Maximum output tokens.|
+|`config.modelCatalog[].inline.providers.*.models.*.modalities`|object|Supported input and output modalities.|
+|`config.modelCatalog[].inline.providers.*.models.*.modalities.input`|[]string|Input modalities, such as text, image, pdf, audio, or video.|
+|`config.modelCatalog[].inline.providers.*.models.*.modalities.output`|[]string|Output modalities, such as text, image, audio, or video.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities`|object|Supported features. Absent fields are unknown.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities.reasoning`|boolean|Whether the model supports reasoning.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities.structuredOutput`|boolean|Whether the model supports JSON Schema structured outputs.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities.toolCall`|boolean|Whether the model supports tool calling.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities.temperature`|boolean|Whether the model accepts the temperature parameter.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning`|object|How reasoning can be controlled.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.toggle`|boolean|Whether reasoning can be turned on and off.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.effort`|[]string|Accepted effort levels.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens`|object|Accepted reasoning token budget range.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens.min`|integer|Minimum reasoning token budget.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens.max`|integer|Maximum reasoning token budget.|
+|`config.database`|object|Primary database used by local runtime features. Request logs are also stored here unless<br>`config.logging.database` sets its own `url` or `enabled: false`.|
+|`config.database.url`|string|Connection URL for the database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
 |`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`, `readOnly`.|
@@ -67,7 +94,7 @@
 |`config.histograms`|enum|Histogram representation to collect. Native histograms are exposed only through the<br>Prometheus protobuf format. Defaults to classic.<br>Possible values: `classic`, `native`, `both`.|
 |`config.readinessAddr`|string|Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.session`|object|Configuration for stateful session management|
-|`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
+|`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, a key is generated when the config file or database is writable.<br>Set to `disabled` to leave sessions unencrypted.<br>For example, generated via `openssl rand -hex 32`.|
 |`config.mcp`|object|MCP gateway settings.|
 |`config.mcp.sessionTtl`|string|Time to live for MCP sessions before they are closed automatically. Defaults to 30 minutes.|
 |`config.sensitiveHeaders`|[]string|Additional request headers whose values should be redacted from trace and debug output.|
@@ -92,9 +119,10 @@
 |`config.logging.fields.add`|object|Map of field name to a CEL expression that computes the value to add to logs.|
 |`config.logging.level`|string|Log level: a single level (e.g. `info`), a comma-separated string of per-module levels (e.g. `info,agent_core=trace`), or a list of per-module levels (e.g. `[info, agent_core=trace]`).|
 |`config.logging.format`|enum|Log output format: `text` or `json`.<br>Possible values: `text`, `json`.|
-|`config.logging.database`|object|Log-store database configuration; enables request logging to a database backend.|
-|`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
-|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
+|`config.logging.database`|object|Request log database. When omitted (or null), request logs are stored in `config.database`<br>if it is set. Set `enabled: false` to turn off request log storage.|
+|`config.logging.database.enabled`|boolean|Store request logs in a database. When omitted, request logs are stored if either `url` or<br>`config.database.url` is set, and otherwise not. When true, one of them is required. When<br>false, no request log store is started, even if `config.database` is set.|
+|`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.<br>Defaults to `config.database`.|
+|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>Can only be set together with `url`. Without a `url`, the `config.database` pool and its limit<br>are used. With a `url`, the pool is shared only when both `url` and `maxConnections` match<br>`config.database`.|
 |`config.metrics`|object|Metrics configuration, including metric removal and custom fields.|
 |`config.metrics.remove`|[]string|Metric names to exclude from collection.|
 |`config.metrics.fields`|object|Custom fields to add to all metrics.|
@@ -110,6 +138,7 @@
 |`config.backend.poolMaxSize`|integer|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
 |`config.backend.h2KeepaliveInterval`|string|Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.<br>PINGs are sent even on idle connections to proactively evict dead connections from the pool.<br>Disabled by default ("0s"). Note: many gRPC servers enforce a minimum ping interval<br>and will reject connections that ping more frequently.|
 |`config.backend.h2KeepaliveTimeout`|string|Timeout waiting for a PING ACK before considering the connection dead and closing it.<br>Only applies when h2_keepalive_interval is set. Defaults to 5s.|
+|`config.backend.allowDynamicLoopback`|boolean|Allow dynamic backends to connect to loopback and link-local addresses (such as cloud<br>metadata servers). Disabled by default, as this lets requests reach services local to the<br>gateway.|
 |`config.callouts`|object|Configuration for calls the gateway makes on its own behalf, such as cloud provider credential<br>fetches, JWKS fetches, OIDC discovery, and external authorization.|
 |`config.callouts.tunnel`|object|HTTP proxy to tunnel callouts through. If unset, the `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,<br>and `NO_PROXY` environment variables are used.<br>Callouts to backends with their own tunnel policy, Kubernetes services, and loopback or<br>link-local addresses (such as cloud metadata servers) are sent directly.|
 |`config.callouts.tunnel.url`|string|URL of the proxy, for example `http://proxy.example.com:3128`.|
@@ -324,12 +353,12 @@
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`binds[].listeners[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`binds[].listeners[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -405,13 +434,14 @@
 |`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`binds[].listeners[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`binds[].listeners[].routes[].policies.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`binds[].listeners[].routes[].policies.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`binds[].listeners[].routes[].policies.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`binds[].listeners[].routes[].policies.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`binds[].listeners[].routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`binds[].listeners[].routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`binds[].listeners[].routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`binds[].listeners[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`binds[].listeners[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -430,13 +460,13 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`binds[].listeners[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -578,6 +608,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`binds[].listeners[].routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`binds[].listeners[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -618,12 +649,19 @@
 |`binds[].listeners[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`binds[].listeners[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`binds[].listeners[].routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`binds[].listeners[].routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`binds[].listeners[].routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`binds[].listeners[].routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`binds[].listeners[].routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`binds[].listeners[].routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`binds[].listeners[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`binds[].listeners[].routes[].policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`binds[].listeners[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
-|`binds[].listeners[].routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`binds[].listeners[].routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`binds[].listeners[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
 |`binds[].listeners[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`binds[].listeners[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -660,7 +698,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.env`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -714,7 +752,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom`|object||
@@ -924,7 +962,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
@@ -1337,13 +1375,14 @@
 |`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`binds[].listeners[].policies.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`binds[].listeners[].policies.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`binds[].listeners[].policies.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`binds[].listeners[].policies.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`binds[].listeners[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`binds[].listeners[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`binds[].listeners[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`binds[].listeners[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`binds[].listeners[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`binds[].listeners[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -1530,13 +1569,13 @@
 |`binds[].listeners[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`binds[].listeners[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`binds[].listeners[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`binds[].listeners[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`binds[].listeners[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`binds[].listeners[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -1566,6 +1605,7 @@
 |`frontendPolicies.http.http2KeepaliveTimeout`|string|Time to wait for an HTTP/2 keepalive ping response.|
 |`frontendPolicies.http.maxConnectionDuration`|string|Maximum time a connection may stay open. After this duration, the connection is gracefully<br>closed after the current in-flight request completes. Useful for even traffic distribution<br>behind load balancers during scaling events.|
 |`frontendPolicies.http.maxConcurrentRequests`|integer|Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests<br>and HTTP/2 streams. Requests over the limit are rejected immediately.|
+|`frontendPolicies.http.normalize`|[]enum|Path normalization rules applied before route matching. The normalized path is used for<br>routing, policies and the upstream request. Access logs keep the original path.<br>Possible values: `mergeSlash`, `dotSegment`, `decodeUnreserved`, `rejectEscapedSlash`, `unescapeSlash`.|
 |`frontendPolicies.tls`|object|Settings for handling incoming TLS connections.|
 |`frontendPolicies.tls.handshakeTimeout`|string|Maximum time allowed to complete the downstream TLS handshake.|
 |`frontendPolicies.tls.alpn`|array|ALPN protocols advertised to downstream clients.|
@@ -1880,12 +1920,12 @@
 |`policies[].policy.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`policies[].policy.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`policies[].policy.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`policies[].policy.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`policies[].policy.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`policies[].policy.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`policies[].policy.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`policies[].policy.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`policies[].policy.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -1961,13 +2001,14 @@
 |`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`policies[].policy.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`policies[].policy.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`policies[].policy.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`policies[].policy.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`policies[].policy.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`policies[].policy.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`policies[].policy.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`policies[].policy.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`policies[].policy.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`policies[].policy.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`policies[].policy.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`policies[].policy.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -1986,13 +2027,13 @@
 |`policies[].policy.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`policies[].policy.apiKey.keys[].key`|string|API key value to accept.|
 |`policies[].policy.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`policies[].policy.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`policies[].policy.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`policies[].policy.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`policies[].policy.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`policies[].policy.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`policies[].policy.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`policies[].policy.apiKey.keys[].budgets[].limit.amount`|number||
-|`policies[].policy.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`policies[].policy.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`policies[].policy.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`policies[].policy.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`policies[].policy.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -2134,6 +2175,7 @@
 |`policies[].policy.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`policies[].policy.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`policies[].policy.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`policies[].policy.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -2174,12 +2216,19 @@
 |`policies[].policy.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`policies[].policy.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`policies[].policy.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.compression`|object|Compress responses and decompress request bodies.|
+|`policies[].policy.compression.response`|object|Compression applied to responses sent to the client.|
+|`policies[].policy.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`policies[].policy.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`policies[].policy.compression.request`|object|Compression applied to requests received from the client.|
+|`policies[].policy.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`policies[].policy.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`policies[].policy.timeout`|object|Set request timeout limits.|
 |`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`policies[].policy.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`policies[].policy.retry`|object|Retry matching failed upstream requests.|
-|`policies[].policy.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`policies[].policy.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`policies[].policy.retry.backoff`|string|Delay between retry attempts.|
 |`policies[].policy.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`policies[].policy.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -2216,7 +2265,7 @@
 |`backends[].mcp.targets[].stdio.args`|[]string||
 |`backends[].mcp.targets[].stdio.env`|object||
 |`backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`backends[].mcp.targets[].openapi`|object||
+|`backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -2270,7 +2319,7 @@
 |`backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`backends[].ai.provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`backends[].ai.provider.copilot`|object||
 |`backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`backends[].ai.provider.custom`|object||
@@ -2480,7 +2529,7 @@
 |`backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`backends[].ai.groups[].providers[].provider.copilot`|object||
 |`backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.custom`|object||
@@ -3014,12 +3063,12 @@
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`routeGroups[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`routeGroups[].routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`routeGroups[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`routeGroups[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`routeGroups[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`routeGroups[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -3095,13 +3144,14 @@
 |`routeGroups[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`routeGroups[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`routeGroups[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`routeGroups[].routes[].policies.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`routeGroups[].routes[].policies.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`routeGroups[].routes[].policies.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`routeGroups[].routes[].policies.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`routeGroups[].routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`routeGroups[].routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`routeGroups[].routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`routeGroups[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`routeGroups[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`routeGroups[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -3120,13 +3170,13 @@
 |`routeGroups[].routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`routeGroups[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`routeGroups[].routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`routeGroups[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`routeGroups[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routeGroups[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -3268,6 +3318,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`routeGroups[].routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`routeGroups[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -3308,12 +3359,19 @@
 |`routeGroups[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routeGroups[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`routeGroups[].routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`routeGroups[].routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`routeGroups[].routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`routeGroups[].routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`routeGroups[].routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`routeGroups[].routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`routeGroups[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`routeGroups[].routes[].policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`routeGroups[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
-|`routeGroups[].routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`routeGroups[].routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`routeGroups[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
 |`routeGroups[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`routeGroups[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -3350,7 +3408,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.env`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`routeGroups[].routes[].backends[].mcp.targets[].openapi`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -3404,7 +3462,7 @@
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`routeGroups[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routeGroups[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routeGroups[].routes[].backends[].ai.provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.custom`|object||
@@ -3614,7 +3672,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
@@ -3999,13 +4057,14 @@
 |`gateways.*.listeners[].oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`gateways.*.listeners[].oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`gateways.*.listeners[].oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`gateways.*.listeners[].oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`gateways.*.listeners[].oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`gateways.*.listeners[].oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`gateways.*.listeners[].oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`gateways.*.listeners[].oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`gateways.*.listeners[].oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`gateways.*.listeners[].oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`gateways.*.listeners[].oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`gateways.*.listeners[].oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.listeners[].jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -4192,13 +4251,13 @@
 |`gateways.*.listeners[].apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`gateways.*.listeners[].apiKey.keys[].key`|string|API key value to accept.|
 |`gateways.*.listeners[].apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`gateways.*.listeners[].apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`gateways.*.listeners[].apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`gateways.*.listeners[].apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].limit.amount`|number||
-|`gateways.*.listeners[].apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.listeners[].apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -4239,13 +4298,14 @@
 |`gateways.*.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`gateways.*.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`gateways.*.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`gateways.*.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`gateways.*.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`gateways.*.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`gateways.*.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`gateways.*.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`gateways.*.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`gateways.*.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`gateways.*.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`gateways.*.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`gateways.*.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -4432,13 +4492,13 @@
 |`gateways.*.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`gateways.*.apiKey.keys[].key`|string|API key value to accept.|
 |`gateways.*.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`gateways.*.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`gateways.*.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`gateways.*.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`gateways.*.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`gateways.*.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`gateways.*.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`gateways.*.apiKey.keys[].budgets[].limit.amount`|number||
-|`gateways.*.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`gateways.*.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`gateways.*.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -4637,12 +4697,12 @@
 |`routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -4718,13 +4778,14 @@
 |`routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`routes[].policies.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`routes[].policies.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`routes[].policies.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`routes[].policies.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -4743,13 +4804,13 @@
 |`routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -4891,6 +4952,7 @@
 |`routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -4931,12 +4993,19 @@
 |`routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`routes[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`routes[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`routes[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`routes[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`routes[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`routes[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`routes[].policies.timeout`|object|Set request timeout limits.|
 |`routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`routes[].policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`routes[].policies.retry`|object|Retry matching failed upstream requests.|
-|`routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`routes[].policies.retry.backoff`|string|Delay between retry attempts.|
 |`routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -4973,7 +5042,7 @@
 |`routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`routes[].backends[].mcp.targets[].stdio.env`|object||
 |`routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`routes[].backends[].mcp.targets[].openapi`|object||
+|`routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -5027,7 +5096,7 @@
 |`routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routes[].backends[].ai.provider.copilot`|object||
 |`routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.custom`|object||
@@ -5237,7 +5306,7 @@
 |`routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.custom`|object||
@@ -5748,6 +5817,7 @@
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].id`|string|id is a stable identity for this model config entry. The name field remains the model match pattern.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
+|`llm.models[].displayName`|string|displayName is an optional label shown in the UI in place of name. It does not affect matching.|
 |`llm.models[].visibility`|enum|visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).<br>Possible values: `public`, `internal`.|
 |`llm.models[].params`|object|params customizes parameters for the outgoing request|
 |`llm.models[].params.model`|string|The model to send to the provider.<br>If unset, the same model will be used from the request.|
@@ -5900,13 +5970,14 @@
 |`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`llm.policies.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`llm.policies.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`llm.policies.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`llm.policies.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`llm.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`llm.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`llm.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`llm.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`llm.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`llm.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -6093,13 +6164,13 @@
 |`llm.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`llm.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`llm.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`llm.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`llm.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`llm.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`llm.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`llm.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`llm.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`llm.policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`llm.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`llm.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`llm.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`llm.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`llm.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -6119,7 +6190,7 @@
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`llm.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`llm.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`llm.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`llm.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`llm.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`llm.policies.remoteRateLimit.service`|object|Service reference. Service must be defined in the top level services list.|
 |`llm.policies.remoteRateLimit.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -6140,6 +6211,12 @@
 |`llm.policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`llm.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`llm.policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
+|`llm.policies.retry`|object|Retry matching failed upstream requests.|
+|`llm.policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
+|`llm.policies.retry.backoff`|string|Delay between retry attempts.|
+|`llm.policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`llm.policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
+|`llm.policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`mcp`|object|mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be<br>served under the attached `gateways` at /mcp and /sse.<br>All MCP servers listed will be served as a single virtual MCP server.|
 |`mcp.gateways`|string|gateways attaches the MCP routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>When omitted and a gateway named `default` exists, the MCP routes attach to it unless port is set.|
 |`mcp.port`|integer|port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.|
@@ -6163,7 +6240,7 @@
 |`mcp.targets[].stdio.args`|[]string||
 |`mcp.targets[].stdio.env`|object||
 |`mcp.targets[].stdio.clear_env`|boolean||
-|`mcp.targets[].openapi`|object||
+|`mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -6349,12 +6426,12 @@
 |`mcp.policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`mcp.policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`mcp.policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`mcp.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`mcp.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`mcp.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`mcp.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`mcp.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`mcp.policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6430,13 +6507,14 @@
 |`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`mcp.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`mcp.policies.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`mcp.policies.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`mcp.policies.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`mcp.policies.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`mcp.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`mcp.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`mcp.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`mcp.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`mcp.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`mcp.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`mcp.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -6455,13 +6533,13 @@
 |`mcp.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`mcp.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`mcp.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`mcp.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`mcp.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`mcp.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`mcp.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`mcp.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`mcp.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`mcp.policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`mcp.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`mcp.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`mcp.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`mcp.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`mcp.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -6603,6 +6681,7 @@
 |`mcp.policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`mcp.policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`mcp.policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`mcp.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -6643,12 +6722,19 @@
 |`mcp.policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`mcp.policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`mcp.policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.compression`|object|Compress responses and decompress request bodies.|
+|`mcp.policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`mcp.policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`mcp.policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`mcp.policies.compression.request`|object|Compression applied to requests received from the client.|
+|`mcp.policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`mcp.policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`mcp.policies.timeout`|object|Set request timeout limits.|
 |`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
 |`mcp.policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`mcp.policies.retry`|object|Retry matching failed upstream requests.|
-|`mcp.policies.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`mcp.policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`mcp.policies.retry.backoff`|string|Delay between retry attempts.|
 |`mcp.policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`mcp.policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
@@ -6680,13 +6766,14 @@
 |`ui.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`ui.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
 |`ui.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`ui.policies.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
 |`ui.policies.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
 |`ui.policies.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
 |`ui.policies.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
 |`ui.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`ui.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`ui.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`ui.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`ui.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`ui.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`ui.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -6796,13 +6883,13 @@
 |`ui.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`ui.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`ui.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`ui.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`ui.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`ui.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`ui.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`ui.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`ui.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`ui.policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`ui.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`ui.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`ui.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`ui.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`ui.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -6818,6 +6905,7 @@
 |`ui.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`ui.policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`ui.policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`ui.basePath`|string|basePath is the prefix a reverse proxy in front of the gateway strips before forwarding (e.g. `/agentgateway`).<br>It is added to UI links, assets and login redirects.|
 
 ## Shared types
 
@@ -7079,9 +7167,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendPolicies>.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendPolicies>.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<BackendPolicies>.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<BackendPolicies>.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<BackendPolicies>.http`|object|HTTP protocol settings for this backend.|
 |`<BackendPolicies>.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<BackendPolicies>.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7481,9 +7575,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendAuth>.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendAuth>.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<BackendAuth>.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<BackendAuth>.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<BackendAuth>.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<BackendAuth>.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<BackendAuth>.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<BackendAuth>.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 
 ### `<Guardrails>`
 
@@ -7756,9 +7856,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8044,9 +8150,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8326,9 +8438,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8608,9 +8726,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8888,9 +9012,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9192,9 +9322,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9482,9 +9618,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9764,9 +9906,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10044,9 +10192,15 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|

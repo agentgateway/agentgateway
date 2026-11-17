@@ -55,6 +55,20 @@
     {
       "role": "user",
       "content": "Continue."
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Nothing to add.",
+          "signature": ""
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "Are you there?"
     }
   ]
 }

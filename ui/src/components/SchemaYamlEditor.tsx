@@ -73,6 +73,8 @@ export function SchemaYamlEditor(props: {
 					lineNumbers: props.showLineNumbers === false ? 'off' : 'on',
 					minimap: { enabled: false },
 					quickSuggestions: { other: true, comments: false, strings: false },
+					wordBasedSuggestions: 'off',
+					fixedOverflowWidgets: true,
 					renderLineHighlight: 'none',
 					scrollBeyondLastLine: false,
 					tabSize: 2,

@@ -45,7 +45,8 @@ fn test_bedrock_rerank_uses_agent_runtime_host_and_rerank_path() {
 				crate::RouteType::Rerank,
 				false,
 				"cohere.rerank-v3-5:0",
-				BedrockEndpoint::Runtime
+				BedrockEndpoint::Runtime,
+				false,
 			)
 			.as_str(),
 		"/rerank"

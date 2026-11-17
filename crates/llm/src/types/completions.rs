@@ -69,7 +69,7 @@ impl Request {
 		self
 			.model
 			.as_deref()
-			.is_some_and(|model| model.starts_with("gpt-"))
+			.is_some_and(|model| model.starts_with("gpt-") || model.contains("openai.gpt-"))
 	}
 }
 
@@ -77,6 +77,7 @@ impl Request {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StreamOptions {
 	/// If set, an additional chunk will be streamed before the `data: [DONE]` message. The `usage` field on this chunk shows the token usage statistics for the entire request, and the `choices` field will always be an empty array. All other chunks will also include a `usage` field, but with a null value.
+	#[serde(default)]
 	pub include_usage: bool,
 
 	#[serde(flatten, default)]
@@ -85,6 +86,7 @@ pub struct StreamOptions {
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
+	#[serde(default)]
 	pub model: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<String>,
@@ -107,11 +109,132 @@ pub struct Choice {
 #[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ResponseMessage {
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub content: Option<String>,
+	pub content: Option<ResponseContent>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub role: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+/// A response message's `content`: usually a string, but some OpenAI-compatible providers
+/// (Mistral reasoning models) send an array of typed parts such as `thinking` and `text`.
+/// The parts are kept as received so a passthrough response is forwarded unchanged.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum ResponseContent {
+	Text(String),
+	Parts(Vec<serde_json::Value>),
+}
+
+impl From<String> for ResponseContent {
+	fn from(s: String) -> Self {
+		ResponseContent::Text(s)
+	}
+}
+
+impl ResponseContent {
+	/// The visible text: the string itself, or the `text` parts joined.
+	pub fn text(&self) -> String {
+		match self {
+			ResponseContent::Text(s) => s.clone(),
+			ResponseContent::Parts(parts) => parts
+				.iter()
+				.filter(|p| part_type(p) == Some("text"))
+				.filter_map(|p| p.get("text").and_then(serde_json::Value::as_str))
+				.collect(),
+		}
+	}
+
+	/// Replaces the visible text. For parts, the first `text` part carries it and the other
+	/// `text` parts are dropped; non-text parts such as `thinking` are left in place.
+	pub fn set_text(&mut self, text: &str) {
+		match self {
+			ResponseContent::Text(s) => *s = text.to_string(),
+			ResponseContent::Parts(parts) => {
+				let mut replaced = false;
+				parts.retain_mut(|p| {
+					if part_type(p) != Some("text") {
+						return true;
+					}
+					// Masking to "" drops the part instead of leaving `{"text":""}`.
+					let keep = !replaced && !text.is_empty();
+					replaced = true;
+					if keep {
+						p["text"] = serde_json::Value::String(text.to_string());
+					}
+					keep
+				});
+				if !replaced && !text.is_empty() {
+					parts.push(serde_json::json!({"type": "text", "text": text}));
+				}
+			},
+		}
+	}
+
+	/// Visits the answer text and the plaintext reasoning carried in `thinking` parts.
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+		let parts = match self {
+			ResponseContent::Text(s) => return f(ContentScope::Messages, s),
+			ResponseContent::Parts(parts) => parts,
+		};
+		for part in parts {
+			match part_type(part) {
+				Some("text") => super::visit_json_at(part, &["text"], ContentScope::Messages, f),
+				Some("thinking") => match part.get_mut("thinking") {
+					Some(serde_json::Value::String(s)) => f(ContentScope::Messages, s),
+					Some(serde_json::Value::Array(inner)) => {
+						for p in inner.iter_mut().filter(|p| part_type(p) == Some("text")) {
+							super::visit_json_at(p, &["text"], ContentScope::Messages, f);
+						}
+					},
+					_ => {},
+				},
+				_ => {},
+			}
+		}
+	}
+}
+
+fn part_type(part: &serde_json::Value) -> Option<&str> {
+	part.get("type").and_then(serde_json::Value::as_str)
+}
+
+/// Deserializes a response `content` that may be a string or an array of typed parts into its
+/// visible text. Used by the typed responses that feed format translations: only `text` parts
+/// are kept, since a translated `thinking` block would be replayed as `reasoning_content`,
+/// which providers sending parts (Mistral) reject on the next turn.
+pub(crate) fn deserialize_content_text<'de, D>(d: D) -> Result<Option<String>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	#[derive(Deserialize)]
+	#[serde(untagged)]
+	enum Content {
+		Text(String),
+		Parts(Vec<Part>),
+	}
+	#[derive(Deserialize)]
+	#[serde(tag = "type", rename_all = "lowercase")]
+	enum Part {
+		Text {
+			text: String,
+		},
+		#[serde(other)]
+		Other,
+	}
+	Ok(match Option::<Content>::deserialize(d)? {
+		None => None,
+		Some(Content::Text(s)) => Some(s),
+		Some(Content::Parts(parts)) => {
+			let mut text: Option<String> = None;
+			for part in parts {
+				if let Part::Text { text: t } = part {
+					text.get_or_insert_default().push_str(&t);
+				}
+			}
+			text
+		},
+	})
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -179,6 +302,9 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
+			cache_creation_1h_input_tokens: None,
+			cache_creation_12h_input_tokens: None,
+			usage_lines: Vec::new(),
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -199,6 +325,7 @@ impl ResponseType for Response {
 
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
 			pages: None,
+			audio_seconds: None,
 			count_tokens: None,
 
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
@@ -226,7 +353,7 @@ impl ResponseType for Response {
 					self
 						.choices
 						.iter()
-						.flat_map(|c| c.message.content.clone())
+						.flat_map(|c| c.message.content.as_ref().map(ResponseContent::text))
 						.collect_vec(),
 				)
 			} else {
@@ -244,7 +371,10 @@ impl ResponseType for Response {
 			anyhow::bail!("webhook response message count mismatch");
 		}
 		for (m, wh) in self.choices.iter_mut().zip(choices) {
-			m.message.content = Some(wh.message.content.to_string());
+			m.message
+				.content
+				.get_or_insert_with(|| ResponseContent::Text(String::new()))
+				.set_text(&wh.message.content);
 		}
 		Ok(())
 	}
@@ -255,7 +385,13 @@ impl ResponseType for Response {
 			.iter()
 			.map(|c| {
 				let role = c.message.role.clone().unwrap_or_default().into();
-				let content = c.message.content.clone().unwrap_or_default().into();
+				let content = c
+					.message
+					.content
+					.as_ref()
+					.map(ResponseContent::text)
+					.unwrap_or_default()
+					.into();
 				ResponseChoice {
 					message: Message { role, content },
 				}
@@ -272,8 +408,8 @@ impl ResponseType for Response {
 			visit_reasoning_text(&mut c.message.rest, f);
 			let mut plain = |scope: ContentScope, text: &mut String| f(scope.into(), text);
 			let f = &mut plain;
-			if let Some(text) = &mut c.message.content {
-				f(ContentScope::Messages, text);
+			if let Some(content) = &mut c.message.content {
+				content.visit_text_mut(f);
 			}
 			super::visit_json_at(&mut c.message.rest, &["refusal"], ContentScope::Messages, f);
 			super::visit_json_at(
@@ -446,6 +582,7 @@ impl super::RequestType for Request {
 			input_format: InputFormat::Completions,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
+			original_model: None,
 			provider,
 			streaming: self.stream.unwrap_or_default(),
 			params: LLMRequestParams {
@@ -460,6 +597,15 @@ impl super::RequestType for Request {
 					.map(Into::into),
 				encoding_format: None,
 				dimensions: None,
+				reasoning_effort: self.reasoning_effort.as_ref().map(|effort| match effort {
+					typed::ReasoningEffort::None => crate::ReasoningEffort::None,
+					typed::ReasoningEffort::Minimal => crate::ReasoningEffort::Minimal,
+					typed::ReasoningEffort::Low => crate::ReasoningEffort::Low,
+					typed::ReasoningEffort::Medium => crate::ReasoningEffort::Medium,
+					typed::ReasoningEffort::High => crate::ReasoningEffort::High,
+					typed::ReasoningEffort::Xhigh => crate::ReasoningEffort::Xhigh,
+					typed::ReasoningEffort::Max => crate::ReasoningEffort::Max,
+				}),
 			},
 			prompt: Default::default(),
 			provider_state: None,
@@ -561,15 +707,16 @@ impl super::RequestType for Request {
 		self.messages = messages.into_iter().map(convert_message).collect();
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
-		for msg in &mut self.messages {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(super::RequestText, &mut String)) {
+		for (index, msg) in self.messages.iter_mut().enumerate() {
 			let scope = match msg.role.as_str() {
 				"tool" | "function" => ContentScope::ToolOutput,
 				"system" | "developer" => ContentScope::SystemPrompt,
 				_ => ContentScope::Messages,
 			};
+			let content = super::RequestText::in_message(scope, index);
 			match &mut msg.content {
-				Some(Content::Text(text)) => f(scope, text),
+				Some(Content::Text(text)) => f(content, text),
 				Some(Content::Array(parts)) => {
 					super::scan_text_runs(
 						parts,
@@ -577,23 +724,34 @@ impl super::RequestType for Request {
 						|p| p.text.as_mut(),
 						|p| Some(&mut p.rest),
 						PRESERVED_REST_KEYS,
-						&mut |text| f(scope, text),
+						&mut |text| f(content, text),
 					);
 				},
 				None => {},
 			}
 
+			let mut tool_text = |scope: ContentScope, text: &mut String| f(scope.into(), text);
 			// in completions API, tool call args are json-in-json
 			// avoiding parsing means a mask can potentially break the json
 			for call in msg.tool_calls.iter_mut().flatten() {
-				super::visit_json_at(call, &["function", "arguments"], ContentScope::ToolInput, f);
-				super::visit_json_at(call, &["custom", "input"], ContentScope::ToolInput, f);
+				super::visit_json_at(
+					call,
+					&["function", "arguments"],
+					ContentScope::ToolInput,
+					&mut tool_text,
+				);
+				super::visit_json_at(
+					call,
+					&["custom", "input"],
+					ContentScope::ToolInput,
+					&mut tool_text,
+				);
 			}
 			super::visit_json_at(
 				&mut msg.rest,
 				&["function_call", "arguments"],
 				ContentScope::ToolInput,
-				f,
+				&mut tool_text,
 			);
 		}
 	}
@@ -670,8 +828,7 @@ pub mod typed {
 	#[allow(deprecated_in_future)]
 	pub use async_openai::types::chat::{
 		ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
-		ChatCompletionMessageToolCall as MessageToolCall, ChatCompletionMessageToolCallChunk,
-		ChatCompletionMessageToolCalls as MessageToolCalls,
+		ChatCompletionMessageCustomToolCall, ChatCompletionMessageToolCallChunk,
 		ChatCompletionNamedToolChoice as NamedToolChoice,
 		ChatCompletionRequestAssistantMessageAudio as RequestAssistantMessageAudio,
 		ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
@@ -700,6 +857,53 @@ pub mod typed {
 		ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct MessageToolCall {
+		pub id: String,
+		pub function: FunctionCall,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub extra_content: Option<ExtraContent>,
+	}
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct ExtraContent {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub google: Option<GoogleExtraContent>,
+	}
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct GoogleExtraContent {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub thought_signature: Option<String>,
+	}
+
+	impl MessageToolCall {
+		pub fn thought_signature(&self) -> Option<&str> {
+			self
+				.extra_content
+				.as_ref()?
+				.google
+				.as_ref()?
+				.thought_signature
+				.as_deref()
+		}
+
+		pub fn set_thought_signature(&mut self, signature: String) {
+			self.extra_content = Some(ExtraContent {
+				google: Some(GoogleExtraContent {
+					thought_signature: Some(signature),
+				}),
+			});
+		}
+	}
+
+	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+	#[serde(tag = "type", rename_all = "snake_case")]
+	pub enum MessageToolCalls {
+		Function(MessageToolCall),
+		Custom(ChatCompletionMessageCustomToolCall),
+	}
 
 	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.
 	///
@@ -758,6 +962,7 @@ pub mod typed {
 		#[serde(default)]
 		pub created: u32,
 		/// The model used for the chat completion.
+		#[serde(default)]
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -774,7 +979,7 @@ pub mod typed {
 		pub usage: Option<Usage>,
 	}
 
-	#[derive(Debug, Deserialize, Clone, Serialize)]
+	#[derive(Default, Debug, Deserialize, Clone, Serialize)]
 	pub struct UsageCompletionDetails {
 		pub reasoning_tokens: Option<u64>,
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -783,7 +988,7 @@ pub mod typed {
 		pub rest: serde_json::Value,
 	}
 
-	#[derive(Debug, Deserialize, Clone, Serialize)]
+	#[derive(Default, Debug, Deserialize, Clone, Serialize)]
 	pub struct UsagePromptDetails {
 		pub cached_tokens: Option<u64>,
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -792,6 +997,23 @@ pub mod typed {
 		pub cache_write_tokens: Option<u64>,
 		#[serde(flatten, default)]
 		pub rest: serde_json::Value,
+	}
+
+	impl UsagePromptDetails {
+		/// Omit the details only when neither cache count was reported.
+		pub fn from_cache_tokens(
+			cached_tokens: Option<u64>,
+			cache_write_tokens: Option<u64>,
+		) -> Option<Self> {
+			match (cached_tokens, cache_write_tokens) {
+				(None, None) => None,
+				(cached_tokens, cache_write_tokens) => Some(Self {
+					cached_tokens,
+					cache_write_tokens,
+					..Default::default()
+				}),
+			}
+		}
 	}
 
 	// Forked typed from OpenAI to include custom cache token details other providers use.
@@ -842,6 +1064,7 @@ pub mod typed {
 		#[serde(default)]
 		pub created: u32,
 		/// The model to generate the completion.
+		#[serde(default)]
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
 		pub service_tier: Option<String>,
@@ -857,12 +1080,8 @@ pub mod typed {
 		pub usage: Option<Usage>,
 	}
 
-	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+	#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoiceStream {
-		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
-		/// preserved so conversions can read them.
-		#[serde(flatten, default)]
-		pub rest: serde_json::Value,
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,
@@ -886,12 +1105,33 @@ pub mod typed {
 		/// Log probability information for the choice.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub logprobs: Option<ChatChoiceLogprobs>,
+		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
+		/// preserved so conversions can read them.
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
+	}
+
+	impl ChatChoiceStream {
+		pub fn with_delta(delta: StreamResponseDelta) -> Self {
+			Self {
+				delta,
+				..Default::default()
+			}
+		}
+
+		pub fn with_finish_reason(finish_reason: FinishReason) -> Self {
+			Self {
+				finish_reason: Some(finish_reason),
+				..Default::default()
+			}
+		}
 	}
 
 	/// A chat completion delta generated by streamed model responses.
 	#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct StreamResponseDelta {
 		/// The contents of the chunk message.
+		#[serde(default, deserialize_with = "super::deserialize_content_text")]
 		pub content: Option<String>,
 		/// Deprecated and replaced by `tool_calls`. The name and arguments of a function that should be called, as generated by the model.
 		#[deprecated]
@@ -952,7 +1192,11 @@ pub mod typed {
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ResponseMessage {
 		/// The contents of the message.
-		#[serde(skip_serializing_if = "Option::is_none")]
+		#[serde(
+			default,
+			deserialize_with = "super::deserialize_content_text",
+			skip_serializing_if = "Option::is_none"
+		)]
 		pub content: Option<String>,
 		/// The refusal message generated by the model.
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -983,8 +1227,7 @@ pub mod typed {
 		/// LiteLLM: `reasoning_content` and `thinking_blocks` (https://docs.litellm.ai/docs/reasoning_content)
 		///
 		/// Since 3/4 of these use `reasoning_content`, it seems like a reasonable default.
-		/// Note: due to 'extra' below we still get other fields passed through, too; we just won't do anything
-		/// specific with them.
+		/// vLLM also uses `reasoning`; `reasoning()` reads either.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub reasoning_content: Option<String>,
 
@@ -1206,6 +1449,15 @@ pub mod typed {
 		pub thinking_budget_tokens: Option<u64>,
 	}
 
+	/// A Chat Completions stream event: a chunk, or OpenAI's mid-stream error.
+	#[derive(Serialize)]
+	#[serde(untagged)]
+	#[allow(clippy::large_enum_variant)]
+	pub enum ChatStreamEvent {
+		Chunk(StreamResponse),
+		Error(async_openai::error::WrappedError),
+	}
+
 	#[derive(Debug, Deserialize, Serialize)]
 	pub struct ChatCompletionErrorResponse {
 		pub event_id: Option<String>,
@@ -1293,6 +1545,67 @@ pub mod typed {
 				Some(Stop::StringArray(s)) => s.clone(),
 				_ => vec![],
 			}
+		}
+
+		/// Remove `extra_content` (Gemini thought signatures) from replayed tool calls,
+		/// for providers that would reject or mishandle the unknown field.
+		pub fn strip_tool_call_extra_content(&mut self) {
+			for message in &mut self.messages {
+				if let RequestMessage::Assistant(assistant) = message {
+					for call in assistant.tool_calls.iter_mut().flatten() {
+						if let MessageToolCalls::Function(call) = call {
+							call.extra_content = None;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	/// Reasoning text from `reasoning_content`, or `reasoning` (vLLM, OpenRouter).
+	fn reasoning_text<'a>(
+		reasoning_content: &'a Option<String>,
+		extra: &'a Option<serde_json::Value>,
+	) -> Option<&'a str> {
+		reasoning_content
+			.as_deref()
+			.filter(|s| !s.is_empty())
+			.or_else(|| extra.as_ref()?.get("reasoning")?.as_str())
+			.filter(|s| !s.is_empty())
+	}
+
+	impl ResponseMessage {
+		/// An empty assistant message.
+		#[allow(deprecated)]
+		pub fn assistant() -> Self {
+			Self {
+				content: None,
+				refusal: None,
+				tool_calls: None,
+				role: Role::Assistant,
+				function_call: None,
+				audio: None,
+				reasoning_content: None,
+				reasoning_signature: None,
+				extra: None,
+			}
+		}
+
+		pub fn reasoning(&self) -> Option<&str> {
+			reasoning_text(&self.reasoning_content, &self.extra)
+		}
+	}
+
+	impl StreamResponseDelta {
+		pub fn with_tool_calls(tool_calls: Vec<ChatCompletionMessageToolCallChunk>) -> Self {
+			Self {
+				tool_calls: Some(tool_calls),
+				..Default::default()
+			}
+		}
+
+		pub fn reasoning(&self) -> Option<&str> {
+			reasoning_text(&self.reasoning_content, &self.extra)
 		}
 	}
 }
@@ -1444,5 +1757,78 @@ mod tests {
 		});
 
 		assert!(llm_response.output_messages.is_none());
+	}
+
+	fn mistral_parts() -> serde_json::Value {
+		serde_json::json!([
+			{"type": "thinking", "thinking": [{"type": "text", "text": "plan"}], "closed": true},
+			{"type": "text", "text": "Hello"},
+			{"type": "text", "text": " world"}
+		])
+	}
+
+	#[test]
+	fn response_content_parts_round_trip_unchanged() {
+		for content in [serde_json::json!("hello"), mistral_parts()] {
+			let body = serde_json::json!({"role": "assistant", "index": 0, "content": content});
+			let msg: ResponseMessage = serde_json::from_value(body.clone()).unwrap();
+			assert_eq!(serde_json::to_value(&msg).unwrap(), body);
+		}
+	}
+
+	#[test]
+	fn response_content_parts_text_and_masking() {
+		let mut content: ResponseContent = serde_json::from_value(mistral_parts()).unwrap();
+		assert_eq!(content.text(), "Hello world");
+
+		let mut seen = Vec::new();
+		content.visit_text_mut(&mut |_, t| seen.push(t.clone()));
+		assert_eq!(seen, ["plan", "Hello", " world"]);
+
+		content.set_text("MASKED");
+		assert_eq!(
+			serde_json::to_value(&content).unwrap(),
+			serde_json::json!([
+				{"type": "thinking", "thinking": [{"type": "text", "text": "plan"}], "closed": true},
+				{"type": "text", "text": "MASKED"}
+			])
+		);
+		content.set_text("");
+		assert_eq!(content.text(), "");
+		assert_eq!(
+			serde_json::to_value(&content)
+				.unwrap()
+				.as_array()
+				.unwrap()
+				.len(),
+			1
+		);
+	}
+
+	#[test]
+	fn typed_responses_keep_only_text_parts() {
+		let cases = [
+			(serde_json::json!("hello"), Some("hello")),
+			(serde_json::Value::Null, None),
+			(mistral_parts(), Some("Hello world")),
+			(
+				serde_json::json!([{"type": "thinking", "thinking": [{"type": "text", "text": "plan"}]}]),
+				None,
+			),
+		];
+		for (content, text) in cases {
+			let msg: typed::ResponseMessage = serde_json::from_value(
+				serde_json::json!({"role": "assistant", "content": content.clone()}),
+			)
+			.unwrap();
+			assert_eq!(msg.content.as_deref(), text, "{content}");
+			assert_eq!(msg.reasoning_content, None, "{content}");
+
+			let delta: typed::StreamResponseDelta =
+				serde_json::from_value(serde_json::json!({"content": content.clone()})).unwrap();
+			assert_eq!(delta.content.as_deref(), text, "{content}");
+		}
+		let delta: typed::StreamResponseDelta = serde_json::from_value(serde_json::json!({})).unwrap();
+		assert_eq!(delta.content, None);
 	}
 }

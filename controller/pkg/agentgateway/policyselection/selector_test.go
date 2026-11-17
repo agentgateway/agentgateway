@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"istio.io/istio/pkg/ptr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -15,8 +14,8 @@ func TestSectionMatcher(t *testing.T) {
 	matcher := newSectionMatcher([]string{"8443", "https"})
 
 	require.Equal(t, sectionWholeResourceMatch, matcher.Match(nil))
-	require.Equal(t, sectionExactMatch, matcher.Match(ptr.Of(gwv1.SectionName("https"))))
-	require.Equal(t, sectionNoMatch, matcher.Match(ptr.Of(gwv1.SectionName("http"))))
+	require.Equal(t, sectionExactMatch, matcher.Match(new(gwv1.SectionName("https"))))
+	require.Equal(t, sectionNoMatch, matcher.Match(new(gwv1.SectionName("http"))))
 }
 
 func TestBestMatchingAgentgatewayPolicy(t *testing.T) {
@@ -41,7 +40,7 @@ func TestBestMatchingAgentgatewayPolicy(t *testing.T) {
 				Group:       gwv1.Group(""),
 				Kind:        gwv1.Kind("Service"),
 				Name:        gwv1.ObjectName("oauth2"),
-				SectionName: ptr.Of(gwv1.SectionName("https")),
+				SectionName: new(gwv1.SectionName("https")),
 			}},
 		},
 	}
@@ -58,7 +57,7 @@ func TestBestMatchingAgentgatewayPolicy(t *testing.T) {
 
 	olderExact := older.DeepCopy()
 	olderExact.Name = "older-exact"
-	olderExact.Spec.TargetRefs[0].SectionName = ptr.Of(gwv1.SectionName("https"))
+	olderExact.Spec.TargetRefs[0].SectionName = new(gwv1.SectionName("https"))
 	selected = bestMatchingAgentgatewayPolicy(
 		[]*agentgateway.AgentgatewayPolicy{olderExact, newerExact},
 		"",
@@ -91,7 +90,7 @@ func TestBestMatchingBackendTLSPolicy(t *testing.T) {
 				Group:       gwv1.Group(""),
 				Kind:        gwv1.Kind("Service"),
 				Name:        gwv1.ObjectName("oauth2"),
-				SectionName: ptr.Of(gwv1.SectionName("https")),
+				SectionName: new(gwv1.SectionName("https")),
 			}},
 		},
 	}

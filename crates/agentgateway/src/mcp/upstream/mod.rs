@@ -11,6 +11,7 @@ use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 use itertools::Itertools;
 pub use openapi::ParseError as OpenAPIParseError;
+pub(crate) use openapi::get_server_prefix as openapi_server_prefix;
 use opentelemetry::KeyValue;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, ExtensionCapabilities,
@@ -31,6 +32,13 @@ use crate::telemetry::log::{SpanWriteOnDrop, SpanWriter};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
 use crate::types::agent::{McpPrefixMode, McpServerOverrides, McpTargetSpec};
 use crate::*;
+
+// Fanout boxes one of these per target; separate limits keep one transport from masking
+// another. A larger future usually means some value is now held across an await.
+const STDIO_SEND_MESSAGE_FUTURE_SIZE: usize = 6 * 1024;
+const SSE_SEND_MESSAGE_FUTURE_SIZE: usize = 6 * 1024;
+const STREAMABLE_SEND_REQUEST_FUTURE_SIZE: usize = 6 * 1024;
+const OPENAPI_SEND_MESSAGE_FUTURE_SIZE: usize = 6 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
@@ -202,6 +210,17 @@ pub enum UpstreamError {
 	Recv,
 }
 
+impl UpstreamError {
+	pub(super) fn is_client_bearer_token_rejection(&self) -> bool {
+		match self {
+			Self::Proxy(err) | Self::Http(mcp::ClientError::Proxy(err)) => {
+				err.is_client_bearer_token_rejection()
+			},
+			_ => false,
+		}
+	}
+}
+
 // UpstreamTarget defines a source for MCP information.
 #[derive(Debug)]
 pub(crate) enum Upstream {
@@ -346,15 +365,35 @@ impl Upstream {
 			}
 			ctx.stamp_trace_context(&mut request.request.get_meta_mut().0);
 			match &self {
-				Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
-					Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?,
-				)),
+				Upstream::McpStdio(c) => {
+					// Match the HTTP upstreams: honor the backend request timeout, defaulting to 10s.
+					let timeout = ctx
+						.extensions()
+						.get::<http::filters::BackendRequestTimeout>()
+						.map_or(Duration::from_secs(10), |t| t.0);
+					let call = Box::pin(
+						c.send_message(request, &ctx)
+							.assert_size::<{ STDIO_SEND_MESSAGE_FUTURE_SIZE }>(),
+					);
+					let response = tokio::time::timeout(timeout, call)
+						.await
+						.map_err(|_| ProxyError::UpstreamCallTimeout)??;
+					Ok(mergestream::Messages::from(response))
+				},
 				Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
-					Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?,
+					Box::pin(
+						c.send_message(request, &ctx)
+							.assert_size::<{ SSE_SEND_MESSAGE_FUTURE_SIZE }>(),
+					)
+					.await?,
 				)),
 				Upstream::McpStreamable(c) => {
 					let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
-					let res = Box::pin(c.send_request(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?;
+					let res = Box::pin(
+						c.send_request(request, &ctx)
+							.assert_size::<{ STREAMABLE_SEND_REQUEST_FUTURE_SIZE }>(),
+					)
+					.await?;
 					if is_init {
 						let sid = match &res {
 							StreamableHttpPostResponse::Accepted => None,
@@ -365,9 +404,13 @@ impl Upstream {
 					}
 					res.try_into().map_err(Into::into)
 				},
-				Upstream::OpenAPI(c) => {
-					Ok(Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?)
-				},
+				Upstream::OpenAPI(c) => Ok(
+					Box::pin(
+						c.send_message(request, &ctx)
+							.assert_size::<{ OPENAPI_SEND_MESSAGE_FUTURE_SIZE }>(),
+					)
+					.await?,
+				),
 			}
 		}
 		.await;
@@ -455,6 +498,16 @@ impl Upstream {
 	}
 }
 
+fn target_condition_passes(target: &McpTarget, ctx: &IncomingRequestContext) -> bool {
+	target.condition.as_ref().is_none_or(|condition| {
+		ctx
+			.clone()
+			.with_mcp_target(&target.name)
+			.executor()
+			.eval_bool(condition)
+	})
+}
+
 #[derive(Debug)]
 pub(crate) struct UpstreamGroup {
 	backend: McpBackendGroup,
@@ -495,15 +548,9 @@ impl UpstreamGroup {
 			.then(|| backend.targets[0].name.to_string());
 		let configured_targets = backend.targets.len();
 		let all_targets_conditioned_out = configured_targets > 0 && {
-			backend.targets.retain(|target| {
-				target.condition.as_ref().is_none_or(|condition| {
-					ctx
-						.clone()
-						.with_mcp_target(&target.name)
-						.executor()
-						.eval_bool(condition)
-				})
-			});
+			backend
+				.targets
+				.retain(|target| target_condition_passes(target, ctx));
 			backend.targets.is_empty()
 		};
 		let mut s = Self {
@@ -532,6 +579,24 @@ impl UpstreamGroup {
 			return Err(mcp::Error::NoBackends);
 		}
 		Ok(s)
+	}
+
+	/// Whether the session's target set still matches the target conditions evaluated against
+	/// this request. Only conditioned targets are compared, so unrelated config changes do not
+	/// invalidate existing sessions.
+	pub(crate) fn conditions_match(
+		&self,
+		backend: &McpBackendGroup,
+		ctx: &IncomingRequestContext,
+	) -> bool {
+		backend
+			.targets
+			.iter()
+			.filter(|target| target.condition.is_some())
+			.all(|target| {
+				let in_session = self.backend.targets.iter().any(|t| t.name == target.name);
+				in_session == target_condition_passes(target, ctx)
+			})
 	}
 
 	pub(crate) fn setup_connections(&mut self) -> Result<(), mcp::Error> {
@@ -696,7 +761,6 @@ impl UpstreamGroup {
 				debug!("starting OpenAPI transport for target: {}", target.name);
 
 				let tools = openapi::parse_openapi_schema(&open.schema).map_err(mcp::Error::OpenAPI)?;
-				let prefix = openapi::get_server_prefix(&open.schema).map_err(mcp::Error::OpenAPI)?;
 
 				let http_client = McpHttpClient::new(
 					self.client.clone(),
@@ -710,8 +774,8 @@ impl UpstreamGroup {
 				);
 				upstream::Upstream::OpenAPI(Box::new(openapi::Handler::new(
 					http_client,
-					tools,  // From parse_openapi_schema
-					prefix, // From get_server_prefix
+					tools, // From parse_openapi_schema
+					open.prefix.clone(),
 				)))
 			},
 		};

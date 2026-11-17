@@ -43,10 +43,8 @@ pub(crate) async fn check_request<P: serde::Serialize + serde::de::DeserializeOw
 	let body = match body.wire() {
 		Ok(body) => body,
 		Err(e) => {
-			return Outcome::Reject(ErrorData::internal_error(
-				format!("mcpGuardrails: serialize params: {e}"),
-				None,
-			));
+			warn!(error = %e, "mcpGuardrails: failed to serialize params");
+			return Outcome::Reject(ErrorData::internal_error("guardrail check failed", None));
 		},
 	};
 	let mcp_request = body.as_deref().cloned();
@@ -227,10 +225,8 @@ pub(crate) async fn check_response(
 		Ok(Some(body)) => body,
 		Ok(None) => unreachable!("response guardrails always have a result"),
 		Err(e) => {
-			return Outcome::Reject(ErrorData::internal_error(
-				format!("mcpGuardrails: serialize result: {e}"),
-				None,
-			));
+			warn!(error = %e, "mcpGuardrails: failed to serialize result");
+			return Outcome::Reject(ErrorData::internal_error("guardrail check failed", None));
 		},
 	};
 	let mcp_response = body.clone();
@@ -386,7 +382,7 @@ fn on_grpc_error<T>(
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
-			format!("mcpGuardrails {rpc} failed: {}", status.message()),
+			"guardrail check failed",
 			None,
 		)),
 	}
@@ -408,7 +404,7 @@ fn on_protocol_violation<T>(
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
-			format!("mcpGuardrails protocol violation: {reason}"),
+			"guardrail check failed",
 			None,
 		)),
 	}

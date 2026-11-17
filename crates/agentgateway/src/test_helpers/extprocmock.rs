@@ -179,26 +179,18 @@ impl Handler for ReplaceRequestBody {
 }
 
 /// Mock ext_proc server for testing
-pub struct ExtProcMock<T> {
-	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
+#[derive(Clone)]
+pub struct ExtProcMock {
+	handler: Arc<dyn Fn() -> Box<dyn Handler + Send + Sync> + Send + Sync>,
 }
 
-impl<T> Clone for ExtProcMock<T> {
-	fn clone(&self) -> Self {
-		Self {
-			handler: self.handler.clone(),
-		}
-	}
-}
-
-impl<T> ExtProcMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
+impl ExtProcMock {
 	/// Create a new mock with default configuration
-	pub fn new(handler: impl Fn() -> T + Send + Sync + 'static) -> Self {
+	pub fn new<T: Handler + Send + Sync + 'static>(
+		handler: impl Fn() -> T + Send + Sync + 'static,
+	) -> Self {
 		Self {
-			handler: Arc::new(handler),
+			handler: Arc::new(move || Box::new(handler())),
 		}
 	}
 
@@ -214,10 +206,7 @@ where
 }
 
 #[tonic::async_trait]
-impl<T> ExternalProcessor for ExtProcMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
+impl ExternalProcessor for ExtProcMock {
 	type ProcessStream = tokio_stream::wrappers::ReceiverStream<Result<ProcessingResponse, Status>>;
 
 	async fn process(

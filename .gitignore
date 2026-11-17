@@ -2,6 +2,7 @@
 .claude
 .codex
 /target
+/build
 /.github/rust-cache/
 /.github/rust-cache-state/
 .vscode

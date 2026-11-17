@@ -45,6 +45,10 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.controller.extraInitContainers }}
+      initContainers:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: controller
           {{- with .Values.securityContext }}
@@ -175,8 +179,6 @@ spec:
             - name: AGW_ENABLE_INFER_EXT
               value: "true"
             {{- end }}
-            - name: AGW_ENABLE_AGENTGATEWAY_MODELS
-              value: {{ .Values.agentgatewayModels.enabled | quote }}
             {{- if .Values.xBackend.enabled }}
             - name: AGW_ENABLE_X_BACKEND
               value: "true"

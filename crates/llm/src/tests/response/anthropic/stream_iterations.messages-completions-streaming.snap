@@ -1,0 +1,42 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_iterations.json
+---
+data: {"id":"msg_iterations","choices":[{"index":0,"delta":{"content":"Done","role":"assistant"}}],"created":123,"model":"claude-sonnet-4-6","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"msg_iterations","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"created":123,"model":"claude-sonnet-4-6","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":213,"completion_tokens":230,"total_tokens":443,"prompt_tokens_details":{"cached_tokens":50,"cache_write_tokens":0},"cache_read_input_tokens":50,"cache_creation_input_tokens":0}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 163,
+  "output_tokens": 230,
+  "total_tokens": 393,
+  "cache_creation_input_tokens": 0,
+  "cached_input_tokens": 50,
+  "provider_model": "claude-sonnet-4-6",
+  "completion": [
+    "Done"
+  ],
+  "usage_lines": [
+    {
+      "input_tokens": 100,
+      "output_tokens": 20,
+      "cache_creation_input_tokens": 0,
+      "cached_input_tokens": 50
+    },
+    {
+      "model": "claude-opus-4-6",
+      "input_tokens": 40,
+      "output_tokens": 200
+    },
+    {
+      "input_tokens": 23,
+      "output_tokens": 10,
+      "cache_creation_input_tokens": 0,
+      "cached_input_tokens": 0
+    }
+  ]
+}

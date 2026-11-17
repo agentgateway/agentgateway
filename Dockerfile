@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.11
 ARG BUILDER=base
 
-FROM docker.io/library/node:24.17.0-bookworm AS node
+FROM docker.io/library/node:24.22.1-bookworm AS node
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN --mount=type=cache,id=agentgateway-ui-pnpm,target=/pnpm/store \
 
 RUN pnpm build
 
-FROM docker.io/library/rust:1.99.0-trixie AS musl-builder
+FROM docker.io/library/rust:1.100.0-trixie AS musl-builder
 
 ARG TARGETARCH
 
@@ -37,7 +37,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.99.0-trixie AS base-builder
+FROM docker.io/library/rust:1.100.0-trixie AS base-builder
 
 ARG TARGETARCH
 

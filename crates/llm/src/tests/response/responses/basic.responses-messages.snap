@@ -70,6 +70,10 @@ info:
     input_tokens: 10
     input_tokens_details:
       cached_tokens: 0
+      cache_write_tokens: 6
+      cache_write_tokens_details:
+        ttl_30m_tokens: 4
+        ttl_12h_tokens: 2
     output_tokens: 10
     output_tokens_details:
       reasoning_tokens: 0
@@ -101,8 +105,9 @@ info:
     "stop_reason": "end_turn",
     "stop_sequence": null,
     "usage": {
-      "input_tokens": 10,
+      "input_tokens": 4,
       "output_tokens": 10,
+      "cache_creation_input_tokens": 6,
       "service_tier": "default"
     }
   },
@@ -111,6 +116,8 @@ info:
     "output_tokens": 10,
     "total_tokens": 20,
     "reasoning_tokens": 0,
+    "cache_creation_input_tokens": 6,
+    "cache_creation_12h_input_tokens": 2,
     "service_tier": "default",
     "provider_model": "gpt-4o-2024-08-06"
   }

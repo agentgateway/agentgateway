@@ -67,10 +67,11 @@ impl LegacySSEService {
 		})?;
 		let message = serde_json::from_slice::<ClientJsonRpcMessage>(&bytes)
 			.map_err(|err| mcp::Error::Deserialize(http::Error::new(err)))?;
+		mcp::validate_client_message(&message)?;
 		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&part);
 		*ctx.request.body_mut() = Some(bytes);
 
-		let Some(mut session) = self.session_manager.get_session(&session_id, inputs) else {
+		let Some(mut session) = self.session_manager.get_session(&session_id, inputs, &ctx) else {
 			return mcp::Error::UnknownSession.into();
 		};
 

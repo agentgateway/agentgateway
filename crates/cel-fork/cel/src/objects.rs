@@ -697,7 +697,8 @@ impl<'a> Value<'a> {
 							.ok_or(ExecutionError::ValuesNotComparable(
 								left.as_static(),
 								right.as_static(),
-							))? == Ordering::Less,
+							))?
+							== Ordering::Less,
 					)
 					.into();
 				},
@@ -710,7 +711,8 @@ impl<'a> Value<'a> {
 							.ok_or(ExecutionError::ValuesNotComparable(
 								left.as_static(),
 								right.as_static(),
-							))? != Ordering::Greater,
+							))?
+							!= Ordering::Greater,
 					)
 					.into();
 				},
@@ -723,7 +725,8 @@ impl<'a> Value<'a> {
 							.ok_or(ExecutionError::ValuesNotComparable(
 								left.as_static(),
 								right.as_static(),
-							))? == Ordering::Greater,
+							))?
+							== Ordering::Greater,
 					)
 					.into();
 				},
@@ -736,7 +739,8 @@ impl<'a> Value<'a> {
 							.ok_or(ExecutionError::ValuesNotComparable(
 								left.as_static(),
 								right.as_static(),
-							))? != Ordering::Less,
+							))?
+							!= Ordering::Less,
 					)
 					.into();
 				},

@@ -37,7 +37,7 @@ func TranslateMCPSelectorTargets(
 	ctx plugins.PolicyCtx,
 	namespace string,
 	selector *agentgateway.McpSelector,
-) ([]*api.MCPTarget, error) {
+) ([]mcpServiceTarget, error) {
 	// Krt only allows 1 filter per type, so we build a composite filter here
 	generic := func(svc any) bool {
 		return true
@@ -95,7 +95,7 @@ func TranslateMCPSelectorTargets(
 	matchingServices := slices.SortBy(krt.Fetch(ctx.Krt, ctx.Collections.Services, opts...), func(s *corev1.Service) string {
 		return s.Namespace + "/" + s.Name
 	})
-	var mcpTargets []*api.MCPTarget
+	var mcpTargets []mcpServiceTarget
 	for _, service := range matchingServices {
 		for _, port := range service.Spec.Ports {
 			appProtocol := ptr.OrEmpty(port.AppProtocol)
@@ -127,7 +127,7 @@ func TranslateMCPSelectorTargets(
 			}
 
 			svcHostname := kubeutils.ServiceFQDN(service.ObjectMeta)
-			mcpTargets = append(mcpTargets, &api.MCPTarget{
+			mcpTargets = append(mcpTargets, mcpServiceTarget{service: service, target: &api.MCPTarget{
 				Name: targetName,
 				Backend: &api.BackendReference{
 					Kind: &api.BackendReference_Service_{
@@ -140,10 +140,71 @@ func TranslateMCPSelectorTargets(
 				},
 				Protocol: toMCPProtocol(appProtocol),
 				Path:     path,
-			})
+			}})
 		}
 	}
 	return mcpTargets, nil
+}
+
+type mcpServiceTarget struct {
+	service *corev1.Service
+	target  *api.MCPTarget
+}
+
+// dedupeMCPTargets drops targets whose name is already used by a preferred target.
+// Static targets always win; among Services, prefer the Backend's namespace, then
+// Services without the target name annotation, then the oldest.
+func dedupeMCPTargets(
+	namespace string,
+	targets []*api.MCPTarget,
+	services map[*api.MCPTarget]*corev1.Service,
+) ([]*api.MCPTarget, []error) {
+	winners := map[string]*api.MCPTarget{}
+	for _, t := range targets {
+		cur, ok := winners[t.Name]
+		if !ok || preferMCPService(namespace, services[t], services[cur]) {
+			winners[t.Name] = t
+		}
+	}
+	var errs []error
+	res := make([]*api.MCPTarget, 0, len(winners))
+	for _, t := range targets {
+		w := winners[t.Name]
+		if w == t {
+			res = append(res, t)
+			continue
+		}
+		svc := services[t]
+		winner := "static target"
+		if ws := services[w]; ws != nil {
+			winner = "Service " + ws.Namespace + "/" + ws.Name
+		}
+		errs = append(errs, fmt.Errorf(
+			"MCP target %q from Service %s/%s conflicts with %s; ignored", t.Name, svc.Namespace, svc.Name, winner))
+	}
+	return res, errs
+}
+
+// preferMCPService reports whether a should replace b. A nil Service is a static target.
+func preferMCPService(namespace string, a, b *corev1.Service) bool {
+	if b == nil {
+		return false
+	}
+	if a == nil {
+		return true
+	}
+	if aLocal, bLocal := a.Namespace == namespace, b.Namespace == namespace; aLocal != bLocal {
+		return aLocal
+	}
+	aRenamed := a.Annotations[apiannotations.MCPServiceTargetName] != ""
+	bRenamed := b.Annotations[apiannotations.MCPServiceTargetName] != ""
+	if aRenamed != bRenamed {
+		return bRenamed
+	}
+	if !a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+		return a.CreationTimestamp.Before(&b.CreationTimestamp)
+	}
+	return a.Namespace+"/"+a.Name < b.Namespace+"/"+b.Name
 }
 
 func ResolveMCPBackendRefHost(

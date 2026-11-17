@@ -1,0 +1,93 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/openai/systemone.json
+info:
+  model: gpt-6-luna
+  answers:
+    - type: predicate
+      name: refund
+      probability: 0.93
+    - type: choice
+      name: category
+      choice: damage
+      probabilities:
+        - value: damage
+          probability: 0.88
+        - value: shipping
+          probability: 0.12
+      confidence: 0.88
+    - type: score
+      name: urgency
+      score: 2
+      probabilities:
+        - value: 0
+          label: Low
+          probability: 0.05
+        - value: 1
+          label: Medium
+          probability: 0.25
+        - value: 2
+          label: High
+          probability: 0.7
+      confidence: 0.7
+  usage:
+    input_tokens: 212
+    input_tokens_details:
+      cached_tokens: 0
+      cache_write_tokens: 0
+    output_tokens: 0
+    output_tokens_details:
+      reasoning_tokens: 0
+    total_tokens: 212
+---
+{
+  "response": {
+    "model": "gpt-6-luna",
+    "usage": {
+      "input_tokens": 212,
+      "output_tokens": 0
+    },
+    "answers": {
+      "refund": {
+        "type": "noul",
+        "noul": 0.93
+      },
+      "category": {
+        "type": "choice",
+        "choice": "damage",
+        "probabilities": {
+          "damage": 0.88,
+          "shipping": 0.12
+        },
+        "confidence": 0.88
+      },
+      "urgency": {
+        "type": "score",
+        "score": 2,
+        "legend": {
+          "0": {
+            "label": "Low",
+            "description": "Can wait"
+          },
+          "1": "Medium",
+          "2": {
+            "label": "High",
+            "sla_minutes": 5
+          }
+        },
+        "probabilities": {
+          "0": 0.05,
+          "1": 0.25,
+          "2": 0.7
+        },
+        "confidence": 0.7
+      }
+    }
+  },
+  "parsed": {
+    "input_tokens": 212,
+    "output_tokens": 0,
+    "total_tokens": 212,
+    "provider_model": "gpt-6-luna"
+  }
+}

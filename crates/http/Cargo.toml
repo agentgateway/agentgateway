@@ -19,6 +19,7 @@ http-body.workspace = true
 http-body-util.workspace = true
 parking_lot.workspace = true
 pin-project-lite.workspace = true
+sync_wrapper.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 

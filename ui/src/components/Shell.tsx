@@ -91,6 +91,11 @@ export function Shell() {
 			(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 	);
 	const [mobileNavOpen, setMobileNavOpen] = useState(false);
+	const [mobileNavPathname, setMobileNavPathname] = useState(router.location.pathname);
+	if (mobileNavPathname !== router.location.pathname) {
+		setMobileNavPathname(router.location.pathname);
+		setMobileNavOpen(false);
+	}
 	const mobileNavRef = useDismissiblePopover<HTMLDivElement>(mobileNavOpen, () =>
 		setMobileNavOpen(false)
 	);
@@ -123,11 +128,6 @@ export function Shell() {
 	useEffect(() => {
 		document.documentElement.dataset.theme = theme;
 	}, [theme]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
-	useEffect(() => {
-		setMobileNavOpen(false);
-	}, [router.location.pathname]);
 
 	return (
 		<div className="app-shell">

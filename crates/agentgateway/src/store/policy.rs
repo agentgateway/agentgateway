@@ -4,10 +4,9 @@ use http::HeaderMap;
 use serde::Serialize;
 
 use crate::cel::{ContextBuilder, Expression};
-use crate::http::{PolicyResponseExt, Response};
-use crate::proxy;
-use crate::proxy::dtrace;
+use crate::http::Response;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::proxy::{ProxyError, dtrace};
 use crate::telemetry::log::RequestLog;
 
 pub trait HasExpressions: Send + Sync + 'static {
@@ -40,7 +39,7 @@ pub trait RequestPolicyTrait: Send + Sync + 'static {
 		client: &PolicyClient,
 		log: &mut RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse>;
+	) -> Result<crate::http::PolicyResponse, ProxyError>;
 
 	/// Returns a list of expressions that are used in this policy.
 	/// Any expressions used in the policy MUST be included here or they will be ignored.
@@ -54,17 +53,18 @@ pub trait RequestPolicyTrait: Send + Sync + 'static {
 impl<T> RequestPolicyTrait for T
 where
 	T: agent_policy::RequestPolicy<ResponseState = std::convert::Infallible>,
+	T::Error: Into<ProxyError>,
 {
 	async fn apply(
 		&self,
 		_client: &PolicyClient,
 		_log: &mut RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
 		let ctx = agent_policy::PolicyContext::new(&crate::proxy::policy_host::GatewayCel);
 		let action = agent_policy::RequestPolicy::apply(self, ctx, req)
 			.await
-			.map_err(proxy::ProxyError::Policy)?;
+			.map_err(Into::into)?;
 		Ok(action.response)
 	}
 
@@ -82,7 +82,7 @@ pub trait ResponsePolicyTrait: Send + Sync + 'static {
 		&self,
 		log: &mut RequestLog,
 		resp: &mut crate::http::Response,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse>;
+	) -> Result<crate::http::PolicyResponse, ProxyError>;
 }
 
 /// A backend policy is a policy that runs per-backend. These are similar to request policies except run on
@@ -94,7 +94,7 @@ pub trait BackendPolicyTrait: Send + Sync + 'static {
 		client: &PolicyClient,
 		log: &mut Option<&mut RequestLog>,
 		req: &mut crate::http::Request,
-	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse>;
+	) -> Result<crate::http::PolicyResponse, ProxyError>;
 
 	/// Returns a list of expressions that are used in this policy.
 	/// Any expressions used in the policy MUST be included here or they will be ignored.
@@ -336,7 +336,7 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		log: &mut RequestLog,
 		req: &mut crate::http::Request,
 		response_headers: &mut HeaderMap,
-	) -> Result<(), proxy::ProxyResponse> {
+	) -> Result<(), ProxyError> {
 		self
 			.apply_internal(name, client, log, req, response_headers)
 			.await
@@ -351,7 +351,7 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		log: &mut RequestLog,
 		req: &mut crate::http::Request,
 		response_headers: &mut HeaderMap,
-	) -> Result<Option<Arc<T>>, proxy::ProxyResponse> {
+	) -> Result<Option<Arc<T>>, ProxyError> {
 		self
 			.apply_internal(name, client, log, req, response_headers)
 			.await
@@ -364,12 +364,15 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		log: &mut RequestLog,
 		req: &mut crate::http::Request,
 		response_headers: &mut HeaderMap,
-	) -> Result<Option<Arc<T>>, proxy::ProxyResponse> {
+	) -> Result<Option<Arc<T>>, ProxyError> {
 		let Some(pol) = self.select(name, req) else {
 			return Ok(None);
 		};
 
-		let res = pol.apply(client, log, req).await?.apply(response_headers);
+		let res = pol
+			.apply(client, log, req)
+			.await
+			.map(|r| r.apply(response_headers));
 		dtrace::snapshot!(Request, name, &req);
 		// Return the policy, for response handling.
 		// Conditions are ignored; we already evaluated them on the request side
@@ -387,7 +390,7 @@ impl<T: RequestPolicyTrait + ResponsePolicyTrait> RequestPolicy<T> {
 		log: &mut RequestLog,
 		req: &mut crate::http::Request,
 		response_headers: &mut HeaderMap,
-	) -> Result<ResponsePolicy<T>, proxy::ProxyResponse> {
+	) -> Result<ResponsePolicy<T>, ProxyError> {
 		self
 			.apply_internal(name, client, log, req, response_headers)
 			.await
@@ -435,11 +438,14 @@ impl<T: ResponsePolicyTrait> ResponsePolicy<T> {
 		log: &mut RequestLog,
 		resp: &mut Response,
 		response_headers: &mut HeaderMap,
-	) -> Result<(), proxy::ProxyResponse> {
+	) -> Result<(), ProxyError> {
 		let Some(ref pol) = self.inner else {
 			return Ok(());
 		};
-		let res = pol.apply(log, resp).await?.apply(response_headers);
+		let res = pol
+			.apply(log, resp)
+			.await
+			.map(|r| r.apply(response_headers));
 		dtrace::snapshot!(Response, name, log, &resp);
 		res
 	}
@@ -492,12 +498,15 @@ impl<T: BackendPolicyTrait> BackendPolicy<T> {
 		log: &mut Option<&mut RequestLog>,
 		req: &mut crate::http::Request,
 		response_headers: &mut HeaderMap,
-	) -> Result<ResponsePolicy<T>, proxy::ProxyResponse> {
+	) -> Result<ResponsePolicy<T>, ProxyError> {
 		let Some(ref pol) = self.0 else {
 			return Ok(ResponsePolicy::new(None));
 		};
 
-		let res = pol.apply(client, log, req).await?.apply(response_headers);
+		let res = pol
+			.apply(client, log, req)
+			.await
+			.map(|r| r.apply(response_headers));
 		dtrace::snapshot!(Request, name, &req);
 		res.map(|_| ResponsePolicy::new(Some(pol.clone())))
 	}

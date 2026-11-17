@@ -10,6 +10,7 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -279,13 +280,17 @@ func TranslateAgwBackend(
 	}, results
 }
 
-func applyMCPTargetCondition(targets []*api.MCPTarget, condition *agentgateway.CELExpression) {
+func applyMCPTargetCondition(targets []*api.MCPTarget, condition *agentgateway.CELExpression) error {
 	if condition == nil {
-		return
+		return nil
 	}
 	for _, t := range targets {
 		t.Condition = new(string(*condition))
 	}
+	if !plugins.IsValidCELExpression(*condition) {
+		return fmt.Errorf("MCP target condition is not a valid CEL expression: %s", *condition)
+	}
+	return nil
 }
 
 func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBackend, inlinePolicies []*api.BackendPolicySpec) ([]*api.Backend, error) {
@@ -293,6 +298,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 	var mcpTargets []*api.MCPTarget
 	var backends []*api.Backend
 	var errs []error
+	serviceTargets := map[*api.MCPTarget]*corev1.Service{}
 	for _, target := range mcp.Targets {
 		start := len(mcpTargets)
 		if s := target.Static; s != nil {
@@ -323,7 +329,9 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				}
 
 				mcpTargets = append(mcpTargets, mcpTarget)
-				applyMCPTargetCondition(mcpTargets[start:], target.Condition)
+				if err := applyMCPTargetCondition(mcpTargets[start:], target.Condition); err != nil {
+					errs = append(errs, err)
+				}
 				continue
 			}
 
@@ -375,10 +383,17 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			if err != nil {
 				return nil, err
 			}
-			mcpTargets = append(mcpTargets, targets...)
+			for _, t := range targets {
+				serviceTargets[t.target] = t.service
+				mcpTargets = append(mcpTargets, t.target)
+			}
 		}
-		applyMCPTargetCondition(mcpTargets[start:], target.Condition)
+		if err := applyMCPTargetCondition(mcpTargets[start:], target.Condition); err != nil {
+			errs = append(errs, err)
+		}
 	}
+	mcpTargets, dedupeErrs := dedupeMCPTargets(be.Namespace, mcpTargets, serviceTargets)
+	errs = append(errs, dedupeErrs...)
 	// defaults to stateful session routing
 	sessionRouting := api.MCPBackend_STATEFUL
 	if mcp.SessionRouting == agentgateway.Stateless {
@@ -521,6 +536,10 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 				Model:      llm.OpenAI.Model,
 				Moderation: moderation,
 			},
+		}
+	} else if llm.Copilot != nil {
+		provider.Provider = &api.AIBackend_Provider_Copilot{
+			Copilot: &api.AIBackend_Copilot{Model: llm.Copilot.Model},
 		}
 	} else if llm.AzureOpenAI != nil {
 		resourceName, resourceType := parseAzureEndpoint(llm.AzureOpenAI.Endpoint)

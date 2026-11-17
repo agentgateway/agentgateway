@@ -248,6 +248,23 @@ fn file_part_without_data_or_id_is_rejected() {
 }
 
 #[test]
+fn rejected_signed_url_omits_query_from_error() {
+	let err = from_completions::translate(
+		&req(file_content(json!({
+			"file_id": "https://storage.googleapis.com/bucket/object?X-Goog-Signature=secret"
+		}))),
+		true,
+	)
+	.expect_err("extension-less URL without a MIME hint must be rejected");
+	let msg = err.to_string();
+	assert!(!msg.contains("secret"), "{msg}");
+	assert!(
+		msg.contains("https://storage.googleapis.com/bucket/object"),
+		"{msg}"
+	);
+}
+
+#[test]
 fn empty_string_user_content_is_preserved() {
 	let g = to_gemini(json!({
 		"model": "gemini-2.5-flash",
@@ -1104,31 +1121,74 @@ fn gemini_schema_rewrites_oneof_of_refs() {
 	assert_eq!(any_of[1]["properties"]["key"]["type"], "string", "{txt}");
 }
 
-// Case 5: only `enum` and `date-time` string formats are safe; others (uri, email, int64, uuid, ...)
-// must be stripped.
+// Case 5: string formats pass through to Gemini.
 #[test]
-fn gemini_schema_strips_unsupported_formats_keeps_datetime() {
-	let s = response_schema(json!({
+fn gemini_schema_keeps_formats() {
+	let schema = json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
-			"link": { "type": "string", "format": "uri" },
 			"when": { "type": "string", "format": "date-time" },
+			"day": { "type": "string", "format": "date" },
+			"at": { "type": "string", "format": "time" },
+			"id": { "type": "string", "format": "uuid" },
+			"mail": { "type": "string", "format": "email" },
 			"big": { "type": "integer", "format": "int64" }
 		}
+	});
+	for is_vertex in [true, false] {
+		let g = from_completions::translate(
+			&req(json!({
+				"model": "gemini-2.5-flash",
+				"messages": [{ "role": "user", "content": "x" }],
+				"response_format": {
+					"type": "json_schema",
+					"json_schema": { "name": "T", "strict": true, "schema": schema }
+				}
+			})),
+			is_vertex,
+		)
+		.expect("translate ok");
+		let g: Value = serde_json::from_slice(&g).expect("valid json");
+		let props = &g["generationConfig"]["responseSchema"]["properties"];
+		for (field, format) in [
+			("when", "date-time"),
+			("day", "date"),
+			("at", "time"),
+			("id", "uuid"),
+			("mail", "email"),
+			("big", "int64"),
+		] {
+			assert_eq!(
+				props[field]["format"], format,
+				"is_vertex={is_vertex}: {props}"
+			);
+		}
+	}
+}
+
+#[test]
+fn tool_parameters_keep_string_formats() {
+	let g = to_gemini_api(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "book",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"day": { "type": "string", "format": "date" },
+						"id": { "type": "string", "format": "uuid" }
+					}
+				}
+			}
+		}]
 	}));
-	assert!(
-		s["properties"]["link"].get("format").is_none(),
-		"unsupported string format must be dropped: {s}"
-	);
-	assert_eq!(
-		s["properties"]["when"]["format"], "date-time",
-		"date-time format must be kept: {s}"
-	);
-	assert!(
-		s["properties"]["big"].get("format").is_none(),
-		"unsupported numeric format must be dropped: {s}"
-	);
+	let props = &g["tools"][0]["functionDeclarations"][0]["parameters"]["properties"];
+	assert_eq!(props["day"]["format"], "date", "{props}");
+	assert_eq!(props["id"]["format"], "uuid", "{props}");
 }
 
 // Case 6: JSON Schema `type` arrays are not allowed. A `null` member becomes `nullable`; a genuine
@@ -1548,6 +1608,87 @@ fn reasoning_effort_maps_to_thinking_level_on_gemini_3() {
 }
 
 #[test]
+fn reasoning_effort_maps_to_thinking_level_on_gemma_4() {
+	// Gemma 4 on the Gemini API only supports the binary `minimal` (off) / `high` (on)
+	// thinking levels and rejects thinkingBudget with "Thinking budget is not supported
+	// for this model." (agentgateway#4148). `none` maps to `minimal` because omitting
+	// thinkingConfig leaves Gemma 4 thinking enabled. Matching is by family substring,
+	// so any gemma-4-* variant (including a `models/` prefix) takes this path.
+	// Full Gemma 4 family as documented, plus a `models/`-prefixed variant to prove
+	// matching is by family substring rather than exact model id.
+	for model in [
+		"gemma-4-e2b-it",
+		"gemma-4-e4b-it",
+		"gemma-4-26b-a4b-it",
+		"gemma-4-31b-it",
+		"models/gemma-4-31b-it",
+	] {
+		for (effort, level) in [
+			("none", "minimal"),
+			("minimal", "minimal"),
+			("low", "minimal"),
+			("medium", "high"),
+			("high", "high"),
+			("xhigh", "high"),
+			("max", "high"),
+		] {
+			let g = to_gemini(json!({
+				"model": model,
+				"messages": [{ "role": "user", "content": "x" }],
+				"reasoning_effort": effort
+			}));
+			let tc = &g["generationConfig"]["thinkingConfig"];
+			assert_eq!(tc["thinkingLevel"], level, "{model} effort={effort}: {g}");
+			assert!(
+				tc.get("thinkingBudget").is_none(),
+				"{model} effort={effort} must not send thinkingBudget: {g}"
+			);
+		}
+	}
+}
+
+#[test]
+fn reasoning_effort_maps_to_thinking_level_on_gemini_4() {
+	// Gemini 4 (e.g. gemini-4-argon) rejects the legacy numeric thinkingBudget
+	// ("Thinking budget is not supported for this model. Use thinkingLevel
+	// instead.") and supports low/medium/high but has no `minimal` level, so
+	// `minimal` clamps up to `low`.
+	for (effort, level) in [
+		("minimal", "low"),
+		("low", "low"),
+		("medium", "medium"),
+		("high", "high"),
+		("xhigh", "high"),
+		("max", "high"),
+	] {
+		let g = to_gemini(json!({
+			"model": "gemini-4-argon",
+			"messages": [{ "role": "user", "content": "x" }],
+			"reasoning_effort": effort
+		}));
+		let tc = &g["generationConfig"]["thinkingConfig"];
+		assert_eq!(tc["thinkingLevel"], level, "effort={effort}: {g}");
+		assert!(
+			tc.get("thinkingBudget").is_none(),
+			"effort={effort} must not send thinkingBudget: {g}"
+		);
+	}
+}
+
+#[test]
+fn reasoning_effort_none_omits_thinking_config_on_gemini_4() {
+	// Gemini 4 has no off level, so `none` keeps the default behavior of
+	// omitting thinkingConfig instead of sending an unsupported `minimal`.
+	let g = to_gemini(json!({
+		"model": "gemini-4-argon",
+		"messages": [{ "role": "user", "content": "x" }],
+		"reasoning_effort": "none"
+	}));
+	let gc = g.get("generationConfig");
+	assert!(gc.is_none() || gc.unwrap().get("thinkingConfig").is_none());
+}
+
+#[test]
 fn reasoning_effort_maps_to_thinking_budget_on_gemini_25() {
 	for (effort, budget) in [("high", 4096), ("xhigh", 8192), ("max", 16384)] {
 		let g = to_gemini(json!({
@@ -1892,6 +2033,7 @@ mod passthrough {
 				input_format: InputFormat::Gemini,
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: "gemini-2.5-flash".into(),
+				original_model: None,
 				provider: "gcp.vertex_ai".into(),
 				streaming: true,
 				params: Default::default(),

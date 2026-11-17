@@ -263,7 +263,7 @@ func CreateAgwExternalAuthFilter(
 	}
 	if b := filter.ForwardBody; b != nil {
 		pol.IncludeRequestBody = &api.TrafficPolicySpec_ExternalAuth_BodyOptions{
-			MaxRequestBytes: uint32(b.MaxSize),
+			MaxRequestBytes: uint32(b.MaxSize), //nolint:gosec // G115: kubebuilder validation ensures 0 <= value
 			// "Bodies over that size must fail processing"
 			AllowPartialMessage: false,
 			// TODO(https://github.com/kubernetes-sigs/gateway-api/issues/4198): do we want this?

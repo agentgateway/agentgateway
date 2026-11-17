@@ -138,7 +138,8 @@ pub async fn spawn_connection<K>(
 		.max_header_list_size(1024 * 16)
 		// 4mb. Aligned with window_size such that we can fill up the buffer, then flush it all in one go, without buffering up too much.
 		.max_send_buffer_size(cfg.window_size as usize)
-		.enable_push(false);
+		.enable_push(false)
+		.data_frame_budget(usize::MAX);
 
 	let (send_req, connection) = builder
 		.handshake::<_, Bytes>(s)

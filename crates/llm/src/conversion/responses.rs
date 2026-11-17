@@ -69,6 +69,12 @@ pub fn passthrough_stream(
 							.input_tokens_details
 							.cache_write_tokens
 							.map(|tokens| tokens as u64);
+						r.response.cache_creation_12h_input_tokens = usage
+							.input_tokens_details
+							.cache_write_tokens_details
+							.as_ref()
+							.and_then(|d| d.ttl_12h_tokens)
+							.map(|t| t as u64);
 						r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
 					}
 				});
@@ -114,6 +120,12 @@ pub fn passthrough_stream(
 							.input_tokens_details
 							.cache_write_tokens
 							.map(|tokens| tokens as u64);
+						r.response.cache_creation_12h_input_tokens = usage
+							.input_tokens_details
+							.cache_write_tokens_details
+							.as_ref()
+							.and_then(|d| d.ttl_12h_tokens)
+							.map(|t| t as u64);
 						r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
 					}
 					if let Some(c) = completion.take() {
@@ -186,6 +198,7 @@ pub mod from_messages {
 			metadata,
 			thinking,
 			output_config,
+			cache_control: _,
 		} = typed;
 
 		// Responses has no direct stop_sequences/top_k equivalent; these are
@@ -254,6 +267,7 @@ pub mod from_messages {
 			stream: Some(stream),
 			instructions: None,
 			vendor_extensions: None,
+			reasoning: None,
 			rest: Value::Object(rest),
 		})
 	}
@@ -324,7 +338,7 @@ pub mod from_messages {
 		effort: Option<messages::ThinkingEffort>,
 	) -> Option<responses::Reasoning> {
 		let effort = effort.or_else(|| {
-			if let Some(messages::ThinkingInput::Enabled { budget_tokens }) = &thinking {
+			if let Some(messages::ThinkingInput::Enabled { budget_tokens, .. }) = &thinking {
 				Some(crate::types::anthropic_effort_for_thinking_budget(
 					*budget_tokens,
 				))
@@ -470,6 +484,11 @@ pub mod from_messages {
 					add_prompt_cache_breakpoint(&mut part, image.cache_control, supports_cache);
 					parts.push(part);
 				},
+				messages::ContentBlock::Document(document) => {
+					let mut part = translate_document_source(&document.source, document.title.as_deref())?;
+					add_prompt_cache_breakpoint(&mut part, document.cache_control, supports_cache);
+					parts.push(part);
+				},
 				messages::ContentBlock::ToolResult {
 					tool_use_id,
 					content,
@@ -490,8 +509,7 @@ pub mod from_messages {
 						"status": status,
 					})));
 				},
-				messages::ContentBlock::Document(_)
-				| messages::ContentBlock::SearchResult(_)
+				messages::ContentBlock::SearchResult(_)
 				| messages::ContentBlock::ServerToolUse { .. }
 				| messages::ContentBlock::WebSearchToolResult { .. }
 				| messages::ContentBlock::Thinking { .. }
@@ -650,6 +668,80 @@ pub mod from_messages {
 		}
 	}
 
+	/// A Messages `document` becomes a Responses `input_file` (or `input_text` for a plain-text
+	/// document). A source Responses cannot carry is an error, never a silent drop: a model that
+	/// answers without the document it was given is worse than a rejected request.
+	fn translate_document_source(source: &Value, title: Option<&str>) -> Result<Value, AIError> {
+		let source_type = source.get("type").and_then(Value::as_str).ok_or_else(|| {
+			AIError::UnsupportedConversion(strng::literal!("messages document source missing type"))
+		})?;
+		match source_type {
+			"base64" => {
+				let media_type = source
+					.get("media_type")
+					.and_then(Value::as_str)
+					.ok_or_else(|| {
+						AIError::UnsupportedConversion(strng::literal!(
+							"messages base64 document source missing media_type"
+						))
+					})?;
+				let data = source.get("data").and_then(Value::as_str).ok_or_else(|| {
+					AIError::UnsupportedConversion(strng::literal!(
+						"messages base64 document source missing data"
+					))
+				})?;
+				// OpenAI requires a filename alongside inline file data.
+				let filename = match (title, media_type) {
+					(Some(title), _) => title.to_string(),
+					(None, "application/pdf") => "document.pdf".to_string(),
+					(None, _) => "document".to_string(),
+				};
+				Ok(json!({
+					"type": "input_file",
+					"filename": filename,
+					"file_data": format!("data:{media_type};base64,{data}"),
+				}))
+			},
+			"url" => {
+				let url = source.get("url").and_then(Value::as_str).ok_or_else(|| {
+					AIError::UnsupportedConversion(strng::literal!(
+						"messages url document source missing url"
+					))
+				})?;
+				Ok(json!({
+					"type": "input_file",
+					"file_url": url,
+				}))
+			},
+			"file" => {
+				let file_id = source
+					.get("file_id")
+					.and_then(Value::as_str)
+					.ok_or_else(|| {
+						AIError::UnsupportedConversion(strng::literal!(
+							"messages file document source missing file_id"
+						))
+					})?;
+				Ok(json!({
+					"type": "input_file",
+					"file_id": file_id,
+				}))
+			},
+			"text" => {
+				let data = source.get("data").and_then(Value::as_str).ok_or_else(|| {
+					AIError::UnsupportedConversion(strng::literal!(
+						"messages text document source missing data"
+					))
+				})?;
+				Ok(json!({
+					"type": "input_text",
+					"text": data,
+				}))
+			},
+			_ => unsupported("messages document source cannot be represented by responses"),
+		}
+	}
+
 	fn translate_tool_result_content(
 		content: messages::ToolResultContent,
 		cache_control: Option<messages::CacheControlEphemeral>,
@@ -694,8 +786,19 @@ pub mod from_messages {
 							requires_array = true;
 							continue;
 						},
+						messages::ToolResultContentPart::Document {
+							source,
+							cache_control,
+							title,
+							..
+						} => {
+							let mut value = translate_document_source(&source, title.as_deref())?;
+							add_prompt_cache_breakpoint(&mut value, cache_control, supports_cache);
+							text_values.push(value);
+							requires_array = true;
+							continue;
+						},
 						messages::ToolResultContentPart::Unknown
-						| messages::ToolResultContentPart::Document { .. }
 						| messages::ToolResultContentPart::SearchResult { .. } => continue,
 					};
 					let mut value = json!({
@@ -737,6 +840,13 @@ pub mod from_messages {
 			input_tokens: u.input_tokens as u64,
 			total_tokens: u.total_tokens as u64,
 			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
+			cache_creation_12h_input_tokens: u
+				.input_tokens_details
+				.cache_write_tokens_details
+				.as_ref()
+				.and_then(|d| d.ttl_12h_tokens)
+				.map(|t| t as u64),
+			..Default::default()
 		});
 		let anthropic = translate_response_internal(resp)?;
 		Ok(Box::new(super::super::ResponseWithProviderUsage {
@@ -804,11 +914,7 @@ pub mod from_messages {
 							},
 							responses::OutputMessageContent::Refusal(refusal) => {
 								saw_refusal = true;
-								content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-									text: refusal.refusal,
-									citations: None,
-									cache_control: None,
-								}));
+								content.push(messages::ContentBlock::text(refusal.refusal));
 							},
 						}
 					}
@@ -851,16 +957,10 @@ pub mod from_messages {
 			saw_refusal,
 		)?;
 		Ok(messages::MessagesResponse {
-			id: resp.id,
-			r#type: "message".to_string(),
-			role: messages::Role::Assistant,
 			content,
-			model: resp.model,
 			stop_reason: Some(stop_reason),
-			stop_sequence: None,
 			usage,
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..messages::MessagesResponse::start(resp.id, resp.model)
 		})
 	}
 
@@ -922,24 +1022,7 @@ pub mod from_messages {
 			push_event(
 				events,
 				messages::MessagesStreamEvent::MessageStart {
-					message: messages::MessagesResponse {
-						id,
-						r#type: "message".to_string(),
-						role: messages::Role::Assistant,
-						content: vec![],
-						model: model.clone(),
-						stop_reason: None,
-						stop_sequence: None,
-						usage: messages::Usage {
-							input_tokens: 0,
-							output_tokens: 0,
-							cache_creation_input_tokens: None,
-							cache_read_input_tokens: None,
-							service_tier: None,
-						},
-						input_audio_tokens: None,
-						output_audio_tokens: None,
-					},
+					message: messages::MessagesResponse::start(id, model.clone()),
 				},
 			);
 			if !model.is_empty() {
@@ -1084,11 +1167,7 @@ pub mod from_messages {
 					events,
 					messages::MessagesStreamEvent::ContentBlockStart {
 						index,
-						content_block: messages::ContentBlock::Text(messages::ContentTextBlock {
-							text: String::new(),
-							citations: None,
-							cache_control: None,
-						}),
+						content_block: messages::ContentBlock::text(String::new()),
 					},
 				);
 			}
@@ -1162,6 +1241,12 @@ pub mod from_messages {
 					.input_tokens_details
 					.cache_write_tokens
 					.map(|tokens| tokens as u64);
+				r.response.cache_creation_12h_input_tokens = usage
+					.input_tokens_details
+					.cache_write_tokens_details
+					.as_ref()
+					.and_then(|d| d.ttl_12h_tokens)
+					.map(|t| t as u64);
 				r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
 				if let Some(service_tier) = &service_tier {
 					r.response.service_tier = Some(strng::new(service_tier));
@@ -1608,11 +1693,8 @@ pub mod from_messages {
 	) -> messages::Usage {
 		let Some(usage) = usage else {
 			return messages::Usage {
-				input_tokens: 0,
-				output_tokens: 0,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
 				service_tier,
+				..Default::default()
 			};
 		};
 		let cache_creation_input_tokens = usage
@@ -1631,6 +1713,7 @@ pub mod from_messages {
 			cache_creation_input_tokens,
 			cache_read_input_tokens,
 			service_tier,
+			..Default::default()
 		}
 	}
 
@@ -1643,6 +1726,7 @@ pub mod from_messages {
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_creation_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
+			..Default::default()
 		}
 	}
 

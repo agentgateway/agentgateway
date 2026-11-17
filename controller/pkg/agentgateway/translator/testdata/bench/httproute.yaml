@@ -1,0 +1,22 @@
+#refresh=true
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{.Name}}
+spec:
+  hostnames:
+    - {{.Name}}.example.com
+  parentRefs:
+  {{ range $gw := .gateways }}
+  {{ $spl := split "/" $gw }}
+  - name: {{$spl._1}}
+    namespace: {{$spl._0}}
+  {{ end }}
+  rules:
+    - backendRefs:
+        - name: {{.Name}}
+          port: 80
+      matches:
+        - path:
+            type: PathPrefix
+            value: /{{.RandNumber}}

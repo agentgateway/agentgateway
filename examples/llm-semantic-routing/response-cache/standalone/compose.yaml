@@ -1,0 +1,39 @@
+name: response-cache
+services:
+  semantic-router:
+    image: ghcr.io/vllm-project/semantic-router/vllm-sr:${VSR_IMAGE_TAG:-v0.4.0}
+    command: ["/app/config/config.yaml"]
+    ports:
+      - "127.0.0.1:50051:50051"
+    volumes:
+      - ./semantic-router-config.yaml:/app/config/config.yaml:ro
+      - models:/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 120
+      start_period: 30s
+  redis:
+    image: redis:${REDIS_VERSION:-8.10.0-alpine}
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "60", "1", "--dir", "/data"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  support-backend:
+    image: ghcr.io/solo-io/homehub-support-demo:${HOMEHUB_TAG:-sha-fd19c81}
+    user: "65532:65532"
+    read_only: true
+    ports:
+      - "127.0.0.1:18080:8080"
+
+volumes:
+  models:
+  redis-data:

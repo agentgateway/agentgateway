@@ -24,6 +24,36 @@ pub async fn load_file_or_inline(
 	}
 }
 
+/// [`load_file_or_inline`] for serde hooks, through the fetcher of the enclosing parse.
+pub fn load_file_or_inline_during_parse(value: &FileOrInline) -> anyhow::Result<String> {
+	let resources = crate::resource_manager::parse_fetcher();
+	futures::executor::block_on(load_file_or_inline(value, &resources))
+}
+
+pub fn deser_watched_secret<'de, D>(deserializer: D) -> Result<secrecy::SecretString, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let input = <FileOrInline as serde::Deserialize>::deserialize(deserializer)?;
+	load_file_or_inline_during_parse(&input)
+		.map(|s| secrecy::SecretString::from(s.trim().to_string()))
+		.map_err(serde::de::Error::custom)
+}
+
+pub fn deser_watched_secret_option<'de, D>(
+	deserializer: D,
+) -> Result<Option<secrecy::SecretString>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let Some(input) = <Option<FileOrInline> as serde::Deserialize>::deserialize(deserializer)? else {
+		return Ok(None);
+	};
+	load_file_or_inline_during_parse(&input)
+		.map(|s| Some(secrecy::SecretString::from(s.trim().to_string())))
+		.map_err(serde::de::Error::custom)
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]

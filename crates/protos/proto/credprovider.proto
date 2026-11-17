@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package credprovider;
+package substrate.credprovider.v1;
 
 // CredentialProvider resolves an external credential reference. The provider
 // owns authorization and secret storage; AgentGateway only brokers a request.

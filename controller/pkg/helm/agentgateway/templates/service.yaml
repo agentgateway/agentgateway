@@ -10,7 +10,10 @@ metadata:
   labels:
     {{- include "kgateway.gateway.allLabels" . | nindent 4 }}
 spec:
-  type: LoadBalancer
+  type: {{ $gateway.service.type | default "LoadBalancer" }}
+  {{- with $gateway.service.clusterIP }}
+  clusterIP: {{ . }}
+  {{- end }}
   {{- with $gateway.service.loadBalancerIP }}
   loadBalancerIP: {{ . }}
   {{- end }}

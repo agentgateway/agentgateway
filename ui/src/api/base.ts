@@ -1,4 +1,7 @@
-export const apiBase = import.meta.env.VITE_AGENTGATEWAY_API ?? '';
+import { defaultApiBase } from '@/basePath';
+import { withBasePath } from '@/uiBase';
+
+export const apiBase = import.meta.env.VITE_AGENTGATEWAY_API ?? defaultApiBase();
 
 let redirecting = false;
 let hasSuccessfulRequest = false;
@@ -24,7 +27,11 @@ export async function requestApi(path: string, init?: RequestInit): Promise<Resp
 				return new Promise<Response>(() => {});
 			}
 			const returnTo = window.location.pathname + window.location.search + window.location.hash;
-			const destination = new URL(`${apiBase}${location}`, window.location.href);
+			// The server's login redirect already has the base path; only add it if missing.
+			const target = apiBase.startsWith('/')
+				? withBasePath(location ?? '', apiBase)
+				: `${apiBase}${location}`;
+			const destination = new URL(target, window.location.href);
 			destination.searchParams.set('returnTo', returnTo);
 			window.location.replace(destination.href);
 		}
@@ -35,6 +42,16 @@ export async function requestApi(path: string, init?: RequestInit): Promise<Resp
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+	const response = await requestOk(path, init);
+	return response.json() as Promise<T>;
+}
+
+export async function requestText(path: string, init?: RequestInit): Promise<string> {
+	const response = await requestOk(path, init);
+	return response.text();
+}
+
+async function requestOk(path: string, init?: RequestInit): Promise<Response> {
 	const response = await requestApi(path, {
 		headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
 		...init
@@ -56,7 +73,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
 		}
 		throw new Error(message || 'request failed');
 	}
-	return response.json() as Promise<T>;
+	return response;
 }
 
 export function parseJsonOrText(text: string) {

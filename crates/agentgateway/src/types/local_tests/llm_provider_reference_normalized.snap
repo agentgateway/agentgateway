@@ -119,7 +119,12 @@ backends:
           discovery: catalog
           pathPrefix: /foo
           models:
-            - name: anthropic/*
+            - discovery:
+                provider: anthropic
+                transformation:
+                  prefix: anthropic/
+                model: claude-sonnet-4-5-20250929
+              name: anthropic/*
               created: 0
               visibility: public
               headerMatches: []

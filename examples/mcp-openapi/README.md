@@ -26,6 +26,23 @@ openapi:
 
 This will expose each method in the openapi specification as MCP tools, and proxy them to the petstore application (on `localhost:8080`).
 
+#### Override the server path prefix
+
+By default, operation paths are joined to the path of the schema's server URL. A
+non-root path in `host` (or `path`, with `host`/`port`/`path` or `backend`) replaces it:
+
+```yaml
+name: example
+openapi:
+  host: https://example.com/api
+  schema:
+    url: https://example.com/openapi.json
+```
+
+Here an operation at `/users` is forwarded to `https://example.com/api/users`.
+
+### Try the Petstore tools
+
 Start the Petstore OpenAPI 3 demo app.
 
 ```bash

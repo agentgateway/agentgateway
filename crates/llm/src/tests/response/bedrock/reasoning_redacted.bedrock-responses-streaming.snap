@@ -15,13 +15,13 @@ event: event
 data: {"type":"response.reasoning_text.done","sequence_number":4,"item_id":"rs_xxx","output_index":0,"content_index":0,"text":"Two plus two is four."}
 
 event: event
-data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"Two plus two is four."}],"encrypted_content":"SIG-xyz==","status":"completed"}}
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"Two plus two is four."}],"encrypted_content":"[{\"type\":\"thinking\",\"thinking\":\"Two plus two is four.\",\"signature\":\"SIG-xyz==\"}]","status":"completed"}}
 
 event: event
 data: {"type":"response.output_item.added","sequence_number":6,"output_index":1,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"status":"in_progress"}}
 
 event: event
-data: {"type":"response.output_item.done","sequence_number":7,"output_index":1,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo","status":"completed"}}
+data: {"type":"response.output_item.done","sequence_number":7,"output_index":1,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"[{\"type\":\"redacted_thinking\",\"data\":\"cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo\"}]","status":"completed"}}
 
 event: event
 data: {"type":"response.output_item.added","sequence_number":8,"output_index":2,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
@@ -39,7 +39,7 @@ event: event
 data: {"type":"response.output_item.done","sequence_number":12,"output_index":2,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"The answer is 4."}],"id":"","role":"assistant","status":"completed"}}
 
 event: event
-data: {"type":"response.completed","sequence_number":13,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"Two plus two is four."}],"encrypted_content":"SIG-xyz==","status":"completed"},{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo","status":"completed"},{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"The answer is 4."}],"id":"","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":18,"input_tokens_details":{"cached_tokens":0},"output_tokens":46,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":64}}}
+data: {"type":"response.completed","sequence_number":13,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"Two plus two is four."}],"encrypted_content":"[{\"type\":\"thinking\",\"thinking\":\"Two plus two is four.\",\"signature\":\"SIG-xyz==\"}]","status":"completed"},{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"[{\"type\":\"redacted_thinking\",\"data\":\"cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo\"}]","status":"completed"},{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"The answer is 4."}],"id":"","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":18,"input_tokens_details":{"cached_tokens":0},"output_tokens":46,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":64}}}
 
 
 

@@ -18,9 +18,10 @@ import (
 
 var log = logging.New("nack/publisher")
 
-// Event reasons for Kubernetes Events created by agentgateway NACK detection
+// Event reasons for proxy configuration diagnostics.
 const (
-	ReasonNack = "AgentGatewayNackError"
+	ReasonNack    = "AgentGatewayNackError"
+	ReasonWarning = "AgentGatewayConfigWarning"
 )
 
 // NackEvent represents a NACK received from an agentgateway gateway
@@ -31,7 +32,7 @@ type NackEvent struct {
 	Timestamp time.Time
 }
 
-// Publisher converts NACK events from the agentgateway xDS server into Kubernetes Events.
+// Publisher converts proxy configuration diagnostics into Kubernetes Events.
 type Publisher struct {
 	eventRecorder record.EventRecorder
 	gatewayClient kclient.Client[*gwv1.Gateway]
@@ -60,7 +61,16 @@ func NewPublisher(client kube.Client) *Publisher {
 
 // PublishNack publishes a NACK event as a k8s event.
 func (p *Publisher) PublishNack(event *NackEvent) {
-	gw := p.gatewayClient.Get(event.Gateway.Name, event.Gateway.Namespace)
+	p.publish(event.Gateway, event.ErrorMsg, ReasonNack)
+}
+
+// PublishWarning publishes a configuration warning as a Kubernetes Event.
+func (p *Publisher) PublishWarning(gateway types.NamespacedName, message string) {
+	p.publish(gateway, message, ReasonWarning)
+}
+
+func (p *Publisher) publish(gateway types.NamespacedName, message, reason string) {
+	gw := p.gatewayClient.Get(gateway.Name, gateway.Namespace)
 	if gw == nil {
 		log.Error("failed to get gateway from cache")
 		return
@@ -69,11 +79,10 @@ func (p *Publisher) PublishNack(event *NackEvent) {
 	gatewayRef := &corev1.ObjectReference{
 		Kind:       wellknown.GatewayKind,
 		APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
-		Name:       event.Gateway.Name,
-		Namespace:  event.Gateway.Namespace,
+		Name:       gateway.Name,
+		Namespace:  gateway.Namespace,
 		UID:        gw.GetUID(),
 	}
-	p.eventRecorder.Event(gatewayRef, corev1.EventTypeWarning, ReasonNack, event.ErrorMsg)
-
-	log.Debug("published NACK event for Gateway", "gateway", event.Gateway, "type_url", event.TypeUrl)
+	p.eventRecorder.Event(gatewayRef, corev1.EventTypeWarning, reason, message)
+	log.Debug("published configuration event for Gateway", "gateway", gateway, "reason", reason)
 }

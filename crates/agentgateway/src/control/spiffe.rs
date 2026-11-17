@@ -729,6 +729,7 @@ mod tests {
 					b"h2".to_vec(),
 					b"http/1.1".to_vec(),
 				])),
+				..Default::default()
 			}])),
 		}
 	}

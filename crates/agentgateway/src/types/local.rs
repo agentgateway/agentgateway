@@ -76,6 +76,12 @@ pub fn default_standalone_config(database_url: &str) -> serde_json::Value {
 #[path = "local_tests.rs"]
 mod tests;
 
+pub fn expand_env(s: &str) -> anyhow::Result<String> {
+	// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
+	let s = s.replace("# yaml-language-server: $schema", "#");
+	Ok(shellexpand::full(&s)?.into_owned())
+}
+
 impl NormalizedLocalConfig {
 	pub async fn from(
 		config: &crate::Config,
@@ -83,9 +89,16 @@ impl NormalizedLocalConfig {
 		gateway_name: ListenerTarget,
 		s: &str,
 	) -> anyhow::Result<NormalizedLocalConfig> {
-		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
-		let s = s.replace("# yaml-language-server: $schema", "#");
-		let s = shellexpand::full(&s)?;
+		Self::from_expanded(config, resources, gateway_name, expand_env(s)?).await
+	}
+
+	/// Like `from`, for config that already had environment variables expanded.
+	pub async fn from_expanded(
+		config: &crate::Config,
+		resources: &crate::resource_manager::ResourceFetcher,
+		gateway_name: ListenerTarget,
+		s: String,
+	) -> anyhow::Result<NormalizedLocalConfig> {
 		let mut registration_config = config.clone();
 		let registration_policy = Arc::new(config.budget_policy.registration_policy());
 		registration_config.budget_policy = registration_policy.clone();
@@ -621,6 +634,10 @@ pub struct LocalUIConfig {
 	/// policies defines route-level policies for the UI and required UI API routes.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<LocalUIPolicy>,
+	/// basePath is the prefix a reverse proxy in front of the gateway strips before forwarding (e.g. `/agentgateway`).
+	/// It is added to UI links, assets and login redirects.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	base_path: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -808,6 +825,10 @@ pub struct LocalLLMModels {
 	/// name is the name of the model we are matching from a users request. If params.model is set, that
 	/// will be used in the request to the LLM provider. If not, the incoming model is used.
 	name: String,
+	/// displayName is an optional label shown in the UI in place of name. It does not affect matching.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[allow(dead_code)]
+	display_name: Option<String>,
 	/// visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).
 	#[serde(
 		default,
@@ -934,7 +955,7 @@ pub struct SecretFromFile(
 	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
 	#[serde(
 		serialize_with = "ser_redact",
-		deserialize_with = "deser_key_from_file"
+		deserialize_with = "deser_watched_secret"
 	)]
 	SecretString,
 );
@@ -1508,6 +1529,10 @@ pub enum InternalBackend {
 	/// Forward the request to the admin API using the request's current path and query.
 	#[serde(rename = "forward")]
 	Forward,
+	/// Forward to the built-in UI, which is served under `base_path`. Set from `ui.basePath`.
+	#[serde(skip_deserializing, rename_all = "camelCase")]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	Ui { base_path: Strng },
 	/// Rewrite all requests to this admin API path, preserving the original query string.
 	#[serde(untagged)]
 	Path(Strng),
@@ -1751,6 +1776,15 @@ impl LocalBackend {
 				if tgt.targets.len() <= 1 && tgt.targets.iter().any(|target| target.condition.is_some()) {
 					bail!("mcp target condition requires at least two configured targets");
 				}
+				if let Some(dup) = tgt
+					.targets
+					.iter()
+					.map(|t| t.name.as_str())
+					.duplicates()
+					.next()
+				{
+					bail!("duplicate mcp target name {dup:?}");
+				}
 				let mut targets = vec![];
 				let mut backends = vec![];
 				for (idx, t) in tgt.targets.iter().enumerate() {
@@ -1809,7 +1843,7 @@ impl LocalBackend {
 							}
 						},
 						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
-							let (bref, _, be) = Self::process_mcp_backend(
+							let (bref, path, be) = Self::process_mcp_backend(
 								local_name(name.clone()),
 								backend,
 								t.policies.clone(),
@@ -1821,9 +1855,17 @@ impl LocalBackend {
 							}
 
 							let openapi_schema = schema.load_openapi_schema(resources).await?;
+							// A root path is indistinguishable from an absent one in host URIs, so both use the schema.
+							let prefix = match path.as_deref().filter(|p| !p.is_empty() && *p != "/") {
+								Some(p) => validate_openapi_prefix(p)
+									.map_err(|e| anyhow!("openapi MCP target '{}': {e}", t.name))?,
+								None => crate::mcp::openapi_server_prefix(&openapi_schema)
+									.map_err(|e| anyhow!("openapi MCP target '{}': {e}", t.name))?,
+							};
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
 								schema: openapi_schema.into(),
+								prefix,
 							})
 						},
 					};
@@ -2037,6 +2079,21 @@ impl<'de> serde::Deserialize<'de> for McpBackendHost {
 	}
 }
 
+// The prefix is formatted directly after the authority, so anything but a plain path could
+// rewrite the upstream URL.
+fn validate_openapi_prefix(prefix: &str) -> anyhow::Result<String> {
+	if !prefix.starts_with('/')
+		|| prefix.starts_with("//")
+		|| prefix.contains(['?', '#', '\\'])
+		|| prefix.parse::<::http::uri::PathAndQuery>().is_err()
+	{
+		anyhow::bail!(
+			"path must start with a single '/' and must not contain a query, fragment, or backslash"
+		);
+	}
+	Ok(prefix.to_string())
+}
+
 impl McpBackendHost {
 	pub fn process(&self) -> anyhow::Result<ProcessedMcpBackendHost> {
 		Ok(match self {
@@ -2046,6 +2103,13 @@ impl McpBackendHost {
 			},
 			McpBackendHost::Host { host, port, path } => match (host, port, path) {
 				(host, Some(port), Some(path)) => {
+					if host.parse::<IpAddr>().is_err() {
+						let authority =
+							::http::uri::Authority::try_from(host.as_str()).context("invalid MCP host")?;
+						if authority.host() != host {
+							anyhow::bail!("invalid MCP host: expected only a hostname or IP address");
+						}
+					}
 					let b = Target::from((host.as_str(), *port));
 					ProcessedMcpBackendHost::Inline {
 						backend: b,
@@ -2107,6 +2171,8 @@ pub enum LocalMcpTargetSpec {
 		#[serde(default, skip_serializing_if = "std::ops::Not::not")]
 		clear_env: bool,
 	},
+	/// Expose the operations in an OpenAPI schema as MCP tools.
+	/// A non-root path in `host` or `path` replaces the schema's server path.
 	#[serde(rename = "openapi")]
 	OpenAPI {
 		#[serde(flatten)]
@@ -2431,7 +2497,7 @@ pub struct LocalBackendAuth {
 pub struct LocalBackendAuthCredential {
 	/// Where the credential is inserted on the backend request.
 	pub location: crate::http::auth::AuthorizationLocation,
-	/// Credential value. Exactly one of `key` or `expression` must be set.
+	/// Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<FileOrInline>"))]
 	pub key: Option<FileOrInline>,
@@ -2439,6 +2505,9 @@ pub struct LocalBackendAuthCredential {
 	/// If it fails or does not return a string, the credential location is cleared instead.
 	#[serde(default)]
 	pub expression: Option<Arc<crate::cel::Expression>>,
+	/// Fetch a Google Cloud access or ID token.
+	#[serde(default)]
+	pub gcp: Option<crate::http::auth::GcpAuth>,
 }
 
 impl LocalBackendAuth {
@@ -2475,10 +2544,23 @@ impl LocalBackendAuth {
 		};
 		let mut credentials = Vec::with_capacity(self.credentials.len());
 		for credential in self.credentials {
+			let sources = [
+				credential.key.is_some(),
+				credential.expression.is_some(),
+				credential.gcp.is_some(),
+			];
+			if sources.into_iter().filter(|set| *set).count() != 1 {
+				anyhow::bail!("backendAuth: exactly one of 'key', 'expression', or 'gcp' must be set");
+			}
+			let source = match credential.gcp {
+				Some(gcp) => crate::http::auth::BackendAuthCredentialSource::Gcp(gcp),
+				None => crate::http::auth::BackendAuthCredentialSource::Key(
+					load_backend_auth_value(credential.key, credential.expression, "key", resources).await?,
+				),
+			};
 			credentials.push(crate::http::auth::BackendAuthCredential {
 				location: credential.location,
-				key: load_backend_auth_value(credential.key, credential.expression, "key", resources)
-					.await?,
+				source,
 			});
 		}
 		Ok(BackendAuth { kind, credentials })
@@ -2576,6 +2658,9 @@ struct LocalLLMPolicy {
 	/// Set request timeout limits.
 	#[serde(default)]
 	timeout: Option<timeout::Policy>,
+	/// Retry matching failed upstream requests.
+	#[serde(default)]
+	retry: Option<retry::Policy>,
 }
 
 #[apply(schema_de!)]
@@ -3116,6 +3201,9 @@ pub struct FilterOrPolicy {
 	/// Buffer request and response bodies.
 	#[serde(default)]
 	buffer: Option<http::buffer::Buffer>,
+	/// Compress responses and decompress request bodies.
+	#[serde(default)]
+	compression: Option<http::compression::Compression>,
 	/// Set request timeout limits.
 	#[serde(default)]
 	timeout: Option<timeout::Policy>,
@@ -3831,6 +3919,7 @@ async fn convert_gateway_listener(
 		name: name.clone(),
 		hostname: hostname.unwrap_or_else(|| strng::new("*")),
 		protocol,
+		..Default::default()
 	};
 	let mut all_policies = Vec::new();
 	if !policies.is_empty() {
@@ -3981,6 +4070,13 @@ fn scoped_routes(listener_key: &ListenerKey, routes: Vec<Route>) -> Vec<Route> {
 		.collect()
 }
 
+fn strip_ui_base_path<'a>(path: &'a str, base_path: &str) -> &'a str {
+	match path.strip_prefix(base_path) {
+		Some(rest) if !base_path.is_empty() && rest.starts_with('/') => rest,
+		_ => path,
+	}
+}
+
 fn ui_oidc_redirect_path(policies: Option<&LocalUIPolicy>) -> anyhow::Result<Option<Strng>> {
 	let Some(oidc) = policies.and_then(|pol| pol.oidc.as_ref()) else {
 		return Ok(None);
@@ -3996,10 +4092,6 @@ fn ui_oidc_redirect_path(policies: Option<&LocalUIPolicy>) -> anyhow::Result<Opt
 
 #[cfg(any(not(test), target_family = "unix"))]
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
-
-fn llm_model_match_specificity(model_name: &str) -> usize {
-	model_name.chars().filter(|c| *c != '*').count()
-}
 
 fn validate_llm_model_pattern(pattern: &str) -> anyhow::Result<()> {
 	let wildcard_count = pattern.chars().filter(|c| *c == '*').count();
@@ -4110,8 +4202,13 @@ async fn convert_attached_ui(
 	{
 		bail!("ui.policies.oidc.login and logout are managed by the built-in UI and must be omitted");
 	}
+	let base_path = strng::new(ui_config.base_path.unwrap_or_default());
+	crate::ui::validate_ui_base_path(&base_path).context("invalid ui.basePath")?;
 	let route_key = strng::new("ui");
-	let route_matches = ui_matches(ui_oidc_redirect_path(ui_config.policies.as_ref())?);
+	let route_matches = ui_matches(
+		ui_oidc_redirect_path(ui_config.policies.as_ref())?
+			.map(|path| strng::new(strip_ui_base_path(&path, &base_path))),
+	);
 	let mut resolved_policies = if let Some(mut pol) = ui_config.policies {
 		// The UI's API is also used by CLI clients, which authenticate with bearer tokens.
 		if let Some(oidc) = pol.oidc.as_mut() {
@@ -4124,6 +4221,8 @@ async fn convert_attached_ui(
 		ResolvedPolicies::default()
 	};
 	// The built-in UI has a public login page; regular OIDC routes retain automatic login.
+	// Login and logout send the browser here, so add the stripped prefix.
+	let login_page = format!("{base_path}/ui/login");
 	for policy in &mut resolved_policies.route_policies {
 		if let TrafficPolicy::Oidc(oidc) = policy {
 			*oidc = RequestPolicy::from_policy_inners(
@@ -4132,13 +4231,18 @@ async fn convert_attached_ui(
 					.into_iter()
 					.map(|mut entry| {
 						let policy = Arc::make_mut(&mut entry.pol);
+						// The IdP calls the public URL, but the proxy forwards it without the prefix.
+						let callback = strip_ui_base_path(policy.redirect_uri.callback_path.path(), &base_path);
+						if let Ok(callback) = callback.parse() {
+							policy.redirect_uri.callback_path = callback;
+						}
 						policy.login = Some(crate::http::oidc::OidcLogin {
 							path: "/api/auth/login".into(),
-							redirect: Some("/ui/login".into()),
+							redirect: Some(login_page.clone()),
 						});
 						policy.logout = Some(crate::http::oidc::OidcLogout {
 							path: "/api/auth/logout".into(),
-							redirect: Some("/ui/login".into()),
+							redirect: Some(login_page.clone()),
 						});
 						entry
 					}),
@@ -4149,7 +4253,14 @@ async fn convert_attached_ui(
 		bail!("ui.policies cannot contain backend policies");
 	}
 	let backend_key = strng::new("ui");
-	let backends = LocalBackend::Internal(InternalBackend::Forward)
+	let internal = if base_path.is_empty() {
+		InternalBackend::Forward
+	} else {
+		InternalBackend::Ui {
+			base_path: base_path.clone(),
+		}
+	};
+	let backends = LocalBackend::Internal(internal)
 		.as_backends(
 			local_name(backend_key.clone()),
 			resources,
@@ -4376,12 +4487,69 @@ impl LocalLLMModelRegistry {
 
 	fn validate_virtual_models(&self) -> anyhow::Result<()> {
 		for virtual_model in &self.virtual_models {
-			for target in virtual_model.routing_strategy()?.targets() {
-				if !self.model_matches(target)? {
+			let strategy = virtual_model.routing_strategy()?;
+			// Failover targets are compiled into a single backend, so they must be concrete models.
+			let failover = matches!(strategy, LocalLLMVirtualRoutingStrategy::Failover(_));
+			for target in strategy.targets() {
+				let nested = self.nested_virtual_model(virtual_model, target).is_some();
+				if failover && nested && !self.models.iter().any(|model| model.name == target) {
+					bail!(
+						"virtual model {} failover target {target} is a virtual model; failover targets must be concrete models",
+						virtual_model.name
+					);
+				}
+				if (failover || !nested) && !self.model_matches(target)? {
 					bail!("virtual model target {target} does not match any llm.models entry");
 				}
 			}
 		}
+		let mut done = HashSet::new();
+		for virtual_model in &self.virtual_models {
+			self.validate_no_cycle(virtual_model, &mut Vec::new(), &mut done)?;
+		}
+		Ok(())
+	}
+
+	/// Returns the virtual model a target refers to. A target with the virtual model's own name refers
+	/// to the concrete model it shadows.
+	fn nested_virtual_model(
+		&self,
+		virtual_model: &LocalLLMVirtualModel,
+		target: &str,
+	) -> Option<&LocalLLMVirtualModel> {
+		if target == virtual_model.name {
+			return None;
+		}
+		self
+			.virtual_models
+			.iter()
+			.find(|model| model.name == target)
+	}
+
+	fn validate_no_cycle<'a>(
+		&'a self,
+		virtual_model: &'a LocalLLMVirtualModel,
+		path: &mut Vec<&'a str>,
+		done: &mut HashSet<&'a str>,
+	) -> anyhow::Result<()> {
+		let name = virtual_model.name.as_str();
+		if done.contains(name) {
+			return Ok(());
+		}
+		if path.contains(&name) {
+			bail!("virtual model cycle: {} -> {name}", path.join(" -> "));
+		}
+		let strategy = virtual_model.routing_strategy()?;
+		if !matches!(strategy, LocalLLMVirtualRoutingStrategy::Failover(_)) {
+			path.push(name);
+			for target in strategy.targets() {
+				if let Some(next) = self.nested_virtual_model(virtual_model, target) {
+					self.validate_no_cycle(next, path, done)?;
+				}
+			}
+			path.pop();
+		}
+		done.insert(name);
 		Ok(())
 	}
 
@@ -4393,7 +4561,7 @@ impl LocalLLMModelRegistry {
 			.enumerate()
 			.sorted_by_key(|(original_idx, model)| {
 				(
-					std::cmp::Reverse(llm_model_match_specificity(&model.name)),
+					std::cmp::Reverse(llm::model_router::model_match_specificity(&model.name)),
 					*original_idx,
 				)
 			})
@@ -4493,6 +4661,7 @@ async fn convert_llm_config(
 			local_rate_limit,
 			remote_rate_limit,
 			timeout,
+			retry,
 		} = pol;
 		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
 		if let Some(guard) = &guardrails {
@@ -4506,6 +4675,7 @@ async fn convert_llm_config(
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
 				timeout,
+				retry,
 				..Default::default()
 			},
 			None,
@@ -4667,32 +4837,19 @@ async fn convert_llm_config(
 			pols.push(BackendTrafficPolicy::backend_auth(backend_auth));
 		}
 
-		let discovery = if !model_config.name.contains('*')
-			|| provider.override_model().is_some()
-			|| model_config
-				.overrides
-				.as_ref()
-				.is_some_and(|p| p.contains_key("model"))
-			|| model_config
-				.final_transformation
-				.as_ref()
-				.is_some_and(|p| p.contains_key("model"))
-		{
-			None
-		} else {
-			match model_config
+		let discovery = llm::discovery::ModelDiscovery::new(
+			provider.provider(),
+			provider.override_model(),
+			model_config
 				.transformation
 				.as_ref()
 				.and_then(|p| p.get("model"))
-			{
-				Some(expression) => llm::model_transform::reverse_model_transformation(expression),
-				None => Some(llm::model_transform::ModelTransformation::Identity),
-			}
-			.map(|transformation| llm::discovery::ModelDiscovery {
-				provider: provider.provider(),
-				transformation,
-			})
-		};
+				.map(AsRef::as_ref),
+		)
+		.map(|d| llm::discovery::ModelDiscovery {
+			provider_config: Some(provider.clone()),
+			..d
+		});
 
 		// Create AI backend
 		let named_provider = NamedAIProvider {
@@ -4808,9 +4965,6 @@ async fn convert_llm_config(
 		let llm_policy = Arc::default();
 		let routing = match virtual_model.routing_strategy()? {
 			LocalLLMVirtualRoutingStrategy::Conditional(conditional) => {
-				for target in &conditional.targets {
-					resolved_models.resolve(&target.model)?;
-				}
 				llm::model_router::VirtualModelRouting::Conditional(
 					conditional
 						.targets
@@ -4824,9 +4978,6 @@ async fn convert_llm_config(
 				)
 			},
 			LocalLLMVirtualRoutingStrategy::Weighted(weighted) => {
-				for target in &weighted.targets {
-					resolved_models.resolve(&target.model)?;
-				}
 				llm::model_router::VirtualModelRouting::Weighted(
 					weighted
 						.targets
@@ -4840,9 +4991,6 @@ async fn convert_llm_config(
 				)
 			},
 			LocalLLMVirtualRoutingStrategy::Callout(callout) => {
-				if let VirtualModelCalloutFailureMode::Fallback(model) = &callout.failure_mode {
-					resolved_models.resolve(model)?;
-				}
 				llm::model_router::VirtualModelRouting::Callout(Arc::new(
 					callout.clone().with_configured_cache_store(),
 				))
@@ -4885,6 +5033,12 @@ async fn convert_llm_config(
 						target: BackendReference::Backend(strng::format!("/{backend_key}")).into(),
 						inline_policies: vec![],
 					},
+					targets: failover
+						.targets
+						.iter()
+						.sorted_by_key(|target| target.priority)
+						.map(|target| strng::new(&target.model))
+						.collect(),
 				}
 			},
 		};
@@ -4906,11 +5060,11 @@ async fn convert_llm_config(
 	});
 
 	routes.push(Route {
-		key: strng::new("llm:request"),
+		key: strng::new(llm::LOCAL_ROUTE_NAME),
 		service_key: None,
 		service_port: 0,
 		name: RouteName {
-			name: strng::new("llm:request"),
+			name: strng::new(llm::LOCAL_ROUTE_NAME),
 			namespace: strng::new("internal"),
 			rule_name: None,
 			kind: None,
@@ -4952,6 +5106,7 @@ async fn convert_llm_config(
 			Some(tls) => ListenerProtocol::HTTPS(tls),
 			None => ListenerProtocol::HTTP,
 		},
+		..Default::default()
 	};
 
 	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
@@ -5075,6 +5230,7 @@ async fn convert_mcp_config(
 		name: listener_name,
 		hostname: strng::new("*"),
 		protocol: ListenerProtocol::HTTP,
+		..Default::default()
 	};
 
 	let mut listener_set = ListenerSet::default();
@@ -5263,6 +5419,7 @@ async fn convert_listener(
 		name,
 		hostname,
 		protocol,
+		..Default::default()
 	};
 	Ok((l, rs, trs, all_policies, all_backends))
 }
@@ -5285,6 +5442,35 @@ pub async fn convert_route(
 	let route_name = name.name.unwrap_or_else(|| strng::format!("route{}", idx));
 	let namespace = name.namespace.unwrap_or_else(|| strng::new("default"));
 	let key = strng::format!("{listener_key}/{namespace}/{route_name}");
+
+	let is_prefix = |p: Option<&crate::types::agent::PathRedirect>| {
+		matches!(p, Some(crate::types::agent::PathRedirect::Prefix(_)))
+	};
+	let uses_prefix_rewrite = policies.as_ref().is_some_and(|p| {
+		is_prefix(p.url_rewrite.as_ref().and_then(|r| r.path.as_ref()))
+			|| is_prefix(p.request_redirect.as_ref().and_then(|r| r.path.as_ref()))
+	}) || backends.iter().any(|b| {
+		is_prefix(
+			b.policies
+				.as_ref()
+				.and_then(|p| p.request_redirect.as_ref()?.path.as_ref()),
+		)
+	});
+	// Delegated routes apply the filter against the child route's match, which is not known here.
+	let delegates = backends
+		.iter()
+		.any(|b| matches!(b.backend, LocalBackend::RouteGroup(_)));
+	if uses_prefix_rewrite
+		&& !delegates
+		&& let Some(m) = matches
+			.iter()
+			.find(|m| !matches!(m.path, PathMatch::PathPrefix(_)))
+	{
+		bail!(
+			"route {route_name}: path prefix rewrite requires every match to be a path prefix match, got {:?}",
+			m.path
+		);
+	}
 
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
@@ -5409,6 +5595,7 @@ async fn split_frontend_policies(
 		tracing,
 	} = pol;
 	if let Some(p) = http {
+		p.validate()?;
 		add(FrontendPolicy::HTTP(p), "http");
 	}
 	if let Some(p) = tls {
@@ -5524,6 +5711,7 @@ pub(crate) async fn split_policies_for_target(
 		substrate_ingress,
 		substrate_egress,
 		buffer,
+		compression,
 		timeout,
 		retry,
 		delay,
@@ -5566,6 +5754,12 @@ pub(crate) async fn split_policies_for_target(
 
 	// Filters
 	if let Some(p) = direct_response {
+		match &p {
+			LocalExplicitOrConditional::Explicit(dr) => dr.validate()?,
+			LocalExplicitOrConditional::Conditional(c) => {
+				c.conditional.iter().try_for_each(|e| e.policy.validate())?
+			},
+		}
 		route_policies.push(TrafficPolicy::DirectResponse(p.into_policy()?));
 	}
 	if let Some(p) = cors {
@@ -5652,7 +5846,7 @@ pub(crate) async fn split_policies_for_target(
 	};
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(RequestPolicy::single(
-			p.try_into()?,
+			p.try_into(resources).await?,
 		)));
 	}
 	if let Some(p) = api_key {
@@ -5720,6 +5914,9 @@ pub(crate) async fn split_policies_for_target(
 	// Traffic policies
 	if let Some(p) = buffer {
 		route_policies.push(TrafficPolicy::Buffer(RequestPolicy::single(p)));
+	}
+	if let Some(p) = compression {
+		route_policies.push(TrafficPolicy::Compression(RequestPolicy::single(p)));
 	}
 	if let Some(p) = timeout {
 		route_policies.push(TrafficPolicy::Timeout(p));

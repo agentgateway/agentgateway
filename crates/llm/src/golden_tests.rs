@@ -41,7 +41,9 @@ const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 const BEDROCK_COHERE_V4: &str = "bedrock-cohere-v4";
 const BEDROCK_NOVA: &str = "bedrock-nova";
+const BEDROCK_PROMPT_CACHING: &str = "bedrock-prompt-caching";
 const COHERE: &str = "cohere";
+const COPILOT: &str = "copilot";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
 const RESPONSES: &str = "responses";
@@ -67,9 +69,12 @@ mod requests {
 			.to_llm_request(
 				strng::new(match provider {
 					COMPLETIONS => OPENAI,
-					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA | BEDROCK_OPENAI | BEDROCK_OPENAI_GPT => {
-						BEDROCK
-					},
+					BEDROCK_TITAN
+					| BEDROCK_COHERE
+					| BEDROCK_NOVA
+					| BEDROCK_OPENAI
+					| BEDROCK_OPENAI_GPT
+					| BEDROCK_PROMPT_CACHING => BEDROCK,
 					VERTEX_GEMINI => VERTEX,
 					provider => provider,
 				}),
@@ -157,7 +162,8 @@ mod requests {
 		("image-url", &[ANTHROPIC]),
 		("image-inline", &[VERTEX_GEMINI]),
 		("image-file", &[VERTEX_GEMINI]),
-		("file-inline", &[VERTEX_GEMINI]),
+		("file-inline", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("file-uri", &[VERTEX_GEMINI]),
 		("structured-output", &[VERTEX_GEMINI]),
 		("multi-turn-tools", &[VERTEX_GEMINI]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
@@ -230,6 +236,7 @@ mod requests {
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
 		("cache_control_dropped_server_tools", &[BEDROCK]),
 		("system_message_mid_conversation", &[BEDROCK]),
+		("document_inline", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
 		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
@@ -243,13 +250,18 @@ mod requests {
 			&[COMPLETIONS, BEDROCK, RESPONSES],
 		),
 		("responses_agent_subset", &[RESPONSES]),
-		("tool_result_error", &[COMPLETIONS, RESPONSES]),
+		(
+			"tool_result_error",
+			&[COMPLETIONS, RESPONSES, BEDROCK_PROMPT_CACHING],
+		),
 		("citations", &[COMPLETIONS, RESPONSES]),
 		("unknown_content", &[COMPLETIONS, RESPONSES]),
 		("reasoning_enabled", &[COMPLETIONS, RESPONSES]),
 		("stop_sequences", &[COMPLETIONS, RESPONSES]),
 		("tool_result_empty", &[COMPLETIONS, RESPONSES]),
 		("tool_result_image", &[COMPLETIONS, RESPONSES]),
+		("document", &[ANTHROPIC, RESPONSES]),
+		("document_unsupported_source", &[RESPONSES]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("namespace-tools", &[BEDROCK, GEMINI]),
@@ -262,6 +274,7 @@ mod requests {
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
 		("cache_control", &[BEDROCK, GEMINI]),
+		("cache_control_tool_outputs", &[BEDROCK]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -270,10 +283,17 @@ mod requests {
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
 		(
 			"basic",
-			&[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, BEDROCK_NOVA, VERTEX],
+			&[
+				OPENAI,
+				COPILOT,
+				BEDROCK_TITAN,
+				BEDROCK_COHERE,
+				BEDROCK_NOVA,
+				VERTEX,
+			],
 		),
 		("cohere-v4", &[BEDROCK_COHERE]),
-		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
+		("array", &[OPENAI, COPILOT, BEDROCK_COHERE, VERTEX]),
 		("full", &[VERTEX]),
 		("embed-content", &[VERTEX]),
 	];
@@ -320,7 +340,7 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					ANTHROPIC => test_request(ANTHROPIC, &path, |i| {
-						conversion::messages::from_completions::translate(i, Some(&catalog))
+						conversion::messages::from_completions::translate(i, None, Some(&catalog))
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
 						conversion::bedrock::from_completions::translate(
@@ -402,8 +422,44 @@ mod requests {
 						conversion::completions::from_messages::translate(i)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_messages::translate(i, &bedrock, None, None).map(|r| r.body)
+						conversion::bedrock::from_messages::translate(i, &bedrock, None, None, None)
+							.map(|r| r.body)
 					}),
+					BEDROCK_PROMPT_CACHING => test_request(
+						BEDROCK_PROMPT_CACHING,
+						&path,
+						|i: &mut types::messages::Request| {
+							let caching = crate::PromptCachingConfig {
+								cache_tools: true,
+								min_tokens: None,
+								..Default::default()
+							};
+							// Nova supports caching, but not on tool definitions.
+							i.model = Some("amazon.nova-pro-v1:0".to_string());
+							let nova: serde_json::Value = serde_json::from_slice(
+								&conversion::bedrock::from_messages::translate(
+									i,
+									&bedrock,
+									None,
+									Some(&caching),
+									None,
+								)?
+								.body,
+							)
+							.unwrap();
+							assert!(
+								nova["toolConfig"]["tools"]
+									.as_array()
+									.unwrap()
+									.iter()
+									.all(|tool| tool.get("cachePoint").is_none())
+							);
+							// The policy only marks models known to support caching.
+							i.model = Some("anthropic.claude-3-5-sonnet-20241022-v2:0".to_string());
+							conversion::bedrock::from_messages::translate(i, &bedrock, None, Some(&caching), None)
+								.map(|r| r.body)
+						},
+					),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_message_body(body)
@@ -463,6 +519,9 @@ mod requests {
 				match *provider {
 					OPENAI => test_request(OPENAI, &path, |i: &mut types::embeddings::Request| {
 						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
+					}),
+					COPILOT => test_request(COPILOT, &path, |i: &mut types::embeddings::Request| {
+						conversion::copilot::from_embeddings::translate(i)
 					}),
 					BEDROCK_TITAN => test_request(
 						BEDROCK_TITAN,
@@ -547,6 +606,19 @@ mod requests {
 			});
 			test_request(SYSTEMONE, &path, |i: &mut types::decisions::Request| {
 				conversion::systemone::from_decisions::translate(i).map(|(body, _)| body)
+			});
+		}
+	}
+
+	#[test]
+	fn systemone() {
+		for name in ["basic", "full", "object_state", "json_criteria"] {
+			let path = format!("requests/systemone/{name}.json");
+			test_request(SYSTEMONE, &path, |i: &mut types::systemone::Request| {
+				serde_json::to_vec(i).map_err(AIError::RequestMarshal)
+			});
+			test_request(OPENAI, &path, |i: &mut types::systemone::Request| {
+				conversion::systemone::from_systemone::translate(i).map(|(body, _)| body)
 			});
 		}
 	}
@@ -838,9 +910,10 @@ mod responses {
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
 				input_tokens: None,
-				input_format: InputFormat::Detect,
+				input_format: InputFormat::Detect(None),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
+				original_model: None,
 				provider: Default::default(),
 				streaming: true,
 				params: Default::default(),
@@ -937,6 +1010,10 @@ mod responses {
 	];
 	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_ANTHROPIC),
+		(
+			"iterations",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 		("tool", ALL_ANTHROPIC),
 		("thinking", ALL_ANTHROPIC),
 		("multiple_text_blocks", ALL_ANTHROPIC),
@@ -950,6 +1027,10 @@ mod responses {
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
 		("content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		("basic", ALL_COMPLETIONS),
+		(
+			"missing_model",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 		("stop_sequence", &[COMPLETIONS_TO_MESSAGES]),
 		("audio", ALL_COMPLETIONS),
 		(
@@ -957,6 +1038,7 @@ mod responses {
 			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
 		),
 		("openrouter_reasoning", ALL_COMPLETIONS),
+		("mistral_reasoning", ALL_COMPLETIONS),
 		(
 			"reasoning",
 			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
@@ -991,7 +1073,14 @@ mod responses {
 				RESPONSES_TO_MESSAGES,
 			],
 		),
-		("tool", &[RESPONSES_TO_MESSAGES]),
+		(
+			"tool",
+			&[
+				RESPONSES_TO_MESSAGES,
+				RESPONSES_TO_RESPONSES,
+				RESPONSES_TO_DETECT,
+			],
+		),
 		("reasoning", &[RESPONSES_TO_MESSAGES]),
 		("custom-tool", &[RESPONSES_TO_RESPONSES]),
 		(
@@ -1013,6 +1102,8 @@ mod responses {
 			BEDROCK_COHERE_V4,
 		),
 		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
+		("response/copilot/embeddings.json", COPILOT),
+		("response/openai/gemini-embeddings.json", COPILOT),
 		("response/vertex/embeddings.json", VERTEX),
 		("response/vertex/embed-content.json", VERTEX_EMBED_CONTENT),
 		("response/openai/embeddings.json", OPENAI),
@@ -1027,6 +1118,14 @@ mod responses {
 	const VERTEX_GEMINI_RESPONSES: &[&str] = &["basic", "tool", "reasoning", "blocked"];
 	const DETECT_RESPONSES: &[(&str, &str)] = &[
 		("response/detect/bedrock-invoke.bin", BEDROCK_TO_DETECT),
+		(
+			"response/detect/bedrock-invoke-anthropic.bin",
+			BEDROCK_TO_DETECT,
+		),
+		(
+			"response/detect/bedrock-invoke-openai.bin",
+			BEDROCK_TO_DETECT,
+		),
 		("response/detect/bedrock-basic.bin", BEDROCK_TO_DETECT),
 		("response/detect/bedrock-broken.bin", BEDROCK_TO_DETECT),
 		("response/detect/broken-sse", COMPLETIONS_TO_DETECT),
@@ -1039,11 +1138,16 @@ mod responses {
 	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_BEDROCK),
 		("tool", ALL_BEDROCK),
+		("tool_no_args", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
 		("reasoning_redacted", ALL_BEDROCK),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream_basic", ALL_ANTHROPIC),
+		(
+			"stream_iterations",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 		("stream_thinking", ALL_ANTHROPIC),
 		(
 			"stream_message_delta_usage",
@@ -1057,10 +1161,15 @@ mod responses {
 			"stream_tool_empty_args",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
 		),
+		(
+			"stream_error",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		("stream", ALL_COMPLETIONS),
+		("stream_mistral_reasoning", ALL_COMPLETIONS),
 		(
 			"stream_tool_empty_content",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
@@ -1072,6 +1181,10 @@ mod responses {
 				COMPLETIONS_TO_MESSAGES,
 				COMPLETIONS_TO_RESPONSES,
 			],
+		),
+		(
+			"stream-vllm_reasoning",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
 		),
 	];
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
@@ -1260,7 +1373,7 @@ mod responses {
 							.map_err(AIError::ResponseParsing)
 					}),
 					COMPLETIONS_TO_MESSAGES => test_response(provider, &path, |i| {
-						conversion::completions::from_messages::translate_response(&i)
+						conversion::completions::from_messages::translate_response(&i, "input-model")
 					}),
 					COMPLETIONS_TO_RESPONSES => test_response(provider, &path, |i| {
 						conversion::openai_compat::to_responses::translate_response(&i, "input-model", None)
@@ -1380,6 +1493,9 @@ mod responses {
 				VERTEX_EMBED_CONTENT => test_response(provider, path, |i| {
 					conversion::vertex::from_embeddings::translate_response(&i, &vertex, "gemini-embedding-2")
 				}),
+				COPILOT => test_response(provider, path, |i| {
+					conversion::copilot::from_embeddings::translate_response(&i, "text-embedding-3-small")
+				}),
 				OPENAI => test_response(provider, path, |i| {
 					serde_json::from_slice::<types::embeddings::Response>(&i)
 						.map(|e| Box::new(e) as Box<dyn ResponseType>)
@@ -1427,6 +1543,25 @@ mod responses {
 				&i, &state,
 			)?)
 		});
+	}
+
+	#[test]
+	fn systemone() {
+		let req: types::systemone::Request =
+			serde_json::from_slice(&fs::read(fixture_path("requests/systemone/full.json")).unwrap())
+				.unwrap();
+		let (_, state) = conversion::systemone::from_systemone::translate(&req).unwrap();
+		for path in [
+			"response/openai/systemone.json",
+			"response/openai/systemone_refusal.json",
+		] {
+			test_response(OPENAI, path, |i| {
+				let body = conversion::systemone::from_systemone::translate_response(&i, &state)?;
+				serde_json::from_slice::<types::systemone::Response>(&body)
+					.map(|r| Box::new(r) as Box<dyn ResponseType>)
+					.map_err(AIError::ResponseParsing)
+			});
+		}
 	}
 
 	#[test]
@@ -1795,9 +1930,10 @@ data: {"type":"message_stop"}
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
 				input_tokens: None,
-				input_format: InputFormat::Detect,
+				input_format: InputFormat::Detect(None),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
+				original_model: None,
 				provider: Default::default(),
 				streaming: true,
 				params: Default::default(),
@@ -1830,9 +1966,10 @@ data: {"type":"message_stop"}
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
 				input_tokens: None,
-				input_format: InputFormat::Detect,
+				input_format: InputFormat::Detect(None),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
+				original_model: None,
 				provider: Default::default(),
 				streaming: true,
 				params: Default::default(),
@@ -1908,6 +2045,35 @@ fn messages_to_responses_rejects_malformed_image_source() {
 		assert!(
 			matches!(err, AIError::UnsupportedConversion(_)),
 			"expected UnsupportedConversion for error source #{i} ({source}), got {err:?}"
+		);
+	}
+}
+
+#[test]
+fn completions_to_messages_rejects_non_inline_file() {
+	let error_files = [
+		// OpenAI Files API reference
+		json!({"file_id": "file-abc123"}),
+		// raw base64 without a data: URI
+		json!({"file_data": "JVBERi0xLjQK", "filename": "report.pdf"}),
+		// remote URL
+		json!({"file_data": "https://example.com/report.pdf"}),
+		// no content
+		json!({"filename": "report.pdf"}),
+	];
+	for (i, file) in error_files.iter().enumerate() {
+		let input: types::completions::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-20250514",
+			"messages": [{
+				"role": "user",
+				"content": [{"type": "file", "file": file}]
+			}]
+		}))
+		.expect("failed to parse request");
+		let err = conversion::messages::from_completions::translate(&input, None, None).unwrap_err();
+		assert!(
+			matches!(err, AIError::UnsupportedConversion(_)),
+			"expected UnsupportedConversion for error file #{i} ({file}), got {err:?}"
 		);
 	}
 }
@@ -2005,5 +2171,66 @@ mod response_guardrails {
 		test_scopes::<types::messages::Response>("response/anthropic/guardrails.json");
 		test_scopes::<types::gemini::Response>("response/vertex-gemini/guardrails.json");
 		test_scopes::<types::responses::Response>("response/responses/guardrails.json");
+	}
+}
+
+/// The visitor must line up with `get_messages()`, which defines a webhook's message indexes.
+mod request_text {
+	use super::*;
+
+	fn check<R: RequestType + DeserializeOwned>(dir: &str) {
+		for entry in fs::read_dir(fixture_path(dir)).expect("failed to read fixtures") {
+			let path = entry.expect("failed to read entry").path();
+			if path.extension().is_none_or(|ext| ext != "json") {
+				continue;
+			}
+			let input = fs::read_to_string(&path).expect("failed to read fixture");
+			let Ok(mut request) = serde_json::from_str::<R>(&input) else {
+				continue;
+			};
+			let sent = request.get_messages();
+			let before = serde_json::to_string(&request.to_value().unwrap()).unwrap();
+
+			let mut joined = vec![String::new(); sent.len()];
+			request.visit_text_mut(&mut |content, text| {
+				if let Some(message) = content.get_messages_idx {
+					let out = joined
+						.get_mut(message)
+						.unwrap_or_else(|| panic!("{path:?}: message {message} out of range"));
+					out.push(' ');
+					out.push_str(text);
+				}
+			});
+
+			for (index, (message, text)) in sent.iter().zip(&joined).enumerate() {
+				// text a guard may not edit (signed or thought parts) is in the message but not visited
+				if !text
+					.split_whitespace()
+					.eq(message.content.split_whitespace())
+				{
+					assert!(
+						has_uneditable_text(&input),
+						"{path:?}: message {index} is {:?} but visited {text:?}",
+						message.content
+					);
+				}
+			}
+			let after = serde_json::to_string(&request.to_value().unwrap()).unwrap();
+			assert_eq!(before, after, "{path:?}: visiting changed the request");
+		}
+	}
+
+	fn has_uneditable_text(input: &str) -> bool {
+		["\"thought\"", "\"thoughtSignature\"", "\"signature\""]
+			.iter()
+			.any(|key| input.contains(key))
+	}
+
+	#[test]
+	fn lines_up_with_get_messages() {
+		check::<types::completions::Request>("requests/completions");
+		check::<types::messages::Request>("requests/messages");
+		check::<types::responses::Request>("requests/responses");
+		check::<types::gemini::Request>("requests/gemini");
 	}
 }

@@ -1,0 +1,50 @@
+{
+  "id": "83a905c2fe1e4ec8a2ce8dd5e0a3ec35",
+  "created": 1790873165,
+  "model": "zai-glm-5-3",
+  "usage": {
+    "prompt_tokens": 13,
+    "total_tokens": 288,
+    "completion_tokens": 275,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "index": 0,
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": [
+              {
+                "type": "text",
+                "text": "Let me consider how to respond to this greeting effectively."
+              }
+            ],
+            "closed": true
+          },
+          {
+            "type": "text",
+            "text": "Hi there! How can I assist you today?"
+          }
+        ]
+      },
+      "logprobs": null,
+      "response_error": {
+        "format_error": null,
+        "content_validation": [
+          "valid_think_chunk",
+          "valid_text_chunk"
+        ],
+        "tool_calls_validation": [],
+        "extra_tags": []
+      }
+    }
+  ]
+}

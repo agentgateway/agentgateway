@@ -151,19 +151,7 @@
         "title": "Controller reconciliations",
         "requests": [
           {
-            "q": "sum:agentgateway.controller.reconciliations.count{$env,component:controller} by {result}.as_rate()",
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Controller reconciliation duration p95",
-        "requests": [
-          {
-            "q": "p95:agentgateway.controller.reconcile.duration{$env,component:controller} by {controller}",
+            "q": "sum:agentgateway.controller.reconciliations.count{$env,component:controller} by {controller,result}.as_rate()",
             "display_type": "line"
           }
         ]
@@ -224,18 +212,6 @@
           },
           {
             "q": "max:agentgateway.cgroup_working_set{$env,component:proxy} by {host}",
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Controller reconciliations running",
-        "requests": [
-          {
-            "q": "max:agentgateway.controller.reconciliations_running{$env,component:controller} by {controller}",
             "display_type": "line"
           }
         ]

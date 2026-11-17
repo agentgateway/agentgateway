@@ -37,7 +37,6 @@ info:
     "top_p": 0.8,
     "temperature": 0.7,
     "max_tokens": 100,
-    "top_k": 50,
     "output_config": {
       "effort": "high",
       "format": {
@@ -58,7 +57,8 @@ info:
           "additionalProperties": false
         }
       }
-    }
+    },
+    "top_k": 50
   },
   "parsed": {
     "input_format": "Messages",
@@ -69,7 +69,8 @@ info:
     "params": {
       "temperature": 0.699999988079071,
       "top_p": 0.800000011920929,
-      "max_tokens": 100
+      "max_tokens": 100,
+      "reasoning_effort": "high"
     },
     "prompt": [
       {

@@ -21,25 +21,17 @@ pub trait Handler {
 }
 
 /// Mock Substrate credential-provider server for testing.
-pub struct CredentialProviderMock<T> {
-	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
+#[derive(Clone)]
+pub struct CredentialProviderMock {
+	handler: Arc<dyn Fn() -> Box<dyn Handler + Send + Sync> + Send + Sync>,
 }
 
-impl<T> Clone for CredentialProviderMock<T> {
-	fn clone(&self) -> Self {
+impl CredentialProviderMock {
+	pub fn new<T: Handler + Send + Sync + 'static>(
+		handler: impl Fn() -> T + Send + Sync + 'static,
+	) -> Self {
 		Self {
-			handler: self.handler.clone(),
-		}
-	}
-}
-
-impl<T> CredentialProviderMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
-	pub fn new(handler: impl Fn() -> T + Send + Sync + 'static) -> Self {
-		Self {
-			handler: Arc::new(handler),
+			handler: Arc::new(move || Box::new(handler())),
 		}
 	}
 
@@ -49,10 +41,7 @@ where
 }
 
 #[tonic::async_trait]
-impl<T> CredentialProvider for CredentialProviderMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
+impl CredentialProvider for CredentialProviderMock {
 	async fn fetch_secret(
 		&self,
 		request: Request<FetchSecretRequest>,

@@ -146,6 +146,8 @@ controller:
   extraEnv: {}
   # -- Add extra sidecar containers to the controller pod.
   extraContainers: []
+  # -- Add extra init containers to the controller pod.
+  extraInitContainers: []
   # -- Add extra volume mounts to the controller container.
   extraVolumeMounts: []
   # -- Add extra volumes to the controller pod.
@@ -228,11 +230,6 @@ inferenceExtension:
   # -- Enable Inference Extension support in the agentgateway controller.
   enabled: false
 
-# -- Configure the AgentgatewayModel API.
-agentgatewayModels:
-  # -- Enable AgentgatewayModel support in the agentgateway controller.
-  enabled: true
-
 # -- Configure the experimental Gateway API XBackend resource.
 xBackend:
   # -- Enable XBackend support in the agentgateway controller.
@@ -303,11 +300,11 @@ monitoring:
     scrapeNativeHistograms: false
       # -- Scrape classic (legacy bucket) histograms.
     scrapeClassicHistograms: true
-    # -- Relabeling rules applied to the scrape target before metrics are ingested
-    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+    # -- Relabeling rules applied to the scrape target before metrics are ingested.
+    #    See the [Prometheus relabel_config docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
     relabelings: []
-    # -- Relabeling rules applied to scraped metrics before ingestion
-    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+    # -- Relabeling rules applied to scraped metrics before ingestion.
+    #    See the [Prometheus metric_relabel_configs docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs).
     metricRelabelings: []
 
   proxy:
@@ -324,11 +321,11 @@ monitoring:
       scrapeNativeHistograms: false
       # -- Scrape classic (legacy bucket) histograms.
       scrapeClassicHistograms: true
-      # -- Relabeling rules applied to the scrape target before metrics are ingested
-      #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+      # -- Relabeling rules applied to the scrape target before metrics are ingested.
+      #    See the [Prometheus relabel_config docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
       relabelings: []
-      # -- Relabeling rules applied to scraped metrics before ingestion
-      #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+      # -- Relabeling rules applied to scraped metrics before ingestion.
+      #    See the [Prometheus metric_relabel_configs docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs).
       metricRelabelings: []
     # -- GatewayClass names whose proxy pods are selected by the proxy PodMonitor.
     gatewayClassNames:

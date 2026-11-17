@@ -9,19 +9,32 @@
 //! ```no_run
 //! use std::convert::Infallible;
 //!
-//! use agent_http::Request;
-//! use agent_policy::{BoxError, PolicyContext, RequestAction, RequestPolicy};
+//! use agent_http::{Request, StatusCode};
+//! use agent_policy::{PolicyContext, PolicyError, RequestAction, RequestPolicy};
 //!
 //! struct Example;
 //!
+//! #[derive(Debug, thiserror::Error)]
+//! enum ExampleError {
+//!     #[error("example rejected the request")]
+//!     Rejected,
+//! }
+//!
+//! impl PolicyError for ExampleError {
+//!     fn status(&self) -> StatusCode {
+//!         StatusCode::FORBIDDEN
+//!     }
+//! }
+//!
 //! impl RequestPolicy for Example {
 //!     type ResponseState = Infallible;
+//!     type Error = ExampleError;
 //!
 //!     async fn apply(
 //!         &self,
 //!         _ctx: PolicyContext<'_>,
 //!         _request: &mut Request,
-//!     ) -> Result<RequestAction<Infallible>, BoxError> {
+//!     ) -> Result<RequestAction<Infallible>, ExampleError> {
 //!         Ok(RequestAction::default())
 //!     }
 //! }
@@ -41,13 +54,13 @@ pub use backend::{BackendChannel, BackendDispatcher, BackendError, BackendRefere
 pub use expression::{
 	Attributes, Error, Expression, PolicyCel, attributes_for, install_custom_function_attributes,
 };
-pub use policy::{BackendPolicy, PolicyContext, RequestAction, RequestPolicy};
+pub use policy::{BackendPolicy, PolicyContext, PolicyError, RequestAction, RequestPolicy};
 pub use trace::{
 	NoopTrace, PolicyOutcome, PolicyTrace, TraceScope, TraceSeverity, install_policy_trace,
 	policy_trace,
 };
 
-/// Error type returned by policy phase callbacks.
+/// Type-erased error, such as a backend dispatch failure.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[cfg(test)]

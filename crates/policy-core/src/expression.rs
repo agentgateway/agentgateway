@@ -101,6 +101,8 @@ flagset::flags! {
 
 		Guardrails,
 
+		UpstreamCalls,
+
 		Extauthz,
 		Extproc,
 		Metadata,
@@ -119,10 +121,6 @@ impl Expression {
 
 	pub fn needs_llm_request(&self) -> bool {
 		self.attributes.contains(Attributes::LlmRequest)
-	}
-
-	pub fn needs_llm(&self) -> bool {
-		self.attributes.contains(Attributes::Llm)
 	}
 
 	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
@@ -245,6 +243,9 @@ pub fn attributes_for(expression: &cel::IdedExpr) -> FlagSet<Attributes> {
 			},
 			["mcp", ..] => {
 				attributes |= Attributes::Mcp;
+			},
+			["upstreamCalls", ..] => {
+				attributes |= Attributes::UpstreamCalls;
 			},
 			["guardrails", ..] => {
 				attributes |= Attributes::Guardrails;

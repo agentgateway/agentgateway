@@ -3,10 +3,13 @@
 //! Apps UI resources use `ui://` URIs. When multiplexing, the routing target is
 //! carried inside the URI authority (`ui://{target}+{rest}`) so the client
 //! still sees a valid `ui://` URI, unlike other schemes which are prefixed as
-//! `{target}+{scheme}://rest`.
+//! `{target}+{scheme}://rest`. The `+` in `ui://` URIs can be changed with
+//! `AGENTGATEWAY_MCP_UI_URI_DELIMITER`, as some hosts reject it.
+
+use std::sync::LazyLock;
 
 use rmcp::model::{ServerJsonRpcMessage, ServerResult};
-use tracing::debug;
+use tracing::{debug, warn};
 
 const UI_META_KEY: &str = "ui";
 const UI_RESOURCE_URI_KEY: &str = "resourceUri";
@@ -15,6 +18,29 @@ const UI_RESOURCE_URI_KEY: &str = "resourceUri";
 const UI_FLAT_RESOURCE_URI_KEY: &str = "ui/resourceUri";
 
 const UI_SCHEME: &str = "ui://";
+
+const UI_DELIMITER_ENV: &str = "AGENTGATEWAY_MCP_UI_URI_DELIMITER";
+const DEFAULT_UI_DELIMITER: char = '+';
+
+static UI_DELIMITER: LazyLock<char> =
+	LazyLock::new(|| parse_ui_delimiter(std::env::var(UI_DELIMITER_ENV).ok().as_deref()));
+
+// Symbols that are valid unescaped in a URI authority; letters and digits would clash with names.
+fn parse_ui_delimiter(value: Option<&str>) -> char {
+	let Some(value) = value else {
+		return DEFAULT_UI_DELIMITER;
+	};
+	let mut chars = value.chars();
+	match (chars.next(), chars.next()) {
+		(Some(c @ ('+' | '_' | '-' | '.' | '~')), None) => c,
+		_ => {
+			warn!(
+				"invalid {UI_DELIMITER_ENV} {value:?}, expected one of + _ - . ~; using '{DEFAULT_UI_DELIMITER}'"
+			);
+			DEFAULT_UI_DELIMITER
+		},
+	}
+}
 
 /// Returns the part after the `ui://` scheme. Scheme matching is
 /// case-insensitive per RFC 3986.
@@ -32,23 +58,34 @@ pub(crate) fn is_ui_uri(uri: &str) -> bool {
 /// Encode an upstream `ui://` URI into the client-visible multiplexed form
 /// `ui://{target}+{rest}`. Returns None for non-`ui://` URIs.
 pub(crate) fn encode_ui_uri(target: &str, uri: &str) -> Option<String> {
+	encode_ui_uri_with(*UI_DELIMITER, target, uri)
+}
+
+fn encode_ui_uri_with(delimiter: char, target: &str, uri: &str) -> Option<String> {
 	let rest = strip_ui_scheme(uri)?;
-	Some(format!("{UI_SCHEME}{target}+{rest}"))
+	Some(format!("{UI_SCHEME}{target}{delimiter}{rest}"))
 }
 
 /// Reverse of `encode_ui_uri`: split `ui://{target}+{rest}` into the target and
 /// the original `ui://{rest}` URI. The delimiter must sit in the authority;
-/// target names never contain `+`, so the first `+` is always ours.
+/// the first delimiter is always ours, so target names must not contain it.
 pub(crate) fn decode_ui_uri(uri: &str) -> Option<(&str, String)> {
+	decode_ui_uri_with(*UI_DELIMITER, uri)
+}
+
+fn decode_ui_uri_with(delimiter: char, uri: &str) -> Option<(&str, String)> {
 	let rest = strip_ui_scheme(uri)?;
-	// The target+ delimiter must sit in the authority (before any /?#).
+	// The target delimiter must sit in the authority (before any /?#).
 	let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-	let plus = rest[..authority_end].find('+')?;
-	let target = &rest[..plus];
+	let pos = rest[..authority_end].find(delimiter)?;
+	let target = &rest[..pos];
 	if target.is_empty() {
 		return None;
 	}
-	Some((target, format!("{UI_SCHEME}{}", &rest[plus + 1..])))
+	Some((
+		target,
+		format!("{UI_SCHEME}{}", &rest[pos + delimiter.len_utf8()..]),
+	))
 }
 
 /// Rewrite or strip the UI resource URI to include our federation target, in the `_meta.ui.resourceUri`
@@ -170,5 +207,27 @@ mod tests {
 		// '+' only after the authority does not carry a target
 		assert_eq!(decode_ui_uri("ui://host/a+b"), None);
 		assert_eq!(decode_ui_uri("memo://a+b"), None);
+	}
+
+	#[test]
+	fn custom_delimiter_roundtrip() {
+		let encoded = encode_ui_uri_with('_', "a", "ui://weather/dashboard.html").unwrap();
+		assert_eq!(encoded, "ui://a_weather/dashboard.html");
+		let (target, original) = decode_ui_uri_with('_', &encoded).unwrap();
+		assert_eq!(target, "a");
+		assert_eq!(original, "ui://weather/dashboard.html");
+		// '+' is not special with a custom delimiter
+		assert_eq!(decode_ui_uri_with('_', "ui://a+weather/x"), None);
+	}
+
+	#[test]
+	fn parse_ui_delimiter_values() {
+		assert_eq!(parse_ui_delimiter(None), '+');
+		assert_eq!(parse_ui_delimiter(Some("_")), '_');
+		assert_eq!(parse_ui_delimiter(Some("~")), '~');
+		assert_eq!(parse_ui_delimiter(Some("")), '+');
+		assert_eq!(parse_ui_delimiter(Some("__")), '+');
+		assert_eq!(parse_ui_delimiter(Some("/")), '+');
+		assert_eq!(parse_ui_delimiter(Some("a")), '+');
 	}
 }

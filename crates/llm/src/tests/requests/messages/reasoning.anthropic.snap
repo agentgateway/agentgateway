@@ -6,6 +6,7 @@ info:
   max_tokens: 1024
   thinking:
     type: adaptive
+    display: summarized
   output_config:
     effort: high
   output_format: markdown
@@ -37,11 +38,12 @@ info:
     ],
     "model": "gpt-5.6-terra",
     "max_tokens": 1024,
-    "thinking": {
-      "type": "adaptive"
-    },
     "output_config": {
       "effort": "high"
+    },
+    "thinking": {
+      "type": "adaptive",
+      "display": "summarized"
     },
     "output_format": "markdown"
   },
@@ -52,7 +54,8 @@ info:
     "provider": "anthropic",
     "streaming": false,
     "params": {
-      "max_tokens": 1024
+      "max_tokens": 1024,
+      "reasoning_effort": "high"
     },
     "prompt": [
       {

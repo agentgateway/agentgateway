@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"slices"
 	"time"
@@ -22,7 +23,7 @@ func RunAdminServer(ctx context.Context, setupOpts *controller.SetupOpts) {
 	// serverHandlers defines the custom handlers that the Admin Server will support
 	serverHandlers := getServerHandlers(ctx, setupOpts.KrtDebugger)
 
-	startHandlers(ctx, serverHandlers)
+	startHandlers(ctx, setupOpts.GlobalSettings.UnsafeAdminBindAddress, serverHandlers)
 }
 
 // use a function for the profile descriptions so that every time the admin page is displayed, it can show
@@ -70,7 +71,7 @@ func writeJSON(w http.ResponseWriter, obj any, req *http.Request) {
 	}
 }
 
-func startHandlers(ctx context.Context, addHandlers ...func(mux *http.ServeMux, profiles map[string]dynamicProfileDescription)) {
+func startHandlers(ctx context.Context, bindAddress string, addHandlers ...func(mux *http.ServeMux, profiles map[string]dynamicProfileDescription)) {
 	mux := new(http.ServeMux)
 	profileDescriptions := map[string]dynamicProfileDescription{}
 	for _, addHandler := range addHandlers {
@@ -80,7 +81,7 @@ func startHandlers(ctx context.Context, addHandlers ...func(mux *http.ServeMux, 
 	mux.HandleFunc("/", idx)
 	mux.HandleFunc("/snapshots/", idx)
 	server := &http.Server{
-		Addr:              fmt.Sprintf("localhost:%d", wellknown.AdminPort),
+		Addr:              net.JoinHostPort(cmp.Or(bindAddress, "localhost"), fmt.Sprint(wellknown.AdminPort)),
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}

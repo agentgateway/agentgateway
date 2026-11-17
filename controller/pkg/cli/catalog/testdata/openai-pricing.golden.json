@@ -1,0 +1,135 @@
+{
+  "providers": {
+    "openai": {
+      "models": {
+        "gpt-4o-mini-transcribe": {
+          "rates": {
+            "input": "1.25",
+            "output": "5"
+          }
+        },
+        "gpt-4o-mini-tts": {
+          "rates": {
+            "input": "0.6",
+            "outputAudio": "12"
+          }
+        },
+        "gpt-4o-transcribe": {
+          "rates": {
+            "input": "2.5",
+            "output": "10"
+          }
+        },
+        "gpt-4o-transcribe-diarize": {
+          "rates": {
+            "input": "2.5",
+            "output": "10"
+          }
+        },
+        "gpt-audio": {
+          "rates": {
+            "input": "2.5",
+            "output": "10",
+            "inputAudio": "32",
+            "outputAudio": "64"
+          }
+        },
+        "gpt-audio-1.5": {
+          "rates": {
+            "input": "2.5",
+            "output": "10",
+            "inputAudio": "32",
+            "outputAudio": "64"
+          }
+        },
+        "gpt-audio-mini": {
+          "rates": {
+            "input": "0.6",
+            "output": "2.4",
+            "inputAudio": "10",
+            "outputAudio": "20"
+          }
+        },
+        "gpt-live-transcribe": {
+          "rates": {
+            "perAudioMinute": "0.017"
+          }
+        },
+        "gpt-realtime": {
+          "rates": {
+            "input": "4",
+            "output": "16",
+            "cacheRead": "0.4",
+            "inputAudio": "32",
+            "outputAudio": "64"
+          }
+        },
+        "gpt-realtime-1.5": {
+          "rates": {
+            "input": "4",
+            "output": "16",
+            "cacheRead": "0.4",
+            "inputAudio": "32",
+            "outputAudio": "64"
+          }
+        },
+        "gpt-realtime-2": {
+          "rates": {
+            "input": "4",
+            "output": "24",
+            "cacheRead": "0.4",
+            "inputAudio": "32",
+            "outputAudio": "64"
+          }
+        },
+        "gpt-realtime-2.1": {
+          "rates": {
+            "input": "4",
+            "output": "24",
+            "cacheRead": "0.4",
+            "inputAudio": "32",
+            "outputAudio": "64"
+          }
+        },
+        "gpt-realtime-2.1-mini": {
+          "rates": {
+            "input": "0.6",
+            "output": "2.4",
+            "cacheRead": "0.06",
+            "inputAudio": "10",
+            "outputAudio": "20"
+          }
+        },
+        "gpt-realtime-mini": {
+          "rates": {
+            "input": "0.6",
+            "output": "2.4",
+            "cacheRead": "0.06",
+            "inputAudio": "10",
+            "outputAudio": "20"
+          }
+        },
+        "gpt-realtime-translate": {
+          "rates": {
+            "perAudioMinute": "0.034"
+          }
+        },
+        "gpt-realtime-whisper": {
+          "rates": {
+            "perAudioMinute": "0.017"
+          }
+        },
+        "gpt-transcribe": {
+          "rates": {
+            "perAudioMinute": "0.0045"
+          }
+        },
+        "whisper-1": {
+          "rates": {
+            "perAudioMinute": "0.006"
+          }
+        }
+      }
+    }
+  }
+}

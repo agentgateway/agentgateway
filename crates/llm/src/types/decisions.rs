@@ -2,7 +2,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ContentScope, RequestType, responses};
+use crate::types::{RequestType, responses};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage};
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -48,6 +48,7 @@ impl RequestType for Request {
 			input_format: InputFormat::Decisions,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new(self.model.as_deref().unwrap_or_default()),
+			original_model: None,
 			provider,
 			streaming: false,
 			params: LLMRequestParams::default(),
@@ -64,7 +65,7 @@ impl RequestType for Request {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for decisions.")
 	}
 
-	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(ContentScope, &mut String)) {
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(crate::types::RequestText, &mut String)) {
 		unimplemented!(
 			"visit_text_mut is used for prompt guard; prompt guard is disabled for decisions."
 		)

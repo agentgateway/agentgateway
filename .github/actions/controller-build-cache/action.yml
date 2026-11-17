@@ -6,9 +6,10 @@ inputs:
     description: Set up Rust and its build cache
     required: false
     default: "false"
-  go-version:
-    description: Go toolchain version
-    required: true
+  go-version-file:
+    description: File containing the Go toolchain version
+    required: false
+    default: go.mod
   save:
     description: Save the Rust build cache after a successful job
     required: false
@@ -40,7 +41,7 @@ runs:
   - name: Install Go
     uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
     with:
-      go-version: ${{ inputs.go-version }}
+      go-version-file: ${{ inputs.go-version-file }}
       cache: false
 
   - name: Locate Go module cache

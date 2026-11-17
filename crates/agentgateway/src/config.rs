@@ -16,8 +16,8 @@ use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::util::ErrorContext;
 use crate::{
 	Address, Config, ConfigSource, ConfigStoreMode, DnsLookupFamily, NestedRawConfig,
-	RawLoggingFields, RawLoggingLevel, StorageConfig, StringOrInt, ThreadingMode, XDSConfig, cel,
-	client, serdes, telemetry, types,
+	RawLoggingDatabase, RawLoggingFields, RawLoggingLevel, StorageConfig, StringOrInt, ThreadingMode,
+	XDSConfig, cel, client, serdes, telemetry, types,
 };
 
 const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey["agentgateway.dev/owner"], apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
@@ -28,6 +28,47 @@ struct TracingEnvOverrides {
 	endpoint: Option<String>,
 	headers: Option<std::collections::HashMap<String, String>>,
 	protocol: Option<trc::Protocol>,
+}
+
+/// Trims surrounding whitespace from the url and validates the settings.
+fn normalize_database_config(
+	field: &str,
+	mut database: crate::database::DatabaseConfig,
+) -> anyhow::Result<crate::database::DatabaseConfig> {
+	database.url = database.url.trim().to_string();
+	if database.url.is_empty() {
+		anyhow::bail!("{field}.url must not be empty");
+	}
+	if database.max_connections == Some(0) {
+		anyhow::bail!("{field}.maxConnections must be greater than zero");
+	}
+	Ok(database)
+}
+
+/// Resolves the request log database from `config.logging.database`, falling back to the primary
+/// `config.database` when no url is set.
+fn resolve_logging_database(
+	logging: Option<&RawLoggingDatabase>,
+	primary: Option<&crate::database::DatabaseConfig>,
+) -> anyhow::Result<Option<crate::database::DatabaseConfig>> {
+	const FIELD: &str = "config.logging.database";
+	let Some(logging) = logging else {
+		return Ok(primary.cloned());
+	};
+	if logging.enabled == Some(false) {
+		// A disabled store is never started, so its other settings are not validated.
+		return Ok(None);
+	}
+	let Some(explicit) = logging.connection() else {
+		if logging.max_connections.is_some() {
+			anyhow::bail!("{FIELD}.maxConnections requires {FIELD}.url");
+		}
+		if logging.enabled == Some(true) && primary.is_none() {
+			anyhow::bail!("{FIELD}.enabled=true requires {FIELD}.url or config.database.url");
+		}
+		return Ok(primary.cloned());
+	};
+	normalize_database_config(FIELD, explicit).map(Some)
 }
 
 pub fn parse_config(
@@ -72,7 +113,7 @@ pub fn parse_config(
 		.or(local_config_source);
 
 	let dns = raw.dns.unwrap_or_default();
-	let dns_lookup_family = match env::var("DNS_LOOKUP_FAMILY") {
+	let dns_lookup_family = match env_var("DNS_LOOKUP_FAMILY") {
 		Ok(val) => Some(DnsLookupFamily::from_env_str(&val).ctx("invalid DNS_LOOKUP_FAMILY")?),
 		Err(_) => None,
 	}
@@ -374,12 +415,21 @@ pub fn parse_config(
 		ThreadingMode::default()
 	};
 
-	let session_encoder = if let Some(key) = parse::<String>("SESSION_KEY")? {
-		crate::http::sessionpersistence::Encoder::aes(key.trim())
-			.ctx("invalid session persistence key SESSION_KEY")?
+	let session_key_env = parse::<String>("SESSION_KEY")?;
+	let session_key_unset = session_key_env.is_none() && raw.session.is_none();
+	let session_encoder = if let Some(key) = session_key_env {
+		if key.trim() == "disabled" {
+			crate::http::sessionpersistence::Encoder::base64()
+		} else {
+			crate::http::sessionpersistence::Encoder::aes(key.trim())
+				.ctx("invalid session persistence key SESSION_KEY")?
+		}
 	} else {
 		match raw.session.as_ref() {
 			None => crate::http::sessionpersistence::Encoder::base64(),
+			Some(session) if session.key.expose_secret() == "disabled" => {
+				crate::http::sessionpersistence::Encoder::base64()
+			},
 			Some(session) => {
 				let key = session.key.expose_secret();
 				crate::http::sessionpersistence::Encoder::aes(key)
@@ -398,21 +448,15 @@ pub fn parse_config(
 		parse_dynamic_ca_cert_cache_config().ctx("invalid dynamic CA cert cache config")?;
 
 	let model_catalog_sources = raw.model_catalog.unwrap_or_default();
-	let database = raw.database.clone();
-	let explicit_logging_database = raw.logging.as_ref().and_then(|l| l.database.clone());
-	if database
-		.as_ref()
-		.is_some_and(|database| database.max_connections == Some(0))
-	{
-		anyhow::bail!("config.database.maxConnections must be greater than zero");
-	}
-	if explicit_logging_database
-		.as_ref()
-		.is_some_and(|database| database.max_connections == Some(0))
-	{
-		anyhow::bail!("config.logging.database.maxConnections must be greater than zero");
-	}
-	let logging_database = explicit_logging_database.or_else(|| database.clone());
+	let database = raw
+		.database
+		.clone()
+		.map(|database| normalize_database_config("config.database", database))
+		.transpose()?;
+	let logging_database = resolve_logging_database(
+		raw.logging.as_ref().and_then(|l| l.database.as_ref()),
+		database.as_ref(),
+	)?;
 
 	let mut storage_mode = raw.storage.clone().unwrap_or_default().mode;
 	if parse::<bool>("UI_READ_ONLY")?.unwrap_or(false) {
@@ -424,8 +468,7 @@ pub fn parse_config(
 	}
 	if storage.mode == ConfigStoreMode::Hybrid
 		&& database.as_ref().is_some_and(|database| {
-			(database.url.starts_with("postgres://") || database.url.starts_with("postgresql://"))
-				&& database.max_connections == Some(1)
+			crate::database::is_postgres_url(&database.url) && database.max_connections == Some(1)
 		}) {
 		anyhow::bail!(
 			"config.database.maxConnections must be at least 2 for PostgreSQL hybrid storage"
@@ -574,7 +617,7 @@ pub fn parse_config(
 			database: logging_database.clone(),
 				fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))
 					.ctx("invalid config.logging.fields")?,
-				database_fields: Arc::new(arc_swap::ArcSwap::from_pointee(
+				standard_attributes: Arc::new(arc_swap::ArcSwap::from_pointee(
 					standard_attributes(raw.standard_attributes.as_ref())
 						.ctx("invalid config.standardAttributes")?,
 				)),
@@ -586,6 +629,7 @@ pub fn parse_config(
 		dns: client::Config {
 			resolver_cfg,
 			resolver_opts,
+			max_ttl: dns.max_ttl,
 		},
 		proxy_metadata: crate::ProxyMetadata {
 			instance_ip: ENV.instance_ip.clone(),
@@ -610,6 +654,7 @@ pub fn parse_config(
 		storage,
 		sensitive_headers,
 		session_encoder,
+		session_key_unset,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
 				h2: agent_hbone::H2Config {
@@ -711,11 +756,61 @@ pub(crate) fn session_attribute(
 	Ok(Some(Arc::new(cel::Expression::new_strict(session)?)))
 }
 
+#[cfg(test)]
+thread_local! {
+	static TEST_ENV: std::cell::RefCell<Option<std::collections::HashMap<String, String>>> =
+		const { std::cell::RefCell::new(None) };
+}
+
+/// Replaces the environment seen by config parsing on the current thread until dropped, so tests
+/// can cover env-driven config without mutating the process env other tests read concurrently.
+#[cfg(test)]
+struct TestEnv;
+
+#[cfg(test)]
+impl TestEnv {
+	fn set(vars: &[(&str, &str)]) -> Self {
+		let vars = vars
+			.iter()
+			.map(|(k, v)| (k.to_string(), v.to_string()))
+			.collect();
+		TEST_ENV.set(Some(vars));
+		TestEnv
+	}
+}
+
+#[cfg(test)]
+impl Drop for TestEnv {
+	fn drop(&mut self) {
+		TEST_ENV.set(None);
+	}
+}
+
+fn env_var(key: &str) -> Result<String, env::VarError> {
+	#[cfg(test)]
+	if let Some(res) = TEST_ENV.with_borrow(|vars| {
+		vars
+			.as_ref()
+			.map(|vars| vars.get(key).cloned().ok_or(env::VarError::NotPresent))
+	}) {
+		return res;
+	}
+	env::var(key)
+}
+
+fn env_vars() -> Vec<(String, String)> {
+	#[cfg(test)]
+	if let Some(vars) = TEST_ENV.with_borrow(|vars| vars.clone()) {
+		return vars.into_iter().collect();
+	}
+	env::vars().collect()
+}
+
 fn parse<T: FromStr>(env: &str) -> anyhow::Result<Option<T>>
 where
 	<T as FromStr>::Err: ToString,
 {
-	match env::var(env) {
+	match env_var(env) {
 		Ok(val) => val
 			.parse()
 			.map(|v| Some(v))
@@ -803,7 +898,7 @@ fn parse_worker_threads(cfg: Option<StringOrInt>) -> anyhow::Result<usize> {
 fn parse_otlp_headers(
 	env_key: &str,
 ) -> anyhow::Result<Option<std::collections::HashMap<String, String>>> {
-	match env::var(env_key) {
+	match env_var(env_key) {
 		Ok(raw) => {
 			let s = raw.trim();
 			if s.starts_with('{') {
@@ -832,7 +927,7 @@ fn parse_otlp_headers(
 }
 
 fn parse_otlp_protocol(env_key: &str) -> anyhow::Result<Option<trc::Protocol>> {
-	match env::var(env_key) {
+	match env_var(env_key) {
 		Ok(raw) => {
 			let protocol = match raw.trim().trim_matches('"').to_ascii_lowercase().as_str() {
 				"grpc" => trc::Protocol::Grpc,
@@ -967,7 +1062,7 @@ fn get_cpu_count() -> anyhow::Result<usize> {
 fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
 	let mut headers = Vec::new();
 
-	for (key, value) in env::vars() {
+	for (key, value) in env_vars() {
 		let stripped_key: Option<&str> = key.strip_prefix(prefix);
 		match stripped_key {
 			Some(stripped_key) => {
@@ -1084,6 +1179,85 @@ mod parse_headers_tests {
 	}
 }
 
+/// Generates and persists a session key when none is configured, so MCP sessions are encrypted
+/// by default. In hybrid mode the key is shared through the database; in file mode it is written
+/// back to `config.session.key` in the config file.
+pub async fn ensure_session_key(
+	config: &mut Config,
+	config_source: Option<&ConfigSource>,
+	store: Option<&crate::config_store::ConfigResourceStore>,
+) -> anyhow::Result<()> {
+	if !config.session_key_unset {
+		return Ok(());
+	}
+	let key = match (store, config_source) {
+		(Some(store), _) => Some(store.session_key().await?),
+		(None, Some(ConfigSource::File(path))) if config.storage.mode == ConfigStoreMode::File => {
+			match persist_session_key(path).await {
+				Ok(key) => Some(key),
+				Err(err) => {
+					warn!(?err, path = %path.display(), "failed to write generated session key");
+					None
+				},
+			}
+		},
+		_ => None,
+	};
+	match key {
+		Some(key) => {
+			config.session_encoder =
+				crate::http::sessionpersistence::Encoder::aes(&key).ctx("invalid generated session key")?;
+		},
+		None => warn!(
+			"no session key configured; MCP session IDs are not encrypted. Set SESSION_KEY or config.session.key"
+		),
+	}
+	Ok(())
+}
+
+async fn persist_session_key(path: &Path) -> anyhow::Result<String> {
+	let key = crate::config_store::generate_session_key()?;
+	let current = fs_err::tokio::read_to_string(path).await?;
+	let mut document = yaml_serde_edit::YamlObject::<serde_json::Value>::parse(&current)?;
+	let mut cfg = document.get().clone();
+	let section = cfg
+		.as_object_mut()
+		.context("config file must be an object")?
+		.entry("config")
+		.or_insert(serde_json::Value::Null);
+	if section.is_null() {
+		*section = serde_json::json!({});
+	}
+	section
+		.as_object_mut()
+		.context("config.config must be an object")?
+		.insert("session".to_string(), serde_json::json!({ "key": key }));
+	let content = match document.set(cfg.clone()) {
+		Ok(()) => document.get_string().to_owned(),
+		Err(yaml_serde_edit::Error::RoundTrip) => crate::yaml::to_string(&cfg)?,
+		Err(e) => return Err(e.into()),
+	};
+	let content = content
+		.lines()
+		.map(|line| {
+			if line.contains(&key) {
+				let indent = &line[..line.len() - line.trim_start().len()];
+				format!(
+					"{indent}# Auto-generated by agentgateway to encode session IDs. Changing it invalidates existing sessions.\n{line}\n"
+				)
+			} else {
+				format!("{line}\n")
+			}
+		})
+		.collect::<String>();
+	fs_err::tokio::write(path, content).await?;
+	info!(
+		path = %path.display(),
+		"generated a session key and wrote it to config.session.key; we recommend setting SESSION_KEY instead"
+	);
+	Ok(key)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::env;
@@ -1179,12 +1353,13 @@ mod tests {
 
 	#[test]
 	fn tracing_accepts_standard_otlp_env_vars() {
-		let _env_lock = lock_env();
-		let _endpoint = TempEnvVar::set(
-			"OTEL_EXPORTER_OTLP_ENDPOINT",
-			"http://collector.example:4318",
-		);
-		let _protocol = TempEnvVar::set("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf");
+		let _env = TestEnv::set(&[
+			(
+				"OTEL_EXPORTER_OTLP_ENDPOINT",
+				"http://collector.example:4318",
+			),
+			("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf"),
+		]);
 
 		let config = parse_config(
 			r#"
@@ -1207,20 +1382,20 @@ config:
 
 	#[test]
 	fn tracing_prefers_signal_specific_otlp_env_vars() {
-		let _env_lock = lock_env();
-		let _endpoint = TempEnvVar::set(
-			"OTEL_EXPORTER_OTLP_ENDPOINT",
-			"http://collector.example:4318",
-		);
-		let _traces_endpoint = TempEnvVar::set(
-			"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-			"http://traces.example:4318/custom/traces",
-		);
-		let _headers = TempEnvVar::set("OTEL_EXPORTER_OTLP_HEADERS", "authorization=general");
-		let _traces_headers =
-			TempEnvVar::set("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "authorization=traces");
-		let _protocol = TempEnvVar::set("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc");
-		let _traces_protocol = TempEnvVar::set("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf");
+		let _env = TestEnv::set(&[
+			(
+				"OTEL_EXPORTER_OTLP_ENDPOINT",
+				"http://collector.example:4318",
+			),
+			(
+				"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+				"http://traces.example:4318/custom/traces",
+			),
+			("OTEL_EXPORTER_OTLP_HEADERS", "authorization=general"),
+			("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "authorization=traces"),
+			("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc"),
+			("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf"),
+		]);
 
 		let config = parse_config(
 			r#"
@@ -1247,16 +1422,17 @@ config:
 
 	#[test]
 	fn tracing_prefers_legacy_otlp_env_vars() {
-		let _env_lock = lock_env();
-		let _legacy_endpoint = TempEnvVar::set("OTLP_ENDPOINT", "http://legacy.example:4317");
-		let _standard_endpoint = TempEnvVar::set(
-			"OTEL_EXPORTER_OTLP_ENDPOINT",
-			"http://collector.example:4318",
-		);
-		let _legacy_headers = TempEnvVar::set("OTLP_HEADERS", "authorization=legacy");
-		let _standard_headers = TempEnvVar::set("OTEL_EXPORTER_OTLP_HEADERS", "authorization=standard");
-		let _legacy_protocol = TempEnvVar::set("OTLP_PROTOCOL", "grpc");
-		let _standard_protocol = TempEnvVar::set("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf");
+		let _env = TestEnv::set(&[
+			("OTLP_ENDPOINT", "http://legacy.example:4317"),
+			(
+				"OTEL_EXPORTER_OTLP_ENDPOINT",
+				"http://collector.example:4318",
+			),
+			("OTLP_HEADERS", "authorization=legacy"),
+			("OTEL_EXPORTER_OTLP_HEADERS", "authorization=standard"),
+			("OTLP_PROTOCOL", "grpc"),
+			("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf"),
+		]);
 
 		let config = parse_config(
 			r#"
@@ -1350,12 +1526,13 @@ config:
 
 	#[test]
 	fn xds_headers_are_loaded_from_environment() {
-		let _env_lock = lock_env();
-		let _address = TempEnvVar::set("XDS_ADDRESS", "http://127.0.0.1:15010");
-		let _namespace = TempEnvVar::set("NAMESPACE", "default");
-		let _gateway = TempEnvVar::set("GATEWAY", "agentgateway");
-		let _revision = TempEnvVar::set("XDS_HEADER_X_ISTIO_REVISION", "canary");
-		let _tenant = TempEnvVar::set("XDS_HEADER_X_TENANT", "team-a");
+		let _env = TestEnv::set(&[
+			("XDS_ADDRESS", "http://127.0.0.1:15010"),
+			("NAMESPACE", "default"),
+			("GATEWAY", "agentgateway"),
+			("XDS_HEADER_X_ISTIO_REVISION", "canary"),
+			("XDS_HEADER_X_TENANT", "team-a"),
+		]);
 
 		let config = parse_config("{}".to_string(), None).expect("config should parse");
 
@@ -1370,19 +1547,6 @@ config:
 				.xds
 				.headers
 				.contains(&("x-tenant".to_string(), "team-a".to_string()))
-		);
-	}
-
-	#[test]
-	fn invalid_xds_header_is_rejected_during_startup() {
-		let _env_lock = lock_env();
-		let _header = TempEnvVar::set("XDS_HEADER_X_TENANT", "bad\nvalue");
-
-		let err = parse_config("{}".to_string(), None).expect_err("invalid header should fail");
-
-		assert!(
-			err.to_string().contains("invalid XDS_HEADER_*"),
-			"unexpected error: {err}"
 		);
 	}
 
@@ -1505,43 +1669,156 @@ config:
 		);
 	}
 
-	#[test]
-	fn database_pool_sizes_must_be_usable() {
-		let _env_lock = lock_env();
-		let err = parse_config(
-			r#"
-config:
-  database:
-    url: "sqlite::memory:"
-    maxConnections: 0
-"#
-			.to_string(),
-			None,
-		)
-		.expect_err("zero-sized pool should fail");
-		assert!(
-			err
-				.to_string()
-				.contains("config.database.maxConnections must be greater than zero")
-		);
+	const PRIMARY: &str = "postgres://config.example/database";
+	const LOGS: &str = "postgres://logs.example/database";
 
-		let err = parse_config(
-			r#"
-config:
-  database:
-    url: "postgres://database.example/database"
-    maxConnections: 1
-  storage:
-    mode: hybrid
-"#
-			.to_string(),
+	/// How `config.logging.database` resolves; `config` is the `config:` section in YAML flow style.
+	/// `expected` is the resulting request log database (url, maxConnections), or None for no store.
+	#[rstest::rstest]
+	// enabled: false turns the store off, ignoring (and not validating) its other settings.
+	#[case::disabled_with_url(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {enabled: false, url: "postgres://logs.example/database", maxConnections: 3}}}"#,
+		None
+	)]
+	#[case::disabled_without_url(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {enabled: false}}}"#,
+		None
+	)]
+	#[case::disabled_ignores_invalid_settings(
+		r#"{logging: {database: {enabled: false, url: "", maxConnections: 0}}}"#,
+		None
+	)]
+	// An explicit url is used as is, whether enabled is unset or true.
+	#[case::explicit_url(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {url: "postgres://logs.example/database", maxConnections: 3}}}"#,
+		Some((LOGS, Some(3)))
+	)]
+	#[case::explicit_url_enabled(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {enabled: true, url: "postgres://logs.example/database", maxConnections: 3}}}"#,
+		Some((LOGS, Some(3)))
+	)]
+	#[case::explicit_url_without_primary(
+		r#"{logging: {database: {url: "sqlite::memory:"}}}"#,
+		Some(("sqlite::memory:", None))
+	)]
+	// Without a url, the store falls back to the primary database, however the block is written.
+	#[case::fallback_missing(
+		r#"{database: {url: "postgres://config.example/database"}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_bare_key(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: }}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_null(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: null}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_empty(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {}}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_enabled(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {enabled: true}}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::fallback_null_max_connections(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {maxConnections: null}}}"#,
+		Some((PRIMARY, None))
+	)]
+	// With nothing to fall back to, an unset enabled means no store.
+	#[case::no_database_bare_key(r#"{logging: {database: }}"#, None)]
+	#[case::no_database_empty(r#"{logging: {database: {}}}"#, None)]
+	// Surrounding whitespace is trimmed: a leading space must not defeat postgres:// detection, and
+	// a trailing newline (common in file-backed Secrets) keeps working.
+	#[case::trims_primary_url(
+		r#"{database: {url: " postgres://config.example/database"}}"#,
+		Some((PRIMARY, None))
+	)]
+	#[case::trims_logging_url(
+		r#"{logging: {database: {url: "postgres://logs.example/database\n"}}}"#,
+		Some((LOGS, None))
+	)]
+	fn logging_database_resolves(
+		#[case] config: &str,
+		#[case] expected: Option<(&str, Option<u32>)>,
+	) {
+		let _env_lock = lock_env();
+		let config = parse_config(format!("config: {config}"), None).expect("config should parse");
+		let resolved = config
+			.logging
+			.database
+			.as_ref()
+			.map(|db| (db.url.as_str(), db.max_connections));
+		assert_eq!(resolved, expected);
+		// Falling back reuses the primary settings exactly, so run.rs shares its pool.
+		if expected.is_some_and(|(url, _)| url == PRIMARY) {
+			assert_eq!(config.logging.database, config.database);
+		}
+	}
+
+	/// Database settings that fail to parse; `config` is the `config:` section in YAML flow style.
+	#[rstest::rstest]
+	#[case::blank_primary_url(r#"{database: {url: "  "}}"#, "config.database.url must not be empty")]
+	#[case::blank_logging_url(
+		r#"{logging: {database: {url: ""}}}"#,
+		"config.logging.database.url must not be empty"
+	)]
+	#[case::zero_primary_pool(
+		r#"{database: {url: "sqlite::memory:", maxConnections: 0}}"#,
+		"config.database.maxConnections must be greater than zero"
+	)]
+	#[case::zero_logging_pool(
+		r#"{logging: {database: {url: "sqlite::memory:", maxConnections: 0}}}"#,
+		"config.logging.database.maxConnections must be greater than zero"
+	)]
+	#[case::postgres_hybrid_pool_too_small(
+		r#"{database: {url: "postgres://database.example/database", maxConnections: 1}, storage: {mode: hybrid}}"#,
+		"maxConnections must be at least 2 for PostgreSQL hybrid storage"
+	)]
+	// maxConnections without a url would open a second pool to the primary database.
+	#[case::max_connections_without_url(
+		r#"{database: {url: "postgres://config.example/database"}, logging: {database: {maxConnections: 3}}}"#,
+		"config.logging.database.maxConnections requires config.logging.database.url"
+	)]
+	#[case::enabled_without_any_database(
+		r#"{logging: {database: {enabled: true}}}"#,
+		"config.logging.database.enabled=true requires config.logging.database.url or config.database.url"
+	)]
+	// A malformed value is reported as that field's type error, in any key order and even when the
+	// store is disabled.
+	#[case::malformed_max_connections(
+		r#"{logging: {database: {url: "postgres://logs.example/database", maxConnections: many}}}"#,
+		"maxConnections: invalid type"
+	)]
+	#[case::malformed_max_connections_first(
+		r#"{logging: {database: {maxConnections: many, url: "postgres://logs.example/database"}}}"#,
+		"maxConnections: invalid type"
+	)]
+	#[case::malformed_max_connections_disabled(
+		r#"{logging: {database: {enabled: false, maxConnections: many}}}"#,
+		"maxConnections: invalid type"
+	)]
+	fn database_config_rejected(#[case] config: &str, #[case] expected_err: &str) {
+		let _env_lock = lock_env();
+		let err = parse_config(format!("config: {config}"), None).expect_err("config should fail");
+		let err = format!("{err:#}");
+		assert!(err.contains(expected_err), "{err}");
+	}
+
+	#[test]
+	fn logging_database_url_is_redacted() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"config: {logging: {database: {url: "postgres://user:secret@logs.example/database"}}}"#
+				.to_string(),
 			None,
 		)
-		.expect_err("PostgreSQL hybrid pool needs a slot besides its listener");
+		.expect("config should parse");
+		let dumped = serde_json::to_string(&config.logging).expect("logging config serializes");
 		assert!(
-			err
-				.to_string()
-				.contains("maxConnections must be at least 2 for PostgreSQL hybrid storage")
+			!dumped.contains("secret"),
+			"url should be redacted: {dumped}"
 		);
 	}
 
@@ -1557,9 +1834,10 @@ config:
 
 	#[test]
 	fn dynamic_ca_cert_cache_uses_config_env_overrides() {
-		let _env_lock = lock_env();
-		let _ttl = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_TTL", "2m");
-		let _capacity = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_CAPACITY", "17");
+		let _env = TestEnv::set(&[
+			("DYNAMIC_CA_CERT_CACHE_TTL", "2m"),
+			("DYNAMIC_CA_CERT_CACHE_CAPACITY", "17"),
+		]);
 
 		let config = parse_config("{}".to_string(), None).expect("config should parse");
 
@@ -1569,8 +1847,7 @@ config:
 
 	#[test]
 	fn dynamic_ca_cert_cache_rejects_zero_capacity() {
-		let _env_lock = lock_env();
-		let _capacity = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_CAPACITY", "0");
+		let _env = TestEnv::set(&[("DYNAMIC_CA_CERT_CACHE_CAPACITY", "0")]);
 
 		let err = parse_config("{}".to_string(), None).expect_err("zero capacity should fail");
 
@@ -1584,14 +1861,9 @@ config:
 
 	#[test]
 	fn session_key_env_overrides_inline_session_config() {
-		let _env_lock = lock_env();
-
 		let env_key = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 		let inline_key = "f1e1d1c1b1a1918171615141312111000f0e0d0c0b0a09080706050403020100";
-
-		unsafe {
-			env::set_var("SESSION_KEY", env_key);
-		}
+		let _env = TestEnv::set(&[("SESSION_KEY", env_key)]);
 
 		let config = parse_config(
 			format!(
@@ -1621,10 +1893,6 @@ config:
 		assert!(
 			crate::http::sessionpersistence::SessionState::decode(&encoded, &inline_encoder).is_err()
 		);
-
-		unsafe {
-			env::remove_var("SESSION_KEY");
-		}
 	}
 
 	#[test]
@@ -1806,23 +2074,14 @@ config:
 
 	#[test]
 	fn session_key_env_enables_aes_session_encoder() {
-		let _env_lock = lock_env();
-
 		let session_key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
-
-		unsafe {
-			env::set_var("SESSION_KEY", session_key);
-		}
+		let _env = TestEnv::set(&[("SESSION_KEY", session_key)]);
 
 		let config = parse_config("{}".to_string(), None).expect("config should parse");
 		assert!(matches!(
 			config.session_encoder,
 			crate::http::sessionpersistence::Encoder::Aes(_)
 		));
-
-		unsafe {
-			env::remove_var("SESSION_KEY");
-		}
 	}
 
 	#[test]

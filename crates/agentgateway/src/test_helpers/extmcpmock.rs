@@ -134,7 +134,7 @@ impl Handler for ClosureHandler {
 
 /// Build an `ExtMcpMock` from two closures, skipping the per-test `struct + impl Handler` boilerplate.
 /// State that varies per call (counters, capture buffers) is captured via `Arc` inside the closure.
-pub fn closure_mock<R, P>(on_request: R, on_response: P) -> ExtMcpMock<ClosureHandler>
+pub fn closure_mock<R, P>(on_request: R, on_response: P) -> ExtMcpMock
 where
 	R: Fn(&McpRequest) -> Result<McpRequestResult, Status> + Send + Sync + 'static,
 	P: Fn(&McpResponse) -> Result<McpResponseResult, Status> + Send + Sync + 'static,
@@ -150,25 +150,17 @@ where
 /// Mock extMcp gRPC server for tests. Wraps a `Handler` factory; a fresh
 /// handler instance is produced per RPC, so per-call state lives in the
 /// caller's closure (typically an Arc<Mutex<…>>).
-pub struct ExtMcpMock<T> {
-	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
+#[derive(Clone)]
+pub struct ExtMcpMock {
+	handler: Arc<dyn Fn() -> Box<dyn Handler + Send + Sync> + Send + Sync>,
 }
 
-impl<T> Clone for ExtMcpMock<T> {
-	fn clone(&self) -> Self {
+impl ExtMcpMock {
+	pub fn new<T: Handler + Send + Sync + 'static>(
+		handler: impl Fn() -> T + Send + Sync + 'static,
+	) -> Self {
 		Self {
-			handler: self.handler.clone(),
-		}
-	}
-}
-
-impl<T> ExtMcpMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
-	pub fn new(handler: impl Fn() -> T + Send + Sync + 'static) -> Self {
-		Self {
-			handler: Arc::new(handler),
+			handler: Arc::new(move || Box::new(handler())),
 		}
 	}
 
@@ -184,10 +176,7 @@ where
 }
 
 #[tonic::async_trait]
-impl<T> ExtMcp for ExtMcpMock<T>
-where
-	T: Handler + Send + Sync + 'static,
-{
+impl ExtMcp for ExtMcpMock {
 	async fn check_request(
 		&self,
 		request: Request<McpRequest>,

@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+mcp:
+  port: 3000
+  prefixMode: always
+  policies:
+    apiKey:
+      mode: strict
+      keys:
+      - key: alice-key
+        metadata:
+          client: alice
+      - key: alice-rotated-key
+        metadata:
+          client: alice
+      - key: bob-key
+        metadata:
+          client: bob
+    localRateLimit:
+      conditional:
+      - condition: 'mcp.methodName == "tools/call"'
+        type: requests
+        maxTokens: 2
+        tokensPerFill: 2
+        fillInterval: 60s
+        key: 'apiKey.client + "/" + mcp.tool.target + "/" + mcp.tool.name'
+  targets:
+  - name: everything
+    stdio:
+      cmd: npx
+      args: ["-y", "@modelcontextprotocol/server-everything"]

@@ -24,7 +24,7 @@ export function policySummary(
 	}
 	if (key === 'jwtAuth') {
 		const jwt = value as { mode?: string; issuer?: string };
-		return `${jwt.mode ?? 'strict'}${jwt.issuer ? `, ${jwt.issuer}` : ''}`;
+		return `${jwt.mode ?? 'optional'}${jwt.issuer ? `, ${jwt.issuer}` : ''}`;
 	}
 	if (key === 'oidc') {
 		const oidc = value as { issuer?: string; clientId?: string };
@@ -32,7 +32,7 @@ export function policySummary(
 	}
 	if (key === 'apiKey') {
 		const apiKey = value as { keys?: unknown[]; mode?: string };
-		return `${apiKey.keys?.length ?? 0} keys, ${apiKey.mode ?? 'strict'}`;
+		return `${apiKey.keys?.length ?? 0} keys, ${apiKey.mode ?? 'optional'}`;
 	}
 	if (key === 'localRateLimit') {
 		const limits = value as LocalRateLimitConfig;

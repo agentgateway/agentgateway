@@ -89,22 +89,6 @@ output:
   resource:
     listener:
       bindKey: 8080/default/example
-      hostname: shared.example.com
-      key: default/aaa-newer.shared
-      name:
-        gatewayName: example
-        gatewayNamespace: default
-        listenerName: shared
-        listenerSet:
-          name: aaa-newer
-          namespace: default
-      protocol: HTTP
-- gateway:
-    Name: example
-    Namespace: default
-  resource:
-    listener:
-      bindKey: 8080/default/example
       hostname: gateway.example.com
       key: default/example.gw-8080
       name:
@@ -127,21 +111,6 @@ output:
           name: zzz-older
           namespace: default
       protocol: HTTP
-- gateway:
-    Name: example
-    Namespace: default
-  resource:
-    listener:
-      bindKey: 8081/default/example
-      key: default/zzz-older.second-on-8081
-      name:
-        gatewayName: example
-        gatewayNamespace: default
-        listenerName: second-on-8081
-        listenerSet:
-          name: zzz-older
-          namespace: default
-      protocol: TCP
 - gateway:
     Name: example
     Namespace: default

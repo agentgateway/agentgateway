@@ -103,6 +103,7 @@ where
 		.max_send_buffer_size(1024 * 400)
 		// default from hyper
 		.max_concurrent_streams(200)
+		.data_frame_budget(usize::MAX)
 		.handshake(s)
 		.await?;
 

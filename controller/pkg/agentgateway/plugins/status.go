@@ -5,7 +5,6 @@ import (
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/maps"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -78,7 +77,7 @@ func MergeAncestors(controllerName string, existing []gwv1.PolicyAncestorStatus,
 		trimmed = append(trimmed, existing[lastOwned+1:16]...)
 		trimmed = append(trimmed, gwv1.PolicyAncestorStatus{
 			AncestorRef: gwv1.ParentReference{
-				Group: ptr.Of(gwv1.Group("agentgateway.dev")),
+				Group: new(gwv1.Group("agentgateway.dev")),
 				Name:  "StatusSummary",
 			},
 			ControllerName: gwv1.GatewayController(controllerName),

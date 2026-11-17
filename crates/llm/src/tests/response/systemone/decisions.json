@@ -32,7 +32,10 @@
       "type": "score",
       "score": 2,
       "legend": {
-        "0": "Low",
+        "0": {
+          "label": "Low",
+          "description": "Can wait"
+        },
         "1": "Medium",
         "2": "High"
       },

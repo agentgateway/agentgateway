@@ -137,7 +137,6 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		agwSyncer.CacheSyncs(),
 		cfg.ExtraAgwResourceStatusHandlers,
 		cfg.AgwCollections.Settings.EnableInferExt,
-		cfg.AgwCollections.Settings.EnableAgentgatewayModels,
 		cfg.AgwCollections.Settings.EnableXBackend,
 	)
 	if err := cfg.Manager.Add(agwStatusSyncer); err != nil {
@@ -273,6 +272,7 @@ func GetDefaultClassInfo(
 	agwClassName,
 	agwControllerName string,
 	additionalClassInfos map[string]*deployer.GatewayClassInfo,
+	clusterTrustBundles bool,
 ) map[string]*deployer.GatewayClassInfo {
 	classInfos := map[string]*deployer.GatewayClassInfo{}
 	refOverrides := globalSettings.GatewayClassParametersRefs
@@ -283,7 +283,7 @@ func GetDefaultClassInfo(
 		Labels:            map[string]string{},
 		Annotations:       map[string]string{},
 		ControllerName:    agwControllerName,
-		SupportedFeatures: deployer.GetSupportedFeaturesForAgentGateway(),
+		SupportedFeatures: deployer.GetSupportedFeaturesForAgentGateway(clusterTrustBundles),
 	}
 	applyGatewayClassParametersRef(classInfos[agwClassName], agwClassName, refOverrides)
 	maps.Copy(classInfos, additionalClassInfos)

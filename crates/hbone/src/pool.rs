@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 
-use anyhow::anyhow;
 use flurry;
 use pingora_pool;
 use rustls::pki_types::ServerName;
@@ -36,7 +35,6 @@ pub trait CertificateFetcher<K>: Send + Sync {
 #[derive(Clone)]
 pub struct WorkloadHBONEPool<K> {
 	state: Arc<PoolState<K>>,
-	pool_watcher: watch::Receiver<bool>,
 }
 
 impl<K> Debug for WorkloadHBONEPool<K> {
@@ -47,13 +45,12 @@ impl<K> Debug for WorkloadHBONEPool<K> {
 
 // PoolState is effectively the gnarly inner state stuff that needs thread/task sync, and should be wrapped in a Mutex.
 struct PoolState<K> {
-	pool_notifier: watch::Sender<bool>, /* This is already impl clone? rustc complains that it isn't, tho */
 	timeout_tx: watch::Sender<bool>, /* This is already impl clone? rustc complains that it isn't, tho */
 	// this is effectively just a convenience data type - a rwlocked hashmap with keying and LRU drops
 	// and has no actual hyper/http/connection logic.
 	connected_pool: Arc<pingora_pool::ConnectionPool<H2ConnectClient<K>>>,
 	// this must be an atomic/concurrent-safe list-of-locks, so we can lock per-key, not globally, and avoid holding up all conn attempts
-	established_conn_writelock: flurry::HashMap<u64, Option<Arc<Mutex<()>>>>,
+	established_conn_writelock: flurry::HashMap<u64, Arc<Mutex<()>>>,
 	pool_unused_release_timeout: Duration,
 	// This is merely a counter to track the overall number of conns this pool spawns
 	// to ensure we get unique poolkeys-per-new-conn, it is not a limit
@@ -157,7 +154,6 @@ impl<K: Key> PoolState<K> {
 			}
 			.in_current_span(),
 		);
-		let _ = self.pool_notifier.send(true);
 	}
 
 	// Since we are using a hash key to do lookup on the inner pingora pool, do a get guard
@@ -191,101 +187,26 @@ impl<K: Key> PoolState<K> {
 		}
 	}
 
-	// 1. Tries to get a writelock.
-	// 2. If successful, hold it, spawn a new connection, check it in, return a clone of it.
-	// 3. If not successful, return nothing.
-	//
-	// This is useful if we want to race someone else to the writelock to spawn a connection,
-	// and expect the losers to queue up and wait for the (singular) winner of the writelock
-	//
-	// This function should ALWAYS return a connection if it wins the writelock for the provided key.
-	// This function should NEVER return a connection if it does not win the writelock for the provided key.
-	// This function should ALWAYS propagate Error results to the caller
-	//
-	// It is important that the *initial* check here is authoritative, hence the locks, as
-	// we must know if this is a connection for a key *nobody* has tried to start yet
-	// (i.e. no writelock for our key in the outer map)
-	// or if other things have already established conns for this key (writelock for our key in the outer map).
-	//
-	// This is so we can backpressure correctly if 1000 tasks all demand a new connection
-	// to the same key at once, and not eagerly open 1000 tunnel connections.
-	async fn start_conn_if_win_writelock(
-		&self,
-		workload_key: &K,
-		pool_key: &pingora_pool::ConnectionMeta,
-	) -> anyhow::Result<Option<H2ConnectClient<K>>> {
-		let inner_conn_lock = {
-			trace!("getting keyed lock out of lockmap");
-			let guard = self.established_conn_writelock.guard();
-
-			let exist_conn_lock = self
-				.established_conn_writelock
-				.get(&pool_key.key, &guard)
-				.unwrap();
-			trace!("got keyed lock out of lockmap");
-			exist_conn_lock.as_ref().unwrap().clone()
-		};
-
-		trace!("attempting to win connlock for {}", workload_key);
-
-		let inner_lock = inner_conn_lock.try_lock();
-		match inner_lock {
-			Ok(_guard) => {
-				// BEGIN take inner writelock
-				debug!("nothing else is creating a conn and we won the lock, make one");
-				let client = self.spawner.new_pool_conn(workload_key.clone()).await?;
-
-				debug!(
-					"checking in new conn for {} with pk {:?}",
-					workload_key, pool_key
-				);
-				self.maybe_checkin_conn(client.clone(), pool_key.clone());
-				Ok(Some(client))
-				// END take inner writelock
-			},
-			Err(_) => {
-				debug!(
-					"did not win connlock for {}, something else has it",
-					workload_key
-				);
-				Ok(None)
-			},
-		}
-	}
-
-	// Does an initial, naive check to see if we have a writelock inserted into the map for this key
-	//
-	// If we do, take the writelock for that key, clone (or create) a connection, check it back in,
-	// and return a cloned ref, then drop the writelock.
-	//
-	// Otherwise, return None.
-	//
-	// This function should ALWAYS return a connection if a writelock exists for the provided key.
-	// This function should NEVER return a connection if no writelock exists for the provided key.
-	// This function should ALWAYS propagate Error results to the caller
-	//
-	// It is important that the *initial* check here is authoritative, hence the locks, as
-	// we must know if this is a connection for a key *nobody* has tried to start yet
-	// (i.e. no writelock for our key in the outer map)
-	// or if other things have already established conns for this key (writelock for our key in the outer map).
-	//
-	// This is so we can backpressure correctly if 1000 tasks all demand a new connection
-	// to the same key at once, and not eagerly open 1000 tunnel connections.
+	// Hold the async mutex across connection creation to backpressure callers for
+	// this key. Releasing the guard wakes waiters on success, error, or cancellation.
 	async fn checkout_conn_under_writelock(
 		&self,
 		workload_key: &K,
 		pool_key: &pingora_pool::ConnectionMeta,
-	) -> anyhow::Result<Option<H2ConnectClient<K>>> {
-		let found_conn = {
-			trace!("pool connect outer map - take guard");
+	) -> anyhow::Result<H2ConnectClient<K>> {
+		let exist_conn_lock = {
 			let guard = self.established_conn_writelock.guard();
-
-			trace!("pool connect outer map - check for keyed mutex");
-			let exist_conn_lock = self.established_conn_writelock.get(&pool_key.key, &guard);
-			exist_conn_lock.and_then(|e_conn_lock| e_conn_lock.clone())
-		};
-		let Some(exist_conn_lock) = found_conn else {
-			return Ok(None);
+			match self.established_conn_writelock.get(&pool_key.key, &guard) {
+				Some(lock) => lock.clone(),
+				None => match self.established_conn_writelock.try_insert(
+					pool_key.key,
+					Arc::new(Mutex::new(())),
+					&guard,
+				) {
+					Ok(lock) => lock.clone(),
+					Err(existing) => existing.current.clone(),
+				},
+			}
 		};
 		debug!(
 			"checkout - found mutex for pool key {:?}, waiting for writelock",
@@ -322,7 +243,7 @@ impl<K: Key> PoolState<K> {
 		// For any connection, we will check in a copy and return the other unless its already maxed out
 		// TODO: in the future, we can keep track of these and start to use them once they finish some streams.
 		self.maybe_checkin_conn(returned_connection.clone(), pool_key.clone());
-		Ok(Some(returned_connection))
+		Ok(returned_connection)
 	}
 }
 
@@ -345,7 +266,6 @@ impl<K: Key> WorkloadHBONEPool<K> {
 		cfg: Arc<crate::Config>,
 		local_workload: Arc<dyn CertificateFetcher<K>>,
 	) -> WorkloadHBONEPool<K> {
-		let (timeout_tx, timeout_rx) = watch::channel(false);
 		let (timeout_send, timeout_recv) = watch::channel(false);
 		let pool_duration = cfg.pool_unused_release_timeout;
 
@@ -357,7 +277,6 @@ impl<K: Key> WorkloadHBONEPool<K> {
 
 		Self {
 			state: Arc::new(PoolState {
-				pool_notifier: timeout_tx,
 				timeout_tx: timeout_send,
 				// timeout_rx: timeout_recv,
 				// the number here is simply the number of unique src/dest keys
@@ -368,12 +287,11 @@ impl<K: Key> WorkloadHBONEPool<K> {
 				pool_global_conn_count: AtomicI32::new(0),
 				spawner,
 			}),
-			pool_watcher: timeout_rx,
 		}
 	}
 
 	pub async fn send_request_pooled(
-		&mut self,
+		&self,
 		workload_key: &K,
 		request: http::Request<()>,
 	) -> anyhow::Result<H2Stream> {
@@ -401,7 +319,7 @@ impl<K: Key> WorkloadHBONEPool<K> {
 	//
 	// If many `connects` request a connection to the same dest at once, all will wait until exactly
 	// one connection is created, before deciding if they should create more or just use that one.
-	async fn connect(&mut self, workload_key: &K) -> anyhow::Result<H2ConnectClient<K>> {
+	async fn connect(&self, workload_key: &K) -> anyhow::Result<H2ConnectClient<K>> {
 		trace!("pool connect START");
 		// TODO BML this may not be collision resistant, or a fast hash. It should be resistant enough for workloads tho.
 		// We are doing a deep-equals check at the end to mitigate any collisions, will see about bumping Pingora
@@ -416,113 +334,9 @@ impl<K: Key> WorkloadHBONEPool<K> {
 		let id = id.try_into()?; // id is usize on windows so try and convert
 		let pool_key = pingora_pool::ConnectionMeta::new(hash_key, id);
 
-		// First, see if we can naively take an inner lock for our specific key, and get a connection.
-		// This should be the common case, except for the first establishment of a new connection/key.
-		// This will be done under outer readlock (nonexclusive)/inner keyed writelock (exclusive).
-		let existing_conn = self
+		self
 			.state
 			.checkout_conn_under_writelock(workload_key, &pool_key)
-			.await?;
-
-		// Early return, no need to do anything else
-		if let Some(e) = existing_conn {
-			debug!("initial attempt - found existing conn, done");
-			return Ok(e);
-		}
-
-		// We couldn't get a writelock for this key. This means nobody has tried to establish any conns for this key yet,
-		// So, we will take a nonexclusive readlock on the outer lockmap, and attempt to insert one.
-		//
-		// (if multiple threads try to insert one, only one will succeed.)
-		{
-			debug!(
-				"didn't find a connection for key {:?}, making sure lockmap has entry",
-				hash_key
-			);
-			let guard = self.state.established_conn_writelock.guard();
-			match self.state.established_conn_writelock.try_insert(
-				hash_key,
-				Some(Arc::new(Mutex::new(()))),
-				&guard,
-			) {
-				Ok(_) => {
-					debug!("inserting conn mutex for key {:?} into lockmap", hash_key);
-				},
-				Err(_) => {
-					debug!("already have conn for key {:?} in lockmap", hash_key);
-				},
-			}
-		}
-
-		// If we get here, it means the following are true:
-		// 1. We have a guaranteed sharded mutex in the outer map for our current key
-		// 2. We can now, under readlock(nonexclusive) in the outer map, attempt to
-		// take the inner writelock for our specific key (exclusive).
-		//
-		// This doesn't block other tasks spawning connections against other keys, but DOES block other
-		// tasks spawning connections against THIS key - which is what we want.
-
-		// NOTE: The inner, key-specific mutex is a tokio::async::Mutex, and not a stdlib sync mutex.
-		// these differ from the stdlib sync mutex in that they are (slightly) slower
-		// (they effectively sleep the current task) and they can be held over an await.
-		// The tokio docs (rightly) advise you to not use these,
-		// because holding a lock over an await is a great way to create deadlocks if the await you
-		// hold it over does not resolve.
-		//
-		// HOWEVER. Here we know this connection will either establish or timeout (or fail with error)
-		// and we WANT other tasks to go back to sleep if a task is already trying to create a new connection for this key.
-		//
-		// So the downsides are actually useful (we WANT task contention -
-		// to block other parallel tasks from trying to spawn a connection for this key if we are already doing so)
-		trace!("fallback attempt - trying win win connlock");
-		let res = match self
-			.state
-			.start_conn_if_win_writelock(workload_key, &pool_key)
-			.await?
-		{
-			Some(client) => client,
-			None => {
-				debug!("we didn't win the lock, something else is creating a conn, wait for it");
-				// If we get here, it means the following are true:
-				// 1. We have a writelock in the outer map for this key (either we inserted, or someone beat us to it - but it's there)
-				// 2. We could not get the exclusive inner writelock to add a new conn for this key.
-				// 3. Someone else got the exclusive inner writelock, and is adding a new conn for this key.
-				//
-				// So, loop and wait for the pool_watcher to tell us a new conn was enpooled,
-				// so we can pull it out and check it.
-				loop {
-					match self.pool_watcher.changed().await {
-						Ok(_) => {
-							trace!(
-								"notified a new conn was enpooled, checking for hash {:?}",
-								hash_key
-							);
-							// Notifier fired, try and get a conn out for our key.
-							let existing_conn = self
-								.state
-								.checkout_conn_under_writelock(workload_key, &pool_key)
-								.await?;
-							match existing_conn {
-								None => {
-									trace!(
-										"woke up on pool notification, but didn't find a conn for {:?} yet",
-										hash_key
-									);
-									continue;
-								},
-								Some(e_conn) => {
-									debug!("found existing conn after waiting");
-									break e_conn;
-								},
-							}
-						},
-						Err(_) => {
-							return Err(anyhow!("pool draining"));
-						},
-					}
-				}
-			},
-		};
-		Ok(res)
+			.await
 	}
 }

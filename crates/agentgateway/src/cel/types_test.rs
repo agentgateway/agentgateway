@@ -118,6 +118,7 @@ fn build_test_request() -> crate::http::Request {
 	let llm = LLMContext {
 		streaming: false,
 		request_model: "gpt-4".into(),
+		original_model: "gpt-4".into(),
 		response_model: Some("gpt-4-turbo".into()),
 		provider: "openai".into(),
 		input_tokens: Some(100),
@@ -125,6 +126,7 @@ fn build_test_request() -> crate::http::Request {
 		input_image_tokens: None,
 		input_text_tokens: None,
 		input_audio_tokens: None,
+		audio_seconds: None,
 		output_tokens: Some(50),
 		output_image_tokens: None,
 		output_text_tokens: None,
@@ -147,6 +149,7 @@ fn build_test_request() -> crate::http::Request {
 		cost: None,
 		cost_rates: None,
 		cost_status: None,
+		model: None,
 	};
 	req.extensions_mut().insert(llm);
 
@@ -163,6 +166,7 @@ fn llm_context_with_usage(
 		input_format: llm::InputFormat::Completions,
 		cache_convention,
 		request_model: "model".into(),
+		original_model: None,
 		provider: "provider".into(),
 		streaming: false,
 		params: llm::LLMRequestParams::default(),
@@ -342,10 +346,13 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		output: dec("0.025"),
 		cache_read: dec("0"),
 		cache_write: dec("0"),
+		cache_write_1h: dec("0"),
+		cache_write_12h: dec("0.01"),
 		reasoning: dec("0"),
 		input_audio: dec("0"),
 		output_audio: dec("0"),
 		pages: dec("0.02"),
+		audio_duration: dec("0"),
 	});
 	// Cost per page
 	req
@@ -355,14 +362,26 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		.cost_rates = Some(llm::catalog::CostRates {
 		input: Some(3.0),
 		per_page: Some(0.005),
+		cache_write_details: llm::catalog::CacheWriteRates {
+			ttl_12h: Some(2.5),
+			..Default::default()
+		},
 		..Default::default()
 	});
 	let executor = Executor::new_request(&req);
 
-	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.545").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.555").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.input == 0.5").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.pages == 0.02").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.cacheRead == 0.0").unwrap()));
+	assert!(
+		executor
+			.eval_bool(&Expression::new_strict("llm.cost.cacheWriteDetails['12h'] == 0.01").unwrap())
+	);
+	assert!(
+		executor
+			.eval_bool(&Expression::new_strict("llm.costRates.cacheWriteDetails['12h'] == 2.5").unwrap())
+	);
 	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.input == 3.0").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.perPage == 0.005").unwrap()));
 }

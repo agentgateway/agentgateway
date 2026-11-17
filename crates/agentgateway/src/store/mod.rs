@@ -11,7 +11,10 @@ use serde::{Serialize, Serializer};
 mod discovery;
 mod policy;
 
-use std::sync::RwLock;
+use std::cell::Cell;
+use std::ops::Deref;
+use std::sync::{RwLock, RwLockReadGuard};
+use std::thread::LocalKey;
 
 pub use binds::{Dump as BindsDump, PreviousState as BindPreviousState};
 pub use discovery::{
@@ -80,12 +83,57 @@ impl Stores {
 			)))),
 		}
 	}
-	pub fn read_binds(&self) -> std::sync::RwLockReadGuard<'_, store::BindStore> {
+	#[track_caller]
+	pub fn read_binds(&self) -> ReadGuard<'_, store::BindStore> {
 		self.binds.read()
 	}
 
-	pub fn read_discovery(&self) -> std::sync::RwLockReadGuard<'_, store::DiscoveryStore> {
+	#[track_caller]
+	pub fn read_discovery(&self) -> ReadGuard<'_, store::DiscoveryStore> {
 		self.discovery.read()
+	}
+}
+
+/// Read guard for a store lock. A second read of a std RwLock on the same thread can deadlock if a
+/// writer is queued in between, so debug builds assert that a thread holds at most one guard per lock.
+pub struct ReadGuard<'a, T> {
+	inner: RwLockReadGuard<'a, T>,
+	#[cfg(debug_assertions)]
+	depth: &'static LocalKey<Cell<u32>>,
+}
+
+impl<'a, T> ReadGuard<'a, T> {
+	#[track_caller]
+	#[cfg_attr(not(debug_assertions), allow(unused_variables))]
+	fn new(lock: &'a RwLock<T>, depth: &'static LocalKey<Cell<u32>>) -> Self {
+		#[cfg(debug_assertions)]
+		assert_eq!(
+			depth.get(),
+			0,
+			"re-entrant store read lock; this can deadlock against a writer"
+		);
+		let inner = lock.read().expect("mutex acquired");
+		#[cfg(debug_assertions)]
+		depth.set(depth.get() + 1);
+		Self {
+			inner,
+			#[cfg(debug_assertions)]
+			depth,
+		}
+	}
+}
+
+impl<T> Deref for ReadGuard<'_, T> {
+	type Target = T;
+	fn deref(&self) -> &T {
+		&self.inner
+	}
+}
+
+impl<T> Drop for ReadGuard<'_, T> {
+	fn drop(&mut self) {
+		#[cfg(debug_assertions)]
+		self.depth.set(self.depth.get() - 1);
 	}
 }
 

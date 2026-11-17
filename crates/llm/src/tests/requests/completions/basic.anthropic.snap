@@ -3,6 +3,7 @@ source: crates/llm/src/golden_tests.rs
 description: src/tests/requests/completions/basic.json
 info:
   model: replaceme
+  tools: []
   messages:
     - role: system
       content: You are a helpful assistant.
@@ -24,7 +25,8 @@ info:
     ],
     "system": "You are a helpful assistant.",
     "model": "replaceme",
-    "max_tokens": 4096
+    "max_tokens": 4096,
+    "tools": []
   },
   "parsed": {
     "input_format": "Completions",

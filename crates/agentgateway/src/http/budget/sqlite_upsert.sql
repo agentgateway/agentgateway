@@ -12,4 +12,7 @@ ON CONFLICT(budget_id) DO UPDATE SET
         ELSE excluded.used_amount
     END,
     updated_at = MAX(budget_usage.updated_at, excluded.updated_at)
-WHERE excluded.window_end >= budget_usage.window_end;
+-- Ignore stale writes from an older window, but let a reconfigured window length replace the row
+-- (for example, switching a lifetime budget to a rolling window).
+WHERE excluded.window_end >= budget_usage.window_end
+   OR excluded.window_end - excluded.window_start <> budget_usage.window_end - budget_usage.window_start;

@@ -732,6 +732,24 @@ func TestStandaloneChartExtraContainers(t *testing.T) {
 	require.Contains(t, out, "containerPort: 80")
 }
 
+func TestStandaloneChartExtraInitContainers(t *testing.T) {
+	t.Parallel()
+	out, stderr, err := renderStandaloneChart(t, `extraInitContainers:
+- name: sleep
+  image: docker.io/curlimages/curl
+  command:
+    - /bin/sleep
+    - infinity
+  imagePullPolicy: IfNotPresent
+  restartPolicy: Always
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "initContainers:")
+	require.Contains(t, out, "name: sleep")
+	require.Contains(t, out, "image: docker.io/curlimages/curl")
+	require.Contains(t, out, "restartPolicy: Always")
+}
+
 func TestStandaloneChartMonitoringDisabledByDefault(t *testing.T) {
 	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, "")

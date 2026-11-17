@@ -3,8 +3,8 @@ use htpasswd_verify_fork::Htpasswd;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
+use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self};
-use crate::proxy::{ProxyError, ProxyResponse};
 use crate::{apply, *};
 
 #[cfg(test)]
@@ -85,7 +85,7 @@ fn default_realm() -> String {
 const TRACE_POLICY_KIND: &str = "basic_auth";
 
 impl BasicAuthentication {
-	/// Create a new BasicAuthentication from a file path
+	/// Create a new BasicAuthentication from htpasswd contents
 	pub fn new(
 		htpasswd: &str,
 		realm: Option<String>,
@@ -173,13 +173,10 @@ impl crate::store::RequestPolicyTrait for BasicAuthentication {
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
-	) -> Result<crate::http::PolicyResponse, ProxyResponse> {
-		let res = self.verify(req).await.map_err(ProxyResponse::from)?;
+	) -> Result<crate::http::PolicyResponse, ProxyError> {
+		let res = self.verify(req).await?;
 		if let Some(claims) = res {
-			self
-				.authorization_location
-				.remove(req)
-				.map_err(ProxyResponse::from)?;
+			self.authorization_location.remove(req)?;
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(claims);
 		}
@@ -220,9 +217,12 @@ pub struct LocalBasicAuth {
 }
 
 impl LocalBasicAuth {
-	pub fn try_into(self) -> anyhow::Result<BasicAuthentication> {
+	pub async fn try_into(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<BasicAuthentication> {
 		Ok(BasicAuthentication::new(
-			&self.htpasswd.load()?,
+			&crate::serdes::load_file_or_inline(&self.htpasswd, resources).await?,
 			self.realm,
 			self.mode,
 			self.authorization_location,

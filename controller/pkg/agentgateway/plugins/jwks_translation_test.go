@@ -83,29 +83,35 @@ func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorPreservesRemoteProv
 }
 
 func TestProcessJWKSInvalidInline(t *testing.T) {
-	inlineBad := agentgateway.LongString(`{"keys":[{"e":"AQAB","kid":"3161","kty":"RSB","n":"tmzcODUF5T9p"}]}`)
-	jwtAuth := &agentgateway.JWTAuthentication{
-		Mode: agentgateway.JWTAuthenticationModeStrict,
-		Providers: []agentgateway.JWTProvider{{
-			Issuer: "cool-issuer.corp",
-			JWKS: agentgateway.JWKS{
-				Inline: &inlineBad,
-			},
-		}},
-	}
-	policy, err := processJWTAuthenticationPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		jwtAuth,
-		nil,
-		"default/test:jwt",
-		types.NamespacedName{Namespace: "default", Name: "test"},
-	)
+	for name, inlineBad := range map[string]agentgateway.LongString{
+		"invalid kty":   `{"keys":[{"e":"AQAB","kid":"3161","kty":"RSB","n":"tmzcODUF5T9p"}]}`,
+		"symmetric oct": `{"keys":[{"kty":"oct","kid":"hmac","alg":"HS256","k":"c2VjcmV0"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			jwtAuth := &agentgateway.JWTAuthentication{
+				Mode: agentgateway.JWTAuthenticationModeStrict,
+				Providers: []agentgateway.JWTProvider{{
+					Issuer: "cool-issuer.corp",
+					JWKS: agentgateway.JWKS{
+						Inline: &inlineBad,
+					},
+				}},
+			}
+			policy, err := processJWTAuthenticationPolicy(
+				PolicyCtx{Krt: krt.TestingDummyContext{}},
+				jwtAuth,
+				nil,
+				"default/test:jwt",
+				types.NamespacedName{Namespace: "default", Name: "test"},
+			)
 
-	if err == nil {
-		t.Fatal("expected error for invalid inline JWKS, got nil")
-	}
-	if got := len(policy.GetTraffic().GetJwt().GetProviders()); got != 1 {
-		t.Fatalf("expected the bad provider to be dropped (0 providers), got %d", got)
+			if err == nil {
+				t.Fatal("expected error for invalid inline JWKS, got nil")
+			}
+			if got := len(policy.GetTraffic().GetJwt().GetProviders()); got != 1 {
+				t.Fatalf("expected the provider to still be emitted, got %d", got)
+			}
+		})
 	}
 }
 

@@ -29,7 +29,9 @@ func TestBuildMCP(t *testing.T) {
 		backend       *agentgateway.AgentgatewayBackend
 		expectError   bool
 		errorContains string
-		inputs        []any
+		// partial compares golden output even when an error is expected.
+		partial bool
+		inputs  []any
 	}{
 		{
 			name: "Static MCPBackend target backend",
@@ -52,6 +54,29 @@ func TestBuildMCP(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "Static MCPBackend target with invalid condition",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "static-mcp-backend-invalid-condition",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name:      "static-target",
+								Condition: new(agentgateway.CELExpression(`request.headers["x-team"] ==`)),
+								Static: &agentgateway.McpTarget{
+									Host: shortStringPtr("mcp-server.example.com"),
+									Port: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: `MCP target condition is not a valid CEL expression: request.headers["x-team"] ==`,
 		},
 		{
 			name: "Static MCPBackend backend with prefixMode Never",
@@ -243,6 +268,45 @@ func TestBuildMCP(t *testing.T) {
 			inputs:        []any{createMockMCPServiceWithTargetNameAnnotation("test-ns", "mcp-service-invalid-target-name", "invalid_target")},
 		},
 		{
+			name: "Service selector MCPBackend backend - target name conflicts",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "conflict-mcp-backend",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name:   "trusted",
+								Static: &agentgateway.McpTarget{Host: shortStringPtr("trusted.example.com"), Port: 8080},
+							},
+							{
+								Selector: &agentgateway.McpSelector{
+									Namespace: &metav1.LabelSelector{MatchLabels: map[string]string{"mcp": "shared"}},
+									Service:   &metav1.LabelSelector{MatchLabels: map[string]string{"app": "mcp-server"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: `MCP target "trusted" from Service other-ns/renamed conflicts with static target; ignored`,
+			partial:       true,
+			inputs: func() []any {
+				renamed := createMockMCPService("other-ns", "renamed", "app=mcp-server")
+				renamed.Annotations = map[string]string{apiannotations.MCPServiceTargetName: "trusted"}
+				older := createMockMCPService("other-ns", "dup", "app=mcp-server")
+				older.CreationTimestamp = metav1.Unix(1, 0)
+				local := createMockMCPService("test-ns", "dup", "app=mcp-server")
+				local.CreationTimestamp = metav1.Unix(2, 0)
+				return []any{
+					&corev1.Namespace{Name: "test-ns", Labels: map[string]string{"mcp": "shared"}},
+					&corev1.Namespace{Name: "other-ns", Labels: map[string]string{"mcp": "shared"}},
+					renamed, older, local,
+				}
+			}(),
+		},
+		{
 			name: "Service backendRef MCPBackend backend - same namespace",
 			backend: &agentgateway.AgentgatewayBackend{
 				Name:      "service-ref-mcp-backend",
@@ -303,7 +367,9 @@ func TestBuildMCP(t *testing.T) {
 				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
 					t.Fatalf("expected error to contain %q, got %v", tt.errorContains, err)
 				}
-				return
+				if !tt.partial {
+					return
+				}
 			} else {
 				assert.NoError(t, err)
 			}
@@ -1222,7 +1288,7 @@ func createMockMCPServiceWithBothAnnotations(namespace, serviceName, labels, new
 }
 
 // createMockMCPService creates a mock service collection with a specific MCPBackend service
-func createMockMCPService(namespace, serviceName, labels string) *corev1.Service {
+func createMockMCPService(namespace, serviceName, labels string) *corev1.Service { //nolint:unparam
 	// Parse labels
 	labelsMap := make(map[string]string)
 	if labels != "" {

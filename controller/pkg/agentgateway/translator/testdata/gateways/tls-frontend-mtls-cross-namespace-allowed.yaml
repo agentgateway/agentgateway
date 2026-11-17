@@ -1,0 +1,153 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  tls:
+    frontend:
+      default:
+        validation:
+          caCertificateRefs:
+            - name: ca-cert
+              kind: ConfigMap
+              namespace: trust
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: tls
+            kind: Secret
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: tls
+  namespace: default
+type: kubernetes.io/tls
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURKYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ca-cert
+  namespace: trust
+data:
+  ca.crt: |-
+    -----BEGIN CERTIFICATE-----
+    MIIC1jCCAb4CCQCJczLyBBZ1GTANBgkqhkiG9w0BAQsFADAtMRUwEwYDVQQKDAxl
+    eGFtcGxlIEluYy4xFDASBgNVBAMMC2V4YW1wbGUuY29tMB4XDTI1MDMwNzE0Mjkx
+    NloXDTI2MDMwNzE0MjkxNlowLTEVMBMGA1UECgwMZXhhbXBsZSBJbmMuMRQwEgYD
+    VQQDDAtleGFtcGxlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
+    AN0U6TVYECkwqnxh1Kt3dS+LialrXBOXKagj9tE582T6dwmqThD75VZPrNKkRoYO
+    aUzCctfDkUBXRemOTMut7ES5xoAtSAhr2GAnqgM3+yBCLOxooSjEFdlpFT7dhi1w
+    jOPa5iMh6ve/pHuRHvEuaF/J6P8tr83wGutx/xFZVuGA9V1AmBmYhePM+JhdcwaB
+    1+IbJp30gGyPfY4vdRQ9VQWbThE8psEzah+3SgTKJSIT7NAdwiIu3O3rXORbaYYU
+    oycgXUHdOKRbJnbvy3pTnFZJ50sg1HIA4yBdX7c0diy8Zz3Suoondg3DforWr0pB
+    Hs6tySAQoz2RiAqDqcE2rbMCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAWPkz3dJW
+    b+LFtnv7MlOVM79Y4PqeiHnazP1G9FwnWBHARkjISsax3b0zX8/RHnU83c3tLP5D
+    VwenYb9B9mzXbLiWI8aaX0UXP//D593ti15y0Od7yC2hQszlqIbxYnkFVwXoT9fQ
+    bdQ9OtpCt8EZnKEyCxck+hlKEyYTcH2PqZ7Ndp0M8I2znz3Kut/uYHLUddfoPF/m
+    O0V6fbyB/Mx/G1uLiv/BVpx3AdP+3ygJyKtelXkD+IdlY3y110fzmVr6NgxAbz/h
+    n9KpuK4SEloIycZUaKVXAaX7T42SFYw7msmB+Uu7z5oLOijsjX6TjeofdFBZ/Byl
+    SxODgqhtaPnOxQ==
+    -----END CERTIFICATE-----
+
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-gateway-ca
+  namespace: trust
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    namespace: default
+  to:
+  - group: ""
+    kind: ConfigMap
+    name: ca-cert
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 443/default/test-gateway
+      port: 443
+      protocol: TLS
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 443/default/test-gateway
+      key: default/test-gateway.https
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: https
+      protocol: HTTPS
+      tls:
+        cert: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURKYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+        privateKey: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+        root: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUMxakNDQWI0Q0NRQ0pjekx5QkJaMUdUQU5CZ2txaGtpRzl3MEJBUXNGQURBdE1SVXdFd1lEVlFRS0RBeGwKZUdGdGNHeGxJRWx1WXk0eEZEQVNCZ05WQkFNTUMyVjRZVzF3YkdVdVkyOXRNQjRYRFRJMU1ETXdOekUwTWpreApObG9YRFRJMk1ETXdOekUwTWpreE5sb3dMVEVWTUJNR0ExVUVDZ3dNWlhoaGJYQnNaU0JKYm1NdU1SUXdFZ1lEClZRUUREQXRsZUdGdGNHeGxMbU52YlRDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUIKQU4wVTZUVllFQ2t3cW54aDFLdDNkUytMaWFsclhCT1hLYWdqOXRFNTgyVDZkd21xVGhENzVWWlByTktrUm9ZTwphVXpDY3RmRGtVQlhSZW1PVE11dDdFUzV4b0F0U0FocjJHQW5xZ00zK3lCQ0xPeG9vU2pFRmRscEZUN2RoaTF3CmpPUGE1aU1oNnZlL3BIdVJIdkV1YUYvSjZQOHRyODN3R3V0eC94RlpWdUdBOVYxQW1CbVloZVBNK0poZGN3YUIKMStJYkpwMzBnR3lQZlk0dmRSUTlWUVdiVGhFOHBzRXphaCszU2dUS0pTSVQ3TkFkd2lJdTNPM3JYT1JiYVlZVQpveWNnWFVIZE9LUmJKbmJ2eTNwVG5GWko1MHNnMUhJQTR5QmRYN2MwZGl5OFp6M1N1b29uZGczRGZvcldyMHBCCkhzNnR5U0FRb3oyUmlBcURxY0UycmJNQ0F3RUFBVEFOQmdrcWhraUc5dzBCQVFzRkFBT0NBUUVBV1BrejNkSlcKYitMRnRudjdNbE9WTTc5WTRQcWVpSG5helAxRzlGd25XQkhBUmtqSVNzYXgzYjB6WDgvUkhuVTgzYzN0TFA1RApWd2VuWWI5QjltelhiTGlXSThhYVgwVVhQLy9ENTkzdGkxNXkwT2Q3eUMyaFFzemxxSWJ4WW5rRlZ3WG9UOWZRCmJkUTlPdHBDdDhFWm5LRXlDeGNrK2hsS0V5WVRjSDJQcVo3TmRwME04STJ6bnozS3V0L3VZSExVZGRmb1BGL20KTzBWNmZieUIvTXgvRzF1TGl2L0JWcHgzQWRQKzN5Z0p5S3RlbFhrRCtJZGxZM3kxMTBmem1WcjZOZ3hBYnovaApuOUtwdUs0U0Vsb0l5Y1pVYUtWWEFhWDdUNDJTRll3N21zbUIrVXU3ejVvTE9panNqWDZUamVvZmRGQlovQnlsClN4T0RncWh0YVBuT3hRPT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: test-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: https
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

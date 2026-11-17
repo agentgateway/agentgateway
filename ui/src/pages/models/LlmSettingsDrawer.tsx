@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { GatewayBindingEditor, type GatewayBindingValue } from '@/components/GatewayBindingEditor';
 import { Drawer, StatusBanner } from '@/components/Primitives';
-import { ensureLlm } from '@/config';
+import { ensureLlm, llmSettingsFields } from '@/config';
 import { PolicySection } from '@/policies/PolicyLayout';
 import type { SchemaHelp } from '@/schemaHelp';
 import type { GatewayConfig, LlmConfig } from '@/types';
@@ -17,6 +17,8 @@ export type LlmSettingsPatch = Partial<Omit<LlmConfig, 'gateways' | 'port'>> & {
 export function LlmSettingsDrawer(props: {
 	config?: GatewayConfig | null;
 	llm?: LlmConfig | null;
+	databaseBacked?: boolean;
+	readOnlyFields?: ReadonlySet<string>;
 	help: SchemaHelp;
 	saving: boolean;
 	saveError?: string | null;
@@ -27,10 +29,22 @@ export function LlmSettingsDrawer(props: {
 		gateways: props.llm?.gateways ?? null,
 		port: props.llm?.port ?? null
 	});
+	const usesGateway = binding.gateways != null && binding.gateways.length > 0;
 	const patch: LlmSettingsPatch = {
 		gateways: binding.gateways ?? [],
-		port: binding.gateways != null && binding.gateways.length > 0 ? null : binding.port
+		port: usesGateway ? null : binding.port
 	};
+	// The llm.settings row is replaced wholesale: carry tls through (it can't sit beside gateways)
+	// and leave out file-owned fields.
+	const originalResourceValue = settingsResource(props.llm ?? {}, props.readOnlyFields);
+	const resourceValue = settingsResource(
+		{ ...patch, tls: usesGateway ? null : props.llm?.tls },
+		props.readOnlyFields
+	);
+	const bindingReadOnly = Boolean(
+		props.readOnlyFields?.has('gateways') || props.readOnlyFields?.has('port')
+	);
+	const savedPatch = props.databaseBacked ? resourceValue : patch;
 
 	return (
 		<Drawer title="Settings" onClose={props.onClose}>
@@ -38,7 +52,7 @@ export function LlmSettingsDrawer(props: {
 				className="policy-editor-stack"
 				onSubmit={event => {
 					event.preventDefault();
-					props.onSave(patch);
+					props.onSave(savedPatch);
 				}}
 			>
 				<PolicySection
@@ -58,6 +72,7 @@ export function LlmSettingsDrawer(props: {
 								'port',
 								'Gateway port for LLM traffic.'
 							)}
+							disabled={bindingReadOnly}
 							onChange={setBinding}
 						/>
 					</div>
@@ -67,7 +82,13 @@ export function LlmSettingsDrawer(props: {
 					diffTitle="LLM settings config diff"
 					saveLabel="Save settings"
 					saving={props.saving}
-					onSave={() => props.onSave(patch)}
+					saveDisabled={props.databaseBacked && bindingReadOnly}
+					onSave={() => props.onSave(savedPatch)}
+					resourceDiff={
+						props.databaseBacked
+							? { original: originalResourceValue, modified: resourceValue }
+							: undefined
+					}
 					applyDiff={next => {
 						Object.assign(ensureLlm(next), patch);
 					}}
@@ -79,5 +100,18 @@ export function LlmSettingsDrawer(props: {
 				</StatusBanner>
 			) : null}
 		</Drawer>
+	);
+}
+
+function settingsResource(
+	settings: Pick<LlmSettingsPatch, 'gateways' | 'port' | 'tls'>,
+	readOnlyFields?: ReadonlySet<string>
+): LlmSettingsPatch {
+	return Object.fromEntries(
+		llmSettingsFields.flatMap(field => {
+			const value = settings[field];
+			const empty = value == null || (Array.isArray(value) && value.length === 0);
+			return empty || readOnlyFields?.has(field) ? [] : [[field, value]];
+		})
 	);
 }

@@ -112,12 +112,10 @@ fn test_extract_beta_headers_variants() {
 		.map(|v| v.as_str().unwrap().to_string())
 		.collect::<Vec<_>>();
 	beta_features.sort();
+	// Converse rejects tool search, so it is dropped even though Bedrock otherwise accepts it.
 	assert_eq!(
 		beta_features,
-		vec![
-			"interleaved-thinking-2025-05-14".to_string(),
-			"tool-search-tool-2025-10-19".to_string(),
-		]
+		vec!["interleaved-thinking-2025-05-14".to_string()]
 	);
 
 	let mut headers = HeaderMap::new();
@@ -171,6 +169,7 @@ fn test_metadata_from_header() {
 		tool_choice: None,
 		thinking: None,
 		output_config: None,
+		cache_control: None,
 	};
 
 	let (out, _) =
@@ -223,6 +222,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 			effort: Some(messages::typed::ThinkingEffort::High),
 			format: None,
 		}),
+		cache_control: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -272,11 +272,12 @@ fn test_explicit_empty_output_config_is_preserved() {
 		top_p: Some(0.8),
 		tools: None,
 		tool_choice: None,
-		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
+		thinking: Some(messages::typed::ThinkingInput::Adaptive { display: None }),
 		output_config: Some(messages::typed::OutputConfig {
 			effort: None,
 			format: None,
 		}),
+		cache_control: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -306,50 +307,66 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		endpoint_preference: Default::default(),
 	};
 
-	let req = messages::typed::Request {
-		model: "anthropic.claude-3-sonnet".to_string(),
-		messages: vec![messages::typed::Message {
-			role: messages::typed::Role::User,
-			content: vec![messages::typed::ContentBlock::Text(
-				messages::typed::ContentTextBlock {
-					text: "Hello".to_string(),
-					citations: None,
-					cache_control: None,
-				},
-			)],
-		}],
-		max_tokens: 100,
-		metadata: None,
-		system: None,
-		stop_sequences: vec![],
-		stream: false,
-		temperature: None,
-		top_k: None,
-		top_p: None,
-		tools: None,
-		tool_choice: None,
-		thinking: Some(messages::typed::ThinkingInput::Enabled {
-			budget_tokens: 1024,
-		}),
-		output_config: Some(messages::typed::OutputConfig {
-			effort: Some(messages::typed::ThinkingEffort::High),
-			format: None,
-		}),
-	};
+	let catalog = crate::model_catalog::TestCatalog::new([(
+		"anthropic.claude-3-sonnet",
+		&[crate::model_catalog::tags::ADAPTIVE_THINKING][..],
+	)]);
+	for adaptive in [false, true] {
+		let req = messages::typed::Request {
+			model: "anthropic.claude-3-sonnet".to_string(),
+			messages: vec![messages::typed::Message {
+				role: messages::typed::Role::User,
+				content: vec![messages::typed::ContentBlock::Text(
+					messages::typed::ContentTextBlock {
+						text: "Hello".to_string(),
+						citations: None,
+						cache_control: None,
+					},
+				)],
+			}],
+			max_tokens: 100,
+			metadata: None,
+			system: None,
+			stop_sequences: vec![],
+			stream: false,
+			temperature: None,
+			top_k: None,
+			top_p: None,
+			tools: None,
+			tool_choice: None,
+			thinking: Some(messages::typed::ThinkingInput::Enabled {
+				budget_tokens: 1024,
+				display: Some(messages::typed::ThinkingDisplay::Omitted),
+			}),
+			output_config: Some(messages::typed::OutputConfig {
+				effort: Some(messages::typed::ThinkingEffort::High),
+				format: None,
+			}),
+			cache_control: None,
+		};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
-	assert_eq!(
-		out.additional_model_request_fields,
-		Some(json!({
-			"thinking": {
-				"type": "enabled",
-				"budget_tokens": 1024
-			},
-			"output_config": {
-				"effort": "high"
-			}
-		}))
-	);
+		let (out, _) = super::from_messages::translate_internal(
+			req,
+			&provider,
+			None,
+			if adaptive { Some(&catalog) } else { None },
+		)
+		.unwrap();
+		let thinking = if adaptive {
+			json!({"type": "adaptive", "display": "omitted"})
+		} else {
+			json!({"type": "enabled", "budget_tokens": 1024, "display": "omitted"})
+		};
+		assert_eq!(
+			out.additional_model_request_fields,
+			Some(json!({
+				"thinking": thinking,
+				"output_config": {
+					"effort": "high"
+				}
+			}))
+		);
+	}
 }
 
 #[test]
@@ -401,8 +418,9 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 			name: "lookup".to_string(),
 			disable_parallel_tool_use: None,
 		}),
-		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
+		thinking: Some(messages::typed::ThinkingInput::Adaptive { display: None }),
 		output_config: None,
+		cache_control: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -522,8 +540,10 @@ fn enabled_thinking_request_with_tool_choice(
 		tool_choice,
 		thinking: Some(messages::typed::ThinkingInput::Enabled {
 			budget_tokens: 1024,
+			display: None,
 		}),
 		output_config: None,
+		cache_control: None,
 	}
 }
 
@@ -563,6 +583,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 		tool_choice: None,
 		thinking: None,
 		output_config: None,
+		cache_control: None,
 	};
 
 	let err = super::from_messages::translate_internal(req, &provider, None, None).unwrap_err();
@@ -1475,6 +1496,53 @@ fn test_embeddings_response_translation_nova() {
 }
 
 #[test]
+fn test_messages_cache_creation_has_both_ttl_counts() {
+	for (details, expected) in [
+		(json!([]), serde_json::Value::Null),
+		(
+			json!([{"ttl": "5m", "inputTokens": 12}]),
+			json!({"ephemeral_5m_input_tokens": 12, "ephemeral_1h_input_tokens": 0}),
+		),
+		(
+			json!([{"ttl": "1h", "inputTokens": 7}]),
+			json!({"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 7}),
+		),
+		(
+			json!([{"ttl": "5m", "inputTokens": 12}, {"ttl": "1h", "inputTokens": 7}]),
+			json!({"ephemeral_5m_input_tokens": 12, "ephemeral_1h_input_tokens": 7}),
+		),
+		(
+			json!([{"ttl": "5m", "inputTokens": 0}]),
+			json!({"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0}),
+		),
+	] {
+		let usage = serde_json::from_value(json!({
+			"inputTokens": 3, "outputTokens": 1, "totalTokens": 4,
+			"cacheDetails": details,
+		}))
+		.unwrap();
+		assert_eq!(
+			serde_json::to_value(helpers::cache_creation(&usage)).unwrap(),
+			expected
+		);
+	}
+}
+
+#[test]
+fn test_messages_error_translation_has_error_discriminator() {
+	let translated =
+		from_messages::translate_error(&Bytes::from_static(br#"{"message":"Model not found"}"#))
+			.unwrap();
+	assert_eq!(
+		serde_json::from_slice::<serde_json::Value>(&translated).unwrap(),
+		json!({
+			"type": "error",
+			"error": {"type": "invalid_request_error", "message": "Model not found"},
+		})
+	);
+}
+
+#[test]
 fn test_embeddings_error_translation() {
 	let error_body =
 		bytes::Bytes::from(serde_json::to_vec(&json!({"message": "Model not found"})).unwrap());
@@ -1504,78 +1572,48 @@ fn test_completions_error_translation_wraps_non_json_body() {
 	);
 }
 
-fn make_message(role: types::bedrock::Role, text: &str) -> types::bedrock::Message {
-	types::bedrock::Message {
-		role,
-		content: vec![types::bedrock::ContentBlock::Text(text.to_string())],
+#[test]
+fn test_prompt_caching_message_offset() {
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	let roles = ["user", "assistant", "user", "assistant", "user"];
+	// (message count, offset, expected cached message index)
+	for (count, offset, expected) in [
+		(3, 0, Some(1)),
+		(5, 2, Some(1)),
+		(3, 100, Some(0)),
+		(1, 0, None),
+	] {
+		let messages: Vec<_> = roles[..count]
+			.iter()
+			.map(|role| json!({"role": role, "content": "hi"}))
+			.collect();
+		let req: types::messages::Request = serde_json::from_value(json!({
+			"model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+			"max_tokens": 100,
+			"messages": messages
+		}))
+		.unwrap();
+		let caching = crate::PromptCachingConfig {
+			cache_message_offset: offset,
+			..Default::default()
+		};
+		let out = from_messages::translate(&req, &provider, None, Some(&caching), None).unwrap();
+		let out: serde_json::Value = serde_json::from_slice(&out.body).unwrap();
+		let cached = out["messages"].as_array().unwrap().iter().position(|m| {
+			m["content"]
+				.as_array()
+				.unwrap()
+				.iter()
+				.any(|b| b.get("cachePoint").is_some())
+		});
+		assert_eq!(cached, expected, "count={count} offset={offset}");
 	}
-}
-
-fn has_cache_point(msg: &types::bedrock::Message) -> bool {
-	msg
-		.content
-		.iter()
-		.any(|b| matches!(b, types::bedrock::ContentBlock::CachePoint(_)))
-}
-
-#[test]
-fn test_insert_cache_point_default_offset() {
-	let mut msgs = vec![
-		make_message(types::bedrock::Role::User, "Hello"),
-		make_message(types::bedrock::Role::Assistant, "Hi"),
-		make_message(types::bedrock::Role::User, "How are you?"),
-	];
-	helpers::insert_message_cache_point(&mut msgs, 0);
-	assert!(has_cache_point(&msgs[1]));
-	assert!(!has_cache_point(&msgs[0]));
-	assert!(!has_cache_point(&msgs[2]));
-}
-
-#[test]
-fn test_insert_cache_point_offset_shifts_back() {
-	let mut msgs = vec![
-		make_message(types::bedrock::Role::User, "a"),
-		make_message(types::bedrock::Role::Assistant, "b"),
-		make_message(types::bedrock::Role::User, "c"),
-		make_message(types::bedrock::Role::Assistant, "d"),
-		make_message(types::bedrock::Role::User, "e"),
-	];
-	helpers::insert_message_cache_point(&mut msgs, 2);
-	// default position is index 3 (len-2), offset 2 → index 1
-	assert!(has_cache_point(&msgs[1]));
-	for (i, msg) in msgs.iter().enumerate() {
-		if i != 1 {
-			assert!(!has_cache_point(msg));
-		}
-	}
-}
-
-#[test]
-fn test_insert_cache_point_offset_clamps_to_zero() {
-	let mut msgs = vec![
-		make_message(types::bedrock::Role::User, "a"),
-		make_message(types::bedrock::Role::Assistant, "b"),
-		make_message(types::bedrock::Role::User, "c"),
-	];
-	// offset 100 should clamp to index 0
-	helpers::insert_message_cache_point(&mut msgs, 100);
-	assert!(has_cache_point(&msgs[0]));
-	assert!(!has_cache_point(&msgs[1]));
-	assert!(!has_cache_point(&msgs[2]));
-}
-
-#[test]
-fn test_insert_cache_point_single_message_noop() {
-	let mut msgs = vec![make_message(types::bedrock::Role::User, "only")];
-	helpers::insert_message_cache_point(&mut msgs, 0);
-	assert!(!has_cache_point(&msgs[0]));
-}
-
-#[test]
-fn test_insert_cache_point_empty_messages_noop() {
-	let mut msgs: Vec<types::bedrock::Message> = vec![];
-	helpers::insert_message_cache_point(&mut msgs, 0);
-	assert!(msgs.is_empty());
 }
 
 #[test]
@@ -1652,6 +1690,7 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		top_k: None,
 		thinking: None,
 		output_config: None,
+		cache_control: None,
 	};
 
 	let (out, tool_map) =
@@ -1711,6 +1750,7 @@ fn test_messages_long_tool_name_round_trip_response() {
 		top_k: None,
 		thinking: None,
 		output_config: None,
+		cache_control: None,
 	};
 
 	let (bedrock_req, tool_map) =

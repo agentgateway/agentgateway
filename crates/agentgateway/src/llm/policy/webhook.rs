@@ -88,8 +88,10 @@ pub struct ResponseChoices {
 	pub choices: Vec<ResponseChoice>,
 }
 
+// deny_unknown_fields keeps a malformed Mask or Reject action from falling through the
+// untagged action enums and being treated as a pass.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct PassAction {
 	/// reason is a human readable string that explains the reason for the action.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -535,6 +537,24 @@ mod tests {
 			scheme.target.policies.as_slice(),
 			[BackendTrafficPolicy::BackendTLS(_)]
 		));
+	}
+
+	#[test]
+	fn malformed_mask_does_not_parse_as_pass() {
+		let mask = serde_json::json!({
+			"body": {"messages": [{"role": "user", "content": "<masked>", "name": "alice"}]},
+			"reason": "masked"
+		});
+		assert!(serde_json::from_value::<RequestAction>(mask).is_err());
+		let mask = serde_json::json!({
+			"body": {"choices": [{"message": {"role": "assistant", "content": "<masked>", "name": "bot"}}]}
+		});
+		assert!(serde_json::from_value::<ResponseAction>(mask).is_err());
+
+		let pass = serde_json::from_value::<RequestAction>(serde_json::json!({"reason": "ok"}));
+		assert!(matches!(pass, Ok(RequestAction::Pass(_))));
+		let pass = serde_json::from_value::<ResponseAction>(serde_json::json!({}));
+		assert!(matches!(pass, Ok(ResponseAction::Pass(_))));
 	}
 
 	/// The policies are honored on the wire: an https webhook is reached with

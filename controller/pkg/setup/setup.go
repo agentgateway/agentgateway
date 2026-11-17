@@ -365,6 +365,7 @@ func (s *setup) buildSyncer(
 		s.AgentgatewayClassName,
 		s.ControllerName,
 		s.AdditionalGatewayClasses,
+		agwCollections.ClusterTrustBundles != nil,
 	)
 
 	slog.Info("initializing controller")

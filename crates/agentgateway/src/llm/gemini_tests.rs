@@ -37,6 +37,7 @@ fn native_chat_request(model: &str, streaming: bool) -> LLMRequest {
 		input_format: InputFormat::Gemini,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: model.into(),
+		original_model: None,
 		provider: Default::default(),
 		streaming,
 		params: Default::default(),

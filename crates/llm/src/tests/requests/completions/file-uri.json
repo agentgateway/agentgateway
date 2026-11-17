@@ -1,0 +1,28 @@
+{
+  "model": "gemini-2.5-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "Compare these documents." },
+        {
+          "type": "file",
+          "file": { "file_id": "gs://my-bucket/notes.txt" }
+        },
+        {
+          "type": "file",
+          "file": {
+            "file_id": "https://storage.googleapis.com/my-bucket/report.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=abc"
+          }
+        },
+        {
+          "type": "file",
+          "file": {
+            "filename": "summary.pdf",
+            "file_data": "https://example.com/download/123"
+          }
+        }
+      ]
+    }
+  ]
+}

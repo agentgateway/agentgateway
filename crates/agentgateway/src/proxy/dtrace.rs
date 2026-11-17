@@ -112,24 +112,6 @@ pub fn timed_start() -> Option<Instant> {
 	is_active().then(Instant::now)
 }
 
-pub fn policy_response_details(pr: &crate::http::PolicyResponse) -> String {
-	match pr.direct_response.as_ref() {
-		Some(resp) => format!("returned direct response with status {}", resp.status()),
-		None => {
-			let len = pr
-				.response_headers
-				.as_ref()
-				.map(|h| h.len())
-				.unwrap_or_default();
-			if len > 0 {
-				format!("queued {} response headers", len)
-			} else {
-				"".to_string()
-			}
-		},
-	}
-}
-
 macro_rules! pol_event {
 	($kind:expr, $severity:expr, details = $details:expr $(,)?) => {{
 		let __details: $crate::proxy::dtrace::PolicyEventDetails = ($details).into();

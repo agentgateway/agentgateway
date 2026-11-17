@@ -1,8 +1,10 @@
 package catalog
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -95,6 +97,22 @@ func (p *Provider) overlayWith(overlay Provider, addExactModels bool) {
 }
 
 func (m *Model) overlayWith(overlay Model) {
+	m.Name = cmp.Or(overlay.Name, m.Name)
+	m.Status = cmp.Or(overlay.Status, m.Status)
+	m.Released = cmp.Or(overlay.Released, m.Released)
+	if overlay.Endpoints != nil {
+		m.Endpoints = overlay.Endpoints
+	}
+	overlayNonZero(&m.Limits, overlay.Limits)
+	overlayNonZero(&m.Capabilities, overlay.Capabilities)
+	overlayNonZero(&m.Modalities, overlay.Modalities)
+	budget := m.Reasoning.BudgetTokens
+	overlayNonZero(&m.Reasoning, overlay.Reasoning)
+	if budget != nil && overlay.Reasoning.BudgetTokens != nil {
+		merged := *budget
+		overlayNonZero(&merged, *overlay.Reasoning.BudgetTokens)
+		m.Reasoning.BudgetTokens = &merged
+	}
 	m.Rates.overlayWith(overlay.Rates)
 	if len(overlay.Tiers) > 0 {
 		// Replace each supplied service tier while preserving other service tiers.
@@ -158,24 +176,71 @@ type Provider struct {
 }
 
 type Model struct {
-	Rates Rates    `json:"rates,omitzero"`
-	Tiers []Tier   `json:"tiers,omitempty"`
-	Tags  []string `json:"tags,omitempty"`
+	// Name is the human-readable display name.
+	Name string `json:"name,omitempty"`
+	// Status is the lifecycle stage (alpha, beta, deprecated); absent means generally available.
+	Status string `json:"status,omitempty"`
+	// Released is the release date, as YYYY-MM-DD or YYYY-MM.
+	Released string `json:"released,omitempty"`
+	// Endpoints are the client endpoints the model serves; absent means a chat model.
+	Endpoints []string `json:"endpoints,omitzero"`
+	Rates     Rates    `json:"rates,omitzero"`
+	Tiers     []Tier   `json:"tiers,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+	// Limits are token limits. Context is the total window shared by input and output; Input,
+	// when set, is a tighter cap on the input alone.
+	Limits       Limits       `json:"limits,omitzero"`
+	Modalities   Modalities   `json:"modalities,omitzero"`
+	Capabilities Capabilities `json:"capabilities,omitzero"`
+	Reasoning    Reasoning    `json:"reasoning,omitzero"`
 }
 
-func (m Model) IsZero() bool {
-	return m.Rates.IsZero() && len(m.Tiers) == 0 && len(m.Tags) == 0
+type Limits struct {
+	Context uint64 `json:"context,omitempty"`
+	Input   uint64 `json:"input,omitempty"`
+	Output  uint64 `json:"output,omitempty"`
+}
+
+type Modalities struct {
+	Input  []string `json:"input,omitempty"`
+	Output []string `json:"output,omitempty"`
+}
+
+// Capabilities are tri-state: nil means unknown.
+type Capabilities struct {
+	Reasoning        *bool `json:"reasoning,omitempty"`
+	StructuredOutput *bool `json:"structuredOutput,omitempty"`
+	ToolCall         *bool `json:"toolCall,omitempty"`
+	Temperature      *bool `json:"temperature,omitempty"`
+}
+
+// Reasoning describes how reasoning can be controlled. A model may support several mechanisms.
+type Reasoning struct {
+	// Toggle reports that reasoning can be turned on and off.
+	Toggle *bool `json:"toggle,omitempty"`
+	// Effort lists the accepted effort levels.
+	Effort []string `json:"effort,omitempty"`
+	// BudgetTokens is the accepted reasoning token budget range.
+	BudgetTokens *BudgetTokens `json:"budgetTokens,omitempty"`
+}
+
+type BudgetTokens struct {
+	Min *uint64 `json:"min,omitempty"`
+	Max *uint64 `json:"max,omitempty"`
 }
 
 type Rates struct {
-	Input       Money `json:"input,omitempty"`
-	Output      Money `json:"output,omitempty"`
-	CacheRead   Money `json:"cacheRead,omitempty"`
-	CacheWrite  Money `json:"cacheWrite,omitempty"`
-	Reasoning   Money `json:"reasoning,omitempty"`
-	InputAudio  Money `json:"inputAudio,omitempty"`
-	OutputAudio Money `json:"outputAudio,omitempty"`
-	PerPage     Money `json:"perPage,omitempty"`
+	Input      Money `json:"input,omitempty"`
+	Output     Money `json:"output,omitempty"`
+	CacheRead  Money `json:"cacheRead,omitempty"`
+	CacheWrite Money `json:"cacheWrite,omitempty"`
+	// CacheWriteDetails holds cache write rates for non-default TTLs, keyed by TTL (e.g. "1h").
+	CacheWriteDetails map[string]Money `json:"cacheWriteDetails,omitempty"`
+	Reasoning         Money            `json:"reasoning,omitempty"`
+	InputAudio        Money            `json:"inputAudio,omitempty"`
+	OutputAudio       Money            `json:"outputAudio,omitempty"`
+	PerPage           Money            `json:"perPage,omitempty"`
+	PerAudioMinute    Money            `json:"perAudioMinute,omitempty"`
 }
 
 type Tier struct {
@@ -187,15 +252,27 @@ type Tier struct {
 type Money string
 
 func (r Rates) IsZero() bool {
-	return r == Rates{}
+	details := r.CacheWriteDetails
+	r.CacheWriteDetails = nil
+	return len(details) == 0 && reflect.ValueOf(r).IsZero()
 }
 
 func (r *Rates) overlayWith(overlay Rates) {
-	dst := reflect.ValueOf(r).Elem()
+	details := maps.Clone(r.CacheWriteDetails)
+	overlayNonZero(r, overlay)
+	if details != nil {
+		maps.Copy(details, overlay.CacheWriteDetails)
+		r.CacheWriteDetails = details
+	}
+}
+
+// overlayNonZero copies each non-zero field of overlay into dst.
+func overlayNonZero[T any](dst *T, overlay T) {
+	d := reflect.ValueOf(dst).Elem()
 	src := reflect.ValueOf(overlay)
 	for i := range src.NumField() {
 		if !src.Field(i).IsZero() {
-			dst.Field(i).Set(src.Field(i))
+			d.Field(i).Set(src.Field(i))
 		}
 	}
 }
@@ -212,8 +289,8 @@ func (m Money) Decimal() (decimal.Decimal, error) {
 }
 
 // maxFractionalDigits bounds rate precision. Money is exact decimal, never float; token rates are
-// USD per 1,000,000 tokens and perPage is USD per page, so neither needs more than micro-dollar
-// precision.
+// USD per 1,000,000 tokens, perPage is USD per page and perAudioMinute is USD per minute, so none
+// needs more than micro-dollar precision.
 const maxFractionalDigits = 6
 
 func (m Money) validate() error {
@@ -245,7 +322,7 @@ func (m *Model) validate() error {
 	previous := make(map[string]uint64)
 	for i, t := range m.Tiers {
 		switch t.ServiceTier {
-		case "", "standard", "flex", "priority", "reserved":
+		case "", "standard", "flex", "priority", "reserved", "ultrafast", "fast":
 		default:
 			return fmt.Errorf("tier %d has unsupported serviceTier %q", i, t.ServiceTier)
 		}
@@ -261,6 +338,11 @@ func (m *Model) validate() error {
 }
 
 func (r *Rates) validate() error {
+	for _, ttl := range slices.Sorted(maps.Keys(r.CacheWriteDetails)) {
+		if err := r.CacheWriteDetails[ttl].validate(); err != nil {
+			return fmt.Errorf("rate cacheWriteDetails.%s: %w", ttl, err)
+		}
+	}
 	v := reflect.ValueOf(*r)
 	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {

@@ -92,6 +92,7 @@ fn test_client() -> client::Client {
 		&client::Config {
 			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			max_ttl: None,
 		},
 		None,
 		BackendConfig::default(),
@@ -131,6 +132,7 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			client_secret: SecretString::new("client-secret".into()),
 			redirect_uri: "http://localhost:3000/oauth/callback".into(),
 			scopes: vec![],
+			session_ttl: None,
 			login: None,
 			logout: None,
 			credentials: Default::default(),
@@ -860,6 +862,21 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_model_accepts_display_name() {
+	normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: "*"
+    displayName: Gemini (us-east5)
+    provider: ollama
+"#,
+	)
+	.await
+	.expect("model displayName should be accepted");
+}
+
+#[tokio::test]
 async fn test_llm_model_rejects_duplicate_id() {
 	let err = normalize_test_config(
 		r#"
@@ -1365,6 +1382,62 @@ ui:
 }
 
 #[tokio::test]
+async fn test_ui_oidc_under_base_path() {
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+gateways:
+  default:
+    port: 3000
+ui:
+  basePath: /team/agw
+  policies:
+    oidc:
+      issuer: https://issuer.example.com
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      jwks: '{TEST_OIDC_JWKS}'
+      clientId: client-id
+      clientSecret: client-secret
+      redirectURI: https://tools.example.com/team/agw/oauth/callback
+"#
+	))
+	.await
+	.expect("UI under a base path should normalize");
+
+	let ui_route = normalized
+		.listener_routes
+		.iter()
+		.flat_map(|(_, routes)| routes)
+		.find(|route| route.key.as_str() == "gateway/default/ui")
+		.expect("UI route");
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == "/oauth/callback")
+	));
+	assert!(normalized.backends.iter().any(|backend| matches!(
+		&backend.backend,
+		Backend::Internal(_, crate::types::local::InternalBackend::Ui { base_path }) if base_path == "/team/agw"
+	)));
+	let oidc = ui_route
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			TrafficPolicy::Oidc(oidc) => Some(oidc.clone().into_policy_inners()),
+			_ => None,
+		})
+		.expect("UI OIDC policy");
+	let oidc = &oidc[0].pol;
+	assert_eq!(oidc.redirect_uri.callback_path.path(), "/oauth/callback");
+	assert_eq!(
+		oidc.login.as_ref().and_then(|v| v.redirect.as_deref()),
+		Some("/team/agw/ui/login")
+	);
+	assert_eq!(
+		oidc.logout.as_ref().and_then(|v| v.redirect.as_deref()),
+		Some("/team/agw/ui/login")
+	);
+}
+
+#[tokio::test]
 async fn test_default_gateway_is_implicit_for_attached_surfaces_and_routes() {
 	let normalized = normalize_test_yaml(&format!(
 		r#"
@@ -1514,6 +1587,51 @@ llm:
 			.iter()
 			.any(|policy| matches!(policy, TrafficPolicy::Authorization(_)))
 	);
+}
+
+#[tokio::test]
+async fn test_llm_policies_retry() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  public:
+    port: 3000
+llm:
+  gateways: [public]
+  policies:
+    retry:
+      attempts: 2
+      codes: [429]
+      backoff: 5s
+  models:
+  - name: gpt-4
+    provider: openAI
+"#,
+	)
+	.await
+	.expect("llm.policies should accept retry");
+
+	let llm_route = normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "gateway/public")
+		.and_then(|(_, routes)| {
+			routes
+				.iter()
+				.find(|route| route.key.as_str() == "gateway/public/llm:request")
+		})
+		.expect("gateway-attached LLM route");
+	let retry = llm_route
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			TrafficPolicy::Retry(p) => Some(p),
+			_ => None,
+		})
+		.expect("retry policy on LLM route");
+	assert_eq!(retry.attempts, 2);
+	assert_eq!(retry.backoff, Some(std::time::Duration::from_secs(5)));
+	assert_eq!(&*retry.codes, &[::http::StatusCode::TOO_MANY_REQUESTS]);
 }
 
 #[tokio::test]
@@ -2512,6 +2630,77 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 	);
 }
 
+#[rstest::rstest]
+#[case::host_only(serde_json::json!({ "host": "https://example.com" }), Ok("/from-spec"))]
+#[case::host_root(serde_json::json!({ "host": "https://example.com/" }), Ok("/from-spec"))]
+#[case::host_path(serde_json::json!({ "host": "https://example.com/api" }), Ok("/api"))]
+#[case::host_parts_root(serde_json::json!({ "host": "example.com", "port": 80, "path": "/" }), Ok("/from-spec"))]
+#[case::host_parts_path(serde_json::json!({ "host": "example.com", "port": 80, "path": "/api" }), Ok("/api"))]
+#[case::reference(serde_json::json!({ "backend": "example" }), Ok("/from-spec"))]
+#[case::reference_path(serde_json::json!({ "backend": "example", "path": "/api" }), Ok("/api"))]
+#[case::relative(serde_json::json!({ "backend": "example", "path": "api" }), Err("must start with"))]
+#[case::authority(serde_json::json!({ "backend": "example", "path": "//example.com/api" }), Err("must start with"))]
+#[case::query(serde_json::json!({ "backend": "example", "path": "/api?v=1" }), Err("must start with"))]
+#[case::backslash(serde_json::json!({ "backend": "example", "path": "/api\\v1" }), Err("must start with"))]
+#[case::space(serde_json::json!({ "backend": "example", "path": "/api v1" }), Err("must start with"))]
+#[tokio::test]
+async fn test_openapi_target_prefix(
+	#[case] mut target: serde_json::Value,
+	#[case] expected: Result<&str, &str>,
+	#[values(false, true)] multiple_servers: bool,
+) {
+	let servers = if multiple_servers {
+		serde_json::json!([{ "url": "https://example.com/v1" }, { "url": "https://example.com/v2" }])
+	} else {
+		serde_json::json!([{ "url": "https://example.com/from-spec" }])
+	};
+	target["schema"] = serde_json::json!(
+		serde_json::json!({
+			"openapi": "3.0.0",
+			"info": { "title": "Test", "version": "1.0.0" },
+			"servers": servers,
+			"paths": {}
+		})
+		.to_string()
+	);
+	let local: super::LocalBackend = serde_json::from_value(serde_json::json!({
+		"mcp": { "targets": [{ "name": "example", "openapi": target }] }
+	}))
+	.unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
+	let result = local
+		.as_backends(
+			ResourceName::new("test-mcp".into(), "".into()),
+			&resources,
+			crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+		)
+		.await;
+	let expected = match expected {
+		Ok("/from-spec") if multiple_servers => Err("multiple servers"),
+		e => e,
+	};
+	let backends = match (result, expected) {
+		(Err(err), Err(msg)) => {
+			let err = err.to_string();
+			assert!(err.contains("openapi MCP target 'example'"), "{err}");
+			assert!(err.contains(msg), "{err}");
+			return;
+		},
+		(result, _) => result.unwrap(),
+	};
+	let mcp = backends
+		.iter()
+		.find_map(|b| match &b.backend {
+			Backend::MCP(_, mcp) => Some(mcp),
+			_ => None,
+		})
+		.unwrap();
+	let crate::types::agent::McpTargetSpec::OpenAPI(target) = &mcp.targets[0].spec else {
+		panic!("expected OpenAPI target");
+	};
+	assert_eq!(Ok(target.prefix.as_str()), expected);
+}
+
 #[tokio::test]
 async fn test_top_level_backend_targeted_transformations_are_backend_policies() {
 	let normalized = normalize_test_yaml(
@@ -2759,6 +2948,142 @@ binds:
 		.await
 		.expect("a change to the key file should notify the resource manager")
 		.expect("resource change channel should stay open");
+}
+
+async fn assert_referenced_file_is_watched(
+	contents: &str,
+	rewritten: &str,
+	yaml: impl FnOnce(&Path) -> String,
+) {
+	let dir = tempfile::tempdir().unwrap();
+	let file = dir.path().join("referenced");
+	fs::write(&file, contents).unwrap();
+
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let mut changes = manager.subscribe_changes();
+
+	NormalizedLocalConfig::from(
+		&test_config(),
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml(&file),
+	)
+	.await
+	.expect("config with a referenced file should load");
+
+	let _ = changes.borrow_and_update();
+
+	fs::write(&file, rewritten).unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+		.await
+		.expect("a change to the referenced file should notify the resource manager")
+		.expect("resource change channel should stay open");
+}
+
+#[tokio::test]
+async fn basic_auth_htpasswd_file_is_a_tracked_resource() {
+	assert_referenced_file_is_watched(
+		"alice:$apr1$saltsalt$X8aAqtalfR6pZ6Jbhuyx1/\n",
+		"bob:$apr1$saltsalt$X8aAqtalfR6pZ6Jbhuyx1/\n",
+		|file| {
+			format!(
+				r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        basicAuth:
+          htpasswd:
+            file: {}
+      backends:
+      - host: 127.0.0.1:8080
+"#,
+				file.display()
+			)
+		},
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn llm_api_key_file_is_a_tracked_resource() {
+	assert_referenced_file_is_watched("first-key\n", "second-key\n", |file| {
+		format!(
+			r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+    params:
+      apiKey:
+        file: {}
+"#,
+			file.display()
+		)
+	})
+	.await;
+}
+
+#[tokio::test]
+async fn gcp_credential_file_is_a_tracked_resource() {
+	assert_referenced_file_is_watched(
+		r#"{"type":"gdch_service_account"}"#,
+		r#"{"type":"gdch_service_account","project":"rotated"}"#,
+		|file| {
+			format!(
+				r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            gcp:
+              type: idToken
+              audience: https://aud.example
+              credential:
+                file: {}
+"#,
+				file.display()
+			)
+		},
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn oauth_client_secret_file_is_a_tracked_resource() {
+	assert_referenced_file_is_watched("first-secret\n", "second-secret\n", |file| {
+		format!(
+			r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauthTokenExchange:
+              host: 127.0.0.1:9000
+              clientAuth:
+                clientId: gateway-client
+                clientSecret:
+                  file: {}
+"#,
+			file.display()
+		)
+	})
+	.await;
 }
 
 /// A backend TLS file resolved by a serde hook during the parse is watched like a

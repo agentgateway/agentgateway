@@ -316,6 +316,7 @@ pub fn simple_bind() -> BindSnapshot {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
+			..Default::default()
 		}])),
 	}
 }
@@ -339,6 +340,7 @@ pub fn waypoint_bind(protocol: ListenerProtocol) -> BindSnapshot {
 			},
 			hostname: Default::default(),
 			protocol,
+			..Default::default()
 		}])),
 	}
 }
@@ -358,6 +360,7 @@ pub fn simple_tcp_bind() -> BindSnapshot {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TCP,
+			..Default::default()
 		}])),
 	}
 }
@@ -1068,6 +1071,14 @@ impl TestBind {
 		}
 	}
 	pub async fn attach_frontend_policy(&mut self, p: serde_json::Value) {
+		self.attach_frontend_policy_with_port(p, None).await;
+	}
+
+	pub async fn attach_frontend_policy_with_port(
+		&mut self,
+		p: serde_json::Value,
+		port: Option<u16>,
+	) {
 		let cfg = serde_json::json!({
 			"frontendPolicies": p,
 		});
@@ -1086,7 +1097,10 @@ impl TestBind {
 			.budget_policy
 			.apply_registration(normalized.budget_registration.clone())
 			.unwrap();
-		for v in normalized.policies.into_iter() {
+		for mut v in normalized.policies.into_iter() {
+			if let PolicyTarget::Gateway(target) = &mut v.target {
+				target.port = port;
+			}
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
 				key: strng::format!("pol/{}", self.policies),
@@ -1485,15 +1499,17 @@ pub fn setup_proxy_test_with_spiffe(
 }
 
 pub fn setup_proxy_test_with_config_and_spiffe(
-	config: crate::Config,
+	mut config: crate::Config,
 	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
 ) -> TestBind {
+	// Mock backends listen on loopback.
+	config.backend.allow_dynamic_loopback = true;
 	agent_core::telemetry::testing::setup_test_logging();
 	crate::crypto::init();
 	let encoder = config.session_encoder.clone();
 	let histogram_mode = config.histograms;
 	let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
-	let client = client::Client::new(&config.dns, None, Default::default(), None);
+	let client = client::Client::new(&config.dns, None, config.backend.clone(), None);
 	let (drain_tx, drain_rx) = drain::new();
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),
@@ -1505,6 +1521,7 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 		)),
 		model_catalog: catalog::ModelCatalog::empty(),
 		admin: None,
+		stats: None,
 		upstream: client.clone(),
 		ca: None,
 		spiffe,

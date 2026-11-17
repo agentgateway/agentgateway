@@ -70,6 +70,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 		input_format: InputFormat::Completions,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "test-model".into(),
+		original_model: None,
 		provider: "test-provider".into(),
 		streaming: true,
 		params: Default::default(),
@@ -1685,6 +1686,7 @@ fn gemini_count_tokens_response_reports_total_tokens() {
 		input_format: InputFormat::GeminiCountTokens,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "gemini-2.5-flash".into(),
+		original_model: None,
 		provider: "gcp.gemini".into(),
 		streaming: false,
 		params: Default::default(),
@@ -1723,6 +1725,7 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 		input_format: InputFormat::CountTokens,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+		original_model: None,
 		provider: "aws.bedrock".into(),
 		streaming: false,
 		params: Default::default(),
@@ -1798,6 +1801,38 @@ async fn vertex_anthropic_messages_prepares_vertex_body() {
 		forwarded_json["anthropic_version"],
 		json!("vertex-2023-10-16")
 	);
+}
+
+#[test]
+fn vertex_anthropic_drops_unsupported_beta_headers() {
+	// Vertex rejects the whole request if any anthropic-beta value is one it does not support.
+	let provider = vertex_provider("claude-haiku-4-5@20251001");
+	for route_type in [RouteType::Messages, RouteType::AnthropicTokenCount] {
+		for (beta, expected) in [
+			(
+				"claude-code-20250219,advisor-tool-2026-03-01",
+				Some("claude-code-20250219"),
+			),
+			("advisor-tool-2026-03-01", None),
+		] {
+			let mut req = crate::http::tests_common::request(
+				"https://example.com/v1/messages",
+				::http::Method::POST,
+				&[("anthropic-beta", beta)],
+			);
+			provider
+				.set_required_fields(&mut req, route_type, None, None)
+				.unwrap();
+			assert_eq!(
+				req
+					.headers()
+					.get("anthropic-beta")
+					.map(|v| v.to_str().unwrap()),
+				expected,
+				"{route_type:?} / {beta}"
+			);
+		}
+	}
 }
 
 #[tokio::test]
@@ -2253,6 +2288,38 @@ async fn llm_transformations_can_set_missing_model() {
 	assert_eq!(llm_request.request_model, "transformed-model");
 }
 
+#[test]
+fn copilot_required_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	let mut authorization = HeaderValue::from_static("Bearer configured-token");
+	authorization.set_sensitive(true);
+	let mut req = ::http::Request::builder()
+		.header(header::AUTHORIZATION, authorization)
+		.header("editor-version", "custom-editor")
+		.header("x-initiator", "incoming")
+		.body(Body::empty())
+		.unwrap();
+
+	provider
+		.set_required_fields(&mut req, RouteType::Completions, None, None)
+		.unwrap();
+
+	let headers = req.headers();
+	assert_eq!(headers[header::CONTENT_TYPE], "application/json");
+	assert_eq!(
+		headers["editor-version"],
+		concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+	);
+	assert_eq!(headers["openai-intent"], "conversation-agent");
+	assert_eq!(headers["x-github-api-version"], "2025-10-01");
+	assert_eq!(headers["x-initiator"], "agent");
+	assert_eq!(headers["x-interaction-type"], "conversation-agent");
+	assert_eq!(headers[header::AUTHORIZATION], "Bearer configured-token");
+	assert!(headers[header::AUTHORIZATION].is_sensitive());
+}
+
 #[tokio::test]
 async fn copilot_anthropic_model_uses_messages_route() {
 	use crate::http::auth::BackendInfo;
@@ -2323,137 +2390,6 @@ async fn copilot_anthropic_model_uses_messages_route() {
 }
 
 #[test]
-fn copilot_embeddings_response_adds_missing_openai_fields() {
-	let provider = AIProvider::Copilot(copilot::Provider {
-		model_override: None,
-	});
-	let mut request = llm_request_with_tokens(None);
-	request.input_format = InputFormat::Embeddings;
-	request.request_model = "text-embedding-3-small".into();
-	let response = Bytes::from_static(
-		br#"{"data":[{"embedding":[0.5,-0.25],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":2,"total_tokens":2}}"#,
-	);
-
-	let (llm_response, body) = provider
-		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
-		.expect("Copilot embeddings response should normalize");
-	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
-
-	assert_eq!(body["object"], json!("list"));
-	assert_eq!(body["model"], json!("text-embedding-3-small"));
-	assert_eq!(body["data"][0]["embedding"], json!([0.5, -0.25]));
-	assert_eq!(llm_response.input_tokens, Some(2));
-	assert_eq!(llm_response.total_tokens, Some(2));
-}
-
-#[test]
-fn copilot_embeddings_response_preserves_missing_usage() {
-	let provider = AIProvider::Copilot(copilot::Provider {
-		model_override: None,
-	});
-	let mut request = llm_request_with_tokens(None);
-	request.input_format = InputFormat::Embeddings;
-	request.request_model = "text-embedding-3-small".into();
-	let response =
-		Bytes::from_static(br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}]}"#);
-
-	let (_, body) = provider
-		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
-		.expect("Copilot embeddings response should normalize");
-	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
-
-	assert!(body.get("usage").is_none());
-}
-
-#[test]
-fn copilot_embeddings_response_preserves_explicit_openai_fields() {
-	let provider = AIProvider::Copilot(copilot::Provider {
-		model_override: None,
-	});
-	let mut request = llm_request_with_tokens(None);
-	request.input_format = InputFormat::Embeddings;
-	request.request_model = "requested-model".into();
-	let response = Bytes::from_static(
-		br#"{"object":"upstream-list","model":"upstream-model","data":[{"embedding":[0.5],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":1,"total_tokens":1}}"#,
-	);
-
-	let (_, body) = provider
-		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
-		.expect("Copilot embeddings response should preserve explicit fields");
-	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
-
-	assert_eq!(body["object"], json!("upstream-list"));
-	assert_eq!(body["model"], json!("upstream-model"));
-}
-
-#[test]
-fn copilot_embeddings_parse_error_logs_normalized_response() {
-	#[derive(Clone)]
-	struct LogWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
-
-	impl std::io::Write for LogWriter {
-		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-			self.0.lock().unwrap().extend_from_slice(buf);
-			Ok(buf.len())
-		}
-
-		fn flush(&mut self) -> std::io::Result<()> {
-			Ok(())
-		}
-	}
-
-	let logs = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-	let writer = LogWriter(logs.clone());
-	let subscriber = tracing_subscriber::fmt()
-		.with_ansi(false)
-		.without_time()
-		.with_writer(move || writer.clone())
-		.finish();
-
-	tracing::subscriber::with_default(subscriber, || {
-		let provider = AIProvider::Copilot(copilot::Provider {
-			model_override: None,
-		});
-		let mut request = llm_request_with_tokens(None);
-		request.input_format = InputFormat::Embeddings;
-		request.request_model = "text-embedding-3-small".into();
-		let response = Bytes::from_static(br#"{"usage":"invalid"}"#);
-
-		assert!(
-			provider
-				.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
-				.is_err()
-		);
-	});
-
-	let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
-	assert!(logs.contains(r#""object":"list""#), "{logs}");
-	assert!(
-		logs.contains(r#""model":"text-embedding-3-small""#),
-		"{logs}"
-	);
-}
-
-#[test]
-fn non_copilot_embeddings_response_still_requires_openai_fields() {
-	let provider = AIProvider::OpenAI(openai::Provider {
-		model_override: None,
-		moderation: None,
-	});
-	let mut request = llm_request_with_tokens(None);
-	request.input_format = InputFormat::Embeddings;
-	let response = Bytes::from_static(
-		br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":1,"total_tokens":1}}"#,
-	);
-
-	assert!(
-		provider
-			.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
-			.is_err()
-	);
-}
-
-#[test]
 fn openai_token_limit_normalization_keeps_explicit_max_completion_tokens() {
 	let mut request: types::completions::Request = serde_json::from_value(json!({
 		"model": "gpt-5.4",
@@ -2505,7 +2441,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 	}))
 	.expect("valid completions request");
 
-	let translated = conversion::messages::from_completions::translate(&request, None)
+	let translated = conversion::messages::from_completions::translate(&request, None, None)
 		.expect("completions->messages translation");
 	let translated: Value =
 		serde_json::from_slice(&translated).expect("translated request should be valid json");
@@ -2542,7 +2478,7 @@ fn test_completions_json_schema_response_format_maps_to_anthropic_output_config(
 	}))
 	.expect("valid completions request");
 
-	let translated = conversion::messages::from_completions::translate(&request, None)
+	let translated = conversion::messages::from_completions::translate(&request, None, None)
 		.expect("completions->messages translation");
 	let translated: Value =
 		serde_json::from_slice(&translated).expect("translated request should be valid json");
@@ -2633,6 +2569,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		input_format: InputFormat::Completions,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
+		original_model: None,
 		provider: Default::default(),
 		streaming: true,
 		params: Default::default(),
@@ -2927,6 +2864,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 				input_format: InputFormat::Completions,
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: "input-model".into(),
+				original_model: None,
 				provider: Default::default(),
 				streaming: true,
 				params: Default::default(),
@@ -2957,6 +2895,63 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		!text.contains("event: \n"),
 		"translated Bedrock completions stream must not emit empty event fields:\n{text}",
 	);
+}
+
+#[tokio::test]
+async fn process_streaming_exposes_request_llm_context_to_response_cel() {
+	use crate::cel::{Executor, Expression, LLMContext};
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+
+	let mut resp = Response::new(Body::from("data: [DONE]\n\n"));
+	resp.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"text/event-stream".parse().unwrap(),
+	);
+
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let translated = provider
+		.process_streaming(
+			client,
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Completions,
+				cache_convention: CacheTokenConvention::pending(),
+				request_model: "input-model".into(),
+				original_model: None,
+				provider: "openai".into(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponsePolicies::default(),
+			None,
+			Default::default(),
+			None,
+			resp,
+		)
+		.expect("streaming translation should succeed");
+
+	let ctx = translated
+		.extensions()
+		.get::<LLMContext>()
+		.expect("streaming responses must carry the request-side LLM context");
+	assert_eq!(ctx.provider, "openai");
+	assert!(ctx.streaming);
+	assert!(ctx.response_model.is_none());
+
+	let executor = Executor::new_response(None, &translated);
+	let expr = Expression::new_strict(
+		"llm.provider == \"openai\" && llm.requestModel == \"input-model\" && llm.streaming \
+		 && !has(llm.responseModel)",
+	)
+	.unwrap();
+	assert!(executor.eval_bool(&expr));
 }
 
 #[test]
@@ -3067,6 +3062,7 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 		input_format: InputFormat::Completions,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
+		original_model: None,
 		provider: Default::default(),
 		streaming: false,
 		params: Default::default(),
@@ -3103,6 +3099,7 @@ fn setup_request_drops_inbound_query_only_when_translated() {
 		input_format: InputFormat::Messages,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "model".into(),
+		original_model: None,
 		provider: Default::default(),
 		streaming: false,
 		params: Default::default(),
@@ -3179,6 +3176,7 @@ fn setup_request_custom_generate_content_defaults_to_the_native_path() {
 			input_format: InputFormat::Gemini,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gemini-2.5-flash".into(),
+			original_model: None,
 			provider: Default::default(),
 			streaming,
 			params: Default::default(),
@@ -3219,6 +3217,7 @@ fn setup_request_custom_count_tokens_defaults_to_the_native_path() {
 		input_format: InputFormat::GeminiCountTokens,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "gemini-2.5-flash".into(),
+		original_model: None,
 		provider: Default::default(),
 		streaming: false,
 		params: Default::default(),
@@ -3257,6 +3256,7 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 		input_format: InputFormat::Messages,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: request_model.into(),
+		original_model: None,
 		provider: Default::default(),
 		streaming: false,
 		params: Default::default(),
@@ -3301,6 +3301,7 @@ fn native_gemini_llm_request(request_model: &str, streaming: bool) -> LLMRequest
 		input_format: InputFormat::Gemini,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: request_model.into(),
+		original_model: None,
 		provider: Default::default(),
 		streaming,
 		params: Default::default(),
@@ -3541,6 +3542,100 @@ fn setup_request_bedrock_sets_signing_region_with_host_override() {
 	);
 }
 
+#[rstest::rstest]
+#[case::foundry(
+	azure::AzureResourceType::Foundry,
+	Some(custom::ProviderFormat::SystemOne)
+)]
+#[case::openai(
+	azure::AzureResourceType::OpenAI,
+	Some(custom::ProviderFormat::Decisions)
+)]
+fn azure_decisions_capability(
+	#[case] resource_type: azure::AzureResourceType,
+	#[case] expected: Option<custom::ProviderFormat>,
+) {
+	let provider = AIProvider::azure(azure::Provider {
+		api_version: None,
+		model_override: None,
+		project_name: None,
+		resource_name: strng::new("example"),
+		resource_type,
+	});
+	assert_eq!(
+		provider.non_chat_provider_format_for(InputFormat::Decisions, "deployment-alias"),
+		expected
+	);
+}
+
+#[tokio::test]
+async fn azure_foundry_uses_systemone_with_deployment_alias() {
+	let provider = AIProvider::azure(azure::Provider {
+		api_version: None,
+		model_override: Some(strng::new("deployment-alias")),
+		project_name: Some(strng::new("test-project")),
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+	});
+
+	// Decisions translates the body to SystemOne and applies the deployment alias.
+	let req = ::http::Request::builder()
+		.uri("/v1/decisions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			serde_json::to_vec(&json!({
+				"input": "I was charged twice for my subscription.",
+				"model": "foundry-decision",
+				"questions": [{"instructions": "Is this a billing issue?", "name": "billing", "type": "predicate"}]
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Foundry Decisions should convert")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::SystemOneDecisions(_))
+	));
+	let body: Value = serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["model"], "deployment-alias");
+
+	// Native SystemOne preserves the body while applying the same deployment alias.
+	let mut native_body = body.clone();
+	native_body["model"] = json!("foundry-decision");
+	let req = ::http::Request::builder()
+		.uri("/v1/systemone")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&native_body).unwrap()))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Foundry SystemOne should forward natively")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(llm_request.provider_state.is_none());
+	let native_body: Value =
+		serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(native_body, body);
+}
+
 #[test]
 fn setup_request_azure_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
@@ -3555,6 +3650,222 @@ fn setup_request_azure_applies_path_prefix_with_host_override() {
 		"/proxy/openai/deployments/gpt-4.1/chat/completions",
 		Some("api-version=2024-02-15-preview&trace=repro"),
 	);
+}
+
+#[rstest::rstest]
+#[case::default(
+	None,
+	None,
+	false,
+	"https://example.cognitiveservices.azure.com/providers/microsoft/v1/systemone?trace=repro"
+)]
+#[case::host_only(None, None, true, "https://proxy.example.com/v1/decisions?trace=repro")]
+#[case::path_override(
+	Some("/custom/systemone?version=42"),
+	Some("/proxy/"),
+	true,
+	"https://proxy.example.com/custom/systemone?version=42"
+)]
+#[case::prefixed_base_url(
+	None,
+	Some("/proxy/"),
+	true,
+	"https://proxy.example.com/proxy/providers/microsoft/v1/systemone?trace=repro"
+)]
+#[case::root_base_url(
+	None,
+	Some("/"),
+	true,
+	"https://proxy.example.com/providers/microsoft/v1/systemone?trace=repro"
+)]
+fn setup_request_azure_foundry_systemone(
+	#[case] path_override: Option<&str>,
+	#[case] path_prefix: Option<&str>,
+	#[case] has_host_override: bool,
+	#[case] expected_uri: &str,
+) {
+	let provider = AIProvider::azure(azure::Provider {
+		api_version: Some(strng::new("2024-02-15-preview")),
+		model_override: None,
+		project_name: Some(strng::new("test-project")),
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+	});
+	for route in [RouteType::Decisions, RouteType::SystemOne] {
+		assert_eq!(
+			provider.default_connector_target(route),
+			Some(Target::Hostname(
+				strng::new("example.cognitiveservices.azure.com"),
+				443
+			))
+		);
+	}
+	let mut llm_request = llm_request_for_path("deployment-alias");
+	llm_request.input_format = InputFormat::Decisions;
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/v1/decisions?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::SystemOne,
+			Some(&llm_request),
+			path_override,
+			path_prefix,
+			has_host_override,
+			None,
+			None,
+		)
+		.unwrap();
+	assert_eq!(req.uri().to_string(), expected_uri);
+}
+
+#[rstest::rstest]
+#[case::anthropic("claude-sonnet-4", None)]
+#[case::decision("microsoft-decision-1", Some(custom::ProviderFormat::SystemOne))]
+fn copilot_decisions_capability(
+	#[case] model: &str,
+	#[case] expected: Option<custom::ProviderFormat>,
+) {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	assert_eq!(
+		provider.non_chat_provider_format_for(InputFormat::Decisions, model),
+		expected
+	);
+	assert!(
+		provider
+			.chat_translation(InputFormat::Completions, "microsoft-decision-1", None)
+			.is_err()
+	);
+}
+
+#[tokio::test]
+async fn copilot_uses_systemone_with_model_override() {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: Some(strng::new("microsoft-decision-1")),
+	});
+
+	let req = ::http::Request::builder()
+		.uri("/v1/decisions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			serde_json::to_vec(&json!({
+				"input": "I was charged twice for my subscription.",
+				"model": "decision-alias",
+				"questions": [{"instructions": "Is this a billing issue?", "name": "billing", "type": "predicate"}]
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Copilot Decisions should convert")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::SystemOneDecisions(_))
+	));
+	let body: Value = serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["model"], "microsoft-decision-1");
+
+	let mut native_body = body.clone();
+	native_body["model"] = json!("decision-alias");
+	let req = ::http::Request::builder()
+		.uri("/v1/systemone")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&native_body).unwrap()))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Copilot SystemOne should forward natively")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(llm_request.provider_state.is_none());
+	let native_body: Value =
+		serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(native_body, body);
+}
+
+#[rstest::rstest]
+#[case::default(
+	None,
+	None,
+	false,
+	"https://api.githubcopilot.com/v1/systemone?trace=repro"
+)]
+#[case::host_only(None, None, true, "https://proxy.example.com/v1/decisions?trace=repro")]
+#[case::path_override(
+	Some("/custom/systemone?version=42"),
+	Some("/proxy/"),
+	true,
+	"https://proxy.example.com/custom/systemone?version=42"
+)]
+#[case::prefixed_base_url(
+	None,
+	Some("/proxy/"),
+	true,
+	"https://proxy.example.com/proxy/v1/systemone?trace=repro"
+)]
+#[case::root_base_url(
+	None,
+	Some("/"),
+	true,
+	"https://proxy.example.com/v1/systemone?trace=repro"
+)]
+fn setup_request_copilot_systemone(
+	#[case] path_override: Option<&str>,
+	#[case] path_prefix: Option<&str>,
+	#[case] has_host_override: bool,
+	#[case] expected_uri: &str,
+) {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	for route in [RouteType::Decisions, RouteType::SystemOne] {
+		assert_eq!(
+			provider.default_connector_target(route),
+			Some(Target::Hostname(copilot::DEFAULT_HOST, 443))
+		);
+	}
+	let mut llm_request = llm_request_for_path("microsoft-decision-1");
+	llm_request.input_format = InputFormat::Decisions;
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/v1/decisions?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::SystemOne,
+			Some(&llm_request),
+			path_override,
+			path_prefix,
+			has_host_override,
+			None,
+			None,
+		)
+		.unwrap();
+	assert_eq!(req.uri().to_string(), expected_uri);
 }
 
 #[test]
@@ -3601,7 +3912,7 @@ fn completions_to_messages_response_allows_missing_openai_metadata() {
 		}"#,
 	);
 
-	conversion::completions::from_messages::translate_response(&body)
+	conversion::completions::from_messages::translate_response(&body, "")
 		.expect("messages response translation should not require OpenAI metadata");
 }
 
@@ -3618,6 +3929,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			original_model: None,
 			provider: "bedrock".into(),
 			streaming: true,
 			params: Default::default(),
@@ -3668,6 +3980,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			original_model: None,
 			provider: "bedrock".into(),
 			streaming: true,
 			params: Default::default(),
@@ -3715,6 +4028,7 @@ async fn bedrock_from_messages_stream_captures_tool_calls() {
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			original_model: None,
 			provider: "bedrock".into(),
 			streaming: true,
 			params: Default::default(),
@@ -3774,6 +4088,7 @@ async fn messages_passthrough_stream_captures_completion() {
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
+			original_model: None,
 			provider: "anthropic".into(),
 			streaming: true,
 			params: Default::default(),
@@ -3822,6 +4137,7 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
+			original_model: None,
 			provider: "anthropic".into(),
 			streaming: true,
 			params: Default::default(),
@@ -3866,6 +4182,7 @@ async fn messages_passthrough_stream_captures_tool_calls() {
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
+			original_model: None,
 			provider: "anthropic".into(),
 			streaming: true,
 			params: Default::default(),
@@ -3921,6 +4238,7 @@ async fn responses_passthrough_stream_captures_completion_and_tool_calls() {
 			input_format: InputFormat::Responses,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-4.1-mini".into(),
+			original_model: None,
 			provider: "openai".into(),
 			streaming: true,
 			params: Default::default(),
@@ -3984,6 +4302,7 @@ data: [DONE]
 			input_format: InputFormat::Responses,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-5".into(),
+			original_model: None,
 			provider: "openai".into(),
 			streaming: true,
 			params: Default::default(),
@@ -4021,6 +4340,7 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 			input_format: InputFormat::Responses,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-4.1-mini".into(),
+			original_model: None,
 			provider: "openai".into(),
 			streaming: true,
 			params: Default::default(),
@@ -4075,6 +4395,7 @@ fn vertex_gemini_stream_log() -> (AsyncLog<LLMInfo>, AsyncLog<LLMInfo>) {
 			params: Default::default(),
 			prompt: None,
 			provider_state: None,
+			original_model: None,
 		},
 		response: LLMResponse::default(),
 	}));
@@ -4241,6 +4562,7 @@ fn amend_info(
 			params: Default::default(),
 			prompt: None,
 			provider_state: None,
+			original_model: None,
 		},
 		response: LLMResponse {
 			input_tokens: response_input,
@@ -4738,6 +5060,7 @@ fn vertex_gemini_messages_streaming_setup_request_adds_alt_sse() {
 		params: Default::default(),
 		prompt: None,
 		provider_state: Some(ProviderState::VertexGemini),
+		original_model: None,
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://us-central1-aiplatform.googleapis.com/v1/messages",

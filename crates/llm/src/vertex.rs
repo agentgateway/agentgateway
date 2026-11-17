@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use agent_core::strng;
 use agent_core::strng::Strng;
 use serde_json::{Map, Value};
@@ -5,6 +7,85 @@ use serde_json::{Map, Value};
 use crate::{AIError, RouteType, apply};
 
 const ANTHROPIC_VERSION: &str = "vertex-2023-10-16";
+
+// Betas Vertex accepts for Anthropic models; it rejects the request if any other value is sent.
+// Checked against Vertex 2026-11-13. AGENTGATEWAY_VERTEX_ANTHROPIC_BETA_HEADERS replaces this list,
+// and `default` in it expands to this list.
+const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
+	"afk-mode-2026-01-31",
+	"auto-mode-classifier-2026-07-16",
+	"claude-code-20250219",
+	"compact-2026-01-12",
+	"computer-use-2025-01-24",
+	"computer-use-2025-11-24",
+	"context-1m-2025-08-07",
+	"context-management-2025-06-27",
+	"dangerous-tool-use-2026-09-03",
+	"effort-2025-11-24",
+	"fallback-credit-2026-06-01",
+	"fine-grained-tool-streaming-2025-05-14",
+	"interleaved-thinking-2025-05-14",
+	"mid-conversation-output-config-2026-07-01",
+	"mid-conversation-system-2026-04-07",
+	"mid-conversation-tool-changes-2026-07-01",
+	"oauth-2025-04-20",
+	"output-128k-2025-02-19",
+	"pdfs-2024-09-25",
+	"per-turn-control-2026-07-01",
+	"prompt-caching-2024-07-31",
+	"server-side-fallback-2026-06-01",
+	"structured-outputs-2025-11-13",
+	"structured-outputs-2025-12-15",
+	"task-budgets-2026-03-13",
+	"thinking-token-count-2026-05-13",
+	"token-counting-2024-11-01",
+	"token-efficient-tools-2025-02-19",
+	"tool-examples-2025-10-29",
+	"tool-search-tool-2025-10-19",
+	"web-search-2025-03-05",
+];
+const ALLOWED_BETA_HEADERS_ENV: &str = "AGENTGATEWAY_VERTEX_ANTHROPIC_BETA_HEADERS";
+
+static ALLOWED_BETA_HEADERS: LazyLock<Vec<String>> = LazyLock::new(|| {
+	let defaults = || DEFAULT_ALLOWED_BETA_HEADERS.iter().map(|f| f.to_string());
+	let Ok(env) = std::env::var(ALLOWED_BETA_HEADERS_ENV) else {
+		return defaults().collect();
+	};
+	env
+		.split(',')
+		.map(str::trim)
+		.filter(|feature| !feature.is_empty())
+		.flat_map(|feature| match feature {
+			"default" => defaults().collect(),
+			_ => vec![feature.to_string()],
+		})
+		.collect()
+});
+
+/// Drops `anthropic-beta` values that are not in the allowlist.
+pub fn filter_anthropic_beta_header(headers: &mut http::HeaderMap) -> Result<(), AIError> {
+	let invalid = || AIError::MissingField("Invalid anthropic-beta header value".into());
+	let mut features = Vec::new();
+	for value in headers.get_all("anthropic-beta") {
+		features.extend(
+			value
+				.to_str()
+				.map_err(|_| invalid())?
+				.split(',')
+				.map(str::trim)
+				.filter(|feature| ALLOWED_BETA_HEADERS.iter().any(|f| f == feature)),
+		);
+	}
+	let joined = features.join(",");
+	headers.remove("anthropic-beta");
+	if !joined.is_empty() {
+		headers.insert(
+			"anthropic-beta",
+			http::HeaderValue::from_str(&joined).map_err(|_| invalid())?,
+		);
+	}
+	Ok(())
+}
 
 /// Host for the Discovery Engine ranking endpoint used by rerank. Distinct from the `aiplatform`
 /// host used for chat/embeddings; defined once so the request authority/Host header and the actual
@@ -275,25 +356,35 @@ fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
 	// output_config is intentionally preserved: Vertex supports it for structured outputs
 	// (format.json_schema) and for adaptive thinking depth control (effort).
 	body.remove("output_format");
-	// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
-	for value in body.values_mut() {
-		remove_nested_field(value, "cache_control", "scope");
+	remove_cache_control_scope(body);
+}
+
+/// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
+/// Only fields where the API accepts cache_control are walked, so tool data is left as is.
+fn remove_cache_control_scope(body: &mut Map<String, Value>) {
+	if let Some(Value::Object(cache_control)) = body.get_mut("cache_control") {
+		cache_control.remove("scope");
+	}
+	for field in ["system", "tools", "messages"] {
+		if let Some(value) = body.get_mut(field) {
+			remove_nested_cache_control_scope(value);
+		}
 	}
 }
 
-fn remove_nested_field(value: &mut Value, key: &str, child: &str) {
+fn remove_nested_cache_control_scope(value: &mut Value) {
 	match value {
-		Value::Object(map) => {
-			if let Some(Value::Object(nested)) = map.get_mut(key) {
-				nested.remove(child);
+		Value::Array(blocks) => blocks
+			.iter_mut()
+			.for_each(remove_nested_cache_control_scope),
+		Value::Object(block) => {
+			if let Some(Value::Object(cache_control)) = block.get_mut("cache_control") {
+				cache_control.remove("scope");
 			}
-			for v in map.values_mut() {
-				remove_nested_field(v, key, child);
-			}
-		},
-		Value::Array(arr) => {
-			for v in arr {
-				remove_nested_field(v, key, child);
+			for field in crate::types::messages::cache_control_children(block) {
+				if let Some(value) = block.get_mut(*field) {
+					remove_nested_cache_control_scope(value);
+				}
 			}
 		},
 		_ => {},
@@ -672,7 +763,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_cache_control_scope_removed_recursively() {
+	fn test_cache_control_scope_removed() {
 		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
 			"system": [{
 				"type": "text",
@@ -685,6 +776,38 @@ mod tests {
 					"type": "text",
 					"text": "hello",
 					"cache_control": {"type": "ephemeral", "scope": "session"}
+				}, {
+					"type": "tool_result",
+					"tool_use_id": "t1",
+					"content": [{
+						"type": "text",
+						"text": "done",
+						"cache_control": {"type": "ephemeral", "scope": "turn"}
+					}]
+				}, {
+					"type": "tool_use",
+					"id": "t2",
+					"name": "set",
+					"input": {"cache_control": {"scope": "user data"}}
+				}, {
+					"type": "search_result",
+					"source": "https://example.com",
+					"title": "Example",
+					"content": [{
+						"type": "text",
+						"text": "result",
+						"cache_control": {"type": "ephemeral", "scope": "turn"}
+					}]
+				}, {
+					"type": "document",
+					"source": {
+						"type": "content",
+						"content": [{
+							"type": "text",
+							"text": "doc",
+							"cache_control": {"type": "ephemeral", "scope": "turn"}
+						}]
+					}
 				}]
 			}]
 		}))
@@ -693,11 +816,26 @@ mod tests {
 		let sys_cc = body["system"][0]["cache_control"].as_object().unwrap();
 		assert_eq!(sys_cc.get("type").unwrap(), "ephemeral");
 		assert!(!sys_cc.contains_key("scope"));
-		let msg_cc = body["messages"][0]["content"][0]["cache_control"]
-			.as_object()
-			.unwrap();
+		let content = &body["messages"][0]["content"];
+		let msg_cc = content[0]["cache_control"].as_object().unwrap();
 		assert_eq!(msg_cc.get("type").unwrap(), "ephemeral");
 		assert!(!msg_cc.contains_key("scope"));
+		assert!(
+			content[1]["content"][0]["cache_control"]
+				.get("scope")
+				.is_none()
+		);
+		assert_eq!(content[2]["input"]["cache_control"]["scope"], "user data");
+		assert!(
+			content[3]["content"][0]["cache_control"]
+				.get("scope")
+				.is_none()
+		);
+		assert!(
+			content[4]["source"]["content"][0]["cache_control"]
+				.get("scope")
+				.is_none()
+		);
 	}
 
 	#[test]

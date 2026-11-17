@@ -159,7 +159,6 @@ fn remaining(resp: &Response) -> u64 {
 
 #[tokio::test]
 async fn token_limits_can_key_on_the_requested_model() {
-	// A token limit is charged once the request has been parsed, so its key can read the model.
 	// Every response costs 25 tokens; each model has 30.
 	let (_upstream, t) = llm_route(
 		json!({
@@ -182,6 +181,25 @@ async fn token_limits_can_key_on_the_requested_model() {
 	let other = chat(&t, "llama", "alice").await;
 	assert_eq!(other.status(), 200);
 	assert_eq!(remaining(&other), 30);
+}
+
+#[tokio::test]
+async fn request_limits_can_key_on_the_requested_model() {
+	let (_upstream, t) = llm_route(
+		json!({
+			"localRateLimit": [{
+				"type": "requests", "maxTokens": 1, "tokensPerFill": 1, "fillInterval": "60s",
+				"key": "llm.requestModel",
+			}]
+		}),
+		10,
+		15,
+	)
+	.await;
+	assert_eq!(status(chat(&t, "qwen3", "alice").await).await, 200);
+	assert_eq!(status(chat(&t, "qwen3", "bob").await).await, 429);
+	// A different model has its own bucket.
+	assert_eq!(status(chat(&t, "llama", "alice").await).await, 200);
 }
 
 #[tokio::test]

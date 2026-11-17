@@ -14,8 +14,9 @@ export interface BudgetStatus {
 	};
 	window: {
 		start: number;
-		end: number;
-		durationMs: number;
+		/** Null for a budget without a window, which never resets. */
+		end: number | null;
+		durationMs: number | null;
 		expired: boolean;
 	};
 	onBudgetExceeded: 'Audit' | 'Block';

@@ -1,5 +1,6 @@
 {
   "model": "gpt-4-turbo-preview",
+  "service_tier": "priority",
   "messages": [
     {
       "role": "system",

@@ -280,6 +280,11 @@ spec:
       maxBufferSize: 5Mi
       http1MaxHeaders: 150
       http1IdleTimeout: 5m
+      normalize:
+      - MergeSlash
+      - DotSegment
+      - DecodeUnreserved
+      - RejectEscapedSlash
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -1506,3 +1511,25 @@ spec:
         - regex:
             matches: [blocked]
           response: {}
+
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-auth-credential-gcp
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: test
+  backend:
+    auth:
+      passthrough: {}
+      credentials:
+      - location:
+          header:
+            name: Proxy-Authorization
+            prefix: "Bearer "
+        gcp:
+          type: IdToken
+          audience: iap-client-id

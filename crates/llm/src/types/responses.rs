@@ -48,17 +48,22 @@ impl RawInputItem {
 		Self::from_typed(InputItem::from(msg))
 	}
 
-	fn as_simple_message(&self) -> Option<SimpleChatCompletionMessage> {
-		let role = self.0.get("role")?.as_str()?;
-		let role = match role {
+	/// The role and raw content of an item `get_messages()` includes.
+	fn simple_role_and_content(&self) -> Option<(Strng, &Value)> {
+		let role = match self.0.get("role")?.as_str()? {
 			"user" => strng::literal!("user"),
 			"assistant" => strng::literal!("assistant"),
 			"system" => strng::literal!("system"),
 			"developer" => strng::literal!("developer"),
 			_ => return None,
 		};
+		let content = self.0.get("content")?;
+		matches!(content, Value::String(_) | Value::Array(_)).then_some((role, content))
+	}
 
-		let content = match self.0.get("content")? {
+	fn as_simple_message(&self) -> Option<SimpleChatCompletionMessage> {
+		let (role, content) = self.simple_role_and_content()?;
+		let content = match content {
 			Value::String(text) => strng::new(text),
 			Value::Array(parts) => {
 				let text = parts
@@ -80,26 +85,37 @@ impl RawInputItem {
 		Some(SimpleChatCompletionMessage { role, content })
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	/// `message` is this item's `get_messages()` index, if it has one.
+	fn visit_text_mut(
+		&mut self,
+		message: Option<usize>,
+		f: &mut dyn FnMut(RequestText, &mut String),
+	) {
 		if let Some(role) = self.0.get("role").and_then(|r| r.as_str()) {
 			let scope = match role {
 				"system" | "developer" => ContentScope::SystemPrompt,
 				_ => ContentScope::Messages,
 			};
+			let content = RequestText {
+				scope,
+				get_messages_idx: message,
+			};
 			match self.0.get_mut("content") {
-				Some(Value::String(text)) => f(scope, text),
+				Some(Value::String(text)) => f(content, text),
 				Some(Value::Array(parts)) => {
 					// assistant refusal parts carry prose under `refusal`, not `text`
 					for part in parts.iter_mut() {
-						visit_json_at(part, &["refusal"], scope, f);
+						visit_json_at(part, &["refusal"], scope, &mut |scope, text| {
+							f(scope.into(), text)
+						});
 					}
-					scan_value_text_runs(scope, parts, f);
+					scan_value_text_runs(parts, &mut |text| f(content, text));
 				},
 				_ => {},
 			}
 			return;
 		}
-		visit_tool_item_text(&mut self.0, f);
+		visit_tool_item_text(&mut self.0, &mut |scope, text| f(scope.into(), text));
 	}
 }
 
@@ -583,11 +599,7 @@ const PRESERVED_REST_KEYS: &[&str] = &[
 	"prompt_cache_breakpoint",
 ];
 
-fn scan_value_text_runs(
-	scope: ContentScope,
-	parts: &mut Vec<Value>,
-	f: &mut dyn FnMut(ContentScope, &mut String),
-) {
+fn scan_value_text_runs(parts: &mut Vec<Value>, f: &mut dyn FnMut(&mut String)) {
 	crate::types::scan_text_runs(
 		parts,
 		"\n",
@@ -606,7 +618,7 @@ fn scan_value_text_runs(
 		// parts are pass-through JSON, so `rest` is the whole part
 		|part| Some(part),
 		PRESERVED_REST_KEYS,
-		&mut |text| f(scope, text),
+		f,
 	);
 }
 
@@ -640,7 +652,18 @@ pub struct Request {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub vendor_extensions: Option<RequestVendorExtensions>,
 
-	// Everything else (tools, reasoning, etc.) - passthrough
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reasoning: Option<RequestReasoning>,
+
+	// Everything else (tools, etc.) - passthrough
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct RequestReasoning {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub effort: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -696,6 +719,15 @@ pub struct UsageInputDetails {
 	pub cached_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_write_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_write_tokens_details: Option<CacheWriteTokensDetails>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct CacheWriteTokensDetails {
+	pub ttl_12h_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -907,6 +939,7 @@ impl RequestType for Request {
 			input_format: InputFormat::Responses,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
+			original_model: None,
 			provider,
 			streaming: self.stream.unwrap_or_default(),
 			params: LLMRequestParams {
@@ -918,6 +951,11 @@ impl RequestType for Request {
 				max_tokens: self.max_output_tokens.map(Into::into),
 				encoding_format: None,
 				dimensions: None,
+				reasoning_effort: self
+					.reasoning
+					.as_ref()
+					.and_then(|r| r.effort.as_deref())
+					.and_then(crate::ReasoningEffort::parse),
 			},
 			prompt: Default::default(),
 			provider_state: None,
@@ -994,15 +1032,29 @@ impl RequestType for Request {
 		);
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(RequestText, &mut String)) {
+		let mut next_message = 0;
 		if let Some(instructions) = &mut self.instructions {
-			f(ContentScope::SystemPrompt, instructions);
+			f(
+				RequestText::in_message(ContentScope::SystemPrompt, next_message),
+				instructions,
+			);
+			next_message += 1;
 		}
 		match &mut self.input {
-			RequestInput::Text(text) => f(ContentScope::Messages, text),
+			RequestInput::Text(text) => f(
+				RequestText::in_message(ContentScope::Messages, next_message),
+				text,
+			),
 			RequestInput::Items(items) => {
 				for item in items {
-					item.visit_text_mut(f);
+					// only items get_messages() includes take an index
+					let message = item
+						.simple_role_and_content()
+						.is_some()
+						.then_some(next_message);
+					next_message += usize::from(message.is_some());
+					item.visit_text_mut(message, f);
 				}
 			},
 		}
@@ -1197,6 +1249,14 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
+			cache_creation_1h_input_tokens: None,
+			cache_creation_12h_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.input_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens_details.as_ref())
+					.and_then(|d| d.ttl_12h_tokens)
+			}),
+			usage_lines: Vec::new(),
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -1214,6 +1274,7 @@ impl ResponseType for Response {
 				.as_ref()
 				.map(|u| u.total_tokens.unwrap_or(u.input_tokens + u.output_tokens)),
 			pages: None,
+			audio_seconds: None,
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
 				u.output_tokens_details
 					.as_ref()
@@ -1332,6 +1393,22 @@ impl ResponseType for Response {
 				);
 				continue;
 			}
+			if let OutputItem::Reasoning(reasoning) = o {
+				use async_openai::types::responses as sdk;
+				for sdk::SummaryPart::SummaryText(summary) in &mut reasoning.summary {
+					f(ContentScope::Messages.into(), &mut summary.text);
+				}
+				// encrypted_content may embed this text; a mask would not cover it and would break replay.
+				let content = crate::types::ResponseText {
+					scope: ContentScope::Messages,
+					signed: reasoning.encrypted_content.is_some(),
+				};
+				for sdk::ReasoningItemContent::ReasoningText(text) in reasoning.content.iter_mut().flatten()
+				{
+					f(content, &mut text.text);
+				}
+				continue;
+			}
 			let mut plain = |scope: ContentScope, text: &mut String| f(scope.into(), text);
 			let f = &mut plain;
 			let OutputItem::Message(msg) = o else {
@@ -1376,8 +1453,9 @@ pub mod typed {
 		ResponseFunctionCallArgumentsDoneEvent, ResponseInProgressEvent, ResponseIncompleteEvent,
 		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseReasoningTextDeltaEvent,
 		ResponseReasoningTextDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role,
+		ServiceTierResponses, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 

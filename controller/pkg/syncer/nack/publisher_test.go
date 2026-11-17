@@ -43,14 +43,24 @@ func TestPublisher_PublishNack(t *testing.T) {
 
 	fakeClient.WaitForCacheSync("test-publisher", ctx.Done(), publisher.HasSynced)
 
-	publisher.PublishNack(&testNackEvent)
-
-	select {
-	case event := <-fakeRecorder.Events:
-		assert.Contains(t, event, "Warning")
-		assert.Contains(t, event, ReasonNack)
-		assert.Contains(t, event, testErrorMessage)
-	default:
-		t.Fatal("Expected event to be recorded but none was found")
+	for _, tt := range []struct {
+		name    string
+		reason  string
+		publish func()
+	}{
+		{name: "rejection", reason: ReasonNack, publish: func() { publisher.PublishNack(&testNackEvent) }},
+		{name: "warning", reason: "AgentGatewayConfigWarning", publish: func() { publisher.PublishWarning(testGateway, testErrorMessage) }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.publish()
+			select {
+			case event := <-fakeRecorder.Events:
+				assert.Contains(t, event, "Warning")
+				assert.Contains(t, event, tt.reason)
+				assert.Contains(t, event, testErrorMessage)
+			default:
+				t.Fatal("Expected event to be recorded but none was found")
+			}
+		})
 	}
 }

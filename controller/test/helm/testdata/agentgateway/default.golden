@@ -101,6 +101,16 @@ rules:
   - list
   - watch
 
+# CA certificates referenced by TLS validation. Only watched if the cluster serves the API.
+- apiGroups:
+  - certificates.k8s.io
+  resources:
+  - clustertrustbundles
+  verbs:
+  - get
+  - list
+  - watch
+
 # Status reports
 - apiGroups:
   - gateway.networking.k8s.io
@@ -372,8 +382,6 @@ spec:
               value: "9978"
             - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
               value: "[]"
-            - name: AGW_ENABLE_AGENTGATEWAY_MODELS
-              value: "true"
             - name: AGW_XDS_MODE
               value: "tls"
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS

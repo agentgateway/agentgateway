@@ -99,11 +99,11 @@ pub mod spiffe_workload_api {
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod ateapi {
-	tonic::include_proto!("ateapi");
+	tonic::include_proto!("substrate.ateapi.v1");
 }
 
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod credprovider {
-	tonic::include_proto!("credprovider");
+	tonic::include_proto!("substrate.credprovider.v1");
 }

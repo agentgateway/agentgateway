@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rustls::client::Resumption;
 use rustls::server::VerifierBuilderError;
+use rustls::sign::{CertifiedKey, SingleCertAndKey};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_pki_types::pem::{PemObject, SectionKind};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -27,7 +28,7 @@ use istio::ca::IstioCertificateRequest;
 use istio::ca::istio_certificate_service_client::IstioCertificateServiceClient;
 
 use crate::control::{AuthSource, RootCert};
-use crate::http::backendtls::VersionedBackendTLS;
+use crate::http::backendtls::{ExpectedIdentities, VersionedBackendTLS};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -79,11 +80,12 @@ pub struct Expiration {
 
 #[derive(Debug)]
 pub struct WorkloadCertificate {
-	// server_config: Arc<ServerConfig>,
-	// client_config: Arc<ClientConfig>,
 	roots: Arc<RootCertStore>,
-	chain: Vec<Certificate>,
-	private_key: PrivateKeyDer<'static>,
+	certified_key: Arc<CertifiedKey>,
+	// Client configs shared across destinations. Their verifier rejects everything; the per-destination
+	// IdentityVerifier is installed when a connection is established (see VersionedBackendTLS::connect_config).
+	legacy_mtls_base: Arc<ClientConfig>,
+	hbone_mtls_base: Arc<ClientConfig>,
 	expiry: Expiration,
 	identity: Identity,
 	allowed_trust_domains: Arc<[Strng]>,
@@ -131,11 +133,38 @@ impl WorkloadCertificate {
 			cert_and_chain.push(c);
 		}
 
+		let roots = Arc::new(roots_store);
+		let certified_key = Arc::new(CertifiedKey::from_der(
+			cert_and_chain.into_iter().map(|c| c.der).collect(),
+			key,
+			&transport::tls::provider(),
+		)?);
+		let base_client_config = |alpn: &[u8]| {
+			let verifier = transport::tls::identity::IdentityVerifier {
+				roots: roots.clone(),
+				identity: vec![],
+			};
+			let mut cc = ClientConfig::builder_with_provider(transport::tls::provider())
+				.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
+				.expect("client config must be valid")
+				.dangerous() // Customer verifier is requires "dangerous" opt-in
+				.with_custom_certificate_verifier(Arc::new(verifier))
+				.with_client_cert_resolver(Arc::new(SingleCertAndKey::from(certified_key.clone())));
+			cc.key_log = transport::tls::key_log();
+			cc.alpn_protocols = vec![alpn.to_vec()];
+			cc.resumption = Resumption::disabled();
+			cc
+		};
+		let legacy_mtls_base = Arc::new(base_client_config(b"istio"));
+		let mut hbone_mtls_base = base_client_config(b"h2");
+		hbone_mtls_base.enable_sni = false;
+
 		Ok(WorkloadCertificate {
-			roots: Arc::new(roots_store),
+			roots,
+			certified_key,
+			legacy_mtls_base,
+			hbone_mtls_base: Arc::new(hbone_mtls_base),
 			expiry,
-			private_key: key,
-			chain: cert_and_chain,
 			identity,
 			allowed_trust_domains,
 			skip_validate_trust_domain,
@@ -153,51 +182,22 @@ impl WorkloadCertificate {
 		}
 	}
 
-	pub fn legacy_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
-		// TODO: this is (way) too expensive to build per request
-		let roots = self.roots.clone();
-		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
-		let mut cc = ClientConfig::builder_with_provider(transport::tls::provider())
-			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-			.expect("client config must be valid")
-			.dangerous() // Customer verifier is requires "dangerous" opt-in
-			.with_custom_certificate_verifier(Arc::new(verifier))
-			.with_client_auth_cert(
-				self.chain.iter().map(|c| c.der.clone()).collect(),
-				self.private_key.clone_key(),
-			)?;
-		cc.key_log = transport::tls::key_log();
-		cc.alpn_protocols = vec![b"istio".into()];
-		cc.resumption = Resumption::disabled();
-		// cc.enable_sni = false;
-		Ok(VersionedBackendTLS {
-			hostname_override: None,
-			config: Arc::new(cc),
-			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
-		})
+	pub fn legacy_mtls(&self, identity: Vec<Identity>) -> VersionedBackendTLS {
+		self.mtls(&self.legacy_mtls_base, identity)
 	}
-	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
-		// TODO: this is (way) too expensive to build per request
-		let roots = self.roots.clone();
-		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
-		let mut cc = ClientConfig::builder_with_provider(transport::tls::provider())
-			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-			.expect("client config must be valid")
-			.dangerous() // Customer verifier is requires "dangerous" opt-in
-			.with_custom_certificate_verifier(Arc::new(verifier))
-			.with_client_auth_cert(
-				self.chain.iter().map(|c| c.der.clone()).collect(),
-				self.private_key.clone_key(),
-			)?;
-		cc.key_log = transport::tls::key_log();
-		cc.alpn_protocols = vec![b"h2".into()];
-		cc.resumption = Resumption::disabled();
-		cc.enable_sni = false;
-		Ok(VersionedBackendTLS {
+	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> VersionedBackendTLS {
+		self.mtls(&self.hbone_mtls_base, identity)
+	}
+	fn mtls(&self, base: &Arc<ClientConfig>, identity: Vec<Identity>) -> VersionedBackendTLS {
+		VersionedBackendTLS {
 			hostname_override: None,
-			config: Arc::new(cc),
+			config: base.clone(),
+			expected_identities: Some(ExpectedIdentities {
+				roots: self.roots.clone(),
+				identities: identity,
+			}),
 			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
-		})
+		}
 	}
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
 		self.server_config(vec![b"h2".into()], true)
@@ -208,7 +208,6 @@ impl WorkloadCertificate {
 		alpns: Vec<Vec<u8>>,
 		require_client_cert: bool,
 	) -> Result<ServerConfig, Error> {
-		// TODO: this is too expensive to build per request
 		let roots = self.roots.clone();
 		let scb = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
@@ -234,10 +233,8 @@ impl WorkloadCertificate {
 		} else {
 			scb.with_no_client_auth()
 		};
-		let mut sc = scb.with_single_cert(
-			self.chain.iter().map(|c| c.der.clone()).collect(),
-			self.private_key.clone_key(),
-		)?;
+		let mut sc =
+			scb.with_cert_resolver(Arc::new(SingleCertAndKey::from(self.certified_key.clone())));
 		sc.key_log = transport::tls::key_log();
 		sc.alpn_protocols = alpns;
 		Ok(sc)

@@ -6,6 +6,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -222,7 +223,7 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 		// Equal long-context prices need no additional tier.
 		model.Tiers = slices.DeleteFunc(model.Tiers, func(t Tier) bool {
 			return t.ContextOver != 0 && slices.ContainsFunc(model.Tiers, func(base Tier) bool {
-				return base.ContextOver == 0 && base.ServiceTier == t.ServiceTier && base.Rates == t.Rates
+				return base.ContextOver == 0 && base.ServiceTier == t.ServiceTier && reflect.DeepEqual(base.Rates, t.Rates)
 			})
 		})
 		models[id] = model

@@ -3,6 +3,7 @@ import { Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import {
 	ConfirmDialog,
@@ -14,8 +15,7 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip,
-	YamlBlock
+	Tooltip
 } from '@/components/Primitives';
 import { isDatabaseConfigResource } from '@/config';
 import type {
@@ -24,6 +24,7 @@ import type {
 	LocalAttachedTCPRoute
 } from '@/gateway-config';
 import {
+	resetFinishedSaves,
 	useConfigDumpMode,
 	useDeleteConfigResource,
 	useTrafficConfigData,
@@ -194,6 +195,11 @@ function TrafficRoutesEditorPage() {
 		writeTrafficRouteSearch(null, 'replace');
 	}
 
+	function cancelEditor() {
+		resetFinishedSaves(update);
+		closeEditor();
+	}
+
 	if (!config.isLoading && !config.isError && !hasLegacyBinds) {
 		return <GatewayRoutesEditorPage />;
 	}
@@ -220,7 +226,7 @@ function TrafficRoutesEditorPage() {
 				}
 			/>
 
-			{update.isError ? (
+			{update.isError && !editing ? (
 				<StatusBanner state="bad" title="Save failed">
 					{update.error.message}
 				</StatusBanner>
@@ -346,7 +352,8 @@ function TrafficRoutesEditorPage() {
 					editing={editing}
 					help={help}
 					saving={update.isPending}
-					onCancel={closeEditor}
+					saveError={update.error?.message}
+					onCancel={cancelEditor}
 					onSave={nextEditing =>
 						update.mutate(
 							next => {
@@ -457,6 +464,11 @@ function GatewayRoutesEditorPage() {
 		setEditing(null);
 	}
 
+	function cancelEditor() {
+		resetFinishedSaves(upsertResource);
+		closeEditor();
+	}
+
 	function databaseRoute(kind: RouteKind, resourceId: string | undefined) {
 		return Boolean(
 			resourceId &&
@@ -486,7 +498,7 @@ function GatewayRoutesEditorPage() {
 				}
 			/>
 
-			{saveError ? (
+			{saveError && !editing ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
@@ -616,7 +628,8 @@ function GatewayRoutesEditorPage() {
 					editing={editing}
 					help={help}
 					saving={upsertResource.isPending || deleteResource.isPending}
-					onCancel={closeEditor}
+					saveError={upsertResource.error?.message}
+					onCancel={cancelEditor}
 					databaseBacked={
 						traffic.hybrid &&
 						(!editing.resourceId || databaseRoute(editing.kind, editing.resourceId))
@@ -669,6 +682,7 @@ function GatewayRouteEditor(props: {
 	help: SchemaHelp;
 	saving: boolean;
 	databaseBacked?: boolean;
+	saveError?: string;
 	onCancel: () => void;
 	onSave: (editing: {
 		kind: RouteKind;
@@ -683,31 +697,32 @@ function GatewayRouteEditor(props: {
 	const [gateway, setGateway] = useState(
 		effectiveGatewayRouteRef(props.editing.route, props.config, kind)
 	);
-	const [error, setError] = useState<string | null>(null);
+	const multipleGateways = Array.isArray(route.gateways) && route.gateways.length > 1;
 	const preview = cleanGatewayRoute(
 		{
 			...route,
-			gateways: implicitDefaultRouteGateway(route, props.config, gateway, kind)
-				? undefined
-				: gateway
+			gateways: multipleGateways
+				? route.gateways
+				: implicitDefaultRouteGateway(route, props.config, gateway, kind)
+					? undefined
+					: gateway
 		} as LocalAttachedGatewayRoute,
 		kind
 	);
+	const merged = useMergedEdits(
+		props.editing.resourceId || typeof props.editing.routeIndex === 'number'
+			? props.editing.route
+			: undefined,
+		preview,
+		['$defs', kind === 'http' ? 'LocalAttachedRoute' : 'LocalAttachedTCPRoute']
+	);
 
 	function save() {
-		if (!route.name?.trim()) {
-			setError('Enter a route name.');
-			return;
-		}
-		if (!gateway) {
-			setError('Select a gateway.');
-			return;
-		}
 		props.onSave({
 			kind,
 			routeIndex: props.editing.routeIndex,
 			resourceId: props.editing.resourceId,
-			route: preview
+			route: merged.value
 		});
 	}
 
@@ -719,6 +734,18 @@ function GatewayRouteEditor(props: {
 					: 'Add route'
 			}
 			onClose={props.onCancel}
+			error={props.saveError}
+			raw={{
+				schemaPath: ['$defs', kind === 'http' ? 'LocalAttachedRoute' : 'LocalAttachedTCPRoute'],
+				value: () => merged.value,
+				onChange: value => {
+					const next = value as LocalAttachedGatewayRoute;
+					setRoute(next);
+					merged.reset(next);
+					setGateway(effectiveGatewayRouteRef(next, props.config, kind));
+				},
+				empty: makeRoute(kind)
+			}}
 			footer={
 				<ConfigDiffSaveActions
 					config={props.config}
@@ -726,48 +753,37 @@ function GatewayRouteEditor(props: {
 						props.databaseBacked
 							? {
 									original: props.editing.resourceId ? props.editing.route : {},
-									modified: preview
+									modified: merged.value
 								}
 							: undefined
 					}
 					diffTitle="Route config diff"
 					saveLabel="Save route"
 					saving={props.saving}
-					saveDisabled={!route.name?.trim()}
 					onCancel={props.onCancel}
 					onSave={save}
-					beforeDiff={() => {
-						if (!route.name?.trim()) {
-							setError('Enter a route name.');
-							return false;
-						}
-						if (!gateway) {
-							setError('Select a gateway.');
-							return false;
-						}
-						return true;
-					}}
 					applyDiff={next => {
 						if (kind === 'http') {
 							if (!Array.isArray(next.routes)) next.routes = [];
 							if (typeof props.editing.routeIndex === 'number') {
-								next.routes[props.editing.routeIndex] = preview as LocalAttachedRoute;
+								next.routes[props.editing.routeIndex] = merged.value as LocalAttachedRoute;
 							} else {
-								next.routes.push(preview as LocalAttachedRoute);
+								next.routes.push(merged.value as LocalAttachedRoute);
 							}
 						} else {
 							if (!Array.isArray(next.tcpRoutes)) next.tcpRoutes = [];
 							if (typeof props.editing.routeIndex === 'number') {
-								next.tcpRoutes[props.editing.routeIndex] = preview as LocalAttachedTCPRoute;
+								next.tcpRoutes[props.editing.routeIndex] = merged.value as LocalAttachedTCPRoute;
 							} else {
-								next.tcpRoutes.push(preview as LocalAttachedTCPRoute);
+								next.tcpRoutes.push(merged.value as LocalAttachedTCPRoute);
 							}
 						}
 					}}
 				/>
 			}
 		>
-			{error ? <StatusBanner state="bad" title={error} /> : null}
+			<LostFieldsWarning lost={merged.lost} />
+			{multipleGateways ? <UnsupportedInForm supports="routes attached to one gateway" /> : null}
 			<div className="route-editor-stack">
 				{!props.editing.resourceId && typeof props.editing.routeIndex !== 'number' ? (
 					<FieldGroup label="Kind" tooltip="Route protocol family.">
@@ -784,26 +800,30 @@ function GatewayRouteEditor(props: {
 								setKind(nextKind);
 								setGateway(nextOptions[0]?.value ?? '');
 								setRoute(makeRoute(nextKind) as LocalAttachedGatewayRoute);
-								if (error) setError(null);
+								merged.reset(undefined);
 							}}
 						/>
 					</FieldGroup>
 				) : null}
-				<FieldGroup label="Gateway" tooltip="Gateway or gateway listener that owns this route.">
+				<FieldGroup
+					label="Gateway"
+					path="gateways"
+					missing={!gateway}
+					tooltip="Gateway or gateway listener that owns this route."
+				>
 					<Dropdown
 						ariaLabel="Gateway"
 						value={gateway}
 						options={gatewayOptions}
-						onChange={value => {
-							setGateway(value);
-							if (error) setError(null);
-						}}
+						onChange={setGateway}
 					/>
 				</FieldGroup>
 
 				<div className="form-grid">
 					<Field
 						label="Name"
+						path="name"
+						missing={!route.name?.trim()}
 						tooltip={
 							kind === 'http'
 								? props.help.field<TrafficRoute>('LocalRoute', 'name')
@@ -818,6 +838,7 @@ function GatewayRouteEditor(props: {
 					</Field>
 					<Field
 						label="Hostnames"
+						path="hostnames"
 						tooltip={
 							kind === 'http'
 								? props.help.field<TrafficRoute>(
@@ -861,11 +882,6 @@ function GatewayRouteEditor(props: {
 					policies={route.policies as Record<string, unknown> | null | undefined}
 					onChange={policies => setRoute({ ...route, policies })}
 				/>
-
-				<details open>
-					<summary>Resulting YAML</summary>
-					<YamlBlock value={preview} />
-				</details>
 			</div>
 		</Drawer>
 	);
@@ -888,6 +904,7 @@ function RouteEditor(props: {
 	};
 	help: SchemaHelp;
 	saving: boolean;
+	saveError?: string;
 	onCancel: () => void;
 	onSave: (editing: {
 		bindIndex: number;
@@ -902,27 +919,27 @@ function RouteEditor(props: {
 	);
 	const [kind, setKind] = useState<RouteKind>(props.editing.kind);
 	const [route, setRoute] = useState<TrafficRoute | TrafficTcpRoute>(props.editing.route);
-	const [error, setError] = useState<string | null>(null);
 	const draft = JSON.stringify({ listenerKey, kind, route });
 	const [initialDraft] = useState(() => draft);
 	const selectedListener = props.listeners.find(
 		item => `${item.bindIndex}:${item.listenerIndex}` === listenerKey
 	);
 	const effectiveKind = selectedListener ? listenerRouteKind(selectedListener.listener) : kind;
-	const preview = cleanRoute(route, effectiveKind);
+	const merged = useMergedEdits(
+		typeof props.editing.routeIndex === 'number' ? props.editing.route : undefined,
+		cleanRoute(route, effectiveKind),
+		['$defs', effectiveKind === 'http' ? 'LocalRoute' : 'LocalTCPRoute']
+	);
 
 	function save() {
 		const [bindIndex, listenerIndex] = listenerKey.split(':').map(Number);
-		if (!selectedListener) {
-			setError('Select a listener.');
-			return;
-		}
+		if (!selectedListener) return;
 		props.onSave({
 			bindIndex,
 			listenerIndex,
 			kind: effectiveKind,
 			routeIndex: props.editing.routeIndex,
-			route: preview
+			route: merged.value
 		});
 	}
 
@@ -930,6 +947,16 @@ function RouteEditor(props: {
 		<Drawer
 			title={typeof props.editing.routeIndex === 'number' ? 'Edit route' : 'Add route'}
 			onClose={props.onCancel}
+			error={props.saveError}
+			raw={{
+				schemaPath: ['$defs', effectiveKind === 'http' ? 'LocalRoute' : 'LocalTCPRoute'],
+				value: () => merged.value,
+				onChange: value => {
+					setRoute(value as TrafficRoute | TrafficTcpRoute);
+					merged.reset(value);
+				},
+				empty: makeRoute(effectiveKind)
+			}}
 			dirty={draft !== initialDraft}
 			saving={props.saving}
 			footer={requestClose => (
@@ -940,31 +967,28 @@ function RouteEditor(props: {
 					saving={props.saving}
 					onCancel={requestClose}
 					onSave={save}
-					beforeDiff={() => {
-						if (!selectedListener) {
-							setError('Select a listener.');
-							return false;
-						}
-						return true;
-					}}
 					applyDiff={next => {
 						const [bindIndex, listenerIndex] = listenerKey.split(':').map(Number);
 						const listener = next.binds?.[bindIndex]?.listeners?.[listenerIndex];
 						if (!listener) return;
 						const routes = routeArray(listener, effectiveKind);
 						if (typeof props.editing.routeIndex === 'number') {
-							routes[props.editing.routeIndex] = preview as never;
+							routes[props.editing.routeIndex] = merged.value as never;
 						} else {
-							routes.push(preview as never);
+							routes.push(merged.value as never);
 						}
 					}}
 				/>
 			)}
 		>
-			{error ? <StatusBanner state="bad" title={error} /> : null}
+			<LostFieldsWarning lost={merged.lost} />
 			<div className="route-editor-stack">
 				{typeof props.editing.routeIndex !== 'number' ? (
-					<FieldGroup label="Listener" tooltip="Listener that owns this route.">
+					<FieldGroup
+						label="Listener"
+						tooltip="Listener that owns this route."
+						missing={!selectedListener}
+					>
 						<Dropdown
 							ariaLabel="Listener"
 							value={listenerKey}
@@ -980,6 +1004,7 @@ function RouteEditor(props: {
 								const nextKind = nextListener ? listenerRouteKind(nextListener.listener) : kind;
 								setKind(nextKind);
 								setRoute(makeRoute(nextKind));
+								merged.reset(undefined);
 							}}
 						/>
 					</FieldGroup>
@@ -988,6 +1013,7 @@ function RouteEditor(props: {
 				<div className="form-grid">
 					<Field
 						label="Name"
+						path="name"
 						tooltip={
 							effectiveKind === 'http'
 								? props.help.field<TrafficRoute>('LocalRoute', 'name')
@@ -1002,6 +1028,7 @@ function RouteEditor(props: {
 					</Field>
 					<Field
 						label="Hostnames"
+						path="hostnames"
 						tooltip={props.help.field<TrafficRoute>(
 							'LocalRoute',
 							'hostnames',
@@ -1033,11 +1060,6 @@ function RouteEditor(props: {
 					policies={route.policies as Record<string, unknown> | null | undefined}
 					onChange={policies => setRoute({ ...route, policies })}
 				/>
-
-				<details open>
-					<summary>Resulting YAML</summary>
-					<YamlBlock value={preview} />
-				</details>
 			</div>
 		</Drawer>
 	);
@@ -1063,6 +1085,7 @@ function HttpMatchEditor(props: {
 			<div className="form-grid">
 				<FieldGroup
 					label="Path match"
+					path="matches.0.path"
 					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}
 				>
 					<EnumSelector
@@ -1081,7 +1104,11 @@ function HttpMatchEditor(props: {
 						}
 					/>
 				</FieldGroup>
-				<Field label="Path" tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}>
+				<Field
+					label="Path"
+					path="matches.0.path"
+					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}
+				>
 					<input
 						value={pathValue}
 						onChange={event =>
@@ -1095,6 +1122,7 @@ function HttpMatchEditor(props: {
 				</Field>
 				<Field
 					label="Method"
+					path="matches.0.method"
 					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'method')}
 				>
 					<input
@@ -1360,6 +1388,7 @@ function RouteBackendsEditor(props: {
 							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							key={index}
 							kind={props.kind}
+							path={`backends.${index}`}
 							help={props.help}
 							backend={backend}
 							onChange={next =>
@@ -1382,6 +1411,8 @@ function RouteBackendsEditor(props: {
 
 function RouteBackendRow(props: {
 	kind: RouteKind;
+	// The backend's path in the route, such as `backends.0`.
+	path: string;
 	help: SchemaHelp;
 	backend: TrafficBackend;
 	onChange: (backend: TrafficBackend) => void;
@@ -1389,24 +1420,7 @@ function RouteBackendRow(props: {
 }) {
 	const type = editableBackendKind(props.backend);
 	if (!type || (props.kind === 'tcp' && (type === 'dynamic' || type === 'routeGroup'))) {
-		return (
-			<div className="route-backend-row readonly">
-				<div>
-					<strong>{backendSummary(props.backend)}</strong>
-					<span>Unsupported backend shape in this form</span>
-				</div>
-				<Tooltip content="Remove backend">
-					<button
-						className="icon-button danger"
-						type="button"
-						aria-label="Remove backend"
-						onClick={props.onRemove}
-					>
-						<Trash2 size={15} />
-					</button>
-				</Tooltip>
-			</div>
-		);
+		return <UnsupportedInForm supports="the backend types it lists" />;
 	}
 
 	const backend = props.backend;
@@ -1426,11 +1440,16 @@ function RouteBackendRow(props: {
 							ariaLabel="Backend target type"
 							value={type}
 							options={backendKindOptions(props.kind)}
+							schema={props.help.node([
+								'$defs',
+								props.kind === 'http' ? 'LocalRouteBackend' : 'LocalTCPRouteBackend'
+							])}
 							onChange={value => props.onChange(makeBackend(props.kind, value, backend))}
 						/>
 					</FieldGroup>
 					<Field
 						label="Weight"
+						path={`${props.path}.weight`}
 						tooltip={
 							props.kind === 'http'
 								? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'weight')
@@ -1454,6 +1473,7 @@ function RouteBackendRow(props: {
 				</div>
 				<BackendTargetFields
 					kind={props.kind}
+					path={props.path}
 					backend={backend}
 					targetKind={type}
 					help={props.help}
@@ -1484,6 +1504,7 @@ function RouteBackendRow(props: {
 
 function BackendTargetFields(props: {
 	kind: RouteKind;
+	path: string;
 	targetKind: EditableBackendKind;
 	backend: TrafficBackend;
 	help: SchemaHelp;
@@ -1494,6 +1515,7 @@ function BackendTargetFields(props: {
 			<div className="route-backend-target-grid single">
 				<Field
 					label="Host"
+					path={`${props.path}.host`}
 					tooltip={
 						props.kind === 'http'
 							? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'host')
@@ -1522,6 +1544,7 @@ function BackendTargetFields(props: {
 			<div className="route-backend-target-grid single">
 				<Field
 					label="Backend reference"
+					path={`${props.path}.backend`}
 					tooltip={
 						props.kind === 'http'
 							? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'backend')
@@ -1550,7 +1573,7 @@ function BackendTargetFields(props: {
 		const serviceName = splitServiceName(service.name);
 		return (
 			<div className="route-backend-target-grid service">
-				<Field label="Namespace">
+				<Field label="Namespace" path={`${props.path}.service.name`}>
 					<input
 						value={serviceName.namespace}
 						onChange={event =>
@@ -1567,7 +1590,7 @@ function BackendTargetFields(props: {
 						placeholder="default"
 					/>
 				</Field>
-				<Field label="Hostname">
+				<Field label="Hostname" path={`${props.path}.service.name`}>
 					<input
 						value={serviceName.hostname}
 						onChange={event =>
@@ -1584,7 +1607,7 @@ function BackendTargetFields(props: {
 						placeholder="api"
 					/>
 				</Field>
-				<Field label="Port">
+				<Field label="Port" path={`${props.path}.service.port`}>
 					<input
 						type="number"
 						min={1}
@@ -1610,7 +1633,7 @@ function BackendTargetFields(props: {
 	if (props.targetKind === 'routeGroup' && isRouteGroupBackend(props.backend)) {
 		return (
 			<div className="route-backend-target-grid single">
-				<Field label="Route group">
+				<Field label="Route group" path={`${props.path}.routeGroup`}>
 					<input
 						value={props.backend.routeGroup}
 						onChange={event =>
@@ -1651,9 +1674,9 @@ function cleanRoute(route: TrafficRoute | TrafficTcpRoute, kind: RouteKind) {
 	if (!next.name) delete next.name;
 	if (!next.ruleName) delete next.ruleName;
 	if (!next.hostnames?.length) delete next.hostnames;
-	const backends = ((next.backends ?? []) as Array<TrafficRouteBackend | TrafficTcpRouteBackend>)
-		.map(cleanBackend)
-		.filter(backendIsConfigured);
+	const backends = (
+		(next.backends ?? []) as Array<TrafficRouteBackend | TrafficTcpRouteBackend>
+	).map(cleanBackend);
 	if (backends.length) next.backends = backends as never;
 	else delete next.backends;
 	if (!next.policies) delete next.policies;
@@ -1767,20 +1790,6 @@ function cleanBackendCommon<T extends TrafficBackend>(backend: T): T {
 		};
 	}
 	return next as T;
-}
-
-function backendIsConfigured(backend: TrafficBackend) {
-	const kind = editableBackendKind(backend);
-	if (!kind) return true;
-	if (kind === 'host' && isHostBackend(backend)) return Boolean(backend.host.trim());
-	if (kind === 'backend' && isBackendReference(backend)) return Boolean(backend.backend.trim());
-	if (kind === 'routeGroup' && isRouteGroupBackend(backend))
-		return Boolean(backend.routeGroup.trim());
-	if (kind === 'service' && isServiceBackend(backend)) {
-		const name = splitServiceName(backend.service.name);
-		return Boolean(name.hostname.trim() && backend.service.port);
-	}
-	return true;
 }
 
 function isHostBackend(backend: TrafficBackend): backend is HostBackend {

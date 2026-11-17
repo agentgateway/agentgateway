@@ -1,6 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
 
 use ::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use bytes::Bytes;
@@ -282,72 +280,6 @@ fn test_ext_authz_cache_store_treats_zero_capacity_as_default() {
 }
 
 #[test]
-fn test_ext_authz_cache_refresh_threshold_scales_and_caps() {
-	assert_eq!(
-		super::cache_refresh_threshold(Duration::from_secs(10)),
-		Duration::from_secs(1)
-	);
-	assert_eq!(
-		super::cache_refresh_threshold(Duration::from_secs(1)),
-		Duration::from_millis(100)
-	);
-	assert_eq!(
-		super::cache_refresh_threshold(Duration::from_secs(365 * 24 * 60 * 60)),
-		Duration::from_secs(5)
-	);
-}
-
-#[test]
-fn test_ext_authz_cache_lookup_hits_outside_refresh_window() {
-	let cached = test_cached_grpc_response(Duration::from_secs(5), Duration::from_secs(10));
-
-	let lookup = cached.lookup(Instant::now());
-
-	assert_eq!(lookup, super::CacheLookup::Hit);
-	assert!(!cached.refreshing.load(Ordering::Acquire));
-}
-
-#[test]
-fn test_ext_authz_cache_lookup_refreshes_once_near_expiry() {
-	let cached = test_cached_grpc_response(Duration::from_millis(50), Duration::from_secs(1));
-
-	let lookup = cached.lookup(Instant::now());
-	assert_eq!(lookup, super::CacheLookup::Refresh);
-	assert!(cached.refreshing.load(Ordering::Acquire));
-
-	let lookup = cached.lookup(Instant::now());
-	assert_eq!(lookup, super::CacheLookup::Hit);
-}
-
-#[test]
-fn test_ext_authz_cache_lookup_misses_expired_entry() {
-	let cached = test_cached_grpc_response(Duration::ZERO, Duration::from_secs(1));
-
-	let lookup = cached.lookup(Instant::now() + Duration::from_millis(1));
-
-	assert_eq!(
-		lookup,
-		super::CacheLookup::Miss(super::CacheMissReason::ExpiredEntry)
-	);
-}
-
-fn test_cached_grpc_response(
-	expires_in: Duration,
-	original_ttl: Duration,
-) -> super::CachedExtAuthzResponse {
-	super::CachedExtAuthzResponse {
-		expires_at: Instant::now() + expires_in,
-		original_ttl,
-		refreshing: Arc::new(AtomicBool::new(false)),
-		response: super::CachedPolicyResponse::Grpc(
-			super::CachedGrpcPolicyResponse::DenyWithoutResponse {
-				dynamic_metadata: None,
-			},
-		),
-	}
-}
-
-#[test]
 fn test_ext_authz_cache_ttl_evaluates_duration() {
 	let extauthz = ExtAuthz::default();
 	let cache = super::CacheConfig {
@@ -547,7 +479,6 @@ fn test_cached_http_allow_replays_request_headers_and_metadata() {
 
 	let response = cached.apply(&mut req).unwrap();
 
-	assert!(response.direct_response.is_none());
 	assert!(response.response_headers.is_none());
 	assert_eq!(req.headers().get("x-authz-user").unwrap(), "alice");
 	assert_eq!(
@@ -577,9 +508,11 @@ async fn test_cached_http_direct_response_replays_status_headers_and_body() {
 		body: Bytes::from_static(b"nope"),
 	};
 
-	let response = cached.apply(&mut req).unwrap();
-
-	let mut direct_response = response.direct_response.unwrap();
+	let Err(crate::proxy::ProxyError::DirectResponse { response, .. }) = cached.apply(&mut req)
+	else {
+		panic!("expected a rejection");
+	};
+	let mut direct_response = response.into_response();
 	assert_eq!(direct_response.status(), StatusCode::UNAUTHORIZED);
 	assert_eq!(
 		direct_response.headers().get("www-authenticate").unwrap(),

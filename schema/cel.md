@@ -55,7 +55,8 @@
 |`basicAuth.username`|string||
 |`llm`|object|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
 |`llm.streaming`|boolean|Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.|
-|`llm.requestModel`|string|The model requested for the LLM request. This may differ from the actual model used.|
+|`llm.requestModel`|string|The model requested for the LLM request. Before LLM processing, this is extracted from<br>the incoming URL or body, before provider overrides. This may differ from the actual model used.|
+|`llm.originalModel`|string|The model the client asked for, before any virtual model, alias, provider override, or<br>request body rewrite. Equal to `requestModel` when the model was not rewritten.|
 |`llm.responseModel`|string|The model that actually served the LLM response.|
 |`llm.provider`|string|The provider of the LLM.|
 |`llm.inputTokens`|integer|The total number of tokens in the input/prompt, including tokens read from or written to<br>cache. This has consistent semantics across providers.|
@@ -63,6 +64,7 @@
 |`llm.inputImageTokens`|integer|The number of image tokens in the input/prompt.|
 |`llm.inputTextTokens`|integer|The number of text tokens in the input/prompt.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.inputAudioTokens`|integer|The number of audio tokens in the input/prompt.|
+|`llm.audioSeconds`|number|Seconds of input audio, for models billed by duration rather than tokens (such as `whisper-1`).|
 |`llm.cachedInputTokens`|integer|The number of tokens in the input/prompt read from cache (savings)|
 |`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)|
 |`llm.outputTokens`|integer|The number of tokens in the output/completion.|
@@ -72,7 +74,7 @@
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of input and output tokens for the request. Input tokens include tokens read<br>from or written to cache, giving this field consistent semantics across providers.|
 |`llm.providerTotalTokens`|integer|The provider-reported total number of tokens for the request. This is inconsistent across<br>providers because some include cached input tokens while others exclude them.|
-|`llm.serviceTier`|enum|The service tier the provider served the request under.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `null`.|
+|`llm.serviceTier`|enum|The service tier the provider served the request under.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `ultrafast`, `fast`, `null`.|
 |`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
 |`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
@@ -93,26 +95,59 @@
 |`llm.params.max_tokens`|integer||
 |`llm.params.encoding_format`|string||
 |`llm.params.dimensions`|integer||
+|`llm.params.reasoning_effort`|enum|The reasoning effort requested by the client: OpenAI `reasoning_effort` or<br>`reasoning.effort`, Anthropic `output_config.effort`, or Gemini `thinkingLevel`.<br>Unset when the request does not specify one, in which case the provider default applies.<br>Possible values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `null`.|
 |`llm.cost`|object|The realized USD cost of the request from the model cost catalog.<br>Unset when the model could not be priced.|
 |`llm.cost.total`|number||
 |`llm.cost.input`|number||
 |`llm.cost.output`|number||
 |`llm.cost.cacheRead`|number||
 |`llm.cost.cacheWrite`|number||
+|`llm.cost.cacheWriteDetails`|object||
+|`llm.cost.cacheWriteDetails.1h`|number||
+|`llm.cost.cacheWriteDetails.12h`|number||
 |`llm.cost.reasoning`|number||
 |`llm.cost.inputAudio`|number||
 |`llm.cost.outputAudio`|number||
 |`llm.cost.pages`|number||
+|`llm.cost.audioDuration`|number||
 |`llm.costRates`|object|Effective model catalog rates in USD per 1M tokens after tier selection.<br>Unset when the model could not be priced.|
 |`llm.costRates.input`|number||
 |`llm.costRates.output`|number||
 |`llm.costRates.cacheRead`|number||
 |`llm.costRates.cacheWrite`|number||
+|`llm.costRates.cacheWriteDetails`|object||
+|`llm.costRates.cacheWriteDetails.1h`|number||
+|`llm.costRates.cacheWriteDetails.12h`|number||
 |`llm.costRates.reasoning`|number||
 |`llm.costRates.inputAudio`|number||
 |`llm.costRates.outputAudio`|number||
 |`llm.costRates.perPage`|number||
-|`llmRequest`|any|`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;<br>policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.|
+|`llm.costRates.perAudioMinute`|number||
+|`llm.model`|object|Model catalog metadata for the model that served the request.<br>Unset when the model is not in the catalog.|
+|`llm.model.id`|string|The catalog model ID the request resolved to.|
+|`llm.model.name`|string|Human-readable display name.|
+|`llm.model.status`|string|Lifecycle stage (alpha, beta, deprecated); absent means generally available.|
+|`llm.model.released`|string|Release date, as YYYY-MM-DD or YYYY-MM.|
+|`llm.model.tags`|[]string|Freeform capability/routing tags for this model.|
+|`llm.model.limits`|object|Token limits.|
+|`llm.model.limits.context`|integer|Total context window, shared by input and output.|
+|`llm.model.limits.input`|integer|Maximum input tokens, when tighter than the context window allows.|
+|`llm.model.limits.output`|integer|Maximum output tokens.|
+|`llm.model.modalities`|object|Supported input and output modalities.|
+|`llm.model.modalities.input`|[]string|Input modalities, such as text, image, pdf, audio, or video.|
+|`llm.model.modalities.output`|[]string|Output modalities, such as text, image, audio, or video.|
+|`llm.model.capabilities`|object|Supported features. Absent fields are unknown.|
+|`llm.model.capabilities.reasoning`|boolean|Whether the model supports reasoning.|
+|`llm.model.capabilities.structuredOutput`|boolean|Whether the model supports JSON Schema structured outputs.|
+|`llm.model.capabilities.toolCall`|boolean|Whether the model supports tool calling.|
+|`llm.model.capabilities.temperature`|boolean|Whether the model accepts the temperature parameter.|
+|`llm.model.reasoning`|object|How reasoning can be controlled.|
+|`llm.model.reasoning.toggle`|boolean|Whether reasoning can be turned on and off.|
+|`llm.model.reasoning.effort`|[]string|Accepted effort levels.|
+|`llm.model.reasoning.budgetTokens`|object|Accepted reasoning token budget range.|
+|`llm.model.reasoning.budgetTokens.min`|integer|Minimum reasoning token budget.|
+|`llm.model.reasoning.budgetTokens.max`|integer|Maximum reasoning token budget.|
+|`llmRequest`|any|`llmRequest` contains the raw JSON LLM request during route and LLM policies.<br>Policies occurring after LLM processing, such as logs, will not have this field present.|
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
 |`source.port`|integer|The port of the downstream connection.|
@@ -183,5 +218,16 @@
 |`guardrails[].guardrailVersion`|string|The configured guardrail version.|
 |`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|
 |`guardrails[].assessments`|array|Assessment detail reported by the guardrail provider, redacted to metadata<br>only. Content-bearing fields (such as the matched text) are never included.|
+|`upstreamCalls`|[]object|`upstreamCalls` lists the outbound calls made for this request, such as MCP target and policy calls.<br>It's only filled in for access log expressions that reference it.<br>Its request headers are the ones sent to the backend. `request.headers` still has the client's headers.|
+|`upstreamCalls[].kind`|enum|Call category: `Primary` (backend request) or `Policy` (policy callout).<br>Possible values: `Primary`, `Policy`, `Mirror`.|
+|`upstreamCalls[].subtype`|string|Call subtype: `Http`, `Llm`, `Mcp`, `ExtAuthz`, `Substrate`, `ExtProc`,<br>`Guardrail`, `RateLimit`, `Oidc`, `Callout`, or a custom subtype name.|
+|`upstreamCalls[].target`|string|The MCP target name for MCP calls, otherwise the connection address (host:port).|
+|`upstreamCalls[].request`|object||
+|`upstreamCalls[].request.headers`|object|Headers sent to the backend, after backend auth. Tunnel proxy credentials are left out.|
+|`upstreamCalls[].response`|object||
+|`upstreamCalls[].response.code`|integer|HTTP status code. Empty when no response came back.|
+|`upstreamCalls[].response.grpcStatus`|integer|gRPC status code, from the response headers or trailers.<br>Trailers that arrive after the access log is written aren't included.|
+|`upstreamCalls[].duration`|string|Time from before DNS resolution through response headers, including connection setup.|
+|`upstreamCalls[].error`|string|Error description when the call fails. Exact wording may change between versions.|
 |`metadata`|object|`metadata` contains values set by transformation metadata expressions.|
 |`metadata.*`|any||

@@ -32,7 +32,11 @@
     "input_tokens": 30,
     "input_tokens_details": {
       "cached_tokens": 4,
-      "cache_write_tokens": 6
+      "cache_write_tokens": 6,
+      "cache_write_tokens_details": {
+        "ttl_30m_tokens": 2,
+        "ttl_12h_tokens": 4
+      }
     },
     "output_tokens": 5,
     "output_tokens_details": {

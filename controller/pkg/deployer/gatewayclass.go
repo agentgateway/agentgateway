@@ -28,8 +28,11 @@ type GatewayClassInfo struct {
 
 // GetSupportedFeaturesForAgentGateway returns the supported features for the agent Gateway class.
 // Agent gateways support additional features beyond the standard gateway class.
-func GetSupportedFeaturesForAgentGateway() []gwv1.SupportedFeature {
+func GetSupportedFeaturesForAgentGateway(enableClusterTrustBundle bool) []gwv1.SupportedFeature {
 	exemptFeatures := GetCommonExemptFeatures()
+	if !enableClusterTrustBundle {
+		exemptFeatures.Insert(features.ClusterTrustBundleFeature)
+	}
 	return getSupportedFeatures(exemptFeatures)
 }
 

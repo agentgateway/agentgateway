@@ -34,7 +34,7 @@ info:
             "text": "Two plus two is four."
           }
         ],
-        "encrypted_content": "SIG-xyz==",
+        "encrypted_content": "[{\"type\":\"thinking\",\"thinking\":\"Two plus two is four.\",\"signature\":\"SIG-xyz==\"}]",
         "status": "completed"
       },
       {
