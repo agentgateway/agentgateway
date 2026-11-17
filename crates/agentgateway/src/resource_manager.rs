@@ -25,6 +25,30 @@ const GENERIC_TTL: Duration = Duration::from_mins(15);
 const FAILED_HTTP_REFRESH: Duration = Duration::from_secs(15);
 const MIN_HTTP_REFRESH: Duration = Duration::from_secs(60);
 
+#[derive(Debug, thiserror::Error)]
+#[error("fetch {url}: HTTP {status}")]
+struct HttpFetchError {
+	url: http::Uri,
+	status: http::StatusCode,
+}
+
+pub(crate) fn is_retryable_jwks_fetch_error(error: &anyhow::Error) -> bool {
+	if let Some(error) = error.downcast_ref::<HttpFetchError>() {
+		return error.status.is_server_error()
+			|| matches!(
+				error.status,
+				http::StatusCode::REQUEST_TIMEOUT | http::StatusCode::TOO_MANY_REQUESTS
+			);
+	}
+	if let Some(error) = error.downcast_ref::<crate::proxy::ProxyError>() {
+		return error.is_retryable();
+	}
+	// A failed body stream is retryable; exceeding its configured size limit is not.
+	error
+		.downcast_ref::<crate::http::Error>()
+		.is_some_and(|error| !agent_http::is_length_limit_error(error))
+}
+
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ResourceKind {
 	Generic,
@@ -330,6 +354,8 @@ struct Entry {
 	// None retains a failed first JWKS fetch without inventing cached key data.
 	content: Option<Bytes>,
 	next_refresh: Option<Instant>,
+	// Publish foreground recovery only for dependencies retained after computation.
+	pending_recovery: bool,
 }
 
 struct FileWatch {
@@ -469,7 +495,8 @@ impl ResourceManager {
 						kind: ResourceKind::Jwks,
 						..
 					}
-				) {
+				) && is_retryable_jwks_fetch_error(&e)
+				{
 					self
 						.inner
 						.entries
@@ -479,6 +506,7 @@ impl ResourceManager {
 						.or_insert(Entry {
 							content: None,
 							next_refresh: None,
+							pending_recovery: false,
 						});
 				}
 				return Err(e);
@@ -557,12 +585,29 @@ impl ResourceManager {
 	}
 
 	fn retain_cached_and_watched_resources(&self, retained: &HashSet<ResourceRef>) {
-		self
-			.inner
-			.entries
-			.lock()
-			.expect("resource cache mutex poisoned")
-			.retain(|resource, _| retained.contains(resource));
+		let recovered = {
+			let mut entries = self
+				.inner
+				.entries
+				.lock()
+				.expect("resource cache mutex poisoned");
+			entries.retain(|resource, _| retained.contains(resource));
+			entries
+				.iter_mut()
+				.filter_map(|(resource, entry)| {
+					if std::mem::take(&mut entry.pending_recovery) {
+						Some(resource.clone())
+					} else {
+						None
+					}
+				})
+				.collect::<Vec<_>>()
+		};
+		// A failed computation drops new dependencies but may retain recovery for
+		// an already-active resource. Publish each retained event only once.
+		for resource in recovered {
+			self.notify_changed(&resource);
+		}
 
 		let retained_files = retained
 			.iter()
@@ -585,18 +630,25 @@ impl ResourceManager {
 	}
 
 	fn store(&self, resource: ResourceRef, content: Bytes, next: Option<Instant>) {
-		self
+		let mut entries = self
 			.inner
 			.entries
 			.lock()
-			.expect("resource cache mutex poisoned")
-			.insert(
-				resource.clone(),
-				Entry {
-					content: Some(content),
-					next_refresh: next,
-				},
-			);
+			.expect("resource cache mutex poisoned");
+		// An earlier consumer may have built an empty verifier during this same
+		// config computation. Defer its recovery event until dependencies are retained.
+		let pending_recovery = entries
+			.get(&resource)
+			.is_some_and(|entry| entry.content.is_none() || entry.pending_recovery);
+		entries.insert(
+			resource.clone(),
+			Entry {
+				content: Some(content),
+				next_refresh: next,
+				pending_recovery,
+			},
+		);
+		drop(entries);
 		if let Some(at) = next {
 			tracing::debug!(
 				resource = %resource_key(&resource),
@@ -661,11 +713,15 @@ impl ResourceManager {
 			let changed = entries
 				.get(&resource)
 				.is_none_or(|entry| entry.content.as_ref() != Some(&content));
+			let pending_recovery = entries
+				.get(&resource)
+				.is_some_and(|entry| entry.pending_recovery);
 			entries.insert(
 				resource.clone(),
 				Entry {
 					content: Some(content),
 					next_refresh: next,
+					pending_recovery,
 				},
 			);
 			changed
@@ -792,6 +848,7 @@ impl ResourceManager {
 				Entry {
 					content: Some(content),
 					next_refresh: None,
+					pending_recovery: false,
 				},
 			);
 			changed
@@ -883,11 +940,13 @@ async fn fetch_direct(client: &Client, resource: &ResourceRef) -> anyhow::Result
 				)
 				.await
 				.with_context(|| format!("fetch {url}"))?;
-			if *kind == ResourceKind::Jwks {
-				anyhow::ensure!(
-					resp.status().is_success(),
-					"fetch {url}: HTTP {}",
-					resp.status()
+			if *kind == ResourceKind::Jwks && !resp.status().is_success() {
+				return Err(
+					HttpFetchError {
+						url: url.clone(),
+						status: resp.status(),
+					}
+					.into(),
 				);
 			}
 			let ttl = ttl_from_headers(resp.headers(), kind.default_ttl());
@@ -1154,6 +1213,111 @@ mod tests {
 			.await
 			.expect("resource deletion should notify")
 			.expect("change channel should remain open");
+	}
+
+	#[tokio::test]
+	async fn foreground_jwks_recovery_notifies_for_shared_url_verifiers() {
+		use serde_json::json;
+		use wiremock::matchers::{method, path};
+		use wiremock::{Mock, MockServer, ResponseTemplate};
+
+		use crate::http::jwt::LocalJwtConfig;
+		use crate::http::jwt::tests::build_signed_token_with_payload;
+
+		for (accepted, previously_active) in [(false, false), (false, true), (true, false)] {
+			let server = MockServer::start().await;
+			Mock::given(method("GET"))
+				.and(path("/jwks"))
+				.respond_with(ResponseTemplate::new(503))
+				.with_priority(1)
+				.up_to_n_times(1)
+				.expect(1)
+				.mount(&server)
+				.await;
+			Mock::given(method("GET"))
+				.and(path("/jwks"))
+				.respond_with(ResponseTemplate::new(200).set_body_json(json!({"keys": [{
+					"kty": "EC", "kid": "recovered-key", "crv": "P-256", "alg": "ES256",
+					"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+					"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+				}]})))
+				.expect(1)
+				.mount(&server)
+				.await;
+			let manager = ResourceManager::new(test_client()).unwrap();
+			let mut changes = manager.subscribe_changes();
+			let resources = ResourceFetcher::managed(manager);
+			if previously_active {
+				let scope = resources.scope_full_computation();
+				let prior: LocalJwtConfig = serde_json::from_value(json!({
+					"mode": "strict", "issuer": "first",
+					"jwks": {"url": format!("{}/jwks", server.uri())}
+				}))
+				.unwrap();
+				prior.try_into(&resources).await.unwrap();
+				scope.finish(true);
+			}
+			let config = || {
+				let mut providers = vec![
+					json!({"issuer": "first", "jwks": {"url": format!("{}/jwks", server.uri())}}),
+					json!({"issuer": "second", "jwks": {"url": format!("{}/jwks", server.uri())}}),
+				];
+				if !accepted {
+					providers.push(json!({"issuer": "third", "jwks": "not valid JSON"}));
+				}
+				serde_json::from_value::<LocalJwtConfig>(json!({
+					"mode": "strict", "providers": providers
+				}))
+				.unwrap()
+			};
+			let scope = resources.scope_full_computation();
+			let result = config().try_into(&resources).await;
+			assert!(
+				!changes.has_changed().unwrap(),
+				"foreground recovery must wait until dependencies are retained"
+			);
+			scope.finish(result.is_ok());
+			if !accepted {
+				assert!(result.is_err());
+				assert_eq!(
+					changes.has_changed().unwrap(),
+					previously_active,
+					"rejected config may publish recovery only for an already-active dependency"
+				);
+				changes.borrow_and_update();
+				if previously_active {
+					let scope = resources.scope_full_computation();
+					assert!(config().try_into(&resources).await.is_err());
+					scope.finish(false);
+					assert!(!changes.has_changed().unwrap());
+				}
+				continue;
+			}
+			let first_token = build_signed_token_with_payload(
+				"recovered-key",
+				json!({"iss": "first", "aud": "aud", "exp": 4102444800_u64}),
+			);
+			let second_token = build_signed_token_with_payload(
+				"recovered-key",
+				json!({"iss": "second", "aud": "aud", "exp": 4102444800_u64}),
+			);
+			let initial = result.unwrap();
+			assert!(initial.validate_claims(&first_token).is_err());
+			assert!(initial.validate_claims(&second_token).is_ok());
+			assert!(
+				changes.has_changed().unwrap(),
+				"foreground recovery must notify so the earlier empty verifier can be rebuilt"
+			);
+			changes.borrow_and_update();
+
+			let recovered = config().try_into(&resources).await.unwrap();
+			assert!(recovered.validate_claims(&first_token).is_ok());
+			assert!(recovered.validate_claims(&second_token).is_ok());
+			assert!(
+				!changes.has_changed().unwrap(),
+				"rebuilding from cached keys must not trigger another reload"
+			);
+		}
 	}
 
 	#[tokio::test]
