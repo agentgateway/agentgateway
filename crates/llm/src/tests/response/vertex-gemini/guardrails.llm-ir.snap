@@ -1,0 +1,76 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/response/vertex-gemini/guardrails.json
+info:
+  candidates:
+    - content:
+        role: model
+        parts:
+          - text: answer
+          - text: unsigned reasoning
+            thought: true
+          - text: signed reasoning
+            thought: true
+            thoughtSignature: signature
+          - functionCall:
+              id: call
+              name: tool
+              args:
+                value: argument
+          - functionCall:
+              id: signed
+              name: tool
+              args:
+                value: signed argument
+            thoughtSignature: signature
+          - functionResponse:
+              id: call
+              name: tool
+              response:
+                result: result
+          - executableCode:
+              language: PYTHON
+              code: print(1)
+          - codeExecutionResult:
+              outcome: OUTCOME_OK
+              output: "1"
+          - toolCall:
+              id: search
+              toolType: GOOGLE_SEARCH_WEB
+              args:
+                query: query
+          - toolResponse:
+              id: search
+              toolType: GOOGLE_SEARCH_WEB
+              response:
+                result: result
+          - inlineData:
+              mimeType: image/png
+              data: opaque
+          - inlineData:
+              mimeType: audio/wav
+              data: opaque
+            audioTranscription:
+              text: transcript
+              speakerLabel: speaker
+              words:
+                - word: transcript
+                  startOffset: 0s
+---
+{
+  "disposition": "unsupported: code execution, server tool calls, function responses and media in a reply, which the client can't be given",
+  "messages": {
+    "failed": 500
+  },
+  "responses": {
+    "failed": 500
+  },
+  "usage": {
+    "input_tokens": null,
+    "output_tokens": null,
+    "total_tokens": null,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

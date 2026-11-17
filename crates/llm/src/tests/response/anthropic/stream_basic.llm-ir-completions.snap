@@ -1,0 +1,143 @@
+---
+source: crates/llm/src/ir_golden_chat_client_tests.rs
+description: src/tests/response/anthropic/stream_basic.json
+info: "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_016wbjv5k86nxxd8CEZwSQnA\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-haiku-4-5-20251001\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":15,\"cache_creation_input_tokens\":13,\"cache_read_input_tokens\":12,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":5,\"service_tier\":\"standard\"}}    }\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}      }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi there! How are\"}    }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" you doing today?\"}           }\n\nevent: ping\ndata: {\"type\": \"ping\"}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" Is\"}  }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" there anything I can help\"}               }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" you with?\"}            }\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0           }\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":21}            }\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"            }\n\n"
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "events": [
+      {
+        "id": "chatcmpl-msg_016wbjv5k86nxxd8CEZwSQnA",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "role": "assistant",
+              "content": ""
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg_016wbjv5k86nxxd8CEZwSQnA",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": "Hi there! How are"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg_016wbjv5k86nxxd8CEZwSQnA",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " you doing today?"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg_016wbjv5k86nxxd8CEZwSQnA",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " Is"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg_016wbjv5k86nxxd8CEZwSQnA",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " there anything I can help"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg_016wbjv5k86nxxd8CEZwSQnA",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " you with?"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg_016wbjv5k86nxxd8CEZwSQnA",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {},
+            "finish_reason": "stop"
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg_016wbjv5k86nxxd8CEZwSQnA",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [],
+        "usage": {
+          "prompt_tokens": 40,
+          "completion_tokens": 21,
+          "total_tokens": 61,
+          "prompt_tokens_details": {
+            "cached_tokens": 12
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    ],
+    "done": true
+  },
+  "usage": {
+    "input_tokens": 40,
+    "output_tokens": 21,
+    "total_tokens": 61,
+    "cached_tokens": 12,
+    "cache_write_tokens": 13,
+    "reasoning_tokens": null
+  }
+}

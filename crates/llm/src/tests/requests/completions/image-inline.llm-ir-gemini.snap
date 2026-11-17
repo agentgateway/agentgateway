@@ -1,0 +1,18 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/image-inline.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: "What's in this image?"
+        - type: image_url
+          image_url:
+            url: "data:image/jpg;base64,/9j/4AAQSkZJRgABAQ=="
+---
+{
+  "disposition": "unsupported: the media type `image/jpg`, which isn't registered; legacy sends it as `image/jpeg`",
+  "refused": "unsupported request: `messages[0].content[1]` must be a base64 data URL of a supported image"
+}

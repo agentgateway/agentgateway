@@ -15,7 +15,7 @@ pub use common::MockInstance;
 #[cfg(test)]
 pub(crate) use common::spawn_service;
 #[cfg(any(test, feature = "internal_benches"))]
-pub use policy::{policy_client, test_policy};
+pub use policy::{make_min_req_log, policy_client, test_policy};
 
 #[cfg(test)]
 pub(crate) fn test_client() -> crate::client::Client {

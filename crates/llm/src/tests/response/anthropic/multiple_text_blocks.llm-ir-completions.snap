@@ -1,0 +1,43 @@
+---
+source: crates/llm/src/ir_golden_chat_client_tests.rs
+description: src/tests/response/anthropic/multiple_text_blocks.json
+info:
+  id: msg_012JYtNYb8sv6Hb67TcGT7xW
+  type: message
+  role: assistant
+  model: claude-haiku-4-5-20251001
+  content:
+    - type: text
+      text: "The sky is "
+    - type: text
+      text: blue during the day
+      citations:
+        - type: char_location
+          cited_text: the sky appears blue
+          document_index: 0
+          document_title: Sky Facts
+          start_char_index: 0
+          end_char_index: 20
+    - type: text
+      text: "."
+  stop_reason: end_turn
+  stop_sequence: ~
+  usage:
+    input_tokens: 15
+    output_tokens: 21
+    service_tier: standard
+---
+{
+  "disposition": "unsupported: a `char_location` citation, which the Messages decoder doesn't read; a Chat Completions client can't send the document it cites",
+  "client": {
+    "failed": "500 {\"error\":{\"message\":\"The provider failed.\",\"type\":\"server_error\",\"param\":null,\"code\":\"server_error\"}}"
+  },
+  "usage": {
+    "input_tokens": 15,
+    "output_tokens": 21,
+    "total_tokens": 36,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

@@ -1,0 +1,88 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/tool_result_error.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 1024
+  tools:
+    - name: get_weather
+      description: Get the current weather in a given location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+            description: "The city and state, e.g. San Francisco, CA"
+        required:
+          - location
+  messages:
+    - role: user
+      content: What is the weather like in San Francisco?
+    - role: assistant
+      content:
+        - type: tool_use
+          id: toolu_01
+          name: get_weather
+          input:
+            location: "San Francisco, CA"
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: toolu_01
+          is_error: true
+          content: "Error: location not found"
+---
+{
+  "disposition": "legacy bug: legacy drops `is_error`, so the model can't tell a failed call; the IR marks the output",
+  "request": {
+    "model": "claude-opus-4-6",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the weather like in San Francisco?"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "toolu_01",
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\n            \"location\": \"San Francisco, CA\"\n          }"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "toolu_01",
+        "content": "[tool error]\nError: location not found"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get the current weather in a given location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      }
+    ],
+    "max_completion_tokens": 1024
+  },
+  "dropped": []
+}

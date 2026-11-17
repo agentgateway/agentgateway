@@ -1168,6 +1168,7 @@ impl RequestLog {
 			llm_request: None,
 			llm_response: Default::default(),
 			original_model: None,
+			llm_converter: None,
 			guardrails: Default::default(),
 			mcp_guardrails: Default::default(),
 			budgets: Vec::new(),
@@ -1359,6 +1360,7 @@ pub struct RequestLog {
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 	pub original_model: Option<String>,
+	pub llm_converter: Option<llm::ir::Converter>,
 	pub guardrails: GuardrailLog,
 	pub mcp_guardrails: McpGuardrailsLog,
 	pub budgets: Vec<crate::http::budget::BudgetSettlement>,
@@ -1947,6 +1949,17 @@ impl Drop for DropOnLog {
 				(
 					"agw.ai.original_model",
 					log.original_model.as_deref().map(Into::into),
+				),
+				(
+					"agw.ai.converter",
+					log.llm_converter.map(|c| c.name().into()),
+				),
+				(
+					"agw.ai.legacy_reason",
+					log
+						.llm_converter
+						.and_then(|c| c.legacy_reason())
+						.map(Into::into),
 				),
 				("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 				(
@@ -2933,6 +2946,7 @@ mod tests {
 	use prometheus_client::registry::Registry;
 
 	use super::*;
+	use crate::llm::ir::{Converter, Ineligible};
 	use crate::telemetry::metrics::{
 		Metrics, OutboundCallKind, OutboundCallLabels, OutboundCallSubtype,
 	};
@@ -4076,6 +4090,54 @@ mod tests {
 			value("agw.ai.original_model").as_deref(),
 			Some("smart-model")
 		);
+	}
+
+	#[test]
+	fn llm_converter_span_attributes() {
+		let attributes = |converter| {
+			let (tracer, exporter) = test_tracer();
+			let mut log = test_request_log();
+			log.tracer = Some(tracer.clone());
+			let mut outgoing = trc::TraceParent::new();
+			outgoing.flags = 1;
+			log.outgoing_span = Some(outgoing);
+			log.llm_request = Some(metric_test_llm_request());
+			log.llm_converter = converter;
+
+			drop(DropOnLog::from(log));
+			let _ = tracer.provider.force_flush();
+			let spans = exporter.finished_spans();
+			let span = spans
+				.iter()
+				.find(|span| span.name.as_ref() == "unknown")
+				.expect("request span should be exported");
+			let value = |key: &str| {
+				span
+					.attributes
+					.iter()
+					.find(|attr| attr.key.as_str() == key)
+					.map(|attr| attr.value.to_string())
+			};
+			(value("agw.ai.converter"), value("agw.ai.legacy_reason"))
+		};
+
+		assert_eq!(
+			attributes(Some(Converter::Native)),
+			(Some("native".into()), None)
+		);
+		assert_eq!(
+			attributes(Some(Converter::LlmIr)),
+			(Some("llm_ir".into()), None)
+		);
+		assert_eq!(
+			attributes(Some(Converter::LlmIrPassthrough)),
+			(Some("llm_ir_passthrough".into()), None)
+		);
+		assert_eq!(
+			attributes(Some(Converter::Legacy(Ineligible::ContentCapture))),
+			(Some("legacy".into()), Some("content_capture".into()))
+		);
+		assert_eq!(attributes(None), (None, None));
 	}
 
 	#[test]

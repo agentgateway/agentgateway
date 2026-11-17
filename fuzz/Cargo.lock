@@ -157,6 +157,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-llm-ir"
+version = "0.0.0"
+dependencies = [
+ "base64 0.23.1",
+ "memchr",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "agent-policy"
 version = "0.0.0"
 dependencies = [
@@ -239,6 +250,7 @@ dependencies = [
  "agent-hbone",
  "agent-http",
  "agent-llm",
+ "agent-llm-ir",
  "agent-policy",
  "agent-policy-cors",
  "agent-pool",
@@ -247,6 +259,7 @@ dependencies = [
  "arc-swap",
  "async-compression",
  "async-openai",
+ "async-stream",
  "async-trait",
  "atomic_float",
  "aws-config",
@@ -382,6 +395,7 @@ version = "0.0.0"
 dependencies = [
  "agent-celx",
  "agent-llm",
+ "agent-llm-ir",
  "agentgateway",
  "cel",
  "libfuzzer-sys",
@@ -6390,9 +6404,9 @@ dependencies = [
 
 [[package]]
 name = "spiffe"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "539d8f20779006e7e078d8ac7f30a7d7d77fdbbf1f343e1d4416c22772850fbf"
+checksum = "bb3330f98f1b0c56c42e8d25f4793b242ffd2df57cb21d0cfdd8dfc24cc444b8"
 dependencies = [
  "arc-swap",
  "base64ct",

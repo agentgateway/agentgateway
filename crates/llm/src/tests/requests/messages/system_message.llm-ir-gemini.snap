@@ -1,0 +1,45 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/system_message.json
+info:
+  model: gpt-5.6-terra
+  max_tokens: 1024
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: "<system-reminder>\nAs you answer, be concise."
+        - type: text
+          text: hola
+          cache_control:
+            type: ephemeral
+    - role: system
+      content: The following skills are available for use.
+---
+{
+  "disposition": "changed: a system-role message after the first turn becomes a `<system-reminder>` in its place, where legacy moves it into the system prompt",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<system-reminder>\nAs you answer, be concise."
+          },
+          {
+            "text": "hola"
+          },
+          {
+            "text": "<system-reminder>\nThe following skills are available for use.\n</system-reminder>"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 1024
+    }
+  },
+  "dropped": [
+    "cache_control"
+  ]
+}

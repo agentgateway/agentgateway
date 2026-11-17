@@ -1,0 +1,63 @@
+---
+source: crates/llm/src/ir_tests/mod.rs
+description: src/tests/response/vertex-gemini/reasoning.json
+info:
+  candidates:
+    - content:
+        role: model
+        parts:
+          - text: Let me think about the weather.
+            thought: true
+          - text: It is sunny.
+      finishReason: STOP
+      index: 0
+  usageMetadata:
+    promptTokenCount: 10
+    candidatesTokenCount: 12
+    thoughtsTokenCount: 5
+    totalTokenCount: 27
+  modelVersion: gemini-2.5-pro
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "body": {
+      "id": "chatcmpl-reply-1",
+      "object": "chat.completion",
+      "created": 1700000000,
+      "model": "gemini-2.5-pro",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "It is sunny.",
+            "refusal": null,
+            "reasoning_content": "Let me think about the weather."
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 10,
+        "completion_tokens": 17,
+        "total_tokens": 27,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 5
+        }
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 17,
+    "total_tokens": 27,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": 5
+  }
+}

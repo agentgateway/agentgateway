@@ -1,0 +1,50 @@
+---
+source: crates/llm/src/ir_golden_chat_tests.rs
+description: src/tests/response/completions/stream-content_filter.json
+info: "data: {\"id\":\"chatcmpl_filtered\",\"object\":\"chat.completion.chunk\",\"created\":123,\"model\":\"gpt-5.6-luna\",\"choices\":[{\"index\":0,\"finish_reason\":\"content_filter\",\"delta\":{\"role\":\"assistant\",\"content\":\"\"}}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":0,\"total_tokens\":10}}\n\ndata: [DONE]\n\n"
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "events": [
+      {
+        "type": "message_start",
+        "message": {
+          "id": "chatcmpl_filtered",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "model": "gpt-5.6-luna",
+          "stop_reason": null,
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "refusal",
+          "stop_sequence": null
+        },
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 0
+        }
+      },
+      {
+        "type": "message_stop"
+      }
+    ]
+  },
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 0,
+    "total_tokens": 10,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

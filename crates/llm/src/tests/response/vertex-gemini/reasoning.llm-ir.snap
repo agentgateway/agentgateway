@@ -1,0 +1,97 @@
+---
+source: crates/llm/src/ir_tests/mod.rs
+description: src/tests/response/vertex-gemini/reasoning.json
+info:
+  candidates:
+    - content:
+        role: model
+        parts:
+          - text: Let me think about the weather.
+            thought: true
+          - text: It is sunny.
+      finishReason: STOP
+      index: 0
+  usageMetadata:
+    promptTokenCount: 10
+    candidatesTokenCount: 12
+    thoughtsTokenCount: 5
+    totalTokenCount: 27
+  modelVersion: gemini-2.5-pro
+---
+{
+  "disposition": "equivalent",
+  "messages": {
+    "body": {
+      "id": "reply-1",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Let me think about the weather.",
+          "signature": "agentgateway.llm-ir.v1:YWdlbnRnYXRld2F5LmxsbS1pci52MToAAAAAAAAABmdvbGRlbgAAAAAAAAAGZ2VtaW5pAAAAAAAAAA5nZW1pbmktMi41LXBybwAAAAAAAAASbWVzc2FnZXMtc2lnbmF0dXJleyJ0ZXh0IjoiTGV0IG1lIHRoaW5rIGFib3V0IHRoZSB3ZWF0aGVyLiIsInRob3VnaHQiOnRydWV9"
+        },
+        {
+          "type": "text",
+          "text": "It is sunny."
+        }
+      ],
+      "model": "gemini-2.5-pro",
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 17
+      }
+    }
+  },
+  "responses": {
+    "body": {
+      "id": "resp_reply-1",
+      "object": "response",
+      "created_at": 1,
+      "model": "gemini-2.5-pro",
+      "status": "completed",
+      "output": [
+        {
+          "type": "reasoning",
+          "id": "rs_0",
+          "summary": [],
+          "encrypted_content": "agentgateway.llm-ir.v1:YWdlbnRnYXRld2F5LmxsbS1pci52MToAAAAAAAAABmdvbGRlbgAAAAAAAAAGZ2VtaW5pAAAAAAAAAA5nZW1pbmktMi41LXBybwAAAAAAAAAbcmVzcG9uc2VzLWVuY3J5cHRlZC1jb250ZW50eyJ0ZXh0IjoiTGV0IG1lIHRoaW5rIGFib3V0IHRoZSB3ZWF0aGVyLiIsInRob3VnaHQiOnRydWV9"
+        },
+        {
+          "type": "message",
+          "id": "msg_1",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "It is sunny.",
+              "annotations": []
+            }
+          ]
+        }
+      ],
+      "usage": {
+        "input_tokens": 10,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 17,
+        "output_tokens_details": {
+          "reasoning_tokens": 5
+        },
+        "total_tokens": 27
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 17,
+    "total_tokens": 27,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": 5
+  }
+}

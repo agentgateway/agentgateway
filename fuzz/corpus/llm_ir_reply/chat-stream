@@ -1,0 +1,7 @@
+D
+data: {"id":"r","object":"chat.completion.chunk","model":"model","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"hello"},"finish_reason":null}],"usage":null}
+
+data: {"id":"r","object":"chat.completion.chunk","model":"model","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
+
+data: [DONE]
+

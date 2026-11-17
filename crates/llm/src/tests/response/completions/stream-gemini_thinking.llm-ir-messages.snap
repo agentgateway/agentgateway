@@ -1,0 +1,78 @@
+---
+source: crates/llm/src/ir_golden_chat_tests.rs
+description: src/tests/response/completions/stream-gemini_thinking.json
+info: "data: {\"choices\":[{\"delta\":{\"content\":\"Neptune was found\",\"role\":\"assistant\"},\"index\":0}],\"created\":1775595257,\"id\":\"9W7VaabzK7KPjMcPnYGiuAU\",\"model\":\"google/gemini-3.8-flash\",\"object\":\"chat.completion.chunk\",\"system_fingerprint\":\"\"}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" by mathematics.\",\"role\":\"assistant\"},\"finish_reason\":\"stop\",\"index\":0}],\"created\":1775595257,\"id\":\"9W7VaabzK7KPjMcPnYGiuAU\",\"model\":\"google/gemini-3.8-flash\",\"object\":\"chat.completion.chunk\",\"system_fingerprint\":\"\",\"usage\":{\"completion_tokens\":30,\"completion_tokens_details\":{\"reasoning_tokens\":20},\"prompt_tokens\":19,\"total_tokens\":69}}\n\ndata: [DONE]\n\n"
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "events": [
+      {
+        "type": "message_start",
+        "message": {
+          "id": "9W7VaabzK7KPjMcPnYGiuAU",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "model": "google/gemini-3.8-flash",
+          "stop_reason": null,
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Neptune was found"
+        }
+      },
+      {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " by mathematics."
+        }
+      },
+      {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null
+        },
+        "usage": {
+          "input_tokens": 19,
+          "output_tokens": 50
+        }
+      },
+      {
+        "type": "message_stop"
+      }
+    ]
+  },
+  "usage": {
+    "input_tokens": 19,
+    "output_tokens": 50,
+    "total_tokens": 69,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": 20
+  }
+}

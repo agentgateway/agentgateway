@@ -1,0 +1,60 @@
+---
+source: crates/llm/src/ir_golden_chat_client_tests.rs
+description: src/tests/response/anthropic/stream_error.json
+info: "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream_error\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-haiku-4-5-20251001\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":15,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi there\"}}\n\nevent: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n"
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "events": [
+      {
+        "id": "chatcmpl-msg_stream_error",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "role": "assistant",
+              "content": ""
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg_stream_error",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "claude-haiku-4-5-20251001",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": "Hi there"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "error": {
+          "message": "The provider is overloaded.",
+          "type": "server_error",
+          "param": null,
+          "code": "server_is_overloaded"
+        }
+      }
+    ],
+    "done": false
+  },
+  "usage": {
+    "input_tokens": 15,
+    "output_tokens": 1,
+    "total_tokens": 16,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

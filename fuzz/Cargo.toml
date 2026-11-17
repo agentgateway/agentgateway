@@ -26,6 +26,7 @@ tiktoken = { git = "https://github.com/howardjohn/rust-tiktoken", rev = "14ea59e
 [dependencies]
 agentgateway = { path = "../crates/agentgateway", default-features = false, features = ["crypto-aws-lc"], optional = true }
 agent-llm = { path = "../crates/llm" }
+agent-llm-ir = { path = "../crates/llm-ir" }
 agent-celx = { path = "../crates/celx" }
 cel = { path = "../crates/cel-fork/cel" }
 libfuzzer-sys = "0.4"
@@ -51,6 +52,20 @@ bench = false
 [[bin]]
 name = "cel_expression"
 path = "fuzz_targets/cel_expression.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "llm_ir_request"
+path = "fuzz_targets/llm_ir_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "llm_ir_reply"
+path = "fuzz_targets/llm_ir_reply.rs"
 test = false
 doc = false
 bench = false

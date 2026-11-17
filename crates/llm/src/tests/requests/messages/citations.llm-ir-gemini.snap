@@ -1,0 +1,69 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/citations.json
+info:
+  model: gpt-5.6-luna
+  max_tokens: 64
+  messages:
+    - role: system
+      content:
+        - type: text
+          text: Be concise.
+          citations: []
+    - role: user
+      content:
+        - type: text
+          text: Say hello.
+          citations: []
+    - role: assistant
+      content:
+        - type: text
+          text: Hello!
+          citations: []
+    - role: user
+      content: Continue.
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Say hello."
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "Hello!"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Continue."
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "Be concise."
+        }
+      ]
+    },
+    "generationConfig": {
+      "maxOutputTokens": 64
+    }
+  },
+  "dropped": [
+    "citations"
+  ]
+}

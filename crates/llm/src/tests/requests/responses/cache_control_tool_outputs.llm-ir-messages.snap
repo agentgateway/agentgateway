@@ -1,0 +1,34 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/responses/cache_control_tool_outputs.json
+info:
+  model: gpt-5
+  input:
+    - type: function_call
+      call_id: call_1
+      name: get_weather
+      arguments: "{}"
+    - type: function_call_output
+      call_id: call_1
+      output:
+        - type: input_text
+          text: sunny
+          prompt_cache_breakpoint:
+            mode: explicit
+    - type: custom_tool_call
+      id: ctc_1
+      call_id: call_2
+      name: shell
+      input: ls
+    - type: custom_tool_call_output
+      call_id: call_2
+      output:
+        - type: input_text
+          text: notes.txt
+          prompt_cache_breakpoint:
+            mode: explicit
+---
+{
+  "disposition": "refuses `prompt_cache_breakpoint` inside tool outputs",
+  "refused": "unsupported request: field `input[1].output[0][0].prompt_cache_breakpoint`; field `input[3].output[0][0].prompt_cache_breakpoint`"
+}

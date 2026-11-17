@@ -1,0 +1,14 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/responses/instructions.json
+info:
+  model: gpt-4o
+  service_tier: flex
+  max_output_tokens: 1024
+  instructions: Always use the get_weather tool for weather questions.
+  input: What is the weather like in San Francisco?
+---
+{
+  "disposition": "unsupported: `service_tier`, which legacy drops",
+  "refused": "unsupported request: field `service_tier`"
+}

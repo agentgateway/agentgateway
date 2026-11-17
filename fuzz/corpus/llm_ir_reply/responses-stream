@@ -1,0 +1,15 @@
+D
+data: {"type":"response.created","response":{"id":"r","object":"response","model":"model","status":"in_progress","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}
+
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"m","type":"message","role":"assistant","status":"in_progress","content":[]}}
+
+data: {"type":"response.content_part.added","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]}}
+
+data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"hello"}
+
+data: {"type":"response.output_text.done","output_index":0,"content_index":0,"text":"hello"}
+
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"m","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"hello","annotations":[]}]}}
+
+data: {"type":"response.completed","response":{"id":"r","object":"response","model":"model","status":"completed","output":[{"id":"m","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"hello","annotations":[]}]}],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}
+

@@ -471,6 +471,7 @@ async fn completions_inbound_to_the_gemini_provider_renders_native() {
 		request: mut forwarded,
 		llm_request,
 		upstream_route_type,
+		..
 	} = provider
 		.process_completions_request(
 			&backend_info(gemini::DEFAULT_HOST_STR),

@@ -1,0 +1,100 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/tool-call.json
+info:
+  model: gpt-3.5-turbo
+  tools: []
+  messages:
+    - role: user
+      content: How is the current weather in Columbus?
+    - role: assistant
+      content: ~
+      tool_calls:
+        - id: call_iMGPsr4Xx1u0G5sOzFsTCbQU
+          type: function
+          function:
+            name: get_weather
+            arguments: "{\"format\":\"celsius\",\"location\":\"Columbus, OH\"}"
+        - id: call_5rQmXtLpZ9wKvNbJhGyDsFcE
+          type: function
+          function:
+            name: get_time
+            arguments: ""
+    - role: tool
+      tool_call_id: call_iMGPsr4Xx1u0G5sOzFsTCbQU
+      name: get_weather
+      content: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+    - role: tool
+      tool_call_id: call_5rQmXtLpZ9wKvNbJhGyDsFcE
+      name: get_time
+      content: "{ \"time\": \"2026-08-12T12:00:00Z\" }"
+---
+{
+  "disposition": "changed: the results of parallel calls are one user turn, where legacy sends a turn for each",
+  "request": {
+    "model": "gpt-3.5-turbo",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "How is the current weather in Columbus?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+            "name": "get_weather",
+            "input": {
+              "format": "celsius",
+              "location": "Columbus, OH"
+            }
+          },
+          {
+            "type": "tool_use",
+            "id": "call_5rQmXtLpZ9wKvNbJhGyDsFcE",
+            "name": "get_time",
+            "input": {}
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+              }
+            ]
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_5rQmXtLpZ9wKvNbJhGyDsFcE",
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"time\": \"2026-08-12T12:00:00Z\" }"
+              }
+            ],
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [
+    "tool result name"
+  ]
+}

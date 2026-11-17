@@ -85,6 +85,9 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				config_resource_store.as_ref(),
 			)
 			.await?;
+			if config.llm_ir_enabled {
+				info!("LLM IR conversion is enabled for eligible LLM requests");
+			}
 			let request_log_store = match config.logging.database.as_ref() {
 				Some(cfg) => {
 					let pool = config

@@ -1,0 +1,32 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/reasoning.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: user
+      content: How is the current weather in Columbus?
+  reasoning_effort: medium
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "How is the current weather in Columbus?"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "thinkingConfig": {
+        "includeThoughts": true,
+        "thinkingBudget": 2048
+      }
+    }
+  },
+  "dropped": []
+}

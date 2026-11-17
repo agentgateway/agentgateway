@@ -780,6 +780,8 @@ pub struct Config {
 	/// True when neither SESSION_KEY nor config.session.key is set, so a key may be generated.
 	#[serde(skip)]
 	pub session_key_unset: bool,
+	/// Converts eligible LLM requests with the agent-llm-ir core: `AGENTGATEWAY_LLM_IR_ENABLED`.
+	pub llm_ir_enabled: bool,
 	/// Runtime cookie/session crypto for browser OIDC flows.
 	pub oidc_cookie_encoder: Option<http::sessionpersistence::Encoder>,
 	/// Handle for tasks/spans emitted on the admin runtime.

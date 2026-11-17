@@ -1,0 +1,37 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/response/responses/failed.json
+info:
+  id: resp_terminal
+  object: response
+  created_at: 123
+  model: gpt-5.6-luna
+  status: failed
+  output: []
+  usage:
+    input_tokens: 100
+    output_tokens: 5
+    total_tokens: 105
+    input_tokens_details:
+      cached_tokens: 20
+      cache_write_tokens: 30
+    output_tokens_details:
+      reasoning_tokens: 3
+  error:
+    code: server_error
+    message: provider failed
+---
+{
+  "disposition": "changed: the IR records the usage a failed reply reports, where legacy records none",
+  "client": {
+    "failed": "500 {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"The provider failed.\"}}"
+  },
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 5,
+    "total_tokens": 105,
+    "cached_tokens": 20,
+    "cache_write_tokens": 30,
+    "reasoning_tokens": 3
+  }
+}

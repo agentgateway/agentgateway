@@ -1,0 +1,18 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/image-url.json
+info:
+  model: claude-sonnet-4-20250514
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: "What's in this image?"
+        - type: image_url
+          image_url:
+            url: "https://example.com/image.png"
+---
+{
+  "disposition": "unsupported: an image by URL, which the provider would fetch",
+  "refused": "unsupported request: `messages[0].content[1]` must be a base64 data URL of a supported image"
+}

@@ -1,0 +1,83 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/gemini/structured-output.json
+info:
+  contents:
+    - role: user
+      parts:
+        - text: List three planets.
+  generationConfig:
+    responseMimeType: application/json
+    responseSchema:
+      type: ARRAY
+      items:
+        type: OBJECT
+        properties:
+          name:
+            type: STRING
+          moons:
+            type: INTEGER
+          habitable:
+            type: BOOLEAN
+        required:
+          - name
+          - moons
+        propertyOrdering:
+          - name
+          - moons
+          - habitable
+---
+{
+  "disposition": "converts; legacy only passes a Gemini request on to Gemini",
+  "request": {
+    "model": "golden-model",
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "List three planets."
+          }
+        ]
+      }
+    ],
+    "max_output_tokens": 4096,
+    "text": {
+      "format": {
+        "type": "json_schema",
+        "name": "structured_output",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "moons": {
+                "type": "integer"
+              },
+              "habitable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "moons"
+            ]
+          }
+        }
+      }
+    },
+    "stream": false,
+    "store": false,
+    "include": [
+      "reasoning.encrypted_content"
+    ]
+  },
+  "dropped": [
+    "schema propertyOrdering"
+  ]
+}

@@ -1,0 +1,27 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/responses/basic.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input: "Hello, world"
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Hello, world"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 1024
+    }
+  },
+  "dropped": []
+}

@@ -1,0 +1,93 @@
+---
+source: crates/llm/src/ir_golden_chat_client_tests.rs
+description: src/tests/response/vertex-gemini/stream_tool.json
+info: "data: {\"responseId\":\"gemini-tool\",\"modelVersion\":\"gemini-2.5-pro\",\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"id\":\"fc_native\",\"name\":\"get_weather\",\"args\":{\"location\":\"Tokyo\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":15,\"candidatesTokenCount\":12,\"totalTokenCount\":27}}\n\n"
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "events": [
+      {
+        "id": "chatcmpl-gemini-tool",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "gemini-2.5-pro",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "role": "assistant",
+              "content": ""
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-gemini-tool",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "gemini-2.5-pro",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "tool_calls": [
+                {
+                  "index": 0,
+                  "id": "fc_native",
+                  "type": "function",
+                  "function": {
+                    "name": "get_weather",
+                    "arguments": "{\"location\":\"Tokyo\"}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-gemini-tool",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "gemini-2.5-pro",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {},
+            "finish_reason": "tool_calls"
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-gemini-tool",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "gemini-2.5-pro",
+        "choices": [],
+        "usage": {
+          "prompt_tokens": 15,
+          "completion_tokens": 12,
+          "total_tokens": 27,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    ],
+    "done": true
+  },
+  "usage": {
+    "input_tokens": 15,
+    "output_tokens": 12,
+    "total_tokens": 27,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

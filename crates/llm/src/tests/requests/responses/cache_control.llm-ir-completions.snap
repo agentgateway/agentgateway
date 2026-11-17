@@ -1,0 +1,38 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/responses/cache_control.json
+info:
+  model: gpt-5
+  input:
+    - role: user
+      content:
+        - type: input_text
+          text: Cached user input
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: input_image
+          image_url: "data:image/png;base64,aGVsbG8="
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: input_file
+          file_data: aGVsbG8=
+          filename: notes.txt
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: system
+      content:
+        - type: input_text
+          text: Cached system input
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: developer
+      content:
+        - type: input_text
+          text: Cached developer input
+          prompt_cache_breakpoint:
+            mode: explicit
+---
+{
+  "disposition": "unsupported: `prompt_cache_breakpoint` on input parts, and `input_file` blocks",
+  "refused": "unsupported request: field `input[0].content[0][0].prompt_cache_breakpoint`; field `input[0].content[1].prompt_cache_breakpoint`; `input[0].content[2][0]` block type `input_file`; field `input[1].content[0].prompt_cache_breakpoint`; field `input[2].content[0].prompt_cache_breakpoint`"
+}

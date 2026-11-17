@@ -1,0 +1,82 @@
+---
+source: crates/llm/src/ir_tests/mod.rs
+description: src/tests/response/completions/openrouter_reasoning.json
+info:
+  id: gen-1758648153-xeB95xIQsxABYYNTJLAj
+  provider: test
+  model: test
+  object: chat.completion
+  created: 1758648153
+  choices:
+    - logprobs: ~
+      finish_reason: stop
+      native_finish_reason: stop
+      index: 0
+      message:
+        role: assistant
+        content: hello world!
+        refusal: ~
+        reasoning: "Okay, the user wants me to write a story"
+        reasoning_details:
+          - type: reasoning.text
+            text: "Okay, the user wants me to write a story"
+            format: unknown
+            index: 0
+  usage:
+    prompt_tokens: 23
+    completion_tokens: 796
+    total_tokens: 819
+    prompt_tokens_details: ~
+---
+{
+  "disposition": "changed: reasoning text is shown only to a client that asked for summaries, where legacy always sends it",
+  "client": {
+    "body": {
+      "id": "resp_gen-1758648153-xeB95xIQsxABYYNTJLAj",
+      "object": "response",
+      "created_at": 1,
+      "model": "test",
+      "status": "completed",
+      "output": [
+        {
+          "type": "reasoning",
+          "id": "rs_0",
+          "summary": [],
+          "encrypted_content": "agentgateway.llm-ir.v1:YWdlbnRnYXRld2F5LmxsbS1pci52MToAAAAAAAAABmdvbGRlbgAAAAAAAAAGb3BlbmFpAAAAAAAAAAtpbnB1dC1tb2RlbAAAAAAAAAAbcmVzcG9uc2VzLWVuY3J5cHRlZC1jb250ZW50eyJyZWFzb25pbmciOiJPa2F5LCB0aGUgdXNlciB3YW50cyBtZSB0byB3cml0ZSBhIHN0b3J5In0"
+        },
+        {
+          "type": "message",
+          "id": "msg_1",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "hello world!",
+              "annotations": []
+            }
+          ]
+        }
+      ],
+      "usage": {
+        "input_tokens": 23,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 796,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 819
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 23,
+    "output_tokens": 796,
+    "total_tokens": 819,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

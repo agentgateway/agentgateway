@@ -1,0 +1,19 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/response/responses/stream-error.json
+info: "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_terminal\",\"object\":\"response\",\"created_at\":123,\"model\":\"gpt-5.6-luna\",\"status\":\"in_progress\",\"output\":[]}}\n\nevent: error\ndata: {\"type\":\"error\",\"sequence_number\":2,\"code\":\"rate_limit_exceeded\",\"message\":\"provider failed\",\"param\":null}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_partial\",\"output_index\":0,\"content_index\":0,\"delta\":\"This must not appear.\",\"sequence_number\":3}\n\ndata: [DONE]\n\n"
+---
+{
+  "disposition": "changed: a failure before any output is an HTTP error, as Anthropic sends it, where legacy starts the stream and then sends an `error` event",
+  "client": {
+    "failed": "429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"The provider's rate limit was reached.\"}}"
+  },
+  "usage": {
+    "input_tokens": null,
+    "output_tokens": null,
+    "total_tokens": null,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

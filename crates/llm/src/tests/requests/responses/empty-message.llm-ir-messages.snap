@@ -1,0 +1,37 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/responses/empty-message.json
+info:
+  model: gpt-5.6-luna
+  input:
+    - type: message
+      role: developer
+      content: []
+    - type: message
+      role: user
+      content:
+        - type: input_text
+          text: hello
+---
+{
+  "disposition": "converts; legacy has no Responses-to-Messages conversion",
+  "request": {
+    "model": "gpt-5.6-luna",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "hello",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": []
+}

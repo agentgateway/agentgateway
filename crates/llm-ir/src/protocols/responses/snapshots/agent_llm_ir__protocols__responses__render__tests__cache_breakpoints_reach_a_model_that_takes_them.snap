@@ -1,0 +1,99 @@
+---
+source: crates/llm-ir/src/protocols/responses/render_tests.rs
+expression: sent
+---
+{
+  "model": "gpt-5.6",
+  "input": [
+    {
+      "type": "message",
+      "role": "system",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "a"
+        },
+        {
+          "type": "input_text",
+          "text": "b",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "hi",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "ok",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    },
+    {
+      "type": "function_call",
+      "call_id": "c",
+      "name": "f",
+      "arguments": "{}"
+    },
+    {
+      "type": "function_call",
+      "call_id": "d",
+      "name": "f",
+      "arguments": "{}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "c",
+      "output": [
+        {
+          "type": "input_text",
+          "text": "done",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "d",
+      "output": [
+        {
+          "type": "input_text",
+          "text": "x"
+        },
+        {
+          "type": "input_image",
+          "image_url": "data:image/png;base64,AAAA",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    }
+  ],
+  "max_output_tokens": 1,
+  "store": false,
+  "include": [
+    "reasoning.encrypted_content"
+  ]
+}

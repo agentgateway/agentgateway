@@ -1,0 +1,147 @@
+---
+source: crates/llm/src/ir_golden_chat_tests.rs
+description: src/tests/response/completions/stream-gemini_thinking.json
+info: "data: {\"choices\":[{\"delta\":{\"content\":\"Neptune was found\",\"role\":\"assistant\"},\"index\":0}],\"created\":1775595257,\"id\":\"9W7VaabzK7KPjMcPnYGiuAU\",\"model\":\"google/gemini-3.8-flash\",\"object\":\"chat.completion.chunk\",\"system_fingerprint\":\"\"}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" by mathematics.\",\"role\":\"assistant\"},\"finish_reason\":\"stop\",\"index\":0}],\"created\":1775595257,\"id\":\"9W7VaabzK7KPjMcPnYGiuAU\",\"model\":\"google/gemini-3.8-flash\",\"object\":\"chat.completion.chunk\",\"system_fingerprint\":\"\",\"usage\":{\"completion_tokens\":30,\"completion_tokens_details\":{\"reasoning_tokens\":20},\"prompt_tokens\":19,\"total_tokens\":69}}\n\ndata: [DONE]\n\n"
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "events": [
+      {
+        "type": "response.created",
+        "response": {
+          "id": "resp_9W7VaabzK7KPjMcPnYGiuAU",
+          "object": "response",
+          "created_at": 1,
+          "model": "google/gemini-3.8-flash",
+          "status": "in_progress",
+          "output": []
+        },
+        "sequence_number": 0
+      },
+      {
+        "type": "response.output_item.added",
+        "output_index": 0,
+        "item": {
+          "type": "message",
+          "id": "msg_0",
+          "role": "assistant",
+          "status": "in_progress",
+          "content": []
+        },
+        "sequence_number": 1
+      },
+      {
+        "type": "response.content_part.added",
+        "item_id": "msg_0",
+        "output_index": 0,
+        "content_index": 0,
+        "part": {
+          "type": "output_text",
+          "text": "",
+          "annotations": []
+        },
+        "sequence_number": 2
+      },
+      {
+        "type": "response.output_text.delta",
+        "item_id": "msg_0",
+        "output_index": 0,
+        "content_index": 0,
+        "delta": "Neptune was found",
+        "sequence_number": 3
+      },
+      {
+        "type": "response.output_text.delta",
+        "item_id": "msg_0",
+        "output_index": 0,
+        "content_index": 0,
+        "delta": " by mathematics.",
+        "sequence_number": 4
+      },
+      {
+        "type": "response.output_text.done",
+        "item_id": "msg_0",
+        "output_index": 0,
+        "content_index": 0,
+        "text": "Neptune was found by mathematics.",
+        "sequence_number": 5
+      },
+      {
+        "type": "response.content_part.done",
+        "item_id": "msg_0",
+        "output_index": 0,
+        "content_index": 0,
+        "part": {
+          "type": "output_text",
+          "text": "Neptune was found by mathematics.",
+          "annotations": []
+        },
+        "sequence_number": 6
+      },
+      {
+        "type": "response.output_item.done",
+        "output_index": 0,
+        "item": {
+          "type": "message",
+          "id": "msg_0",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "Neptune was found by mathematics.",
+              "annotations": []
+            }
+          ]
+        },
+        "sequence_number": 7
+      },
+      {
+        "type": "response.completed",
+        "response": {
+          "id": "resp_9W7VaabzK7KPjMcPnYGiuAU",
+          "object": "response",
+          "created_at": 1,
+          "model": "google/gemini-3.8-flash",
+          "status": "completed",
+          "output": [
+            {
+              "type": "message",
+              "id": "msg_0",
+              "role": "assistant",
+              "status": "completed",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "Neptune was found by mathematics.",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "usage": {
+            "input_tokens": 19,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 50,
+            "output_tokens_details": {
+              "reasoning_tokens": 20
+            },
+            "total_tokens": 69
+          }
+        },
+        "sequence_number": 8
+      }
+    ]
+  },
+  "usage": {
+    "input_tokens": 19,
+    "output_tokens": 50,
+    "total_tokens": 69,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": 20
+  }
+}

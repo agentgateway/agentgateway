@@ -1,0 +1,57 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/tool_history_without_tools.json
+info:
+  model: "anthropic.claude-sonnet-4-20250514-v1:0"
+  max_tokens: 1024
+  messages:
+    - role: assistant
+      content:
+        - type: tool_use
+          id: call_1
+          name: get_weather
+          input:
+            location: Seattle
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: call_1
+          content: rain
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "contents": [
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "get_weather",
+              "args": {
+                "location": "Seattle"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "functionResponse": {
+              "name": "get_weather",
+              "response": {
+                "content": "rain"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 1024
+    }
+  },
+  "dropped": []
+}

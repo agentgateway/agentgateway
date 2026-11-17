@@ -1,0 +1,22 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/server_tools.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 64
+  messages:
+    - role: user
+      content: "Search the web for today's date"
+  tools:
+    - type: web_search_20250305
+      name: web_search
+      max_uses: 5
+    - name: get_weather
+      description: Get the weather
+      input_schema:
+        type: object
+---
+{
+  "disposition": "unsupported: server tools such as web search, which legacy drops",
+  "refused": "unsupported request: field `tools[0].type`; field `tools[0].max_uses`; `tools[0]` needs `name` and `input_schema`"
+}

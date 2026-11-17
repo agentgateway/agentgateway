@@ -1,0 +1,68 @@
+---
+source: crates/llm/src/ir_golden_chat_client_tests.rs
+description: src/tests/response/anthropic/stream_message_delta_usage.json
+info: "event:message_start\ndata:{\"type\":\"message_start\",\"message\":{\"id\":\"msg\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"glm-5.2\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":34824,\"output_tokens\":0}}}\n\nevent:message_delta\ndata:{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":3883,\"output_tokens\":49,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":30464,\"prompt_tokens_details\":{\"cached_tokens\":30464}}}\n\nevent:message_stop\ndata:{\"type\":\"message_stop\"}\n\n"
+---
+{
+  "disposition": "changed: an engine whose `message_delta` restates the input with a different cache split: the IR keeps the largest of each count, where legacy takes the last",
+  "client": {
+    "events": [
+      {
+        "id": "chatcmpl-msg",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "glm-5.2",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "role": "assistant",
+              "content": ""
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "glm-5.2",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {},
+            "finish_reason": "stop"
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-msg",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "glm-5.2",
+        "choices": [],
+        "usage": {
+          "prompt_tokens": 34347,
+          "completion_tokens": 49,
+          "total_tokens": 34396,
+          "prompt_tokens_details": {
+            "cached_tokens": 30464
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    ],
+    "done": true
+  },
+  "usage": {
+    "input_tokens": 34824,
+    "output_tokens": 49,
+    "total_tokens": 34824,
+    "cached_tokens": 30464,
+    "cache_write_tokens": 0,
+    "reasoning_tokens": null
+  }
+}

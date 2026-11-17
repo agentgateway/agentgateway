@@ -1,0 +1,30 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/responses/basic.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input: "Hello, world"
+---
+{
+  "disposition": "converts; legacy has no Responses-to-Messages conversion",
+  "request": {
+    "model": "gpt-4o",
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello, world",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": []
+}

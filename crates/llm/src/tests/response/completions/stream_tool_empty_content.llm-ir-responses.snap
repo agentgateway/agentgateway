@@ -1,0 +1,90 @@
+---
+source: crates/llm/src/ir_golden_chat_tests.rs
+description: src/tests/response/completions/stream_tool_empty_content.json
+info: "data: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"toolu_empty_content\",\"type\":\"function\",\"function\":{\"name\":\"Bash\"}}]},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"com\"}}]},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"mand\\\":\\\"pwd\\\"}\"}}]},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"content\":null},\"finish_reason\":\"tool_calls\"}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n\ndata: [DONE]\n\n"
+---
+{
+  "disposition": "changed: the provider's call id is kept, where legacy's stream makes up a new one",
+  "client": {
+    "events": [
+      {
+        "type": "response.created",
+        "response": {
+          "id": "resp_chatcmpl-tool-empty-content",
+          "object": "response",
+          "created_at": 1,
+          "model": "claude-opus-4-8",
+          "status": "in_progress",
+          "output": []
+        },
+        "sequence_number": 0
+      },
+      {
+        "type": "response.output_item.added",
+        "output_index": 0,
+        "item": {
+          "type": "function_call",
+          "id": "fc_0",
+          "call_id": "toolu_empty_content",
+          "name": "Bash",
+          "arguments": "{\"command\":\"pwd\"}",
+          "status": "completed"
+        },
+        "sequence_number": 1
+      },
+      {
+        "type": "response.output_item.done",
+        "output_index": 0,
+        "item": {
+          "type": "function_call",
+          "id": "fc_0",
+          "call_id": "toolu_empty_content",
+          "name": "Bash",
+          "arguments": "{\"command\":\"pwd\"}",
+          "status": "completed"
+        },
+        "sequence_number": 2
+      },
+      {
+        "type": "response.completed",
+        "response": {
+          "id": "resp_chatcmpl-tool-empty-content",
+          "object": "response",
+          "created_at": 1,
+          "model": "claude-opus-4-8",
+          "status": "completed",
+          "output": [
+            {
+              "type": "function_call",
+              "id": "fc_0",
+              "call_id": "toolu_empty_content",
+              "name": "Bash",
+              "arguments": "{\"command\":\"pwd\"}",
+              "status": "completed"
+            }
+          ],
+          "usage": {
+            "input_tokens": 12,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 8,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 20
+          }
+        },
+        "sequence_number": 3
+      }
+    ]
+  },
+  "usage": {
+    "input_tokens": 12,
+    "output_tokens": 8,
+    "total_tokens": 20,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

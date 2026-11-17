@@ -1,0 +1,61 @@
+---
+source: crates/llm/src/ir_tests/mod.rs
+description: src/tests/response/completions/reasoning_omitted.json
+info:
+  id: chatcmpl-C3kBOLGARFj2WJrm5MRyuTiK4u6eH
+  object: chat.completion
+  created: 1755008546
+  model: qwen3
+  choices:
+    - index: 0
+      message:
+        role: assistant
+        content: Two plus two is 4.
+        reasoning_content: ""
+        reasoning_signature: SIG-omitted==
+        refusal: ~
+      logprobs: ~
+      finish_reason: stop
+  usage:
+    prompt_tokens: 17
+    completion_tokens: 23
+    total_tokens: 40
+    completion_tokens_details:
+      reasoning_tokens: 12
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "body": {
+      "id": "chatcmpl-C3kBOLGARFj2WJrm5MRyuTiK4u6eH",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "",
+          "signature": "agentgateway.llm-ir.v1:YWdlbnRnYXRld2F5LmxsbS1pci52MToAAAAAAAAABmdvbGRlbgAAAAAAAAAGb3BlbmFpAAAAAAAAAAtpbnB1dC1tb2RlbAAAAAAAAAASbWVzc2FnZXMtc2lnbmF0dXJleyJyZWFzb25pbmdfY29udGVudCI6IiIsInJlYXNvbmluZ19zaWduYXR1cmUiOiJTSUctb21pdHRlZD09In0"
+        },
+        {
+          "type": "text",
+          "text": "Two plus two is 4."
+        }
+      ],
+      "model": "qwen3",
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 17,
+        "output_tokens": 23
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 17,
+    "output_tokens": 23,
+    "total_tokens": 40,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": 12
+  }
+}

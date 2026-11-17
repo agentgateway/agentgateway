@@ -1,0 +1,73 @@
+---
+source: crates/llm/src/ir_golden_chat_tests.rs
+description: src/tests/response/completions/stream_tool_empty_content.json
+info: "data: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"toolu_empty_content\",\"type\":\"function\",\"function\":{\"name\":\"Bash\"}}]},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"com\"}}]},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"mand\\\":\\\"pwd\\\"}\"}}]},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[{\"index\":0,\"delta\":{\"content\":null},\"finish_reason\":\"tool_calls\"}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-tool-empty-content\",\"object\":\"chat.completion.chunk\",\"created\":1772656915,\"model\":\"claude-opus-4-8\",\"service_tier\":\"default\",\"system_fingerprint\":null,\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n\ndata: [DONE]\n\n"
+---
+{
+  "disposition": "equivalent",
+  "client": {
+    "events": [
+      {
+        "type": "message_start",
+        "message": {
+          "id": "chatcmpl-tool-empty-content",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "model": "claude-opus-4-8",
+          "stop_reason": null,
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_empty_content",
+          "name": "Bash",
+          "input": {}
+        }
+      },
+      {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\":\"pwd\"}"
+        }
+      },
+      {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null
+        },
+        "usage": {
+          "input_tokens": 12,
+          "output_tokens": 8,
+          "service_tier": "standard"
+        }
+      },
+      {
+        "type": "message_stop"
+      }
+    ]
+  },
+  "usage": {
+    "input_tokens": 12,
+    "output_tokens": 8,
+    "total_tokens": 20,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

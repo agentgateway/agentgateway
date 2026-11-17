@@ -1,0 +1,69 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/structured-output.json
+info:
+  model: anthropic.claude-3-sonnet
+  max_tokens: 100
+  temperature: 0.7
+  top_p: 0.8
+  top_k: 50
+  output_config:
+    effort: high
+    format:
+      type: json_schema
+      schema:
+        type: object
+        properties:
+          answer:
+            type: number
+          explanation:
+            type: string
+        required:
+          - answer
+        additionalProperties: false
+  messages:
+    - role: user
+      content: What is 2+2?
+---
+{
+  "disposition": "legacy bug: legacy rounds `temperature` and `top_p` through 32-bit floats, sending 0.699999988 for 0.7; the IR also drops `additionalProperties` from the reply schema and records it",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is 2+2?"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 100,
+      "temperature": 0.7,
+      "topP": 0.8,
+      "topK": 50,
+      "responseMimeType": "application/json",
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "number"
+          },
+          "explanation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer"
+        ]
+      },
+      "thinkingConfig": {
+        "thinkingBudget": 4096
+      }
+    }
+  },
+  "dropped": [
+    "tool schema keyword"
+  ]
+}

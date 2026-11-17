@@ -437,6 +437,7 @@ pub fn parse_config(
 			},
 		}
 	};
+	let llm_ir_enabled = parse::<bool>("AGENTGATEWAY_LLM_IR_ENABLED")?.unwrap_or(false);
 	// Browser OIDC cookie crypto is core gateway runtime config, not per-policy input.
 	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
 		.map(|key| {
@@ -655,6 +656,7 @@ pub fn parse_config(
 		sensitive_headers,
 		session_encoder,
 		session_key_unset,
+		llm_ir_enabled,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
 				h2: agent_hbone::H2Config {
@@ -765,11 +767,11 @@ thread_local! {
 /// Replaces the environment seen by config parsing on the current thread until dropped, so tests
 /// can cover env-driven config without mutating the process env other tests read concurrently.
 #[cfg(test)]
-struct TestEnv;
+pub(crate) struct TestEnv;
 
 #[cfg(test)]
 impl TestEnv {
-	fn set(vars: &[(&str, &str)]) -> Self {
+	pub(crate) fn set(vars: &[(&str, &str)]) -> Self {
 		let vars = vars
 			.iter()
 			.map(|(k, v)| (k.to_string(), v.to_string()))
@@ -2070,6 +2072,28 @@ config:
 			resolve_dns_config(cfg, opts, DnsLookupFamily::default(), true, edns0_param);
 
 		assert_eq!(resolved_opts.edns0, expected);
+	}
+
+	const LLM_IR_ON: (&str, &str) = ("AGENTGATEWAY_LLM_IR_ENABLED", "true");
+
+	fn config_with(vars: &[(&str, &str)]) -> anyhow::Result<Config> {
+		let _env = TestEnv::set(vars);
+		parse_config("{}".to_string(), None)
+	}
+
+	#[test]
+	fn the_llm_ir_is_off_unless_its_flag_is_true() {
+		assert!(!config_with(&[]).unwrap().llm_ir_enabled);
+		let off = config_with(&[("AGENTGATEWAY_LLM_IR_ENABLED", "false")]).unwrap();
+		assert!(!off.llm_ir_enabled);
+		assert!(config_with(&[LLM_IR_ON]).unwrap().llm_ir_enabled);
+		for invalid in ["TRUE", "1", "yes"] {
+			let err = config_with(&[("AGENTGATEWAY_LLM_IR_ENABLED", invalid)]).expect_err(invalid);
+			assert!(
+				err.to_string().contains("AGENTGATEWAY_LLM_IR_ENABLED"),
+				"{err}"
+			);
+		}
 	}
 
 	#[test]

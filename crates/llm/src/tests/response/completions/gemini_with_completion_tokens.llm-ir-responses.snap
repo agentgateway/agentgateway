@@ -1,0 +1,68 @@
+---
+source: crates/llm/src/ir_golden_chat_tests.rs
+description: src/tests/response/completions/gemini_with_completion_tokens.json
+info:
+  model: gemini-2.5-flash
+  usage:
+    prompt_tokens: 7
+    completion_tokens: 12
+    total_tokens: 402
+  choices:
+    - message:
+        content: "Hello! I'm functioning perfectly and ready to assist.\n\n"
+        role: assistant
+      finish_reason: length
+      index: 0
+  created: 1775595257
+  id: 9W7VaabzK7KPjMcPnYGiuAU
+  object: chat.completion
+---
+{
+  "disposition": "legacy bug: legacy ends with incomplete reason `max_tokens`, which Responses doesn't have; the IR writes `max_output_tokens`",
+  "client": {
+    "body": {
+      "id": "resp_9W7VaabzK7KPjMcPnYGiuAU",
+      "object": "response",
+      "created_at": 1,
+      "model": "gemini-2.5-flash",
+      "status": "incomplete",
+      "output": [
+        {
+          "type": "message",
+          "id": "msg_0",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "Hello! I'm functioning perfectly and ready to assist.\n\n",
+              "annotations": []
+            }
+          ]
+        }
+      ],
+      "usage": {
+        "input_tokens": 7,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 395,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 402
+      },
+      "incomplete_details": {
+        "reason": "max_output_tokens"
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 7,
+    "output_tokens": 395,
+    "total_tokens": 402,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

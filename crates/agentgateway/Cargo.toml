@@ -34,6 +34,7 @@ agent-celx.workspace = true
 agent-hbone.workspace = true
 agent-http.workspace = true
 agent-llm.workspace = true
+agent-llm-ir.workspace = true
 agent-policy.workspace = true
 agent-policy-cors.workspace = true
 agent-xds.workspace = true
@@ -73,6 +74,7 @@ fs-err = { workspace = true }
 futures-core.workspace = true
 futures-util.workspace = true
 futures.workspace = true
+async-stream.workspace = true
 google-cloud-auth.workspace = true
 hashbrown.workspace = true
 headers.workspace = true

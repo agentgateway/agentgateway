@@ -1,0 +1,9 @@
+---
+source: crates/llm-ir/tests/client_reply.rs
+expression: sse(stream(&reply))
+---
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Plan.","thought":true}]},"index":0}],"modelVersion":"claude-test","responseId":"msg_1"}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello","thoughtSignature":"YWdlbnRnYXRld2F5LmxsbS1pci52MTpZV2RsYm5SbllYUmxkMkY1TG14c2JTMXBjaTUyTVRvQUFBQUFBQUFBQjJGalkyOTFiblFBQUFBQUFBQUFDV0Z1ZEdoeWIzQnBZd0FBQUFBQUFBQUxZMnhoZFdSbExYUmxjM1FBQUFBQUFBQUFHR2RsYldsdWFTMTBhRzkxWjJoMExYTnBaMjVoZEhWeVpYc2lkSGx3WlNJNkluUm9hVzVyYVc1bklpd2lkR2hwYm10cGJtY2lPaUpRYkdGdUxpSXNJbk5wWjI1aGRIVnlaU0k2SW5OcFp5MHhJbjA="}]},"index":0}],"modelVersion":"claude-test","responseId":"msg_1"}
+
+data: {"candidates":[{"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15},"modelVersion":"claude-test","responseId":"msg_1"}

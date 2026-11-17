@@ -1,0 +1,45 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/policies/gemini_with_system.json
+info:
+  systemInstruction:
+    parts:
+      - text: system prompt
+  contents:
+    - role: user
+      parts:
+        - text: "Hello, world"
+        - inlineData:
+            mimeType: image/png
+            data: AAAA
+---
+{
+  "disposition": "converts; legacy only passes a Gemini request on to Gemini",
+  "request": {
+    "model": "golden-model",
+    "instructions": "system prompt",
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Hello, world"
+          },
+          {
+            "type": "input_image",
+            "image_url": "data:image/png;base64,AAAA"
+          }
+        ]
+      }
+    ],
+    "max_output_tokens": 4096,
+    "stream": false,
+    "store": false,
+    "include": [
+      "reasoning.encrypted_content"
+    ]
+  },
+  "dropped": []
+}

@@ -1,0 +1,45 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/reasoning_replay.json
+info:
+  model: "claude-3-7-sonnet-20250219-v1:0"
+  max_tokens: 1024
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: What is 2+2?
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Two plus two.
+          signature: SIG-replay==
+        - type: redacted_thinking
+          data: cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo
+        - type: text
+          text: "4"
+    - role: user
+      content:
+        - type: text
+          text: And 3+3?
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Three plus three is six.
+          signature: ""
+        - type: text
+          text: "6"
+    - role: user
+      content: Continue.
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Nothing to add.
+          signature: ""
+    - role: user
+      content: Are you there?
+---
+{
+  "disposition": "unsupported: redacted thinking, and thinking signed by another provider, which legacy drops",
+  "refused": "unsupported request: `messages[1].content[1]` block type `redacted_thinking`; `messages[1].content[0]`: unknown carrier format; `messages[3].content[0]`: unknown carrier format; `messages[5].content[0]`: unknown carrier format"
+}

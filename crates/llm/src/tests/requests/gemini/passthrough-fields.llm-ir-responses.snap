@@ -1,0 +1,53 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/gemini/passthrough-fields.json
+info:
+  contents:
+    - role: user
+      parts:
+        - text: hi
+          someNewPartField:
+            nested:
+              - 1
+              - 2
+              - 3
+      someNewContentField: true
+    - role: user
+      parts:
+        - someNewPartKind:
+            opaque: blob
+  systemInstruction:
+    parts:
+      - text: be brief
+    someNewSystemField: x
+  tools:
+    - functionDeclarations:
+        - name: f
+          someNewDeclField: 1
+      someNewToolField: y
+  toolConfig:
+    functionCallingConfig:
+      mode: AUTO
+      someNewKnob: 1
+    someNewToolConfigField: 2
+  generationConfig:
+    thinkingConfig:
+      thinkingBudget: 1024
+      someNewThinkingField: z
+    someNewGenerationField:
+      - a
+      - b
+  safetySettings:
+    - category: HARM_CATEGORY_HARASSMENT
+      threshold: "OFF"
+      someNewSafetyField: ~
+  modelArmorConfig:
+    promptTemplateName: projects/p/locations/l/templates/t
+  someNewTopLevelField:
+    deeply:
+      nested: 1
+---
+{
+  "disposition": "refuses fields the core doesn't know, such as `modelArmorConfig`",
+  "refused": "unsupported request: field `systemInstruction.someNewSystemField`; field `tools[0].functionDeclarations[0].someNewDeclField`; `tools[0].someNewToolField` tool; field `generationConfig.thinkingConfig.someNewThinkingField`; field `generationConfig.someNewGenerationField`; field `modelArmorConfig`; field `someNewTopLevelField`; field `toolConfig.functionCallingConfig.someNewKnob`; field `toolConfig.someNewToolConfigField`; field `contents[0].someNewContentField`; field `contents[0].parts[0].someNewPartField`; field `contents[1].parts[0].someNewPartKind`"
+}

@@ -1,0 +1,13 @@
+---
+source: crates/llm-ir/tests/client_reply.rs
+expression: sse(stream(&reply))
+---
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"claude-test","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"claude-test","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"claude-test","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-msg_1","object":"chat.completion.chunk","created":1700000000,"model":"claude-test","choices":[],"usage":{"prompt_tokens":30,"completion_tokens":5,"total_tokens":35,"prompt_tokens_details":{"cached_tokens":20},"completion_tokens_details":{"reasoning_tokens":0}}}
+
+data: [DONE]

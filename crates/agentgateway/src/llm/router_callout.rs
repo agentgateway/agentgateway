@@ -75,6 +75,22 @@ pub struct CalloutSelection {
 }
 
 impl VirtualModelCallout {
+	/// Every expression evaluated against the request.
+	pub(crate) fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		let cache = self
+			.cache
+			.iter()
+			.flat_map(|cache| cache.key.iter().chain([&cache.ttl]));
+		self
+			.headers
+			.iter()
+			.map(|(_, expression)| expression)
+			.chain(&self.body)
+			.chain(self.transformation.values())
+			.chain(cache)
+			.map(Arc::as_ref)
+	}
+
 	pub fn with_configured_cache_store(mut self) -> Self {
 		self.cache_store = self
 			.cache

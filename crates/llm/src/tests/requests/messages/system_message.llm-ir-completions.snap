@@ -1,0 +1,47 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/system_message.json
+info:
+  model: gpt-5.6-terra
+  max_tokens: 1024
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: "<system-reminder>\nAs you answer, be concise."
+        - type: text
+          text: hola
+          cache_control:
+            type: ephemeral
+    - role: system
+      content: The following skills are available for use.
+---
+{
+  "disposition": "changed: cache marks are dropped and recorded, where legacy sends `prompt_cache_breakpoint` on Chat Completions parts",
+  "request": {
+    "model": "gpt-5.6-terra",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<system-reminder>\nAs you answer, be concise."
+          },
+          {
+            "type": "text",
+            "text": "hola"
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": "The following skills are available for use."
+      }
+    ],
+    "max_completion_tokens": 1024
+  },
+  "dropped": [
+    "cache_control"
+  ]
+}

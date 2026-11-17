@@ -1,0 +1,45 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/response/responses/truncated_tool_call.json
+info:
+  id: resp_truncated_tool_call
+  status: incomplete
+  model: gpt-x
+  output:
+    - type: function_call
+      id: fc_1
+      call_id: call_1
+      name: get_weather
+      arguments: "{\"location\": \"Par"
+      status: incomplete
+  object: response
+  created_at: 123
+  incomplete_details:
+    reason: max_output_tokens
+---
+{
+  "disposition": "legacy bug: legacy writes the cut-off arguments as a string `input`, which Messages doesn't allow, and records usage the provider didn't report as zero; the IR leaves out the incomplete call",
+  "client": {
+    "body": {
+      "id": "resp_truncated_tool_call",
+      "type": "message",
+      "role": "assistant",
+      "content": [],
+      "model": "gpt-x",
+      "stop_reason": "max_tokens",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": null,
+    "output_tokens": null,
+    "total_tokens": null,
+    "cached_tokens": null,
+    "cache_write_tokens": null,
+    "reasoning_tokens": null
+  }
+}

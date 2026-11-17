@@ -1,0 +1,19 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/response/responses/stream-failed.json
+info: "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_terminal\",\"object\":\"response\",\"created_at\":123,\"model\":\"gpt-5.6-luna\",\"status\":\"in_progress\",\"output\":[]}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_partial\",\"output_index\":0,\"content_index\":0,\"delta\":\"Let me check.\",\"sequence_number\":2}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"function_call\",\"id\":\"fc_partial\",\"call_id\":\"call_partial\",\"name\":\"weather\",\"arguments\":\"\",\"status\":\"in_progress\"},\"sequence_number\":3}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_partial\",\"output_index\":1,\"delta\":\"{\\\"city\\\":\",\"sequence_number\":4}\n\nevent: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_terminal\",\"object\":\"response\",\"created_at\":123,\"model\":\"gpt-5.6-luna\",\"status\":\"failed\",\"output\":[],\"usage\":{\"input_tokens\":100,\"output_tokens\":5,\"total_tokens\":105,\"input_tokens_details\":{\"cached_tokens\":20,\"cache_write_tokens\":30},\"output_tokens_details\":{\"reasoning_tokens\":3}},\"error\":{\"code\":\"server_error\",\"message\":\"provider failed\"}}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_partial\",\"output_index\":0,\"content_index\":0,\"delta\":\"This must not appear.\",\"sequence_number\":6}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_terminal\",\"object\":\"response\",\"created_at\":123,\"model\":\"gpt-5.6-luna\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":100,\"output_tokens\":5,\"total_tokens\":105,\"input_tokens_details\":{\"cached_tokens\":20,\"cache_write_tokens\":30},\"output_tokens_details\":{\"reasoning_tokens\":3}},\"error\":null},\"sequence_number\":7}\n\ndata: [DONE]\n\n"
+---
+{
+  "disposition": "changed: a delta for an output item the provider never announced makes the reply unreadable, so it fails before any output, where legacy streams the text and then the provider's failure",
+  "client": {
+    "failed": "500 {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"The provider's reply could not be read.\"}}"
+  },
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 5,
+    "total_tokens": 105,
+    "cached_tokens": 20,
+    "cache_write_tokens": 30,
+    "reasoning_tokens": 3
+  }
+}

@@ -1,0 +1,36 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/completions/basic.json
+info:
+  model: gemini-2.5-pro
+  tools: []
+  messages:
+    - role: system
+      content: You are a helpful assistant.
+    - role: user
+      content: What is the name of the LLM provider?
+---
+{
+  "disposition": "equivalent",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the name of the LLM provider?"
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "You are a helpful assistant."
+        }
+      ]
+    },
+    "generationConfig": {}
+  },
+  "dropped": []
+}

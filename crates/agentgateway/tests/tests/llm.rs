@@ -2594,3 +2594,925 @@ impl ratelimitmock::Handler for RecordingRateLimit {
 		ratelimitmock::ok_response()
 	}
 }
+
+fn llm_ir_on(config: Value) -> agentgateway::Config {
+	let mut config = agentgateway::config::parse_config(config.to_string(), None).unwrap();
+	config.llm_ir_enabled = true;
+	config
+}
+
+#[rstest::rstest]
+#[case::embeddings(
+	custom::ProviderFormat::Embeddings, "embeddings",
+	llm_body!("requests/embeddings/basic.json"), llm_body!("response/openai/embeddings.json")
+)]
+#[case::rerank(
+	custom::ProviderFormat::Rerank, "rerank",
+	llm_body!("requests/rerank/basic.json"), llm_body!("response/cohere/rerank.json")
+)]
+#[tokio::test]
+async fn llm_ir_non_chat_endpoints_keep_native_handlers(
+	#[case] format: custom::ProviderFormat,
+	#[case] route: &str,
+	#[case] body: &[u8],
+	#[case] reply: &[u8],
+) {
+	let mock = body_mock(reply).await;
+	let mut provider = llm_named_provider(
+		&mock,
+		AIProvider::Custom(custom::Provider {
+			model_override: None,
+			provider_override: None,
+			formats: vec![custom::ProviderFormatConfig { format, path: None }],
+		}),
+		false,
+	);
+	provider.policies = Some(
+		serde_json::from_value(json!({
+			"ai": {"routes": {format!("/v1/{route}"): route}}
+		}))
+		.unwrap(),
+	);
+	let (mock, _bind, io) =
+		setup_llm_named_provider_mock_with_config(mock, provider, llm_ir_on(json!({})));
+	let path = format!("/{}/v1/{route}", rand::rng().random::<u128>());
+	let response = send_request_body(io, Method::POST, &format!("http://lo{path}"), body).await;
+	assert_eq!(response.status(), 200);
+	assert_eq!(
+		serde_json::from_slice::<Value>(&read_body_raw(response.into_body()).await).unwrap(),
+		serde_json::from_slice::<Value>(reply).unwrap(),
+	);
+	let upstream = single_upstream_request(&mock).await;
+	assert_eq!(
+		serde_json::from_slice::<Value>(&upstream.body).unwrap(),
+		serde_json::from_slice::<Value>(body).unwrap()
+	);
+	let log = request_log(&path).await;
+	assert_eq!(log["agw.ai.converter"], "native");
+	assert!(log.get("agw.ai.legacy_reason").is_none());
+}
+
+#[tokio::test]
+async fn llm_ir_rejects_a_chat_model_without_a_supported_format() {
+	let mock = body_mock(llm_body!("response/responses/basic.json")).await;
+	let mut provider = llm_named_provider(
+		&mock,
+		AIProvider::Custom(custom::Provider {
+			model_override: Some("backend-model".into()),
+			provider_override: Some("embeddings-only".into()),
+			formats: vec![custom::ProviderFormatConfig {
+				format: custom::ProviderFormat::Embeddings,
+				path: None,
+			}],
+		}),
+		false,
+	);
+	provider.policies = Some(
+		serde_json::from_value(json!({
+			"ai": {"routes": {"/v1/messages": "messages"}}
+		}))
+		.unwrap(),
+	);
+	let (mock, _bind, io) =
+		setup_llm_named_provider_mock_with_config(mock, provider, llm_ir_on(json!({})));
+	let path = format!("/{}/v1/messages", rand::rng().random::<u128>());
+	let body = json!({"model": "client-model", "max_tokens": 64, "messages": [{"role": "user", "content": "hi"}]}).to_string();
+	let response = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.as_bytes(),
+	)
+	.await;
+	assert_eq!(response.status(), 400);
+	let response = String::from_utf8(read_body_raw(response.into_body()).await.to_vec()).unwrap();
+	for detail in ["embeddings-only", "backend-model", "Messages", "Embeddings"] {
+		assert!(response.contains(detail), "{response}");
+	}
+	assert!(mock.received_requests().await.unwrap().is_empty());
+	let log = request_log(&path).await;
+	assert_eq!(log["agw.ai.converter"], "llm_ir");
+	assert!(log.get("agw.ai.legacy_reason").is_none());
+}
+
+fn openai_messages_provider(
+	mock: &MockServer,
+	tokenize: bool,
+) -> agentgateway::types::local::LocalNamedAIProvider {
+	let mut provider = llm_named_provider(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation: None,
+		}),
+		tokenize,
+	);
+	provider.policies =
+		Some(serde_json::from_value(json!({"ai": {"routes": {"/v1/messages": "messages"}}})).unwrap());
+	provider
+}
+
+// The thinking signature is not one the IR sealed, so the IR refuses the request while legacy
+// forwards it. The status shows which converter ran, and the log records it and why.
+#[rstest::rstest]
+#[case::flag_off(None, false, Some("gpt-5"), 200, None)]
+#[case::selected(Some(json!({})), false, Some("gpt-5"), 400, Some(("llm_ir", None)))]
+#[case::prompt_captured(
+	Some(json!({"config": {"logging": {"fields": {"add": {"prompt": "llm.prompt"}}}}})),
+	false,
+	Some("gpt-5"),
+	400,
+	Some(("llm_ir", None))
+)]
+#[case::tokenize(Some(json!({})), true, Some("gpt-5"), 200, Some(("legacy", Some("tokenize"))))]
+// Nothing names a model, so the IR refuses the request before choosing where it goes.
+#[case::missing_model(Some(json!({})), false, None, 400, Some(("llm_ir", None)))]
+#[tokio::test]
+async fn llm_ir_serves_only_selected_messages_requests(
+	#[case] llm_ir: Option<Value>,
+	#[case] tokenize: bool,
+	#[case] model: Option<&str>,
+	#[case] status: u16,
+	#[case] converter: Option<(&str, Option<&str>)>,
+) {
+	let mock = body_mock(llm_body!("response/responses/basic.json")).await;
+	let provider = openai_messages_provider(&mock, tokenize);
+	let config = match llm_ir {
+		Some(config) => llm_ir_on(config),
+		None => agentgateway::config::parse_config("{}".to_string(), None).unwrap(),
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
+	let mut body = json!({
+		"max_tokens": 64,
+		"messages": [
+			{"role": "user", "content": "hi"},
+			{"role": "assistant", "content": [
+				{"type": "thinking", "thinking": "", "signature": "legacy-signature"},
+				{"type": "text", "text": "hello"}
+			]},
+			{"role": "user", "content": "again"}
+		]
+	});
+	if let Some(model) = model {
+		body["model"] = model.into();
+	}
+
+	let path = format!("/{}/v1/messages", rand::rng().random::<u128>());
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.to_string().as_bytes(),
+	)
+	.await;
+	assert_eq!(res.status(), status);
+	let _ = read_body_raw(res.into_body()).await;
+	let upstream = mock.received_requests().await.unwrap();
+	assert_eq!(upstream.len(), usize::from(status == 200));
+	let log = request_log(&path).await;
+	assert_eq!(
+		(
+			log.get("agw.ai.converter").and_then(Value::as_str),
+			log.get("agw.ai.legacy_reason").and_then(Value::as_str),
+		),
+		match converter {
+			Some((name, reason)) => (Some(name), reason),
+			None => (None, None),
+		}
+	);
+}
+
+#[tokio::test]
+async fn llm_ir_converts_the_request_and_its_reply() {
+	struct UnusedIdentifierHasher;
+
+	impl agent_llm_ir::IdentifierPseudonymizer for UnusedIdentifierHasher {
+		fn pseudonymize(&self, _: &str) -> String {
+			unreachable!("the request has no long safety identifier")
+		}
+	}
+
+	let mock = body_mock(llm_body!("response/responses/basic.json")).await;
+	let provider = openai_messages_provider(&mock, false);
+	let (mock, _bind, io) =
+		setup_llm_named_provider_mock_with_config(mock, provider, llm_ir_on(json!({})));
+	let body = json!({
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"system": [{"type": "text", "text": "Be brief."}, {"type": "text", "text": "Use lists."}],
+		"messages": [{"role": "user", "content": "hi"}]
+	});
+
+	let path = format!("/{}/v1/messages", rand::rng().random::<u128>());
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.to_string().as_bytes(),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let reply: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(reply["type"], "message");
+	assert_eq!(
+		reply["content"][0]["text"],
+		"Hello! How can I assist you today?"
+	);
+	// Messages names OpenAI's `default` tier `standard`; legacy passes the OpenAI word through.
+	assert_eq!(reply["usage"]["service_tier"], "standard");
+	assert_llm_log(
+		&path,
+		json!({
+			"gen_ai.request.model": "gpt-5",
+			"gen_ai.response.model": "gpt-4o-2024-08-06",
+			"gen_ai.usage.input_tokens": 10,
+			"gen_ai.usage.output_tokens": 10,
+		}),
+	)
+	.await;
+
+	let request = single_upstream_request(&mock).await;
+	let want = agent_llm_ir::prepare(
+		body.to_string().as_bytes(),
+		agent_llm_ir::ClientProtocol::Messages,
+		agent_llm_ir::Upstream {
+			identifier_pseudonymizer: &UnusedIdentifierHasher,
+			scope: agent_llm_ir::StateScope {
+				backend: "any",
+				provider: "openai",
+				model: "gpt-5",
+			},
+			protocol: agent_llm_ir::UpstreamProtocol::Responses {
+				safety_identifier: true,
+				reasoning_context: false,
+			},
+			default_max_tokens: None,
+		},
+	)
+	.and_then(|prepared| prepared.render(agent_llm_ir::RenderSettings::ModelDefaults))
+	.unwrap();
+	assert_eq!(std::str::from_utf8(&request.body).unwrap(), want.body);
+}
+
+async fn assert_llm_log(path: &str, want: Value) {
+	let log = request_log(path).await;
+	assert!(is_json_subset(&want, &log), "want {want}, got {log}");
+}
+
+async fn request_log(path: &str) -> Value {
+	agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", path)])
+		.await
+		.unwrap()
+}
+
+// A compressed provider stream is decompressed and sent on as it is converted, as legacy does.
+#[rstest::rstest]
+#[case::plain(None)]
+#[case::gzip(Some("gzip"))]
+#[case::deflate(Some("deflate"))]
+#[case::brotli(Some("br"))]
+#[case::zstd(Some("zstd"))]
+#[tokio::test]
+async fn llm_ir_streams_its_reply(#[case] encoding: Option<&str>) {
+	const MESSAGE: &str = r#"{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Hello there","annotations":[]}]}"#;
+	let events = [
+		r#"{"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","model":"gpt-5","status":"in_progress","output":[]}}"#.to_string(),
+		r#"{"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"type":"message","id":"msg_1","role":"assistant","status":"in_progress","content":[]}}"#.to_string(),
+		r#"{"type":"response.content_part.added","sequence_number":2,"item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]}}"#.to_string(),
+		r#"{"type":"response.output_text.delta","sequence_number":3,"item_id":"msg_1","output_index":0,"content_index":0,"delta":"Hello there"}"#.to_string(),
+		r#"{"type":"response.output_text.done","sequence_number":4,"item_id":"msg_1","output_index":0,"content_index":0,"text":"Hello there"}"#.to_string(),
+		r#"{"type":"response.content_part.done","sequence_number":5,"item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":"Hello there","annotations":[]}}"#.to_string(),
+		format!(r#"{{"type":"response.output_item.done","sequence_number":6,"output_index":0,"item":{MESSAGE}}}"#),
+		format!(
+			r#"{{"type":"response.completed","sequence_number":7,"response":{{"id":"resp_1","object":"response","model":"gpt-5","status":"completed","output":[{MESSAGE}],"usage":{{"input_tokens":12,"input_tokens_details":{{"cached_tokens":4}},"output_tokens":5,"output_tokens_details":{{"reasoning_tokens":2}},"total_tokens":17}}}}}}"#
+		),
+	];
+	let stream: String = events
+		.iter()
+		.map(|data| format!("data: {data}\n\n"))
+		.collect();
+	let reply = match encoding {
+		None => {
+			wiremock::ResponseTemplate::new(200).set_body_raw(stream.into_bytes(), "text/event-stream")
+		},
+		Some(encoding) => wiremock::ResponseTemplate::new(200)
+			.set_body_raw(
+				agentgateway::http::compression::encode_body(stream.as_bytes(), encoding)
+					.await
+					.unwrap(),
+				"text/event-stream",
+			)
+			.insert_header("content-encoding", encoding),
+	};
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(reply)
+		.mount(&mock)
+		.await;
+	let provider = openai_messages_provider(&mock, false);
+	let (_mock, _bind, io) =
+		setup_llm_named_provider_mock_with_config(mock, provider, llm_ir_on(json!({})));
+	let body = json!({
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"stream": true,
+		"messages": [{"role": "user", "content": "hi"}]
+	});
+
+	let path = format!("/{}/v1/messages", rand::rng().random::<u128>());
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.to_string().as_bytes(),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.headers()[header::CONTENT_TYPE], "text/event-stream");
+	assert_eq!(res.headers().get(header::CONTENT_ENCODING), None);
+	let reply = read_body_raw(res.into_body()).await;
+	let events: Vec<&str> = std::str::from_utf8(&reply)
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("event: "))
+		.collect();
+	assert_eq!(
+		events,
+		[
+			"message_start",
+			"content_block_start",
+			"content_block_delta",
+			"content_block_stop",
+			"message_delta",
+			"message_stop"
+		]
+	);
+	assert_llm_log(
+		&path,
+		json!({
+			"gen_ai.response.model": "gpt-5",
+			"gen_ai.usage.input_tokens": 12,
+			"gen_ai.usage.output_tokens": 5,
+			"gen_ai.usage.reasoning_tokens": 2,
+		}),
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn llm_ir_answers_a_stream_that_fails_before_output_with_an_http_error() {
+	let stream = [
+		r#"{"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","model":"gpt-5","status":"in_progress","output":[]}}"#,
+		r#"{"type":"response.failed","sequence_number":1,"response":{"id":"resp_1","object":"response","model":"gpt-5","status":"failed","output":[],"error":{"code":"rate_limit_exceeded","message":"slow down"}}}"#,
+	]
+	.iter()
+	.map(|data| format!("data: {data}\n\n"))
+	.collect::<String>();
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(
+			wiremock::ResponseTemplate::new(200).set_body_raw(stream.into_bytes(), "text/event-stream"),
+		)
+		.mount(&mock)
+		.await;
+	let provider = openai_messages_provider(&mock, false);
+	let (_mock, _bind, io) =
+		setup_llm_named_provider_mock_with_config(mock, provider, llm_ir_on(json!({})));
+	let body = json!({
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"stream": true,
+		"messages": [{"role": "user", "content": "hi"}]
+	});
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/messages",
+		body.to_string().as_bytes(),
+	)
+	.await;
+	assert_eq!(res.status(), 429);
+	assert_eq!(res.headers()[header::CONTENT_TYPE], "application/json");
+	let reply: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(reply["type"], "error");
+	assert_eq!(reply["error"]["type"], "rate_limit_error");
+}
+
+/// How the IR's answer to a provider reply differs from legacy's, on purpose.
+#[derive(Debug, Clone, Copy)]
+enum Difference {
+	/// The same message, status, headers and usage.
+	None,
+	/// The IR keeps reasoning as thinking blocks sealed for replay. Legacy drops it.
+	Reasoning,
+	/// The IR uses the Messages stop reason for a full context window. Legacy says `max_tokens`.
+	ContextWindow,
+	/// The IR drops a tool call cut short. Legacy sends its partial arguments as a string.
+	TruncatedToolCall,
+	/// The IR fails, before any output, where legacy invents an answer or a 200 stream.
+	IrFails(u16),
+	/// The IR ends the stream with an error event where legacy drops what it can't read.
+	IrFailsAfterOutput,
+	/// Both fail. The IR answers in the Messages error shape, legacy in plain text.
+	BothFail,
+}
+
+// Every Responses reply fixture, served through the gateway with the IR off and on.
+#[rstest::rstest]
+#[case::basic("basic.json", Difference::None)]
+#[case::content_filter("content_filter.json", Difference::None)]
+#[case::context_window("context_window.json", Difference::ContextWindow)]
+#[case::empty_tool_call("empty_tool_call.json", Difference::None)]
+#[case::max_tokens("max_tokens.json", Difference::None)]
+#[case::reasoning("reasoning.json", Difference::Reasoning)]
+#[case::tool("tool.json", Difference::None)]
+#[case::truncated_tool_call("truncated_tool_call.json", Difference::TruncatedToolCall)]
+// OpenAI sends no reason; legacy says `max_tokens` here and `end_turn` when streamed.
+#[case::incomplete_no_details("incomplete_no_details.json", Difference::IrFails(500))]
+// Only Responses clients can ask for custom or hosted tools, so a Messages client never gets these.
+#[case::custom_tool("custom-tool.json", Difference::BothFail)]
+#[case::guardrails("guardrails.json", Difference::BothFail)]
+#[case::failed("failed.json", Difference::BothFail)]
+#[case::stream("stream.json", Difference::None)]
+#[case::stream_content_filter("stream-content_filter.json", Difference::None)]
+#[case::stream_context_window("stream-context_window.json", Difference::ContextWindow)]
+#[case::stream_max_tokens("stream-max_tokens.json", Difference::None)]
+#[case::stream_refusal("stream-refusal.json", Difference::None)]
+#[case::stream_refusal_final_only("stream-refusal-final-only.json", Difference::None)]
+#[case::stream_incomplete_no_details("stream-incomplete_no_details.json", Difference::IrFails(500))]
+#[case::stream_error("stream-error.json", Difference::IrFails(429))]
+// Text arrives before its item is announced, which the IR can't place.
+#[case::stream_failed("stream-failed.json", Difference::IrFails(500))]
+#[case::stream_custom_tool("stream-custom-tool.json", Difference::IrFails(500))]
+#[case::stream_image("stream-image.json", Difference::IrFailsAfterOutput)]
+#[tokio::test]
+async fn llm_ir_differs_from_legacy_only_on_purpose(
+	#[case] fixture: &str,
+	#[case] difference: Difference,
+) {
+	let legacy = serve_responses_reply(fixture, false).await;
+	let ir = serve_responses_reply(fixture, true).await;
+	let error = ir.log.get("error").and_then(Value::as_str);
+	match difference {
+		Difference::None
+		| Difference::Reasoning
+		| Difference::ContextWindow
+		| Difference::TruncatedToolCall => {
+			assert_eq!(ir.status, 200);
+			assert_eq!(legacy.status, 200);
+			assert_eq!(ir.headers, legacy.headers);
+			let mut message = ir.message.clone();
+			match difference {
+				Difference::Reasoning => {
+					let content = message["content"].as_array_mut().unwrap();
+					let thinking = content.iter().filter(|b| b["type"] == "thinking").count();
+					assert!(thinking > 0, "{message}");
+					content.retain(|b| b["type"] != "thinking");
+				},
+				Difference::ContextWindow => {
+					assert_eq!(message["stop_reason"], "model_context_window_exceeded");
+					assert_eq!(legacy.message["stop_reason"], "max_tokens");
+					message["stop_reason"] = "max_tokens".into();
+				},
+				Difference::TruncatedToolCall => {
+					assert_eq!(message["content"], json!([]));
+					assert!(legacy.message["content"][0]["input"].is_string());
+					message["content"] = legacy.message["content"].clone();
+				},
+				_ => {},
+			}
+			assert_eq!(message, legacy.message);
+			assert_eq!(error, None);
+		},
+		Difference::IrFails(status) => {
+			assert_eq!(legacy.status, 200);
+			assert_eq!(ir.status, status);
+			assert_eq!(ir.message["type"], "error");
+			assert!(error.unwrap().starts_with("llm-ir reply failed: "));
+		},
+		Difference::IrFailsAfterOutput => {
+			assert_eq!(ir.status, 200);
+			assert_eq!(ir.headers, legacy.headers);
+			assert_eq!(ir.message["error"]["type"], "api_error");
+			assert_eq!(legacy.message["error"], Value::Null);
+		},
+		Difference::BothFail => {
+			assert_eq!(legacy.status, 502);
+			assert_eq!(ir.status, 500);
+			assert_eq!(ir.message["type"], "error");
+			assert!(error.unwrap().starts_with("llm-ir reply failed: "));
+		},
+	}
+	// The IR also accounts what it read before failing, where legacy fails to parse at all.
+	if !matches!(difference, Difference::BothFail) {
+		assert_eq!(usage(&ir.log), usage(&legacy.log));
+	}
+	assert_eq!(ir.log["agw.ai.converter"], "llm_ir");
+}
+
+struct Served {
+	status: u16,
+	/// Every header but the date and length.
+	headers: Vec<(String, String)>,
+	/// What a Messages client assembles from the reply or its stream.
+	message: Value,
+	log: Value,
+}
+
+async fn serve_responses_reply(fixture: &str, llm_ir: bool) -> Served {
+	let reply = std::fs::read(
+		std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+			.join("../llm/src/tests/response/responses")
+			.join(fixture),
+	)
+	.unwrap();
+	let stream = fixture.starts_with("stream");
+	let content_type = if stream {
+		"text/event-stream"
+	} else {
+		"application/json"
+	};
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(wiremock::ResponseTemplate::new(200).set_body_raw(reply, content_type))
+		.mount(&mock)
+		.await;
+	let provider = openai_messages_provider(&mock, false);
+	let config = if llm_ir {
+		llm_ir_on(json!({}))
+	} else {
+		agentgateway::config::parse_config("{}".to_string(), None).unwrap()
+	};
+	let (_mock, _bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
+	let body = json!({
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"stream": stream,
+		"messages": [{"role": "user", "content": "hi"}]
+	});
+	let path = format!("/{}/v1/messages", rand::rng().random::<u128>());
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.to_string().as_bytes(),
+	)
+	.await;
+	let status = res.status().as_u16();
+	let headers = res
+		.headers()
+		.iter()
+		.filter(|(name, _)| *name != header::DATE && *name != header::CONTENT_LENGTH)
+		.map(|(name, value)| (name.to_string(), value.to_str().unwrap().to_string()))
+		.collect();
+	let is_stream = res
+		.headers()
+		.get(header::CONTENT_TYPE)
+		.map(|v| v.as_bytes())
+		== Some(b"text/event-stream".as_slice());
+	let body = read_body_raw(res.into_body()).await;
+	let message = match (status, is_stream) {
+		// Legacy's own failures are plain text.
+		(502, _) => Value::Null,
+		(_, true) => assembled_message(&body),
+		(_, false) => serde_json::from_slice(&body).unwrap(),
+	};
+	Served {
+		status,
+		headers,
+		message: normalized(message),
+		log: request_log(&path).await,
+	}
+}
+
+/// Folds a Messages stream into the message it describes.
+fn assembled_message(stream: &[u8]) -> Value {
+	fn append(field: &mut Value, more: &Value) {
+		*field = format!("{}{}", field.as_str().unwrap_or(""), more.as_str().unwrap()).into();
+	}
+	let mut message = Value::Null;
+	for data in std::str::from_utf8(stream)
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data: "))
+	{
+		let event: Value = serde_json::from_str(data).unwrap();
+		let index = event["index"].as_u64().unwrap_or_default() as usize;
+		match event["type"].as_str().unwrap() {
+			"message_start" => message = event["message"].clone(),
+			"content_block_start" => message["content"]
+				.as_array_mut()
+				.unwrap()
+				.push(event["content_block"].clone()),
+			"content_block_delta" => {
+				let block = &mut message["content"][index];
+				let delta = &event["delta"];
+				match delta["type"].as_str().unwrap() {
+					"text_delta" => append(&mut block["text"], &delta["text"]),
+					"thinking_delta" => append(&mut block["thinking"], &delta["thinking"]),
+					"signature_delta" => append(&mut block["signature"], &delta["signature"]),
+					"input_json_delta" => append(&mut block["partial_json"], &delta["partial_json"]),
+					other => panic!("unexpected delta {other}"),
+				}
+			},
+			"content_block_stop" => {
+				let block = message["content"][index].as_object_mut().unwrap();
+				if let Some(json) = block.remove("partial_json") {
+					block.insert(
+						"input".into(),
+						serde_json::from_str(json.as_str().unwrap()).unwrap(),
+					);
+				}
+			},
+			"message_delta" => {
+				for (key, value) in event["delta"].as_object().unwrap() {
+					message[key] = value.clone();
+				}
+				for (key, value) in event["usage"].as_object().unwrap() {
+					message["usage"][key] = value.clone();
+				}
+			},
+			"error" => message["error"] = event["error"].clone(),
+			"message_stop" | "ping" => {},
+			other => panic!("unexpected event {other}"),
+		}
+	}
+	message
+}
+
+/// Removes the differences that change no meaning.
+fn normalized(mut message: Value) -> Value {
+	let usage = &mut message["usage"];
+	if let Some(usage) = usage.as_object_mut() {
+		// The IR passes on a zero cache count that legacy leaves out.
+		if usage.get("cache_read_input_tokens") == Some(&json!(0)) {
+			usage.remove("cache_read_input_tokens");
+		}
+		// Legacy passes on OpenAI's name for the tier. Messages calls it `standard`.
+		if usage.get("service_tier") == Some(&json!("default")) {
+			usage.insert("service_tier".into(), "standard".into());
+		}
+	}
+	message
+}
+
+/// The usage and model accounted in the log, without zero counts.
+fn usage(log: &Value) -> Vec<(String, Value)> {
+	log
+		.as_object()
+		.unwrap()
+		.iter()
+		.filter(|(key, value)| {
+			(key.starts_with("gen_ai.usage.") && **value != json!(0)) || *key == "gen_ai.response.model"
+		})
+		.map(|(key, value)| (key.clone(), value.clone()))
+		.collect()
+}
+
+/// A client protocol the provider serves too, with its route and a request for a reply.
+#[derive(Debug, Clone, Copy)]
+enum SameProtocol {
+	Chat,
+	Messages,
+	Responses,
+}
+
+// A provider serving the client's own protocol gets what legacy sends it, and the client gets
+// what legacy gives it. Legacy re-encodes a whole reply, where the IR sends the provider's bytes
+// on, so those are compared as JSON; a stream is the same bytes either way.
+#[rstest::rstest]
+#[case::chat(SameProtocol::Chat, "completions/basic.json")]
+#[case::chat_stream(SameProtocol::Chat, "completions/stream.json")]
+#[case::messages(SameProtocol::Messages, "anthropic/basic.json")]
+#[case::messages_stream(SameProtocol::Messages, "anthropic/stream_basic.json")]
+#[case::responses(SameProtocol::Responses, "responses/basic.json")]
+#[case::responses_stream(SameProtocol::Responses, "responses/stream.json")]
+#[tokio::test]
+async fn llm_ir_passes_through_what_legacy_does(
+	#[case] protocol: SameProtocol,
+	#[case] fixture: &str,
+) {
+	let legacy = serve_same_protocol(protocol, fixture, false).await;
+	let ir = serve_same_protocol(protocol, fixture, true).await;
+	assert_eq!(ir.upstream, legacy.upstream);
+	assert_eq!(ir.status, 200);
+	assert_eq!(ir.status, legacy.status);
+	if fixture.contains("stream") {
+		assert_eq!(
+			String::from_utf8_lossy(&ir.reply),
+			String::from_utf8_lossy(&legacy.reply)
+		);
+	} else {
+		let json = |reply: &[u8]| serde_json::from_slice::<Value>(reply).unwrap();
+		assert_eq!(json(&ir.reply), json(&legacy.reply));
+	}
+	assert_eq!(usage(&ir.log), usage(&legacy.log));
+	assert!(!usage(&ir.log).is_empty(), "{}", ir.log);
+	assert_eq!(ir.log["agw.ai.converter"], "llm_ir_passthrough");
+}
+
+struct PassedThrough {
+	/// What the provider got.
+	upstream: Value,
+	status: u16,
+	reply: Vec<u8>,
+	log: Value,
+}
+
+async fn serve_same_protocol(protocol: SameProtocol, fixture: &str, llm_ir: bool) -> PassedThrough {
+	let reply = std::fs::read(
+		std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+			.join("../llm/src/tests/response")
+			.join(fixture),
+	)
+	.unwrap();
+	let stream = fixture.contains("stream");
+	let content_type = if stream {
+		"text/event-stream"
+	} else {
+		"application/json"
+	};
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(wiremock::ResponseTemplate::new(200).set_body_raw(reply, content_type))
+		.mount(&mock)
+		.await;
+	let (provider, route, kind, body) = match protocol {
+		SameProtocol::Chat => (
+			AIProvider::OpenAI(openai::Provider {
+				model_override: None,
+				moderation: None,
+			}),
+			"/v1/chat/completions",
+			"completions",
+			json!({"model": "gpt-5", "stream": stream, "seed": 7, "max_tokens": 64,
+				"messages": [{"role": "user", "content": "hi"}]}),
+		),
+		SameProtocol::Messages => (
+			AIProvider::Anthropic(serde_json::from_value(json!({})).unwrap()),
+			"/v1/messages",
+			"messages",
+			json!({"model": "claude-haiku-4-5", "stream": stream, "max_tokens": 64,
+				"metadata": {"user_id": "u1"},
+				"messages": [{"role": "user", "content": "hi"}]}),
+		),
+		SameProtocol::Responses => (
+			AIProvider::OpenAI(openai::Provider {
+				model_override: None,
+				moderation: None,
+			}),
+			"/v1/responses",
+			"responses",
+			json!({"model": "gpt-5", "stream": stream, "store": false,
+				"input": [{"role": "user", "content": "hi"}]}),
+		),
+	};
+	let mut provider = llm_named_provider(&mock, provider, false);
+	provider.policies =
+		Some(serde_json::from_value(json!({"ai": {"routes": {route: kind}}})).unwrap());
+	let config = if llm_ir {
+		llm_ir_on(json!({}))
+	} else {
+		agentgateway::config::parse_config("{}".to_string(), None).unwrap()
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
+	let path = format!("/{}{route}", rand::rng().random::<u128>());
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.to_string().as_bytes(),
+	)
+	.await;
+	let status = res.status().as_u16();
+	let reply = read_body_raw(res.into_body()).await.to_vec();
+	let upstream = mock.received_requests().await.unwrap();
+	assert_eq!(upstream.len(), 1);
+	PassedThrough {
+		upstream: serde_json::from_slice(&upstream[0].body).unwrap(),
+		status,
+		reply,
+		log: request_log(&path).await,
+	}
+}
+
+/// A Chat Completions client on Anthropic, with prompt enrichment and caching: the IR adds the
+/// same prompts and cache marks legacy does.
+#[rstest::rstest]
+#[case::default_caching(json!({}))]
+#[case::everything_cached(json!({"cacheTools": true, "minTokens": null}))]
+#[case::an_earlier_turn(json!({"cacheSystem": false, "cacheMessageOffset": 1}))]
+#[tokio::test]
+async fn llm_ir_enriches_and_caches_as_legacy_does(#[case] caching: Value) {
+	let legacy = serve_enriched(&caching, false).await;
+	let ir = serve_enriched(&caching, true).await;
+	assert_eq!(ir.log["agw.ai.converter"], "llm_ir", "{}", ir.log);
+	assert_eq!(marked(&ir.upstream), marked(&legacy.upstream));
+}
+
+async fn serve_enriched(caching: &Value, llm_ir: bool) -> PassedThrough {
+	let reply = std::fs::read(
+		std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+			.join("../llm/src/tests/response/anthropic/basic.json"),
+	)
+	.unwrap();
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(wiremock::ResponseTemplate::new(200).set_body_raw(reply, "application/json"))
+		.mount(&mock)
+		.await;
+	let provider = AIProvider::Anthropic(serde_json::from_value(json!({})).unwrap());
+	let mut provider = llm_named_provider(&mock, provider, false);
+	provider.policies = Some(
+		serde_json::from_value(json!({"ai": {
+			"routes": {"/v1/chat/completions": "completions"},
+			"prompts": {
+				"prepend": [{"role": "system", "content": "Rule one"}, {"role": "user", "content": "Context"}],
+				"append": [{"role": "system", "content": "Rule two"}, {"role": "assistant", "content": "Noted"}],
+			},
+			"promptCaching": caching,
+		}}))
+		.unwrap(),
+	);
+	let config = if llm_ir {
+		llm_ir_on(json!({}))
+	} else {
+		agentgateway::config::parse_config("{}".to_string(), None).unwrap()
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
+	let body = json!({"model": "claude-haiku-4-5", "max_tokens": 64,
+		"tools": [{"type": "function", "function": {"name": "look", "parameters": {"type": "object"}}}],
+		"messages": [
+			{"role": "system", "content": "Be brief"},
+			{"role": "user", "content": "a"},
+			{"role": "assistant", "content": "b"},
+			{"role": "user", "content": "c"}]});
+	let path = format!("/{}/v1/chat/completions", rand::rng().random::<u128>());
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.to_string().as_bytes(),
+	)
+	.await;
+	let status = res.status().as_u16();
+	let reply = read_body_raw(res.into_body()).await.to_vec();
+	let upstream = mock.received_requests().await.unwrap();
+	assert_eq!(
+		upstream.len(),
+		1,
+		"{status}: {}",
+		String::from_utf8_lossy(&reply)
+	);
+	PassedThrough {
+		upstream: serde_json::from_slice(&upstream[0].body).unwrap(),
+		status,
+		reply,
+		log: request_log(&path).await,
+	}
+}
+
+/// What a Messages request says, with whether each part is marked for caching: the system
+/// text, each text with its role, and the tools. Legacy joins system texts into one and keeps
+/// adjacent turns of a role apart, where the IR sends a block for each and joins the turns, so
+/// both are flattened; Anthropic reads them alike.
+fn marked(request: &Value) -> Value {
+	let blocks = |content: &Value| -> Vec<(String, bool)> {
+		match content {
+			Value::String(text) => vec![(text.clone(), false)],
+			Value::Array(blocks) => blocks
+				.iter()
+				.map(|block| {
+					let text = block["text"].as_str().unwrap().to_string();
+					(text, block.get("cache_control").is_some())
+				})
+				.collect(),
+			other => panic!("unexpected content {other}"),
+		}
+	};
+	let system = blocks(&request["system"]);
+	let system_text: Vec<&str> = system.iter().map(|(text, _)| text.as_str()).collect();
+	// Only the last system block can carry a mark, so where it sits is the same.
+	let system_marked = system.last().is_some_and(|(_, marked)| *marked);
+	let turns: Vec<Value> = request["messages"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.flat_map(|message| {
+			blocks(&message["content"])
+				.into_iter()
+				.map(|(text, marked)| json!([message["role"], text, marked]))
+		})
+		.collect();
+	json!({
+		"system": [system_text.join("\n"), system_marked],
+		"turns": turns,
+		"tools": request["tools"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|tool| json!([tool["name"], tool.get("cache_control").is_some()]))
+			.collect::<Vec<_>>(),
+	})
+}

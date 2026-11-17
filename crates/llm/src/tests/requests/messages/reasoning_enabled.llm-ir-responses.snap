@@ -1,0 +1,17 @@
+---
+source: crates/llm/src/ir_golden_tests.rs
+description: src/tests/requests/messages/reasoning_enabled.json
+info:
+  model: gpt-5.6-luna
+  max_tokens: 2048
+  messages:
+    - role: user
+      content: hello
+  thinking:
+    type: enabled
+    budget_tokens: 1024
+---
+{
+  "disposition": "unsupported: `thinking.type` `enabled` with a token budget",
+  "refused": "unsupported request: `thinking.type` `enabled`; field `thinking.budget_tokens`"
+}
