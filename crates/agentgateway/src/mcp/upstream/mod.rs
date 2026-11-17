@@ -517,6 +517,8 @@ pub(crate) struct UpstreamGroup {
 	// per-target set of capabilities; we record the capabilities from a legacy
 	// target's initialize response so a modern client can see them in discover.
 	extensions: RwLock<HashMap<Strng, ExtensionCapabilities>>,
+	// per-target instructions from initialize, served as `instructions://<target>` resources.
+	instructions: RwLock<HashMap<Strng, Strng>>,
 
 	// If we have one target and prefixMode is not Always, names and URIs pass
 	// through unchanged and all calls route to this target.
@@ -561,6 +563,7 @@ impl UpstreamGroup {
 			client,
 			by_name: IndexMap::new(),
 			extensions: RwLock::new(HashMap::new()),
+			instructions: RwLock::new(HashMap::new()),
 			default_target_name,
 			is_multiplexing,
 			all_targets_conditioned_out,
@@ -678,6 +681,29 @@ impl UpstreamGroup {
 				.or_else(|| store.get(name))
 				.map(|ext| (name.as_str(), ext))
 		}))
+	}
+
+	/// Keeps a target's instructions from initialize. `None` or empty forgets earlier ones, so a
+	/// target that stops sending instructions on re-initialize is no longer listed.
+	pub(crate) fn record_instructions(&self, target: &str, instructions: Option<&str>) {
+		let mut store = self.instructions.write().expect("write lock");
+		match instructions.filter(|i| !i.is_empty()) {
+			Some(i) => {
+				store.insert(strng::new(target), strng::new(i));
+			},
+			None => {
+				store.remove(target);
+			},
+		}
+	}
+
+	pub(crate) fn instructions(&self, target: &str) -> Option<Strng> {
+		self
+			.instructions
+			.read()
+			.expect("read lock")
+			.get(target)
+			.cloned()
 	}
 
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {

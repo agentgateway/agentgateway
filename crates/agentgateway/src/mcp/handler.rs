@@ -206,6 +206,30 @@ pub(super) fn rewrite_resource_messages(
 	message
 }
 
+/// One `instructions://<target>` resource per target that sent instructions, if the caller may read it.
+fn instructions_resources(
+	upstreams: &upstream::UpstreamGroup,
+	policies: &McpAuthorizationSet,
+	cel: &CelExecWrapper,
+) -> Vec<rmcp::model::Resource> {
+	upstreams
+		.iter_named()
+		.filter_map(|(name, _)| {
+			upstreams.instructions(&name)?;
+			let uri = format!("instructions://{name}");
+			let resource =
+				rbac::ResourceType::Resource(rbac::ResourceId::new(name.to_string(), uri.clone()));
+			policies
+				.validate(
+					&resource,
+					&crate::mcp::guardrails::methods::RESOURCES_LIST,
+					cel,
+				)
+				.then(|| rmcp::model::Resource::new(uri, format!("{name} instructions")))
+		})
+		.collect()
+}
+
 // Namespaces a task id as `<target>+<task id>`, mirroring `resource_uri`.
 fn task_id(default_target_name: Option<&String>, target: &str, task_id: &str) -> String {
 	if default_target_name.is_none() {
@@ -630,6 +654,14 @@ impl Relay {
 		}
 	}
 
+	/// `instructions://<target>`: the target and the instructions it sent at initialize.
+	pub fn instructions_resource(&self, uri: &str) -> Option<(&str, Strng)> {
+		let target = self
+			.upstreams
+			.get_name(uri.strip_prefix("instructions://")?)?;
+		Some((target, self.upstreams.instructions(target)?))
+	}
+
 	pub fn get_sessions(&self) -> Option<Vec<MCPSession>> {
 		let mut sessions = Vec::with_capacity(self.upstreams.size());
 		for (_, us) in self.upstreams.iter_named() {
@@ -906,6 +938,7 @@ impl Relay {
 				if r.protocol_version.to_string() < lowest_version.to_string() {
 					lowest_version = r.protocol_version;
 				}
+				upstreams.record_instructions(&server_name, r.instructions.as_deref());
 				if let Some(instructions) = r.instructions
 					&& !instructions.is_empty()
 				{
@@ -1031,9 +1064,12 @@ impl Relay {
 			)
 		})
 	}
-	pub fn merge_resources(&self) -> Box<MergeFn> {
+	/// `first_page`: the request has no cursor; only then are the gateway's own `instructions://`
+	/// resources added, so a paginated list does not repeat them on every page.
+	pub fn merge_resources(&self, first_page: bool) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
+		let upstreams = self.upstreams.clone();
 		Box::new(move |streams, cel| {
 			let resources = streams
 				.into_iter()
@@ -1066,6 +1102,12 @@ impl Relay {
 				.collect::<Result<Vec<Vec<_>>, ClientError>>()?
 				.into_iter()
 				.flatten()
+				.chain(
+					first_page
+						.then(|| instructions_resources(&upstreams, &policies, cel))
+						.into_iter()
+						.flatten(),
+				)
 				.collect_vec();
 			Ok(
 				ListResourcesResult {
