@@ -4,7 +4,10 @@ use std::time::{Duration, Instant};
 
 use ::http::{HeaderName, HeaderValue};
 use quick_cache::sync::Cache;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use tonic::Code;
+use x509_parser::extensions::{GeneralName, ParsedExtension};
+use x509_parser::prelude::FromDer;
 
 use super::{ActorIdentity, EgressActorResolution, TRACE_POLICY_KIND};
 use crate::http::backendtls::ClientCertificate;
@@ -148,6 +151,17 @@ impl RequestPolicyTrait for SubstrateEgress {
 			.unwrap_or(hostname);
 		let target = Target::from((hostname, destination.port));
 		req.extensions_mut().insert(DynamicBackendOverride(target));
+		if let Some(source) = matched_rule
+			.https
+			.as_ref()
+			.and_then(|rule| rule.upstream_tls.as_ref())
+			.and_then(|tls| tls.client_certificate.as_ref())
+		{
+			let certificate = self
+				.provider_client_certificate(client, &identity, source)
+				.await?;
+			req.extensions_mut().insert(certificate);
+		}
 		self
 			.apply_effects(
 				client,
@@ -165,17 +179,6 @@ impl RequestPolicyTrait for SubstrateEgress {
 				req,
 			)
 			.await?;
-		if let Some(source) = matched_rule
-			.https
-			.as_ref()
-			.and_then(|rule| rule.upstream_tls.as_ref())
-			.and_then(|tls| tls.client_certificate.as_ref())
-		{
-			let certificate = self
-				.provider_client_certificate(client, &identity, source)
-				.await?;
-			req.extensions_mut().insert(certificate);
-		}
 		Ok(PolicyResponse::default())
 	}
 }
@@ -344,9 +347,12 @@ impl SubstrateEgress {
 		source: &protos::ateapi::ClientCertificateSource,
 	) -> Result<ClientCertificate, ProxyError> {
 		use protos::ateapi::client_certificate_source::Source;
+		if matches!(&source.source, Some(Source::ActorCertificate(_))) {
+			return self.actor_client_certificate(client, identity).await;
+		}
 		let Some(Source::Credential(source)) = &source.source else {
 			return Err(ProxyError::SubstrateEgressDenied(
-				"actor client certificate sources are not supported".to_owned(),
+				"client certificate source is missing".to_owned(),
 			));
 		};
 		let certificate_provider = self.provider_for_uri(&source.certificate_uri)?;
@@ -367,6 +373,64 @@ impl SubstrateEgress {
 				"credential provider returned an invalid client certificate: {error}"
 			))
 		})
+	}
+
+	async fn actor_client_certificate(
+		&self,
+		client: &PolicyClient,
+		identity: &ActorIdentity,
+	) -> Result<ClientCertificate, ProxyError> {
+		let actor_uid = identity.actor_uid.clone().ok_or_else(|| {
+			ProxyError::SubstrateEgressDenied("actor identity is missing a UID".to_owned())
+		})?;
+		let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).map_err(|error| {
+			ProxyError::SubstrateEgressUnavailable(format!(
+				"could not generate actor client certificate key: {error}"
+			))
+		})?;
+		let csr = rcgen::CertificateParams::default()
+			.serialize_request(&key)
+			.map_err(|error| {
+				ProxyError::SubstrateEgressUnavailable(format!(
+					"could not generate actor client certificate request: {error}"
+				))
+			})?;
+		let policy_client =
+			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
+		let channel = self.target.grpc_channel(policy_client.clone());
+		let mut request = tonic::Request::new(protos::ateapi::MintActorCertificateRequest {
+			actor: Some(protos::ateapi::ObjectRef {
+				atespace: identity.atespace.clone(),
+				name: identity.actor_name.clone(),
+			}),
+			actor_uid: actor_uid.clone(),
+			certificate_signing_request: csr.der().to_vec(),
+		});
+		let mut span = policy_client.start_grpc_span(
+			&mut request,
+			self.target.target.as_ref(),
+			"/substrate.ateapi.v1.Control/MintActorCertificate",
+		);
+		let mut control = protos::ateapi::control_client::ControlClient::new(channel);
+		let response = control.mint_actor_certificate(request).await;
+		if let Some(span) = span.as_deref_mut() {
+			span.record_grpc_result(&response);
+		}
+		drop(span);
+		let response = response.map_err(actor_certificate_error)?.into_inner();
+		let chain = response
+			.actor_certificates
+			.into_iter()
+			.map(CertificateDer::from)
+			.collect::<Vec<_>>();
+		validate_actor_client_certificate(&chain, identity, &actor_uid)?;
+		ClientCertificate::from_der(chain, PrivateKeyDer::Pkcs8(key.serialize_der().into())).map_err(
+			|error| {
+				ProxyError::SubstrateEgressDenied(format!(
+					"actor certificate issuer returned an invalid client certificate: {error}"
+				))
+			},
+		)
 	}
 
 	/// Fetches a PEM credential without caching so provider authorization and rotation apply to every request.
@@ -492,6 +556,72 @@ fn actor_jwt_error(status: tonic::Status) -> ProxyError {
 		},
 		_ => ProxyError::SubstrateEgressDenied(format!("actor JWT denied: {status}")),
 	}
+}
+
+fn actor_certificate_error(status: tonic::Status) -> ProxyError {
+	match status.code() {
+		Code::Unavailable | Code::DeadlineExceeded => ProxyError::SubstrateEgressUnavailable(format!(
+			"actor certificate issuer unavailable: {status}"
+		)),
+		_ => ProxyError::SubstrateEgressDenied(format!("actor certificate issuer denied: {status}")),
+	}
+}
+
+fn validate_actor_client_certificate(
+	chain: &[CertificateDer<'static>],
+	identity: &ActorIdentity,
+	actor_uid: &str,
+) -> Result<(), ProxyError> {
+	let invalid = |message: &str| ProxyError::SubstrateEgressDenied(message.to_owned());
+	let leaf = chain
+		.first()
+		.ok_or_else(|| invalid("actor certificate chain is empty"))?;
+	let (_, leaf) = x509_parser::certificate::X509Certificate::from_der(leaf.as_ref())
+		.map_err(|_| invalid("actor certificate leaf is invalid"))?;
+	let expected_spiffe = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
+	let sans = leaf
+		.subject_alternative_name()
+		.map_err(|_| invalid("actor certificate has invalid subject alternative names"))?
+		.ok_or_else(|| invalid("actor certificate has no subject alternative names"))?;
+	let mut uris = sans
+		.value
+		.general_names
+		.iter()
+		.filter_map(|name| match name {
+			GeneralName::URI(uri) => Some(uri),
+			_ => None,
+		});
+	if uris.next().copied() != Some(expected_spiffe.as_str()) || uris.next().is_some() {
+		return Err(invalid("actor certificate has an invalid SPIFFE identity"));
+	}
+	let client_auth = leaf.extensions().iter().any(|extension| {
+		matches!(
+			extension.parsed_extension(),
+			ParsedExtension::ExtendedKeyUsage(usage) if usage.client_auth
+		)
+	});
+	if !client_auth {
+		return Err(invalid("actor certificate leaf does not permit client authentication"));
+	}
+	const ACTOR_IDENTITY_OID: &str = "1.3.6.1.4.1.11129.2.12.2";
+	let extensions = leaf
+		.extensions()
+		.iter()
+		.filter(|extension| extension.oid.to_id_string() == ACTOR_IDENTITY_OID)
+		.collect::<Vec<_>>();
+	if extensions.len() != 1 {
+		return Err(invalid("actor certificate has an invalid identity extension"));
+	}
+	let extension = extensions[0];
+	let actor: serde_json::Value = serde_json::from_slice(extension.value)
+		.map_err(|_| invalid("actor certificate has an invalid identity extension"))?;
+	if actor["Atespace"] != identity.atespace
+		|| actor["ActorName"] != identity.actor_name
+		|| actor["ActorUid"] != actor_uid
+	{
+		return Err(invalid("actor certificate identity does not match the actor"));
+	}
+	Ok(())
 }
 
 fn credential_secret(secret: Vec<u8>) -> Result<Vec<u8>, ProxyError> {
@@ -733,6 +863,46 @@ mod tests {
 	use std::net::IpAddr;
 
 	use super::*;
+
+	fn minted_actor_certificate(actor_uid: &str) -> (Vec<CertificateDer<'static>>, rcgen::KeyPair) {
+		let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+		let mut params = rcgen::CertificateParams::default();
+		params.subject_alt_names.push(rcgen::SanType::URI(
+			"spiffe://substrate-actor.local/actor/demo/my-actor"
+				.try_into()
+				.unwrap(),
+		));
+		params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+		params
+			.custom_extensions
+			.push(rcgen::CustomExtension::from_oid_content(
+				&[1, 3, 6, 1, 4, 1, 11129, 2, 12, 2],
+				serde_json::json!({
+					"Atespace": "demo",
+					"ActorName": "my-actor",
+					"ActorUid": actor_uid,
+				})
+				.to_string()
+				.into_bytes(),
+			));
+		let certificate = params.self_signed(&key).unwrap();
+		(vec![CertificateDer::from(certificate.der().to_vec())], key)
+	}
+
+	#[test]
+	fn minted_actor_client_certificate_requires_matching_actor_identity() {
+		let identity = ActorIdentity {
+			atespace: "demo".to_owned(),
+			actor_name: "my-actor".to_owned(),
+			actor_uid: Some("uid-1".to_owned()),
+		};
+		let (chain, key) = minted_actor_certificate("uid-1");
+		validate_actor_client_certificate(&chain, &identity, "uid-1").unwrap();
+		ClientCertificate::from_der(chain, PrivateKeyDer::Pkcs8(key.serialize_der().into())).unwrap();
+
+		let (chain, _) = minted_actor_certificate("other-uid");
+		assert!(validate_actor_client_certificate(&chain, &identity, "uid-1").is_err());
+	}
 
 	fn request(protocol: EgressRequestProtocol, hostname: &str, port: u16) -> Request {
 		let mut request = Request::new(crate::http::Body::empty());

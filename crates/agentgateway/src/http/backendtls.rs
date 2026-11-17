@@ -8,7 +8,7 @@ use once_cell::sync::Lazy;
 use rustls::sign::{CertifiedKey, SingleCertAndKey};
 use rustls::{ClientConfig, RootCertStore};
 use rustls_pki_types::pem::PemObject;
-use rustls_pki_types::{CertificateDer, ServerName};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use serde::Serializer;
 use tracing::{info, trace, warn};
 
@@ -28,12 +28,24 @@ pub(crate) struct ClientCertificate {
 
 impl ClientCertificate {
 	pub(crate) fn from_pem(certificate: &[u8], private_key: &[u8]) -> anyhow::Result<Self> {
+		Self::from_der(
+			crate::types::agent::parse_cert(certificate)?,
+			crate::types::agent::parse_key(private_key)?,
+		)
+	}
+
+	pub(crate) fn from_der(
+		chain: Vec<CertificateDer<'static>>,
+		private_key: PrivateKeyDer<'static>,
+	) -> anyhow::Result<Self> {
 		use sha2::{Digest, Sha256};
 		use x509_parser::extensions::ParsedExtension;
 		use x509_parser::prelude::FromDer;
 
-		let chain = crate::types::agent::parse_cert(certificate)?;
-		let (_, leaf) = x509_parser::certificate::X509Certificate::from_der(chain[0].as_ref())
+		let leaf = chain
+			.first()
+			.ok_or_else(|| anyhow::anyhow!("no certificate"))?;
+		let (_, leaf) = x509_parser::certificate::X509Certificate::from_der(leaf.as_ref())
 			.map_err(|err| anyhow::anyhow!("invalid client certificate: {err}"))?;
 		if !leaf.validity().is_valid() {
 			anyhow::bail!("client certificate is expired or not yet valid");
@@ -55,7 +67,6 @@ impl ClientCertificate {
 		if !client_auth {
 			anyhow::bail!("client certificate leaf does not permit client authentication");
 		}
-		let key = crate::types::agent::parse_key(private_key)?;
 		let mut hasher = Sha256::new();
 		for certificate in &chain {
 			hasher.update((certificate.as_ref().len() as u64).to_be_bytes());
@@ -63,7 +74,7 @@ impl ClientCertificate {
 		}
 		let certified_key = Arc::new(CertifiedKey::from_der(
 			chain,
-			key,
+			private_key,
 			&transport::tls::provider(),
 		)?);
 		Ok(Self {

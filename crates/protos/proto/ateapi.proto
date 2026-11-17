@@ -9,6 +9,7 @@ service Control {
   rpc ResumeActor(ResumeActorRequest) returns (ResumeActorResponse) {}
   rpc GetActorEgressPolicy(GetActorEgressPolicyRequest) returns (EgressPolicy) {}
   rpc MintActorJwt(MintActorJwtRequest) returns (MintActorJwtResponse) {}
+  rpc MintActorCertificate(MintActorCertificateRequest) returns (MintActorCertificateResponse) {}
 }
 
 message Actor {
@@ -152,4 +153,14 @@ message MintActorJwtRequest {
 
 message MintActorJwtResponse {
   string actor_jwt = 1;
+}
+
+message MintActorCertificateRequest {
+  ObjectRef actor = 1;
+  string actor_uid = 2;
+  bytes certificate_signing_request = 3;
+}
+
+message MintActorCertificateResponse {
+  repeated bytes actor_certificates = 1;
 }

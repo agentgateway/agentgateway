@@ -20,7 +20,7 @@ const UNREACHABLE_ADDR: &str = "127.0.0.1:1";
 
 #[test]
 fn substrate_control_api_wire_tags() {
-	// Canonical Substrate tags: Actor.status=5 and MintActorJwtRequest fields=1,2,3.
+	// Canonical Substrate tags: Actor.status=5 and actor credential request fields=1,2,3.
 	let actor = <Actor as prost::Message>::decode(&b"\x2a\x04\x08\x02\x12\x00"[..]).unwrap();
 	let status = actor.status.unwrap();
 	assert_eq!(status.state, ActorState::Running as i32);
@@ -37,6 +37,18 @@ fn substrate_control_api_wire_tags() {
 	assert_eq!(
 		prost::Message::encode_to_vec(&request),
 		b"\x0a\x06\x0a\x01a\x12\x01b\x12\x01x\x18\x01",
+	);
+	let request = protos::ateapi::MintActorCertificateRequest {
+		actor: Some(protos::ateapi::ObjectRef {
+			atespace: "a".into(),
+			name: "b".into(),
+		}),
+		actor_uid: "uid-1".into(),
+		certificate_signing_request: vec![1, 2, 3],
+	};
+	assert_eq!(
+		prost::Message::encode_to_vec(&request),
+		b"\x0a\x06\x0a\x01a\x12\x01b\x12\x05uid-1\x1a\x03\x01\x02\x03",
 	);
 }
 

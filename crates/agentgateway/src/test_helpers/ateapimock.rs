@@ -3,8 +3,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use protos::ateapi::control_server::{Control, ControlServer};
 use protos::ateapi::{
-	Actor, EgressPolicy, GetActorEgressPolicyRequest, GetActorRequest, MintActorJwtRequest,
-	MintActorJwtResponse, ResumeActorRequest, ResumeActorResponse,
+	Actor, EgressPolicy, GetActorEgressPolicyRequest, GetActorRequest, MintActorCertificateRequest,
+	MintActorCertificateResponse, MintActorJwtRequest, MintActorJwtResponse, ResumeActorRequest,
+	ResumeActorResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -40,6 +41,15 @@ pub trait Handler {
 		_request: &MintActorJwtRequest,
 	) -> Result<MintActorJwtResponse, Status> {
 		Err(Status::unimplemented("MintActorJwt is not implemented"))
+	}
+
+	async fn mint_actor_certificate(
+		&mut self,
+		_request: &MintActorCertificateRequest,
+	) -> Result<MintActorCertificateResponse, Status> {
+		Err(Status::unimplemented(
+			"MintActorCertificate is not implemented",
+		))
 	}
 }
 
@@ -106,6 +116,17 @@ impl Control for AteApiMock {
 		handler.metadata(request.metadata());
 		Ok(Response::new(
 			handler.mint_actor_jwt(request.get_ref()).await?,
+		))
+	}
+
+	async fn mint_actor_certificate(
+		&self,
+		request: Request<MintActorCertificateRequest>,
+	) -> Result<Response<MintActorCertificateResponse>, Status> {
+		let mut handler = (self.handler)();
+		handler.metadata(request.metadata());
+		Ok(Response::new(
+			handler.mint_actor_certificate(request.get_ref()).await?,
 		))
 	}
 }

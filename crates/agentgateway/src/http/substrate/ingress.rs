@@ -906,6 +906,13 @@ mod tests {
 		) -> Result<GrpcResponse<protos::ateapi::MintActorJwtResponse>, Status> {
 			Err(Status::unimplemented("not used"))
 		}
+
+		async fn mint_actor_certificate(
+			&self,
+			_request: GrpcRequest<protos::ateapi::MintActorCertificateRequest>,
+		) -> Result<GrpcResponse<protos::ateapi::MintActorCertificateResponse>, Status> {
+			Err(Status::unimplemented("not used"))
+		}
 	}
 
 	#[tokio::test]
