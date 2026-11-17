@@ -14,12 +14,11 @@ use super::{
 
 const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 const SQLITE_SCHEMA: &str = include_str!("sqlite_schema.sql");
-const POSTGRES_SCHEMA: &str = include_str!("postgres_schema.sql");
 const SQLITE_UPSERT: &str = include_str!("sqlite_upsert.sql");
 const POSTGRES_UPSERT: &str = include_str!("postgres_upsert.sql");
-/// "agwbudgt"
-const POSTGRES_XACT_LOCK_KEY: i64 = 0x6167_7762_7564_6774;
-/// Bounds how long schema setup waits on the advisory lock or table locks before failing.
+/// Keeps budget migrations independent from other SQLx-managed schemas that may share the database.
+pub(super) const POSTGRES_MIGRATIONS_TABLE: &str = "_agentgateway_budget_migrations";
+/// Bounds how long schema setup waits on the migration lock or table locks before failing.
 const POSTGRES_SCHEMA_LOCK_TIMEOUT: &str = "10s";
 
 impl BudgetPolicy {
@@ -55,44 +54,9 @@ impl BudgetPolicy {
 					.context("failed to prune expired budget usage")?;
 			},
 			crate::database::DatabasePool::Postgres(pool) => {
-				let mut tx = pool
-					.begin()
-					.await
-					.context("failed to begin budget database initialization")?;
-				sqlx::query("SELECT set_config('lock_timeout', $1, true)")
-					.bind(POSTGRES_SCHEMA_LOCK_TIMEOUT)
-					.execute(&mut *tx)
-					.await
-					.context("failed to configure budget database lock timeout")?;
-				sqlx::query("SELECT pg_advisory_xact_lock($1)")
-					.bind(POSTGRES_XACT_LOCK_KEY)
-					.execute(&mut *tx)
-					.await
-					.context("failed to acquire budget database schema lock")?;
-				sqlx::raw_sql(POSTGRES_SCHEMA)
-					.execute(&mut *tx)
-					.await
-					.context("failed to initialize budget database")?;
-				// `ALTER TABLE` takes an access exclusive lock and blocks every running proxy's budget traffic
-				// on each restart so first check whether its even needed
-				let has_unit = sqlx::query_scalar::<_, bool>(
-					"SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'budget_usage'::regclass \
-					 AND attname = 'unit' AND NOT attisdropped)",
-				)
-				.fetch_one(&mut *tx)
-				.await
-				.context("failed to inspect budget database schema")?;
-				if !has_unit {
-					sqlx::query("ALTER TABLE budget_usage ADD COLUMN IF NOT EXISTS unit TEXT")
-						.execute(&mut *tx)
-						.await
-						.context("failed to migrate budget database schema")?;
-				}
-				tx.commit()
-					.await
-					.context("failed to commit budget database initialization")?;
-				// Pruning is idempotent and safe to run concurrently in postgres, so it runs outside
-				// the schema lock to keep that critical section short for other starting proxies.
+				migrate_postgres(pool).await?;
+				// Pruning is idempotent and safe to run concurrently in postgres, so it runs after the
+				// migration lock is released to keep that critical section short for other starting proxies.
 				sqlx::query("DELETE FROM budget_usage WHERE window_end <= $1")
 					.bind(now.timestamp_millis())
 					.execute(pool)
@@ -289,6 +253,49 @@ impl BudgetPolicy {
 		let persisted = Self::read_persisted(pool).await?;
 		self.reconcile(persisted, updated_at);
 		Ok(())
+	}
+}
+
+/// Runs the budget migrations. The migrator serializes concurrent proxies with an advisory lock
+/// and skips migrations already applied, so restarts do not take table locks.
+async fn migrate_postgres(pool: &sqlx::PgPool) -> anyhow::Result<()> {
+	let started = std::time::Instant::now();
+	tracing::info!(
+		target: "budget",
+		lock_timeout = POSTGRES_SCHEMA_LOCK_TIMEOUT,
+		"initializing budget database schema"
+	);
+
+	// Use one connection for all migration work, then close it so the session-scoped
+	// lock_timeout and any advisory lock left behind after an error cannot leak into the pool.
+	let mut connection = pool
+		.acquire()
+		.await
+		.context("failed to acquire connection for budget database migration")?;
+	connection.close_on_drop();
+	sqlx::query("SELECT set_config('lock_timeout', $1, false)")
+		.bind(POSTGRES_SCHEMA_LOCK_TIMEOUT)
+		.execute(&mut *connection)
+		.await
+		.context("failed to configure budget database migration lock timeout")?;
+
+	let mut migrator = sqlx_macros::migrate!("./src/http/budget/postgres_migrations");
+	// Keep budget migrations independent from any other SQLx-managed schema that
+	// may share this database.
+	migrator.dangerous_set_table_name(POSTGRES_MIGRATIONS_TABLE);
+	let result = migrator.run(&mut *connection).await;
+	if let Err(err) = connection.close().await {
+		tracing::warn!(target: "budget", ?err, "failed to close budget database migration connection");
+	}
+	match result {
+		Ok(()) => {
+			tracing::info!(target: "budget", elapsed = ?started.elapsed(), "budget database schema is ready");
+			Ok(())
+		},
+		Err(err) => {
+			tracing::error!(target: "budget", ?err, elapsed = ?started.elapsed(), "failed to migrate budget database schema");
+			Err(err).context("failed to migrate budget database schema")
+		},
 	}
 }
 

@@ -34,6 +34,17 @@ CREATE TABLE budget_usage (
     updated_at BIGINT NOT NULL
 );
 "#;
+/// The `budget_usage` table as created by releases that had the `unit` column but no migrations.
+const UNTRACKED_SCHEMA: &str = r#"
+CREATE TABLE budget_usage (
+    budget_id TEXT PRIMARY KEY,
+    window_start BIGINT NOT NULL,
+    window_end BIGINT NOT NULL,
+    unit TEXT NOT NULL,
+    used_amount BIGINT NOT NULL DEFAULT 0 CHECK (used_amount >= 0),
+    updated_at BIGINT NOT NULL
+);
+"#;
 /// Proxies started at once in each round of the concurrent startup test.
 const CONCURRENT_INITIALIZERS: usize = 8;
 /// Rounds of the concurrent startup test, each against a fresh database.
@@ -99,7 +110,7 @@ async fn unit_column_count(pool: &PgPool) -> i64 {
 /// Several proxies sharing one database start at once. Without the advisory lock, concurrent
 /// `CREATE TABLE IF NOT EXISTS` statements on a fresh database can fail and abort startup. The
 /// legacy case checks that concurrent startups also all migrate an existing table.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::test]
 async fn concurrent_initializers_create_and_migrate_the_schema() {
 	let Some(postgres) = TestPostgres::from_env() else {
 		return;
@@ -122,20 +133,15 @@ async fn concurrent_initializers_create_and_migrate_the_schema() {
 			for _ in 0..CONCURRENT_INITIALIZERS {
 				pools.push(postgres.pool(&database, 1).await);
 			}
-			let start = Arc::new(tokio::sync::Barrier::new(CONCURRENT_INITIALIZERS));
-			let mut initializers = tokio::task::JoinSet::new();
-			for (initializer, pool) in pools.into_iter().enumerate() {
-				let start = start.clone();
-				initializers.spawn(async move {
-					start.wait().await;
-					let result = Arc::new(BudgetPolicy::default())
-						.initialize(DatabasePool::Postgres(pool))
-						.await;
-					(initializer, result)
-				});
-			}
-			while let Some(joined) = initializers.join_next().await {
-				let (initializer, result) = joined.unwrap();
+			// Polled together in this task rather than spawned: the migration future is not `Send`.
+			// Each initializer has its own connection, so the server still runs them concurrently.
+			let results = futures::future::join_all(pools.into_iter().map(|pool| async move {
+				Arc::new(BudgetPolicy::default())
+					.initialize(DatabasePool::Postgres(pool))
+					.await
+			}))
+			.await;
+			for (initializer, result) in results.into_iter().enumerate() {
 				if let Err(err) = result {
 					panic!("{case} round {round}: initializer {initializer} failed: {err:#}");
 				}
@@ -151,15 +157,15 @@ async fn concurrent_initializers_create_and_migrate_the_schema() {
 	}
 }
 
-/// The lock timeout and advisory lock are transaction-scoped, so a pooled connection that ran
-/// schema setup must come back with neither.
+/// Migrations set a session lock timeout and take a session advisory lock, then close their
+/// connection, so neither may reach a connection the pool hands out afterwards.
 #[tokio::test]
 async fn schema_setup_does_not_leak_lock_settings_into_the_pool() {
 	let Some(postgres) = TestPostgres::from_env() else {
 		return;
 	};
 	let database = postgres.create_database("no_leak").await;
-	// One connection, so the checks below run on the connection that did the schema setup.
+	// One connection, so a migration connection returned to the pool would be the one checked below.
 	let pool = postgres.pool(&database, 1).await;
 	let default_lock_timeout: String = sqlx::query_scalar("SHOW lock_timeout")
 		.fetch_one(&pool)
@@ -186,39 +192,106 @@ async fn schema_setup_does_not_leak_lock_settings_into_the_pool() {
 	assert_eq!(advisory_locks, 0);
 }
 
-/// Restarting against an up-to-date schema must not take the ACCESS EXCLUSIVE lock of
-/// `ALTER TABLE`, which would wait on running proxies' open transactions.
+/// Starting against a table that already has the current columns must not take the
+/// ACCESS EXCLUSIVE lock of `ALTER TABLE`, which would wait on running proxies' open transactions.
+/// Covers both a restart (migrations already recorded) and the first upgrade of a database from a
+/// release without a migrations table (migrations apply over the existing table).
 #[tokio::test]
-async fn restart_does_not_wait_on_open_readers() {
+async fn startup_does_not_wait_on_open_readers() {
 	let Some(postgres) = TestPostgres::from_env() else {
 		return;
 	};
-	let database = postgres.create_database("open_reader").await;
-	Arc::new(BudgetPolicy::default())
-		.initialize(DatabasePool::Postgres(postgres.pool(&database, 1).await))
-		.await
-		.unwrap();
+	for case in ["restart", "upgrade"] {
+		let database = postgres
+			.create_database(&format!("open_reader_{case}"))
+			.await;
+		let setup = postgres.pool(&database, 1).await;
+		if case == "restart" {
+			Arc::new(BudgetPolicy::default())
+				.initialize(DatabasePool::Postgres(setup))
+				.await
+				.unwrap();
+		} else {
+			sqlx::raw_sql(UNTRACKED_SCHEMA)
+				.execute(&setup)
+				.await
+				.unwrap();
+			setup.close().await;
+		}
 
-	// A running proxy's transaction that has read the table holds ACCESS SHARE until it ends.
-	let running = postgres.pool(&database, 1).await;
-	let mut reader = running.begin().await.unwrap();
-	sqlx::query("SELECT COUNT(*) FROM budget_usage")
-		.execute(&mut *reader)
-		.await
-		.unwrap();
+		// A running proxy's transaction that has read the table holds ACCESS SHARE until it ends.
+		let running = postgres.pool(&database, 1).await;
+		let mut reader = running.begin().await.unwrap();
+		sqlx::query("SELECT COUNT(*) FROM budget_usage")
+			.execute(&mut *reader)
+			.await
+			.unwrap();
 
-	let restart = Arc::new(BudgetPolicy::default());
-	let restarted = tokio::time::timeout(
-		Duration::from_secs(5),
-		restart.initialize(DatabasePool::Postgres(postgres.pool(&database, 1).await)),
-	)
-	.await
-	.expect("schema setup waited on an open reader");
-	restarted.unwrap();
-	reader.rollback().await.unwrap();
+		let starting = Arc::new(BudgetPolicy::default());
+		let started = tokio::time::timeout(
+			Duration::from_secs(5),
+			starting.initialize(DatabasePool::Postgres(postgres.pool(&database, 1).await)),
+		)
+		.await
+		.unwrap_or_else(|_| panic!("{case}: schema setup waited on an open reader"));
+		started.unwrap_or_else(|err| panic!("{case}: schema setup failed: {err:#}"));
+		reader.rollback().await.unwrap();
+	}
 }
 
-/// Pruning runs after the schema transaction commits; expired rows must still be removed and
+/// Databases set up by releases without a migrations table must upgrade in place: the migrations
+/// apply over the existing table, keep its rows, and are recorded so later restarts skip them.
+#[tokio::test]
+async fn upgrade_from_untracked_schema_keeps_rows() {
+	let Some(postgres) = TestPostgres::from_env() else {
+		return;
+	};
+	for (case, schema, unit_insert) in [
+		("legacy", LEGACY_SCHEMA, ""),
+		("untracked", UNTRACKED_SCHEMA, "'Tokens', "),
+	] {
+		let database = postgres.create_database(&format!("upgrade_{case}")).await;
+		let pool = postgres.pool(&database, 2).await;
+		sqlx::raw_sql(schema).execute(&pool).await.unwrap();
+		let unit_column = if unit_insert.is_empty() { "" } else { "unit, " };
+		sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+			"INSERT INTO budget_usage (budget_id, window_start, window_end, {unit_column}used_amount, \
+			 updated_at) VALUES ('kept', 0, {window_end}, {unit_insert}7, 0)",
+			window_end = (Utc::now() + chrono::Duration::days(1)).timestamp_millis(),
+		)))
+		.execute(&pool)
+		.await
+		.unwrap();
+
+		Arc::new(BudgetPolicy::default())
+			.initialize(DatabasePool::Postgres(pool.clone()))
+			.await
+			.unwrap_or_else(|err| panic!("{case}: upgrade failed: {err:#}"));
+
+		assert_eq!(
+			unit_column_count(&pool).await,
+			1,
+			"{case}: unit column missing"
+		);
+		let kept: i64 =
+			sqlx::query_scalar("SELECT used_amount FROM budget_usage WHERE budget_id = 'kept'")
+				.fetch_one(&pool)
+				.await
+				.unwrap();
+		assert_eq!(kept, 7, "{case}: existing row lost");
+		let applied: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+			"SELECT COUNT(*) FROM {} WHERE success",
+			super::database::POSTGRES_MIGRATIONS_TABLE
+		)))
+		.fetch_one(&pool)
+		.await
+		.unwrap();
+		assert_eq!(applied, 2, "{case}: migrations not recorded");
+		pool.close().await;
+	}
+}
+
+/// Pruning runs after the migrations finish; expired rows must still be removed and
 /// live rows preloaded into the in-memory counters.
 #[tokio::test]
 async fn initialization_prunes_expired_rows_and_preloads_live_ones() {
