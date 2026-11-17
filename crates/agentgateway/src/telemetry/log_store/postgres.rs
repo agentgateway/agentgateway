@@ -24,6 +24,7 @@ pub struct PostgresLogStore {
 
 const ANALYTICS_FILTER_OPTION_LIMIT: i64 = 500;
 const SCHEMA_LOCK_TIMEOUT: &str = "10s";
+const SCHEMA_STATEMENT_TIMEOUT: &str = "0";
 
 impl PostgresLogStore {
 	pub async fn from_pool(pool: PgPool) -> anyhow::Result<Self> {
@@ -255,6 +256,7 @@ async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
 	let started = Instant::now();
 	info!(
 		lock_timeout = SCHEMA_LOCK_TIMEOUT,
+		statement_timeout = SCHEMA_STATEMENT_TIMEOUT,
 		"initializing request log database schema"
 	);
 
@@ -270,6 +272,12 @@ async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
 		.execute(&mut *connection)
 		.await
 		.context("failed to configure request log database migration lock timeout")?;
+	// Do not timeout database migrations if a role has a statement_timeout set.
+	sqlx::query("SELECT set_config('statement_timeout', $1, false)")
+		.bind(SCHEMA_STATEMENT_TIMEOUT)
+		.execute(&mut *connection)
+		.await
+		.context("failed to configure request log database migration statement timeout")?;
 
 	let mut migrator = sqlx_macros::migrate!("./src/telemetry/log_store/postgres_migrations");
 	// Keep request-log migrations independent from any other SQLx-managed schema that
