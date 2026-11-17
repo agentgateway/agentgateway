@@ -6998,6 +6998,41 @@ async fn test_stdio_targets_remain_non_stateless() {
 }
 
 #[tokio::test]
+async fn test_stdio_target_rejects_server_discover() {
+	use rmcp::model::{ClientRequest, JsonRpcRequest};
+
+	use crate::mcp::upstream::{IncomingRequestContext, UpstreamError, UpstreamGroup};
+
+	let group = UpstreamGroup::new_for_request(
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		McpBackendGroup {
+			targets: vec![fake_stdio_target("stdio")],
+			..Default::default()
+		},
+		&IncomingRequestContext::empty(),
+	)
+	.unwrap();
+	let discover: JsonRpcRequest<ClientRequest> = serde_json::from_value(serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "server/discover",
+		"params": { "_meta": modern_meta() }
+	}))
+	.unwrap();
+
+	// stdio cannot serve `subscriptions/listen`, so discovery must steer clients to `initialize`.
+	let res = group
+		.get("stdio")
+		.unwrap()
+		.generic_stream("stdio", discover, &IncomingRequestContext::empty())
+		.await;
+	assert!(
+		matches!(res, Err(UpstreamError::InvalidMethod(_))),
+		"expected server/discover to be rejected for a stdio target"
+	);
+}
+
+#[tokio::test]
 async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 	let good = mock_streamable_http_server(true).await;
 	let bad_addr = SocketAddr::from(([127, 0, 0, 1], 31999));
@@ -7729,6 +7764,50 @@ async fn test_runtime_fanout_fail_open_skips_jsonrpc_error_frames() {
 		res.is_ok(),
 		"expected merged success with FailOpen when one upstream returns a JSON-RPC error frame: {:?}",
 		res.err()
+	);
+}
+
+#[tokio::test]
+async fn test_runtime_fanout_fail_open_surfaces_invalid_params_discovery_rejection() {
+	use futures_util::StreamExt;
+	use rmcp::model::{ErrorData, ListToolsResult, RequestId, ServerJsonRpcMessage};
+
+	use crate::mcp::mergestream::{MergeStream, Messages};
+
+	let ok_msg = ServerJsonRpcMessage::response(
+		rmcp::model::ServerResult::ListToolsResult(ListToolsResult::default()),
+		RequestId::Number(1),
+	);
+	// Python SDK servers reject unknown methods such as `server/discover` with -32602.
+	let err_stream = Messages::from(Ok(ServerJsonRpcMessage::error(
+		ErrorData::invalid_params("Invalid request parameters", None),
+		Some(RequestId::Number(1)),
+	)));
+
+	let streams = vec![
+		("ok".into(), Messages::from(ok_msg)),
+		("python".into(), err_stream),
+	];
+
+	let merge = Box::new(
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
+			Ok(results.into_iter().next().unwrap().1)
+		},
+	);
+
+	let mut ms = MergeStream::new(
+		streams,
+		RequestId::Number(1),
+		merge,
+		empty_cel(),
+		FailureMode::FailOpen,
+		true,
+	);
+
+	let res = ms.next().await.unwrap();
+	assert!(
+		matches!(&res, Ok(ServerJsonRpcMessage::Error(e)) if e.error.code == rmcp::model::ErrorCode::INVALID_PARAMS),
+		"expected the discovery rejection to surface under FailOpen, got {res:?}"
 	);
 }
 
