@@ -180,10 +180,10 @@ wiremock.workspace = true
 # Linux only dependencies
 # pprof's "frame-pointer" unwinder only compiles on these arches; elsewhere
 # (e.g. s390x) it must be left off, and pprof falls back to its default unwinder.
-[target.'cfg(all(target_family = "unix", any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64", target_arch = "loongarch64")))'.dependencies]
+[target.'cfg(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64", target_arch = "loongarch64")))'.dependencies]
 pprof = { workspace = true, features = ["frame-pointer"] }
 
-[target.'cfg(all(target_family = "unix", not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64", target_arch = "loongarch64"))))'.dependencies]
+[target.'cfg(all(target_os = "linux", not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64", target_arch = "loongarch64"))))'.dependencies]
 pprof.workspace = true
 
 # Windows only dependencies
@@ -242,6 +242,9 @@ legacyreqwest = { package = "reqwest", version = "0.12", default-features = fals
     "macos-system-configuration",
     "rustls-tls",
 ] }
+
+[target.'cfg(target_family = "unix")'.dev-dependencies]
+pprof.workspace = true
 
 [lints.clippy]
 # This rule makes code more confusing
