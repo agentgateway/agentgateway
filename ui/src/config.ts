@@ -36,6 +36,8 @@ function hasLegacyUiPromptCompletionMappings(add: Record<string, string> | undef
 	);
 }
 
+export const llmSettingsFields = ['gateways', 'port', 'tls'] as const;
+
 export const mcpSettingsFields = [
 	'gateways',
 	'port',
@@ -267,6 +269,15 @@ export function fileOwnedMcpSettingFields(
 	if (!hybrid) return new Set();
 	const mcp = config?.mcp;
 	return new Set(mcpSettingsFields.filter(field => Object.hasOwn(mcp ?? {}, field)));
+}
+
+export function fileOwnedLlmSettingFields(
+	config: GatewayConfig | null | undefined,
+	hybrid: boolean
+): ReadonlySet<string> {
+	if (!hybrid) return new Set();
+	const llm = config?.llm;
+	return new Set(llmSettingsFields.filter(field => Object.hasOwn(llm ?? {}, field)));
 }
 
 type LlmPolicyWithGuardrails = NonNullable<LlmConfig['policies']> & {

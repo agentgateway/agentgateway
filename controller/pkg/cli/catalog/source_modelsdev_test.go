@@ -72,6 +72,7 @@ func sampleAPI() map[string]modelsDevProvider {
 				Cost:             &modelsDevCost{Input: "5", Output: "25"},
 				ReasoningOptions: []modelsDevReasoningOption{{Type: "effort", Values: []*string{new("low"), new("high")}}},
 			},
+			"claude-opus-5-5": modelsDevSampleModel(`{"family": "claude-opus", "cost": {"input": 4, "output": 20}, "experimental": {"modes": {"fast": {"cost": {"input": 8, "output": 40}, "provider": {"body": {"speed": "fast"}}}}}}`),
 			"claude-opus-4-6": {
 				Family: "claude-opus",
 				Cost:   &modelsDevCost{Input: "5", Output: "25"},

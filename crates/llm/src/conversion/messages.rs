@@ -1135,7 +1135,10 @@ pub mod from_completions {
 					service_tier = message.usage.service_tier.clone();
 					log.update(|r| {
 						usage_acc.apply(&mut r.response);
-						r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
+						r.response.service_tier = crate::types::messages::served_tier(
+							message.usage.service_tier.as_deref(),
+							message.usage.speed.as_deref(),
+						);
 						r.response.provider_model = Some(strng::new(&message.model))
 					});
 					// no need to respond with anything yet
@@ -1464,7 +1467,10 @@ pub fn passthrough_stream(
 				usage_acc = message.usage.accounting();
 				log.update(|r| {
 					usage_acc.apply(&mut r.response);
-					r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
+					r.response.service_tier = crate::types::messages::served_tier(
+						message.usage.service_tier.as_deref(),
+						message.usage.speed.as_deref(),
+					);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
 			},

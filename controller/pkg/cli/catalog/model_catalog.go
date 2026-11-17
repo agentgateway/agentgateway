@@ -322,7 +322,7 @@ func (m *Model) validate() error {
 	previous := make(map[string]uint64)
 	for i, t := range m.Tiers {
 		switch t.ServiceTier {
-		case "", "standard", "flex", "priority", "reserved", "ultrafast":
+		case "", "standard", "flex", "priority", "reserved", "ultrafast", "fast":
 		default:
 			return fmt.Errorf("tier %d has unsupported serviceTier %q", i, t.ServiceTier)
 		}

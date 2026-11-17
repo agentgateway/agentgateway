@@ -3,10 +3,13 @@ use rust_decimal::Decimal;
 
 use super::{BudgetPolicy, UNBOUNDED_WINDOW};
 
+/// A point-in-time status of budgets.
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BudgetStatusResponse {
+	/// When the status was read, in milliseconds since the Unix epoch.
 	pub observed_at: i64,
+	/// The budgets, ordered by API key name and budget name.
 	pub budgets: Vec<BudgetStatus>,
 }
 
@@ -14,37 +17,56 @@ pub struct BudgetStatusResponse {
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BudgetStatus {
+	/// Display name of the API key that the budget belongs to.
 	pub api_key_name: String,
+	/// Name of the budget.
 	pub name: String,
+	/// The configured limit.
 	pub limit: BudgetStatusLimit,
+	/// Usage in the current window.
 	pub usage: BudgetStatusUsage,
+	/// The window that the counter tracks.
 	pub window: BudgetStatusWindow,
+	/// Action taken when the budget is exceeded: `Audit` or `Block`.
 	pub on_budget_exceeded: String,
+	/// When the usage was last recorded or reset, in milliseconds since the Unix epoch.
 	pub updated_at: i64,
 }
 
+/// The limit of a budget.
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BudgetStatusLimit {
+	/// Unit of the limit: `USD` or `Tokens`.
 	pub unit: String,
+	/// Maximum usage in one window, as a decimal string.
 	pub amount: String,
 }
 
+/// The usage of a budget in its current window.
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BudgetStatusUsage {
+	/// Usage so far, as a decimal string. Zero when the window has expired.
 	pub used: String,
+	/// The limit minus the usage, never below zero, as a decimal string.
 	pub remaining: String,
+	/// Whether the usage has reached the limit.
 	pub exceeded: bool,
 }
 
+/// The usage window that the counter of a budget tracks.
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BudgetStatusWindow {
+	/// Start of the window, in milliseconds since the Unix epoch. Zero for a budget without a window.
 	pub start: i64,
-	/// `None` for a budget without a window, which never resets.
+	/// End of the window, in milliseconds since the Unix epoch. Null for a budget without a window,
+	/// which never resets.
 	pub end: Option<i64>,
+	/// Length of the window in milliseconds. Null for a budget without a window.
 	pub duration_ms: Option<i64>,
+	/// Whether the tracked window has ended and the counter has not advanced to the current window.
 	pub expired: bool,
 }
 

@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [features]
 default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
-jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
+jemalloc = ["dep:tikv-jemallocator"]
 mimalloc = ["pprof-alloc/allocator-mimalloc"]
 # Crypto provider selection. `crypto-aws-lc` (the default) backs all crypto with
 # aws-lc-rs. `fips` is an operating-mode modifier; it currently requires the
@@ -180,10 +180,10 @@ wiremock.workspace = true
 # Linux only dependencies
 # pprof's "frame-pointer" unwinder only compiles on these arches; elsewhere
 # (e.g. s390x) it must be left off, and pprof falls back to its default unwinder.
-[target.'cfg(all(target_family = "unix", any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64", target_arch = "loongarch64")))'.dependencies]
+[target.'cfg(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64", target_arch = "loongarch64")))'.dependencies]
 pprof = { workspace = true, features = ["frame-pointer"] }
 
-[target.'cfg(all(target_family = "unix", not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64", target_arch = "loongarch64"))))'.dependencies]
+[target.'cfg(all(target_os = "linux", not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64", target_arch = "loongarch64"))))'.dependencies]
 pprof.workspace = true
 
 # Windows only dependencies
@@ -193,7 +193,6 @@ which.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 tokio = { workspace = true, features = ["taskdump"] }
 tikv-jemallocator = { workspace = true, optional = true }
-jemalloc_pprof = { workspace = true, optional = true }
 
 [target.'cfg(all(target_os = "linux", not(all(target_env = "musl", target_arch = "aarch64"))))'.dependencies]
 pprof-alloc = { workspace = true, features = ["allocator-jemalloc"] }
@@ -243,6 +242,9 @@ legacyreqwest = { package = "reqwest", version = "0.12", default-features = fals
     "macos-system-configuration",
     "rustls-tls",
 ] }
+
+[target.'cfg(target_family = "unix")'.dev-dependencies]
+pprof.workspace = true
 
 [lints.clippy]
 # This rule makes code more confusing

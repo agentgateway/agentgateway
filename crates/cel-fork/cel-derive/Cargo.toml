@@ -16,3 +16,7 @@ proc-macro = true
 
 [dev-dependencies]
 macrotest = "1"
+cel = { path = "../cel" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+vector-map = { workspace = true }

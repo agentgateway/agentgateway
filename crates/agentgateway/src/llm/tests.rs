@@ -1753,6 +1753,38 @@ async fn vertex_anthropic_messages_prepares_vertex_body() {
 	);
 }
 
+#[test]
+fn vertex_anthropic_drops_unsupported_beta_headers() {
+	// Vertex rejects the whole request if any anthropic-beta value is one it does not support.
+	let provider = vertex_provider("claude-haiku-4-5@20251001");
+	for route_type in [RouteType::Messages, RouteType::AnthropicTokenCount] {
+		for (beta, expected) in [
+			(
+				"claude-code-20250219,advisor-tool-2026-03-01",
+				Some("claude-code-20250219"),
+			),
+			("advisor-tool-2026-03-01", None),
+		] {
+			let mut req = crate::http::tests_common::request(
+				"https://example.com/v1/messages",
+				::http::Method::POST,
+				&[("anthropic-beta", beta)],
+			);
+			provider
+				.set_required_fields(&mut req, route_type, None, None)
+				.unwrap();
+			assert_eq!(
+				req
+					.headers()
+					.get("anthropic-beta")
+					.map(|v| v.to_str().unwrap()),
+				expected,
+				"{route_type:?} / {beta}"
+			);
+		}
+	}
+}
+
 #[tokio::test]
 async fn provider_model_is_set_before_llm_transformations() {
 	use crate::http::auth::BackendInfo;

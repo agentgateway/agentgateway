@@ -577,6 +577,71 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 	});
 });
 
+test('dropdown menu fits its longest option', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/client-setup');
+	// A compact dropdown whose trigger only fits a short selected label.
+	await page.addStyleTag({ content: '.client-recipe-select { width: 64px; }' });
+
+	await page.getByRole('combobox', { name: 'Integration' }).click();
+	const menu = page.locator('.custom-select-menu');
+	const box = await menu.boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect(box?.width).toBeLessThanOrEqual(420);
+	const truncated = await menu
+		.locator('.custom-select-copy > span')
+		.evaluateAll(labels => labels.filter(label => label.scrollWidth > label.clientWidth).length);
+	expect(truncated).toBe(0);
+
+	// Searching down to one short option keeps the menu steady.
+	await page.getByRole('combobox', { name: 'Search Integration' }).fill('OpenAI JavaScript');
+	await expect(page.getByRole('option')).toHaveCount(1);
+	expect((await menu.boundingBox())?.width).toBe(box?.width);
+});
+
+test('dropdown menu stays on screen at the right edge', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/client-setup');
+	await page.addStyleTag({
+		content: '.client-recipe-select { position: fixed; top: 80px; right: 8px; width: 64px; }'
+	});
+
+	await page.getByRole('combobox', { name: 'Integration' }).click();
+	const box = await page.locator('.custom-select-menu').boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+	expect(box?.x).toBeGreaterThanOrEqual(0);
+});
+
+test('dropdown menu in a drawer', async ({ page }) => {
+	await mockGateway(page, populatedConfig());
+	await page.goto('/llm/models');
+	await page.getByRole('button', { name: 'Add model' }).first().click();
+	const provider = page.getByRole('combobox', { name: 'Provider', exact: true });
+	const menu = page.locator('.custom-select-menu');
+	const drawerBody = page.locator('.drawer-body');
+
+	// A full-width form dropdown keeps a menu matching its trigger.
+	await provider.click();
+	expect((await menu.boundingBox())?.width).toBe((await provider.boundingBox())?.width);
+	await provider.click();
+
+	// A compact one at the drawer's right edge stays inside without adding a horizontal scrollbar.
+	await page.addStyleTag({
+		content:
+			'.drawer-body .custom-select:has(.custom-select-trigger[aria-label="Provider"]) { width: 64px; margin-left: auto; }'
+	});
+	await provider.click();
+	const box = await menu.boundingBox();
+	const bodyBox = await drawerBody.boundingBox();
+	expect(box?.width).toBeGreaterThan(64);
+	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+		(bodyBox?.x ?? 0) + (bodyBox?.width ?? 0)
+	);
+	const scrolls = await drawerBody.evaluate(body => body.scrollWidth > body.clientWidth);
+	expect(scrolls).toBe(false);
+});
+
 test('trims whitespace from a new model name and explicit model', async ({ page }) => {
 	const gateway = await mockGateway(page, populatedConfig());
 	await page.goto('/llm/models');
@@ -1239,6 +1304,81 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	expect(writes[0]).not.toHaveProperty('port');
 	expect(gateway.postedConfigs).toHaveLength(0);
 });
+
+for (const filePort of [false, true]) {
+	test(`hybrid LLM settings save to the database (filePort=${filePort})`, async ({ page }) => {
+		// The file may set the port; tls only comes from the llm.settings row.
+		const config = populatedConfig();
+		const fileLlm = config.llm as Record<string, unknown>;
+		if (!filePort) delete fileLlm.port;
+		const effective = structuredClone(config);
+		Object.assign(effective.llm as Record<string, unknown>, {
+			port: 4000,
+			tls: { cert: 'cert.pem', key: 'key.pem' }
+		});
+		const gateway = await mockGateway(page, config);
+		const writes: Array<Record<string, unknown>> = [];
+
+		await page.route('**/api/runtime', route =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					build: {},
+					ui: { gatewayMode: 'standalone', configStoreMode: 'hybrid' }
+				})
+			})
+		);
+		await page.route('**/api/config/effective', route =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(effective)
+			})
+		);
+		await page.route('**/api/config/resources**', async route => {
+			if (route.request().method() === 'GET') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ resources: [] })
+				});
+				return;
+			}
+			if (
+				route.request().method() === 'PUT' &&
+				new URL(route.request().url()).pathname.endsWith('/llm.settings')
+			) {
+				const request = route.request().postDataJSON() as {
+					resources: Array<{ value: Record<string, unknown> }>;
+				};
+				writes.push(request.resources[0].value);
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ resources: [] })
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/');
+		await page.getByRole('button', { name: 'Settings' }).first().click();
+		const port = page.getByRole('textbox', { name: /Port/ });
+		if (filePort) {
+			await expect(port).toBeDisabled();
+			await expect(page.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+			expect(writes).toHaveLength(0);
+		} else {
+			await port.fill('4100');
+			await page.getByRole('button', { name: 'Save settings' }).click();
+			await expect.poll(() => writes.length).toBe(1);
+			expect(writes[0]).toEqual({ port: 4100, tls: { cert: 'cert.pem', key: 'key.pem' } });
+		}
+		expect(gateway.postedConfigs).toHaveLength(0);
+	});
+}
 
 test('hybrid file-owned API key policy is read-only', async ({ page }) => {
 	const config = emptyConfig();
@@ -2000,4 +2140,81 @@ test('email tokenization saves and reloads without changing existing guards', as
 	expect(gateway.postedConfigs[1]).toMatchObject({ llm: { policies: { guardrails: original } } });
 	await page.reload();
 	await expect(page.getByRole('checkbox', { name: 'Email addresses' })).not.toBeChecked();
+});
+
+test('multiselect shows selected values as chips with an overflow count', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/analytics');
+
+	const field = page.locator('.multi-check', { hasText: 'Group by' });
+	const trigger = field.locator('.multi-check-trigger');
+	const chips = field.locator('.multi-check-values > .multi-check-chip');
+	const count = field.locator('.multi-check-values > .multi-check-count');
+	const widthBefore = (await trigger.boundingBox())?.width;
+
+	await trigger.click();
+	const popover = field.locator('.multi-check-popover');
+	await popover.getByRole('checkbox', { name: 'Model' }).check();
+	await popover.getByRole('checkbox', { name: 'User', exact: true }).check();
+	await expect(chips).toHaveText(['Model', 'User']);
+	await expect(count).toHaveCount(0);
+
+	// Picking everything can't fit: the rest collapse into +n, and hovering still names them all.
+	const labels = ['Model', 'User', 'Group', 'Provider', 'User agent'];
+	for (const label of labels) {
+		await popover.getByRole('checkbox', { name: label, exact: true }).check();
+	}
+	await expect(count).toBeVisible();
+	const shown = await chips.count();
+	expect(shown).toBeGreaterThan(1);
+	await expect(count).toHaveText(`+${labels.length - shown}`);
+	await expect(trigger).toHaveAttribute('title', labels.join(', '));
+
+	// The field keeps its width so the open popover doesn't move while picking.
+	expect((await trigger.boundingBox())?.width).toBe(widthBefore);
+});
+
+test('multiselect popover fits long options inside the filter row', async ({ page }) => {
+	const longModel = 'anthropic/claude-sonnet-4-5-20250929-long-deployment-name';
+	const longProvider = 'azure-openai-eastus2-production-deployment-pool';
+	const tooLong = `${'very-long-model-name-'.repeat(20)}end`;
+	await mockGateway(page);
+	await page.route('**/api/logs/analytics/summary', route =>
+		route.fulfill({
+			json: {
+				timeRange: { from: '2025-01-01T00:00:00Z', to: '2025-01-01T01:00:00Z' },
+				bucketSeconds: 900,
+				buckets: [],
+				groups: [],
+				filterOptions: {
+					requestModel: ['gpt-4o', longModel, tooLong],
+					provider: ['openai', longProvider]
+				}
+			}
+		})
+	);
+	await page.goto('/llm/analytics');
+	const row = page.locator('.analytics-controls-left');
+	await expect(row.locator('.multi-check')).toHaveCount(6);
+	const rowBox = await row.boundingBox();
+	if (!rowBox) throw new Error('filter row is not visible');
+
+	// A long provider reads in full, even from a field near the row's right edge.
+	const providers = row.locator('.multi-check', { hasText: 'Providers' });
+	await providers.locator('.multi-check-trigger').click();
+	const label = providers.locator('.multi-check-option span', { hasText: longProvider });
+	await expect(label).toBeVisible();
+	expect(await label.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+	const popover = await providers.locator('.multi-check-popover').boundingBox();
+	if (!popover) throw new Error('popover is not visible');
+	expect(popover.x + popover.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+	await page.keyboard.press('Escape');
+	await page.mouse.click(5, 5);
+
+	// A name wider than the row is capped at the row, and the tooltip still gives it in full.
+	const models = row.locator('.multi-check', { hasText: 'Models' });
+	await models.locator('.multi-check-trigger').click();
+	const capped = await models.locator('.multi-check-popover').boundingBox();
+	expect(capped?.width).toBeLessThanOrEqual(rowBox.width + 1);
+	await expect(models.locator(`.multi-check-option span[title="${tooLong}"]`)).toBeVisible();
 });

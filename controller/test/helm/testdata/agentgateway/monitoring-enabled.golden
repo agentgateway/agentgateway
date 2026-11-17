@@ -23,7 +23,6 @@ spec:
   namespaceSelector:
     matchNames:
     - default
-  scrapeNativeHistograms: false
   scrapeClassicHistograms: true
   scrapeProtocols:
     - OpenMetricsText1.0.0
@@ -61,7 +60,6 @@ spec:
   namespaceSelector:
     matchNames:
     - default
-  scrapeNativeHistograms: false
   scrapeClassicHistograms: true
   scrapeProtocols:
     - OpenMetricsText1.0.0

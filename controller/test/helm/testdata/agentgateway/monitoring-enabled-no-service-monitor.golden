@@ -19,7 +19,6 @@ spec:
       operator: In
       values:
       - "agentgateway"
-  scrapeNativeHistograms: false
   scrapeClassicHistograms: true
   scrapeProtocols:
     - OpenMetricsText1.0.0

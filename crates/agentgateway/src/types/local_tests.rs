@@ -1590,6 +1590,51 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_policies_retry() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  public:
+    port: 3000
+llm:
+  gateways: [public]
+  policies:
+    retry:
+      attempts: 2
+      codes: [429]
+      backoff: 5s
+  models:
+  - name: gpt-4
+    provider: openAI
+"#,
+	)
+	.await
+	.expect("llm.policies should accept retry");
+
+	let llm_route = normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "gateway/public")
+		.and_then(|(_, routes)| {
+			routes
+				.iter()
+				.find(|route| route.key.as_str() == "gateway/public/llm:request")
+		})
+		.expect("gateway-attached LLM route");
+	let retry = llm_route
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			TrafficPolicy::Retry(p) => Some(p),
+			_ => None,
+		})
+		.expect("retry policy on LLM route");
+	assert_eq!(retry.attempts, 2);
+	assert_eq!(retry.backoff, Some(std::time::Duration::from_secs(5)));
+	assert_eq!(&*retry.codes, &[::http::StatusCode::TOO_MANY_REQUESTS]);
+}
+
+#[tokio::test]
 async fn test_ui_policies_rejects_non_ui_policy() {
 	for field in ["ai", "requestHeaderModifier", "responseHeaderModifier"] {
 		let err = normalize_test_yaml(&format!(

@@ -2658,6 +2658,9 @@ struct LocalLLMPolicy {
 	/// Set request timeout limits.
 	#[serde(default)]
 	timeout: Option<timeout::Policy>,
+	/// Retry matching failed upstream requests.
+	#[serde(default)]
+	retry: Option<retry::Policy>,
 }
 
 #[apply(schema_de!)]
@@ -4661,6 +4664,7 @@ async fn convert_llm_config(
 			local_rate_limit,
 			remote_rate_limit,
 			timeout,
+			retry,
 		} = pol;
 		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
 		if let Some(guard) = &guardrails {
@@ -4674,6 +4678,7 @@ async fn convert_llm_config(
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
 				timeout,
+				retry,
 				..Default::default()
 			},
 			None,

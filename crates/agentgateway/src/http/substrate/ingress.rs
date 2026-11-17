@@ -458,7 +458,8 @@ impl SubstrateIngress {
 				&& matches!(
 					status.code(),
 					Code::FailedPrecondition | Code::ResourceExhausted | Code::Unavailable
-				) && status_reason(status).as_deref() != Some(REASON_TERMINAL_STATE))
+				)
+				&& status_reason(status).as_deref() != Some(REASON_TERMINAL_STATE))
 	}
 
 	async fn resolve(&self, client: &PolicyClient, actor: ActorRef) -> ResolutionResult {

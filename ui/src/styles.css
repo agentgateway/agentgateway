@@ -3689,7 +3689,14 @@ tbody tr:hover {
 }
 
 .logs-filter-bar .multi-check {
+	flex: 1 1 170px;
 	min-width: 170px;
+	max-width: 320px;
+}
+
+.analytics-controls-left .multi-check {
+	flex: 1 1 190px;
+	max-width: 320px;
 }
 
 .analytics-controls {
@@ -5364,8 +5371,10 @@ textarea {
 	position: absolute;
 	top: calc(100% + 6px);
 	left: 0;
-	right: 0;
 	z-index: 25;
+	width: max-content;
+	min-width: 100%;
+	max-width: 420px;
 	max-height: 280px;
 	overflow: auto;
 	border: 1px solid var(--line-strong);
