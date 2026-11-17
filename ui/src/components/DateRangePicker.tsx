@@ -54,8 +54,16 @@ export function DateRangePicker(props: {
 			value={[from, to]}
 			showTime={{ format: 'HH:mm' }}
 			allowClear={false}
+			// The preset's own bounds read as its name and "Now"; a picked date shows as a date.
 			format={
-				presetLabel ? (date: Dayjs) => (date.isSame(to) ? 'Now' : presetLabel) : 'MMM D, HH:mm'
+				presetLabel
+					? (date: Dayjs) =>
+							date.isSame(to)
+								? 'Now'
+								: date.isSame(from)
+									? presetLabel
+									: date.format('MMM D, HH:mm')
+					: 'MMM D, HH:mm'
 			}
 			prefix={<CalendarDays size={16} />}
 			presets={RANGE_PRESETS.map(preset => ({

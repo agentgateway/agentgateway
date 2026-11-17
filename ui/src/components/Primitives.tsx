@@ -26,7 +26,8 @@ import type {
 	ReactElement,
 	KeyboardEvent as ReactKeyboardEvent,
 	MouseEvent as ReactMouseEvent,
-	ReactNode
+	ReactNode,
+	SyntheticEvent
 } from 'react';
 import {
 	cloneElement,
@@ -503,10 +504,18 @@ export function Drawer(props: {
 		return () => window.removeEventListener('beforeunload', preventUnload);
 	}, [dirty, props.saving]);
 
+	// Events from a nested drawer bubble here through its portal; they are not this form's edits.
+	function ownEvent(event: SyntheticEvent<HTMLElement>) {
+		return event.currentTarget.contains(event.target as Node);
+	}
+
 	function trackButtonChange(event: ReactMouseEvent<HTMLElement>) {
 		const target = event.target as HTMLElement;
 		// Select options, toggle buttons and number steppers change values without a change event.
-		if (target.closest('[role="option"], [aria-pressed], .ant-input-number-action')) {
+		if (
+			ownEvent(event) &&
+			target.closest('[role="option"], [aria-pressed], .ant-input-number-action')
+		) {
 			setFormChanged(true);
 		}
 	}
@@ -514,6 +523,7 @@ export function Drawer(props: {
 	function trackKeyChange(event: ReactKeyboardEvent<HTMLElement>) {
 		const target = event.target as HTMLElement;
 		if (
+			ownEvent(event) &&
 			(event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
 			target.closest('.ant-input-number')
 		) {
@@ -523,20 +533,17 @@ export function Drawer(props: {
 
 	useRestoreFocus();
 
+	// A nested drawer gets its own transparent mask, so outside clicks close only it.
 	const nested = props.variant === 'nested';
-	// A nested drawer covers its parent, so outside clicks reach the parent's mask.
-	// Opened from a page, it needs its own transparent mask instead.
-	const inDrawer = useContext(InDrawerContext);
 	return (
-		<InDrawerContext.Provider value>
+		<>
 			<AntDrawer
 				open
 				placement="right"
 				size={760}
 				push={false}
-				mask={nested && inDrawer ? false : { closable: true }}
-				focusable={nested && inDrawer ? { trap: true } : undefined}
-				styles={nested && !inDrawer ? { mask: { background: 'transparent' } } : undefined}
+				mask={{ closable: true }}
+				styles={nested ? { mask: { background: 'transparent' } } : undefined}
 				keyboard={!confirmClose}
 				closable={false}
 				title={<h3>{props.title}</h3>}
@@ -583,7 +590,9 @@ export function Drawer(props: {
 			>
 				<div
 					className="drawer-content"
-					onChangeCapture={() => setFormChanged(true)}
+					onChangeCapture={event => {
+						if (ownEvent(event)) setFormChanged(true);
+					}}
 					onClickCapture={trackButtonChange}
 					onKeyDownCapture={trackKeyChange}
 				>
@@ -651,11 +660,9 @@ export function Drawer(props: {
 					<p>Your changes have not been saved and will be lost.</p>
 				</ConfirmDialog>
 			) : null}
-		</InDrawerContext.Provider>
+		</>
 	);
 }
-
-const InDrawerContext = createContext(false);
 
 // Overlays unmount instead of closing, so antd never restores focus.
 // Capture it during render, before antd's focus lock moves it inside.

@@ -1,4 +1,4 @@
-import { Link, Outlet, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Breadcrumb, Button, Dropdown, Layout, Menu, type MenuProps } from 'antd';
 import {
 	BarChart3,
@@ -75,6 +75,7 @@ const projectLinks = [
 
 export function Shell() {
 	const router = useRouterState();
+	const navigate = useNavigate();
 	const runtime = useRuntimeInfo();
 	const mode = useConfigDumpMode();
 	const dumpMode = mode.data?.mode === 'dump';
@@ -128,6 +129,10 @@ export function Shell() {
 			};
 		})
 	}));
+	// Keyboard Enter lands on the item, not its Link; a clicked Link has already navigated.
+	const onNavClick: MenuProps['onClick'] = ({ key, domEvent }) => {
+		if (!(domEvent.target as Element).closest('a')) navigate({ to: key });
+	};
 
 	return (
 		<Layout className="app-shell" hasSider>
@@ -140,7 +145,13 @@ export function Shell() {
 					)}
 				</Link>
 				<nav className="nav-list" aria-label="Primary">
-					<Menu mode="inline" inlineIndent={9} items={menuItems} selectedKeys={selectedKeys} />
+					<Menu
+						mode="inline"
+						inlineIndent={9}
+						items={menuItems}
+						selectedKeys={selectedKeys}
+						onClick={onNavClick}
+					/>
 				</nav>
 				<div className="sidebar-links">
 					{projectLinks.map(link => {
@@ -167,7 +178,7 @@ export function Shell() {
 							<Dropdown
 								transitionName=""
 								trigger={['click']}
-								menu={{ items: menuItems, selectedKeys }}
+								menu={{ items: menuItems, selectedKeys, onClick: onNavClick }}
 								classNames={{ root: 'mobile-nav-menu' }}
 							>
 								<Button className="mobile-nav-trigger" icon={<MenuIcon size={17} />}>

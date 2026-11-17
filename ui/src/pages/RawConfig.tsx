@@ -249,22 +249,35 @@ function DatabaseResourcesPanel(props: {
 						rowKey={resourceKey}
 						dataSource={props.resources}
 						pagination={false}
+						tableLayout="fixed"
 						expandable={{
 							showExpandColumn: false,
 							expandedRowKeys: expanded ? [expanded] : [],
 							expandedRowRender: resource => <JsonBlock value={redactedResourceValue(resource)} />
 						}}
 						columns={[
-							{ title: 'Kind', dataIndex: 'kind', render: (kind: string) => <code>{kind}</code> },
-							{ title: 'ID', dataIndex: 'id', render: (id: string) => <code>{id}</code> },
+							{
+								title: 'Kind',
+								dataIndex: 'kind',
+								width: '22%',
+								render: (kind: string) => <code>{kind}</code>
+							},
+							{
+								title: 'ID',
+								dataIndex: 'id',
+								width: '22%',
+								render: (id: string) => <code>{id}</code>
+							},
 							{
 								title: 'Revision',
 								dataIndex: 'revision',
+								width: '10%',
 								render: (revision?: number) => revision ?? '—'
 							},
 							{
 								title: 'Updated',
 								dataIndex: 'updatedAt',
+								width: '28%',
 								render: (updatedAt?: string) =>
 									updatedAt ? new Date(updatedAt).toLocaleString() : '—'
 							},

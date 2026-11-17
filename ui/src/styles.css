@@ -125,21 +125,10 @@ button {
 	cursor: pointer;
 }
 
-/* Disabled buttons keep their colours at 60% opacity (theme.tsx sets the default ones).
-   Hybrid-write save stays clickable (override keys) but looks the same. */
-.ant-btn:disabled,
-.ant-btn.hybrid-write-disabled:not(.hybrid-write-override) {
+/* Disabled buttons keep their colours at 60% opacity (theme.tsx sets the default ones). */
+.ant-btn:disabled {
 	cursor: not-allowed;
 	opacity: 0.6;
-}
-
-/* No hover colours while blocked; the tooltip wrapper still gets the pointer. */
-.ant-btn.hybrid-write-disabled:not(.hybrid-write-override) {
-	pointer-events: none;
-}
-
-.tooltip-wrap:has(> .hybrid-write-disabled:not(.hybrid-write-override)) {
-	cursor: not-allowed;
 }
 
 /* Bordered icon buttons are a touch narrower than tall, as before. */
@@ -2298,6 +2287,7 @@ details summary {
 	max-height: 360px;
 	margin: 0;
 	overflow: auto;
+	overflow-wrap: anywhere;
 }
 
 .table-wrap {
@@ -3384,6 +3374,11 @@ details summary {
 .multi-check .ant-select .ant-select-selection-item {
 	margin-inline: 0 2px;
 	padding-inline: 4px;
+}
+
+/* The clear button is hidden until hover; keyboard focus shows it too. */
+.ant-select .ant-select-clear:focus-visible {
+	opacity: 1;
 }
 
 .analytics-controls {

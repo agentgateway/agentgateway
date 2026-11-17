@@ -1,5 +1,6 @@
 import { Checkbox, Select } from 'antd';
 import { ChevronDown, Funnel, Layers3 } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 import { selectComponents } from '@/components/Primitives';
 
@@ -31,6 +32,9 @@ export function MultiCheckboxDropdown(props: {
 	onChange: (values: string[]) => void;
 }) {
 	const Icon = props.kind === 'group' ? Layers3 : Funnel;
+	const [open, setOpen] = useState(false);
+	// The popup renders at the end of the page, so Tab from the open select jumps to "All".
+	const allRef = useRef<HTMLButtonElement>(null);
 	return (
 		<div className="multi-check">
 			<span>{props.label}</span>
@@ -65,9 +69,9 @@ export function MultiCheckboxDropdown(props: {
 						{/* Stays visible when nothing matches, so a selection can always be cleared. */}
 						{props.allLabel ? (
 							<button
+								ref={allRef}
 								type="button"
 								className="multi-check-option all"
-								tabIndex={-1}
 								onMouseDown={event => event.preventDefault()}
 								onClick={() => props.onChange([])}
 							>
@@ -95,6 +99,13 @@ export function MultiCheckboxDropdown(props: {
 				}
 				notFoundContent={props.options.length ? 'No matching values.' : 'No values found.'}
 				onChange={props.onChange}
+				onOpenChange={setOpen}
+				onKeyDown={event => {
+					if (open && event.key === 'Tab' && !event.shiftKey && allRef.current) {
+						event.preventDefault();
+						allRef.current.focus();
+					}
+				}}
 			/>
 		</div>
 	);

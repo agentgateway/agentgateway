@@ -28,14 +28,12 @@ export function ConfigSaveButton(props: {
 	const overrideKeysActive = useHybridFileWriteOverrideKeys();
 	const fileWriteDisabled =
 		runtime.data?.ui.configStoreMode === 'hybrid' && !props.allowHybridWrite;
+	// Blocked saves look disabled without hover colours; the override keys make them clickable.
+	const blocked = fileWriteDisabled && !overrideKeysActive;
 	const button = (
 		<Button
 			type="primary"
-			className={
-				fileWriteDisabled
-					? `hybrid-write-disabled${overrideKeysActive ? ' hybrid-write-override' : ''}`
-					: undefined
-			}
+			style={blocked ? { opacity: 0.6, pointerEvents: 'none' } : undefined}
 			disabled={props.disabled}
 			aria-disabled={fileWriteDisabled}
 			onClick={event => {
@@ -58,7 +56,9 @@ export function ConfigSaveButton(props: {
 					: (props.hybridFileWriteMessage ?? hybridFileWriteMessage)
 			}
 		>
-			{button}
+			<span style={{ display: 'inline-flex', cursor: blocked ? 'not-allowed' : undefined }}>
+				{button}
+			</span>
 		</Tooltip>
 	);
 }
