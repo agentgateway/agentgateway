@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"istio.io/istio/pkg/kube/krt"
@@ -471,6 +472,7 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 				Alg:               new(agentgateway.JwtSigningAlgPS256),
 				KeyID:             new("kid-1"),
 				AssertionAudience: "https://issuer.example.com/oauth/token",
+				AssertionTTL:      &agentgateway.Duration{Duration: 2 * time.Minute},
 			},
 		},
 	}, "default")
@@ -506,6 +508,9 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	}
 	if privateKeyJWT.GetAssertionAudience() != "https://issuer.example.com/oauth/token" {
 		t.Fatalf("privateKeyJwt assertion audience = %q, want token endpoint URL", privateKeyJWT.GetAssertionAudience())
+	}
+	if got := privateKeyJWT.GetAssertionTtl().AsDuration(); got != 2*time.Minute {
+		t.Fatalf("privateKeyJwt assertion TTL = %v, want 2m0s", got)
 	}
 }
 

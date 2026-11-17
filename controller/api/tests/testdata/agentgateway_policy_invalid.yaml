@@ -1692,6 +1692,25 @@ spec:
         additionalParams:
           Scope: '"read"'
 ---
+_err: 'assertionTtl must be at least 1 second'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-private-key-jwt-assertion-ttl-too-short
+spec:
+  backend:
+    auth:
+      oauthTokenExchange:
+        url: https://oauth.example.com/token
+        clientAuth:
+          clientId: gateway
+          method: PrivateKeyJwt
+          privateKeyJwt:
+            signingKeyRef:
+              name: oauth-signing-key
+            assertionAudience: https://oauth.example.com/token
+            assertionTtl: 500ms
+---
 _err: 'url path is only valid with protocol HTTP'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

@@ -2135,6 +2135,10 @@ type OAuthPrivateKeyJWT struct {
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	AssertionAudience string `json:"assertionAudience"`
+
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="assertionTtl must be at least 1 second"
+	// +optional
+	AssertionTTL *Duration `json:"assertionTtl,omitempty"`
 }
 
 // +k8s:enum

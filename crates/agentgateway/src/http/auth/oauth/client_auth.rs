@@ -10,7 +10,7 @@ use secrecy::{ExposeSecret, SecretString};
 use tracing::warn;
 
 use super::super::jws::{JwtSigningAlg, SigningKey, signing_alg_from_proto};
-use super::super::{jwt_claim_times, unix_timestamp_now};
+use super::super::{JwtClaimTimes, jwt_claim_times, unix_timestamp_now};
 use crate::serdes::FileOrInline;
 use crate::types::proto::{ProtoError, agent as proto};
 use crate::{apply, schema_enum, ser_redact};
@@ -134,6 +134,13 @@ enum RawOAuthClientAuth {
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		kid: Option<String>,
 		assertion_audience: String,
+		#[serde(
+			default,
+			with = "crate::serdes::serde_dur_option",
+			skip_serializing_if = "Option::is_none"
+		)]
+		#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+		assertion_ttl: Option<Duration>,
 	},
 }
 
@@ -183,6 +190,7 @@ impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
 				alg,
 				kid,
 				assertion_audience,
+				assertion_ttl,
 			}) => {
 				let private_key_jwt = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
 					signing_key,
@@ -191,6 +199,7 @@ impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
 					alg,
 					kid,
 					assertion_audience,
+					assertion_ttl,
 				})?;
 				(
 					client_id,
@@ -240,6 +249,13 @@ pub struct PrivateKeyJwt {
 	#[serde(rename = "x5t#S256", skip_serializing_if = "Option::is_none")]
 	x5t_s256: Option<String>,
 	assertion_audience: String,
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	assertion_ttl: Option<Duration>,
 }
 
 impl fmt::Debug for PrivateKeyJwt {
@@ -251,6 +267,7 @@ impl fmt::Debug for PrivateKeyJwt {
 			.field("x5c", &self.x5c.as_ref().map(|_| "[REDACTED]"))
 			.field("x5t#S256", &self.x5t_s256)
 			.field("assertion_audience", &self.assertion_audience)
+			.field("assertion_ttl", &self.assertion_ttl)
 			.finish()
 	}
 }
@@ -278,6 +295,13 @@ pub(super) struct RawPrivateKeyJwt {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub(super) kid: Option<String>,
 	pub(super) assertion_audience: String,
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub(super) assertion_ttl: Option<Duration>,
 }
 
 impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
@@ -286,6 +310,9 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 	fn try_from(raw: RawPrivateKeyJwt) -> Result<Self, Self::Error> {
 		if raw.assertion_audience.is_empty() {
 			return Err("oauth private_key_jwt assertion_audience must not be empty".into());
+		}
+		if raw.assertion_ttl.is_some_and(|ttl| ttl.as_secs() == 0) {
+			return Err("oauth private_key_jwt assertion_ttl must be at least one second".into());
 		}
 		let signing_key_pem = raw.signing_key.expose_secret();
 		let signing_key = SigningKey::from_pem(raw.alg, signing_key_pem.trim().as_bytes())
@@ -313,6 +340,7 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 			x5c: certificate_headers.x5c,
 			x5t_s256: certificate_headers.x5t_s256,
 			assertion_audience: raw.assertion_audience,
+			assertion_ttl: raw.assertion_ttl,
 		})
 	}
 }
@@ -510,6 +538,13 @@ impl TryFrom<proto::o_auth_client_auth::PrivateKeyJwt> for PrivateKeyJwt {
 				.ok_or_else(|| ProtoError::EnumParse("unknown oauth private_key_jwt signing alg".into()))?,
 			kid: private_key_jwt.kid,
 			assertion_audience: private_key_jwt.assertion_audience,
+			assertion_ttl: private_key_jwt
+				.assertion_ttl
+				.map(Duration::try_from)
+				.transpose()
+				.map_err(|e| {
+					ProtoError::Generic(format!("invalid oauth private_key_jwt assertion_ttl: {e}"))
+				})?,
 		})
 		.map_err(ProtoError::Generic)
 	}
@@ -538,6 +573,19 @@ fn certificate_header_from_proto(header: i32) -> Result<Option<CertificateHeader
 	}
 }
 
+pub(super) fn client_assertion_claim_times(
+	now: u64,
+	lifetime: Duration,
+) -> anyhow::Result<JwtClaimTimes> {
+	let lifetime = lifetime.as_secs();
+	let issued_at_backdate = CLIENT_ASSERTION_CLOCK_SKEW.as_secs().min(lifetime / 2);
+	jwt_claim_times(
+		now,
+		Duration::from_secs(lifetime - issued_at_backdate),
+		Duration::from_secs(issued_at_backdate),
+	)
+}
+
 pub(super) fn sign_client_assertion(
 	client_id: &str,
 	private_key: &PrivateKeyJwt,
@@ -553,11 +601,11 @@ pub(super) fn sign_client_assertion(
 		exp: u64,
 	}
 
-	let now = unix_timestamp_now()?;
-	let times = jwt_claim_times(
-		now,
-		CLIENT_ASSERTION_LIFETIME.saturating_sub(CLIENT_ASSERTION_CLOCK_SKEW),
-		CLIENT_ASSERTION_CLOCK_SKEW,
+	let times = client_assertion_claim_times(
+		unix_timestamp_now()?,
+		private_key
+			.assertion_ttl
+			.unwrap_or(CLIENT_ASSERTION_LIFETIME),
 	)?;
 	let claims = ClientAssertionClaims {
 		iss: client_id,
