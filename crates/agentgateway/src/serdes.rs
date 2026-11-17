@@ -5,7 +5,9 @@ use anyhow::Context;
 use openapiv3::OpenAPI;
 use serde::de::DeserializeOwned;
 
-use crate::resource_manager::{ResourceFetcher, ResourceKind, ResourceRef};
+use crate::resource_manager::{
+	ResourceFetcher, ResourceKind, ResourceRef, is_retryable_jwks_fetch_error,
+};
 
 define_schema_aliases!();
 
@@ -71,8 +73,8 @@ pub enum FileInlineOrRemote {
 }
 
 impl FileInlineOrRemote {
-	/// Keep a remote JWKS outage local to its verifier. Parsing errors and local
-	/// file errors still reject the config; an unavailable endpoint has no keys.
+	/// Keep a remote JWKS outage local to its verifier. Invalid data, local-file
+	/// errors, and non-retryable HTTP errors still reject the config.
 	pub async fn load_jwks(
 		&self,
 		resources: &ResourceFetcher,
@@ -90,10 +92,11 @@ impl FileInlineOrRemote {
 		};
 		match resources.fetch(resource).await {
 			Ok(bytes) => serde_json::from_slice(&bytes).map_err(Into::into),
-			Err(e) => {
+			Err(e) if is_retryable_jwks_fetch_error(&e) => {
 				tracing::warn!(%url, error = %e, "JWKS endpoint unavailable; no verification keys loaded");
 				Ok(jsonwebtoken::jwk::JwkSet { keys: Vec::new() })
 			},
+			Err(e) => Err(e),
 		}
 	}
 
@@ -208,19 +211,45 @@ mod jwks_tests {
 	async fn jwks_outage_handling_does_not_hide_configuration_errors() {
 		let server = MockServer::start().await;
 		Mock::given(method("GET"))
+			.and(path("/malformed"))
 			.respond_with(ResponseTemplate::new(200).set_body_string("not a key set"))
 			.mount(&server)
 			.await;
 		let resources = jwks_test_fetcher();
 		for jwks in [
 			json!({"url": "/relative-jwks"}),
-			json!({"url": format!("{}/jwks", server.uri())}),
+			json!({"url": format!("{}/malformed", server.uri())}),
 		] {
 			let config: LocalJwtConfig = serde_json::from_value(json!({
 				"mode": "strict", "issuer": "issuer", "jwks": jwks
 			}))
 			.unwrap();
 			assert!(config.try_into(&resources).await.is_err());
+		}
+		for (status, retryable) in [
+			(404, false),
+			(401, false),
+			(403, false),
+			(408, true),
+			(429, true),
+			(503, true),
+		] {
+			let endpoint = format!("/jwks-{status}");
+			Mock::given(method("GET"))
+				.and(path(endpoint.clone()))
+				.respond_with(ResponseTemplate::new(status).set_body_json(json!({"keys": []})))
+				.mount(&server)
+				.await;
+			let config: LocalJwtConfig = serde_json::from_value(json!({
+				"mode": "strict", "issuer": "issuer",
+				"jwks": {"url": format!("{}{endpoint}", server.uri())}
+			}))
+			.unwrap();
+			assert_eq!(
+				config.try_into(&resources).await.is_ok(),
+				retryable,
+				"unexpected configuration result for JWKS HTTP {status}"
+			);
 		}
 	}
 
