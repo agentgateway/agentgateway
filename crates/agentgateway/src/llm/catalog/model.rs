@@ -79,6 +79,11 @@ impl Catalog {
 				}
 				let mut previous = BTreeMap::new();
 				for (index, tier) in pricing.tiers.iter().enumerate() {
+					if strict && let Some(value) = tier.unknown.get("serviceTier") {
+						anyhow::bail!(
+							"{provider}/{model} tier {index}: unrecognized serviceTier value {value}"
+						);
+					}
 					reject_unknown(
 						&format_args!("{provider}/{model} tier {index}"),
 						&tier.unknown,
@@ -433,7 +438,7 @@ impl Rates {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "camelCase")]
@@ -450,6 +455,46 @@ pub struct Tier {
 	#[serde(flatten, skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub unknown: Unknown,
+}
+
+// An unrecognized serviceTier value goes into `unknown`, so `validate_newer` drops the tier instead
+// of failing the whole catalog.
+impl<'de> Deserialize<'de> for Tier {
+	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Raw {
+			#[serde(default)]
+			context_over: u64,
+			#[serde(default)]
+			service_tier: Option<serde_json::Value>,
+			rates: Rates,
+			#[serde(flatten)]
+			unknown: Unknown,
+		}
+		let Raw {
+			context_over,
+			service_tier,
+			rates,
+			mut unknown,
+		} = Raw::deserialize(deserializer)?;
+		let service_tier = match service_tier {
+			None | Some(serde_json::Value::Null) => None,
+			Some(value) => match PricingTier::deserialize(&value) {
+				Ok(tier) => Some(tier),
+				Err(_) => {
+					unknown.insert("serviceTier".to_string(), value);
+					None
+				},
+			},
+		};
+		Ok(Tier {
+			context_over,
+			service_tier,
+			rates,
+			unknown,
+		})
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -834,6 +879,30 @@ mod tests {
 		catalog.validate_newer().unwrap();
 		let expected = from_json(
 			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[{"contextOver":100,"rates":{"input":"3"}}]}}}}}"#,
+		)
+		.unwrap();
+		assert_eq!(
+			serde_json::to_value(&catalog).unwrap(),
+			serde_json::to_value(&expected).unwrap()
+		);
+	}
+
+	#[test]
+	fn newer_catalog_drops_tiers_with_unknown_service_tier() {
+		let json = r#"{"providers":{"openai":{"models":{"m":{
+			"rates":{"input":"1"},
+			"tiers":[
+				{"serviceTier":"flex","rates":{"input":"0.5"}},
+				{"serviceTier":"future","rates":{"input":"9"}}
+			]}}}}}"#;
+		assert_eq!(
+			from_json(json).unwrap_err().to_string(),
+			r#"openai/m tier 1: unrecognized serviceTier value "future""#
+		);
+		let mut catalog: Catalog = serde_json::from_str(json).unwrap();
+		catalog.validate_newer().unwrap();
+		let expected = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[{"serviceTier":"flex","rates":{"input":"0.5"}}]}}}}}"#,
 		)
 		.unwrap();
 		assert_eq!(
