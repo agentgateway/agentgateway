@@ -20,12 +20,17 @@ pub fn with_profiling(f: impl FnOnce()) {
 	f()
 }
 
+// Sampling slows the code under test; set AGENTGATEWAY_BENCH_NO_PPROF=1 for clean timings.
 #[cfg(target_family = "unix")]
 pub fn with_profiling(f: impl FnOnce()) {
 	use std::fs::File;
 	use std::io::Write;
 
 	use pprof::protos::Message;
+	if std::env::var_os("AGENTGATEWAY_BENCH_NO_PPROF").is_some_and(|v| !v.is_empty()) {
+		return f();
+	}
+
 	let guard = pprof::ProfilerGuardBuilder::default()
 		.frequency(1000)
 		.build()
