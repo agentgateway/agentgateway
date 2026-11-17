@@ -143,16 +143,33 @@ impl Provider {
 		catalog: crate::model_catalog::Catalog<'_>,
 	) {
 		use crate::types::ChatRequest;
-		let (model, rest) = match req {
-			ChatRequest::Messages(r) => (r.model.as_deref(), &mut r.rest),
-			ChatRequest::Completions(r) => (r.model.as_deref(), &mut r.rest),
-			ChatRequest::Responses(r) => (r.model.as_deref(), &mut r.rest),
+		let model = match &*req {
+			ChatRequest::Messages(r) => r.model.clone(),
+			ChatRequest::Completions(r) => r.model.clone(),
+			ChatRequest::Responses(r) => r.model.clone(),
 			ChatRequest::Gemini(_) => return,
 		};
-		let endpoint = self.resolve_endpoint(super::RouteType::Messages, model, catalog);
-		if endpoint != BedrockEndpoint::Runtime || !self.native_chat(endpoint) {
+		let endpoint = self.resolve_endpoint(super::RouteType::Messages, model.as_deref(), catalog);
+		if !self.native_chat(endpoint) {
 			return;
 		}
+		if let ChatRequest::Messages(r) = req
+			&& let Some(model) = model.as_deref()
+		{
+			rewrite_native_thinking(
+				r,
+				crate::model_catalog::anthropic_thinking_capabilities(model, catalog),
+			);
+		}
+		if endpoint != BedrockEndpoint::Runtime {
+			return;
+		}
+		let rest = match req {
+			ChatRequest::Messages(r) => &mut r.rest,
+			ChatRequest::Completions(r) => &mut r.rest,
+			ChatRequest::Responses(r) => &mut r.rest,
+			ChatRequest::Gemini(_) => return,
+		};
 		let clean = |s: &mut String| {
 			s.retain(|c| {
 				c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || ":_@$#=/+,.-".contains(c)
@@ -327,10 +344,132 @@ impl Provider {
 	}
 }
 
+/// The native-API side of the thinking rewrites Converse applies in `translate_internal`:
+/// adaptive models reject `enabled`, always-on models reject `disabled`, and between-tools models
+/// take `between_tools` in place of `disabled`.
+fn rewrite_native_thinking(
+	req: &mut crate::types::messages::Request,
+	capabilities: crate::model_catalog::AnthropicThinkingCapabilities,
+) {
+	let kind = req
+		.rest
+		.get("thinking")
+		.and_then(|t| t.get("type"))
+		.and_then(|t| t.as_str());
+	let thinking = match kind {
+		Some("enabled") if capabilities.adaptive && !capabilities.legacy => {
+			req
+				.output_config
+				.get_or_insert_with(|| crate::types::messages::RequestOutputConfig {
+					effort: None,
+					rest: serde_json::json!({}),
+				})
+				.effort
+				.get_or_insert_with(|| "high".to_owned());
+			Some(serde_json::json!({"type": "adaptive"}))
+		},
+		Some("disabled") if capabilities.always_on => None,
+		Some("disabled") if capabilities.between_tools => {
+			Some(serde_json::json!({"type": "between_tools"}))
+		},
+		_ => return,
+	};
+	let Some(body) = req.rest.as_object_mut() else {
+		return;
+	};
+	match thinking {
+		Some(thinking) => body.insert("thinking".into(), thinking),
+		None => body.remove("thinking"),
+	};
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::{ChatFormat, RouteType};
+
+	#[test]
+	fn native_messages_get_the_converse_thinking_rewrites() {
+		use crate::model_catalog::{TestCatalog, tags};
+		let opus = "anthropic.claude-opus-5-5";
+		let sonnet = "anthropic.claude-sonnet-5-5";
+		let haiku = "anthropic.claude-haiku-4-5";
+		let cat = TestCatalog::new([
+			(
+				opus,
+				&[
+					tags::MANTLE,
+					tags::ADAPTIVE_THINKING,
+					tags::ALWAYS_ON_THINKING,
+				][..],
+			),
+			(
+				sonnet,
+				&[
+					tags::MANTLE,
+					tags::ADAPTIVE_THINKING,
+					tags::BETWEEN_TOOLS_THINKING,
+				][..],
+			),
+			(haiku, &[tags::MANTLE, tags::LEGACY_THINKING][..]),
+		]);
+		let run = |pref: BedrockEndpointPreference, model: &str, extra: serde_json::Value| {
+			let mut body = serde_json::json!({
+				"model": model,
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "hi"}]
+			});
+			body
+				.as_object_mut()
+				.unwrap()
+				.extend(extra.as_object().unwrap().clone());
+			let mut req = crate::types::ChatRequest::Messages(serde_json::from_value(body).unwrap());
+			provider(pref).sanitize_runtime_request(&mut req, Some(&cat));
+			let crate::types::ChatRequest::Messages(r) = req else {
+				unreachable!()
+			};
+			(
+				r.rest.get("thinking").cloned(),
+				r.output_config.map(|c| serde_json::to_value(c).unwrap()),
+			)
+		};
+		let mantle = BedrockEndpointPreference::MantleOnly;
+		let disabled = serde_json::json!({"thinking": {"type": "disabled"}});
+		let enabled = serde_json::json!({"thinking": {"type": "enabled", "budget_tokens": 1024}});
+
+		assert_eq!(run(mantle, opus, disabled.clone()), (None, None));
+		assert_eq!(
+			run(mantle, sonnet, disabled.clone()).0,
+			Some(serde_json::json!({"type": "between_tools"}))
+		);
+		assert_eq!(
+			run(mantle, haiku, disabled.clone()).0,
+			Some(serde_json::json!({"type": "disabled"}))
+		);
+		assert_eq!(
+			run(mantle, sonnet, enabled.clone()),
+			(
+				Some(serde_json::json!({"type": "adaptive"})),
+				Some(serde_json::json!({"effort": "high"}))
+			)
+		);
+		assert_eq!(
+			run(
+				mantle,
+				opus,
+				serde_json::json!({
+					"thinking": {"type": "enabled", "budget_tokens": 1024},
+					"output_config": {"effort": "low"}
+				})
+			)
+			.1,
+			Some(serde_json::json!({"effort": "low"}))
+		);
+		assert_eq!(
+			run(mantle, haiku, enabled).0,
+			Some(serde_json::json!({"type": "enabled", "budget_tokens": 1024}))
+		);
+	}
 
 	fn provider(pref: BedrockEndpointPreference) -> Provider {
 		Provider {
