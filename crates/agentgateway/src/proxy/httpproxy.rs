@@ -830,13 +830,11 @@ impl HTTPProxy {
 		}
 	}
 
-	#[allow(clippy::result_large_err)]
-	async fn proxy_internal(
+	fn prepare_request(
 		&self,
-		mut req: Request,
+		req: &mut Request,
 		log: &mut RequestLog,
-		response_policies: &mut ResponsePolicies,
-	) -> Result<Response, SnapshottedProxyError> {
+	) -> Result<BindSnapshot, ProxyError> {
 		log.tls_info = req.extensions().get::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::http);
 		if let Some(actor) = req.extensions().get::<ActorIdentity>() {
@@ -844,22 +842,39 @@ impl HTTPProxy {
 			log.ate_actor_uid = actor.actor_uid.clone();
 			log.ate_atespace = Some(actor.atespace.clone());
 		}
-		let selected_listener = self.selected_listener.clone();
-		let inputs = self.inputs.clone();
-		let bind_name = self.bind_name.clone();
+		let bind_name = &self.bind_name;
 		debug!(bind=%bind_name, "route for bind");
 
-		let Some(bind) = inputs.stores.read_binds().bind(&bind_name) else {
-			return Err(ProxyError::BindNotFound).snapshot_on_err(log, &mut req);
-		};
+		let bind = self
+			.inputs
+			.stores
+			.read_binds()
+			.bind(bind_name)
+			.ok_or(ProxyError::BindNotFound)?;
 		log.bind_name = Some(bind_name.clone());
-		cel::ProxyContext::mutate(&mut req, |ctx| {
+		cel::ProxyContext::mutate(req, |ctx| {
 			ctx.bind = Some(bind_name.clone());
 		});
 
-		crate::http::mark_sensitive_headers(&mut req, &self.inputs.cfg.sensitive_headers);
-		normalize_uri(log.tls_info.as_ref(), &mut req).snapshot_on_err(log, &mut req)?;
-		set_destination_hostname(&mut req);
+		crate::http::mark_sensitive_headers(req, &self.inputs.cfg.sensitive_headers);
+		normalize_uri(log.tls_info.as_ref(), req)?;
+		set_destination_hostname(req);
+		Ok(bind)
+	}
+
+	#[allow(clippy::result_large_err)]
+	async fn proxy_internal(
+		&self,
+		mut req: Request,
+		log: &mut RequestLog,
+		response_policies: &mut ResponsePolicies,
+	) -> Result<Response, SnapshottedProxyError> {
+		let bind = self
+			.prepare_request(&mut req, log)
+			.snapshot_on_err(log, &mut req)?;
+		let selected_listener = self.selected_listener.clone();
+		let inputs = self.inputs.clone();
+		let bind_name = self.bind_name.clone();
 		let connect_upgrade = if req.method() == ::http::Method::CONNECT {
 			req.extensions_mut().remove::<OnUpgrade>()
 		} else {
