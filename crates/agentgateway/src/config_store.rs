@@ -1,6 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -241,7 +242,7 @@ impl ConfigResourceStore {
 		let (change_tx, _) = watch::channel(());
 		match &pool {
 			DatabasePool::Sqlite(pool) => {
-				sqlx::raw_sql(SQLITE_SCHEMA).execute(pool).await?;
+				setup_sqlite_schema(pool).await?;
 				Ok(Self {
 					pool: DatabasePool::Sqlite(pool.clone()),
 					change_tx,
@@ -249,7 +250,7 @@ impl ConfigResourceStore {
 				})
 			},
 			DatabasePool::Postgres(pool) => {
-				sqlx::raw_sql(POSTGRES_SCHEMA).execute(pool).await?;
+				setup_postgres_schema(pool).await?;
 				let notification_id = uuid::Uuid::new_v4().to_string();
 				let mut listener = PgListener::connect_with(pool).await?;
 				listener.listen(POSTGRES_CHANGE_CHANNEL).await?;
@@ -1963,6 +1964,8 @@ async fn upsert_sqlite(
 			 (kind, id, value_json, revision, created_at, updated_at, deleted_at) \
 			 VALUES (?, ?, ?, 1, ?, ?, NULL) \
 			 ON CONFLICT(kind, id) DO UPDATE SET \
+				uid = CASE WHEN agw_config_resources.deleted_at IS NOT NULL THEN excluded.uid \
+					ELSE agw_config_resources.uid END, \
 				value_json = excluded.value_json, \
 				revision = agw_config_resources.revision + 1, \
 				updated_at = excluded.updated_at, \
@@ -2012,6 +2015,8 @@ async fn upsert_postgres(
 			 (kind, id, value_json, revision, created_at, updated_at, deleted_at) \
 			 VALUES ($1, $2, $3, 1, $4, $4, NULL) \
 			 ON CONFLICT(kind, id) DO UPDATE SET \
+				uid = CASE WHEN agw_config_resources.deleted_at IS NOT NULL THEN excluded.uid \
+					ELSE agw_config_resources.uid END, \
 				value_json = excluded.value_json, \
 				revision = agw_config_resources.revision + 1, \
 				updated_at = excluded.updated_at, \
@@ -2060,20 +2065,29 @@ async fn rename_sqlite(
 	let mut tx = pool.begin_with(SQLITE_BEGIN_IMMEDIATE).await?;
 	let generation = bump_generation_sqlite(&mut tx, expected_generation).await?;
 	let now = Utc::now().to_rfc3339();
-	if !soft_delete_sqlite(&mut tx, previous_kind, previous_id, &now).await? {
+	let Some(uid) = soft_delete_sqlite(&mut tx, previous_kind, previous_id, &now).await? else {
 		return Err(
 			ConfigResourceError::NotFound(format!(
 				"config resource not found: {previous_kind}/{previous_id}"
 			))
 			.into(),
 		);
-	}
+	};
+
+	// Free the source UID for the destination while retaining the old lookup key's tombstone.
+	sqlx::query("UPDATE agw_config_resources SET uid = ? WHERE kind = ? AND id = ?")
+		.bind(uuid::Uuid::new_v4().to_string())
+		.bind(previous_kind.as_str())
+		.bind(previous_id)
+		.execute(&mut *tx)
+		.await?;
 
 	let inserted = sqlx::query(
 		"INSERT INTO agw_config_resources \
-		 (kind, id, value_json, revision, created_at, updated_at, deleted_at) \
-		 VALUES (?, ?, ?, 1, ?, ?, NULL) \
+		 (kind, id, value_json, revision, created_at, updated_at, deleted_at, uid) \
+		 VALUES (?, ?, ?, 1, ?, ?, NULL, ?) \
 		 ON CONFLICT(kind, id) DO UPDATE SET \
+			uid = excluded.uid, \
 			value_json = excluded.value_json, \
 			revision = agw_config_resources.revision + 1, \
 			updated_at = excluded.updated_at, \
@@ -2085,6 +2099,7 @@ async fn rename_sqlite(
 	.bind(serde_json::to_string(&prepared.value)?)
 	.bind(&now)
 	.bind(&now)
+	.bind(uid)
 	.execute(&mut *tx)
 	.await?;
 	if inserted.rows_affected() == 0 {
@@ -2120,20 +2135,29 @@ async fn rename_postgres(
 	let mut tx = pool.begin().await?;
 	let generation = bump_generation_postgres(&mut tx, expected_generation).await?;
 	let now = Utc::now();
-	if !soft_delete_postgres(&mut tx, previous_kind, previous_id, now).await? {
+	let Some(uid) = soft_delete_postgres(&mut tx, previous_kind, previous_id, now).await? else {
 		return Err(
 			ConfigResourceError::NotFound(format!(
 				"config resource not found: {previous_kind}/{previous_id}"
 			))
 			.into(),
 		);
-	}
+	};
+
+	// Free the source UID for the destination while retaining the old lookup key's tombstone.
+	sqlx::query("UPDATE agw_config_resources SET uid = $1 WHERE kind = $2 AND id = $3")
+		.bind(uuid::Uuid::new_v4())
+		.bind(previous_kind.as_str())
+		.bind(previous_id)
+		.execute(&mut *tx)
+		.await?;
 
 	let inserted = sqlx::query(
 		"INSERT INTO agw_config_resources \
-		 (kind, id, value_json, revision, created_at, updated_at, deleted_at) \
-		 VALUES ($1, $2, $3, 1, $4, $4, NULL) \
+		 (kind, id, value_json, revision, created_at, updated_at, deleted_at, uid) \
+		 VALUES ($1, $2, $3, 1, $4, $4, NULL, $5) \
 		 ON CONFLICT(kind, id) DO UPDATE SET \
+			uid = excluded.uid, \
 			value_json = excluded.value_json, \
 			revision = agw_config_resources.revision + 1, \
 			updated_at = excluded.updated_at, \
@@ -2144,6 +2168,7 @@ async fn rename_postgres(
 	.bind(&prepared.id)
 	.bind(Json(prepared.value))
 	.bind(now)
+	.bind(uid)
 	.execute(&mut *tx)
 	.await?;
 	if inserted.rows_affected() == 0 {
@@ -2172,7 +2197,7 @@ async fn delete_sqlite(
 	let mut tx = pool.begin_with(SQLITE_BEGIN_IMMEDIATE).await?;
 	let generation = bump_generation_sqlite(&mut tx, expected_generation).await?;
 	let now = Utc::now().to_rfc3339();
-	if !soft_delete_sqlite(&mut tx, kind, id, &now).await? {
+	if soft_delete_sqlite(&mut tx, kind, id, &now).await?.is_none() {
 		return Ok(None);
 	}
 	tx.commit().await?;
@@ -2184,19 +2209,21 @@ async fn soft_delete_sqlite(
 	kind: ConfigResourceKind,
 	id: &str,
 	now: &str,
-) -> anyhow::Result<bool> {
-	let result = sqlx::query(
-		"UPDATE agw_config_resources \
+) -> anyhow::Result<Option<String>> {
+	Ok(
+		sqlx::query_scalar(
+			"UPDATE agw_config_resources \
 		 SET revision = revision + 1, updated_at = ?, deleted_at = ? \
-		 WHERE kind = ? AND id = ? AND deleted_at IS NULL",
+		 WHERE kind = ? AND id = ? AND deleted_at IS NULL \
+		 RETURNING uid",
+		)
+		.bind(now)
+		.bind(now)
+		.bind(kind.as_str())
+		.bind(id)
+		.fetch_optional(&mut **tx)
+		.await?,
 	)
-	.bind(now)
-	.bind(now)
-	.bind(kind.as_str())
-	.bind(id)
-	.execute(&mut **tx)
-	.await?;
-	Ok(result.rows_affected() > 0)
 }
 
 async fn delete_postgres(
@@ -2209,7 +2236,10 @@ async fn delete_postgres(
 	let mut tx = pool.begin().await?;
 	let generation = bump_generation_postgres(&mut tx, expected_generation).await?;
 	let now = Utc::now();
-	if !soft_delete_postgres(&mut tx, kind, id, now).await? {
+	if soft_delete_postgres(&mut tx, kind, id, now)
+		.await?
+		.is_none()
+	{
 		return Ok(None);
 	}
 	notify_postgres(&mut tx, notification_id).await?;
@@ -2222,18 +2252,20 @@ async fn soft_delete_postgres(
 	kind: ConfigResourceKind,
 	id: &str,
 	now: DateTime<Utc>,
-) -> anyhow::Result<bool> {
-	let result = sqlx::query(
-		"UPDATE agw_config_resources \
+) -> anyhow::Result<Option<uuid::Uuid>> {
+	Ok(
+		sqlx::query_scalar(
+			"UPDATE agw_config_resources \
 		 SET revision = revision + 1, updated_at = $1, deleted_at = $1 \
-		 WHERE kind = $2 AND id = $3 AND deleted_at IS NULL",
+		 WHERE kind = $2 AND id = $3 AND deleted_at IS NULL \
+		 RETURNING uid",
+		)
+		.bind(now)
+		.bind(kind.as_str())
+		.bind(id)
+		.fetch_optional(&mut **tx)
+		.await?,
 	)
-	.bind(now)
-	.bind(kind.as_str())
-	.bind(id)
-	.execute(&mut **tx)
-	.await?;
-	Ok(result.rows_affected() > 0)
 }
 
 async fn notify_postgres(
@@ -2314,52 +2346,40 @@ fn postgres_row_to_resource(row: sqlx::postgres::PgRow) -> anyhow::Result<Config
 	})
 }
 
-const SQLITE_SCHEMA: &str = r#"
-CREATE TABLE IF NOT EXISTS agw_config_resources (
-	kind TEXT NOT NULL,
-	id TEXT NOT NULL,
-	value_json TEXT NOT NULL CHECK (json_valid(value_json)),
-	revision INTEGER NOT NULL DEFAULT 1,
-	created_at TEXT NOT NULL,
-	updated_at TEXT NOT NULL,
-	deleted_at TEXT,
-	PRIMARY KEY (kind, id)
-);
+async fn setup_sqlite_schema(pool: &SqlitePool) -> anyhow::Result<()> {
+	let mut migrator = sqlx_macros::migrate!("./src/config_store/sqlite_migrations");
+	migrator.dangerous_set_table_name(MIGRATIONS_TABLE);
+	// SQLite's SQLx migrator relies on the caller to serialize migration discovery and execution.
+	let mut tx = pool.begin_with(SQLITE_BEGIN_IMMEDIATE).await?;
+	migrator
+		.run_direct(None, &mut *tx, false)
+		.await
+		.context("failed to migrate SQLite config store schema")?;
+	tx.commit().await?;
+	Ok(())
+}
 
-CREATE INDEX IF NOT EXISTS idx_agw_config_resources_kind_updated
-	ON agw_config_resources(kind, updated_at);
+async fn setup_postgres_schema(pool: &PgPool) -> anyhow::Result<()> {
+	let mut migrator = sqlx_macros::migrate!("./src/config_store/postgres_migrations");
+	migrator.dangerous_set_table_name(MIGRATIONS_TABLE);
+	let mut connection = pool.acquire().await?;
+	// Keep migration timeouts and any advisory lock left after an error out of the pool.
+	connection.close_on_drop();
+	sqlx::query(
+		"SELECT set_config('lock_timeout', '10s', false), \
+		        set_config('statement_timeout', '0', false)",
+	)
+	.execute(&mut *connection)
+	.await
+	.context("failed to configure Postgres config store migration timeouts")?;
+	migrator
+		.run_direct(None, &mut *connection, false)
+		.await
+		.context("failed to migrate Postgres config store schema")?;
+	Ok(())
+}
 
-CREATE TABLE IF NOT EXISTS agw_config_meta (
-	id INTEGER PRIMARY KEY CHECK (id = 1),
-	generation INTEGER NOT NULL
-);
-
-INSERT OR IGNORE INTO agw_config_meta (id, generation) VALUES (1, 1);
-"#;
-
-const POSTGRES_SCHEMA: &str = r#"
-CREATE TABLE IF NOT EXISTS agw_config_resources (
-	kind TEXT NOT NULL,
-	id TEXT NOT NULL,
-	value_json JSONB NOT NULL,
-	revision BIGINT NOT NULL DEFAULT 1,
-	created_at TIMESTAMPTZ NOT NULL,
-	updated_at TIMESTAMPTZ NOT NULL,
-	deleted_at TIMESTAMPTZ,
-	PRIMARY KEY (kind, id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_agw_config_resources_kind_updated
-	ON agw_config_resources(kind, updated_at);
-
-CREATE TABLE IF NOT EXISTS agw_config_meta (
-	id INTEGER PRIMARY KEY CHECK (id = 1),
-	generation BIGINT NOT NULL
-);
-
-INSERT INTO agw_config_meta (id, generation) VALUES (1, 1) ON CONFLICT (id) DO NOTHING;
-"#;
-
+const MIGRATIONS_TABLE: &str = "_agentgateway_config_migrations";
 const POSTGRES_CHANGE_CHANNEL: &str = "agentgateway_config_changed";
 
 #[cfg(test)]
@@ -2591,34 +2611,41 @@ mod tests {
 	async fn seeds_the_generation_for_databases_written_before_it_existed() {
 		let dir = tempfile::tempdir().expect("tempdir");
 		let url = format!("sqlite://{}", dir.path().join("config.db").display());
-		let store = ConfigResourceStore::connect(&url, None)
-			.await
-			.expect("connect config resource store");
-		store
-			.upsert_prepared(vec![test_provider("a")], None)
-			.await
-			.expect("write a resource");
-
-		let DatabasePool::Sqlite(pool) = store.pool() else {
-			panic!("expected a sqlite pool");
+		let DatabasePool::Sqlite(pool) = DatabasePool::connect(&url).await.unwrap() else {
+			panic!("expected a SQLite pool");
 		};
-		sqlx::query("DROP TABLE agw_config_meta")
-			.execute(&pool)
-			.await
-			.expect("drop the generation counter");
-		drop(store);
-		pool.close().await;
+		sqlx::raw_sql(include_str!(
+			"config_store/sqlite_migrations/0001_create_config_store.sql"
+		))
+		.execute(&pool)
+		.await
+		.unwrap();
+		sqlx::raw_sql(
+			"DROP TABLE agw_config_meta;
+			 INSERT INTO agw_config_resources (kind, id, value_json, created_at, updated_at, deleted_at)
+			 VALUES ('llm.provider', 'a', '{}', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', NULL),
+			        ('llm.provider', 'b', '{}', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+		)
+		.execute(&pool)
+		.await
+		.unwrap();
 
-		let reopened = ConfigResourceStore::connect(&url, None)
-			.await
-			.expect("reconnect config resource store");
+		let (reopened, _) = tokio::try_join!(
+			ConfigResourceStore::from_pool(DatabasePool::Sqlite(pool.clone())),
+			ConfigResourceStore::from_pool(DatabasePool::Sqlite(pool.clone())),
+		)
+		.expect("reconnect config resource stores");
 		let snapshot = reopened.snapshot(None).await.expect("snapshot");
 		assert_eq!(snapshot.generation, 1, "the counter seeds on startup");
-		assert_eq!(
-			snapshot.resources.len(),
-			1,
-			"seeding must not disturb existing resources"
-		);
+		assert_eq!(snapshot.resources.len(), 1);
+		assert_eq!(snapshot.resources[0].id, "a");
+		let uids: Vec<String> =
+			sqlx::query_scalar("SELECT uid FROM agw_config_resources WHERE id IN ('a', 'b')")
+				.fetch_all(&pool)
+				.await
+				.unwrap();
+		assert_eq!(uids.len(), 2);
+		assert_ne!(uids[0], uids[1]);
 	}
 
 	#[test]
@@ -2776,6 +2803,19 @@ mod tests {
 		let store = ConfigResourceStore::connect("sqlite::memory:", None)
 			.await
 			.expect("connect config resource store");
+		let DatabasePool::Sqlite(pool) = store.pool() else {
+			panic!("expected a SQLite pool");
+		};
+		let pool = &pool;
+		let uid = |id: &'static str| async move {
+			sqlx::query_scalar::<_, String>(
+				"SELECT uid FROM agw_config_resources WHERE kind = 'llm.provider' AND id = ?",
+			)
+			.bind(id)
+			.fetch_one(pool)
+			.await
+			.unwrap()
+		};
 		store
 			.upsert_prepared(
 				vec![PreparedResource {
@@ -2787,6 +2827,11 @@ mod tests {
 			)
 			.await
 			.expect("create resource");
+		let original_uid = uid("old").await;
+		let mut updated = test_provider("old");
+		updated.value["provider"] = json!("anthropic");
+		store.upsert_prepared(vec![updated], None).await.unwrap();
+		assert_eq!(uid("old").await, original_uid);
 		let response = store
 			.rename_prepared(
 				ConfigResourceKind::LlmProvider,
@@ -2801,6 +2846,8 @@ mod tests {
 			.await
 			.expect("rename resource");
 		assert_eq!(response.resources[0].id, "new");
+		assert_eq!(uid("new").await, original_uid);
+		assert_ne!(uid("old").await, original_uid);
 		assert_eq!(
 			store
 				.list(Some(ConfigResourceKind::LlmProvider))
@@ -2823,6 +2870,7 @@ mod tests {
 			)
 			.await
 			.expect("create rename target");
+		let other_uid = uid("other").await;
 		let err = store
 			.rename_prepared(
 				ConfigResourceKind::LlmProvider,
@@ -2837,6 +2885,8 @@ mod tests {
 			.await
 			.expect_err("rename collision should fail");
 		assert!(err.to_string().contains("already exists"));
+		assert_eq!(uid("new").await, original_uid);
+		assert_eq!(uid("other").await, other_uid);
 		assert_eq!(
 			store
 				.list(Some(ConfigResourceKind::LlmProvider))
@@ -2847,6 +2897,21 @@ mod tests {
 				.collect::<Vec<_>>(),
 			vec!["new", "other"]
 		);
+
+		let kind = ConfigResourceKind::LlmProvider;
+		store.delete(kind, "other", None).await.unwrap();
+		store
+			.rename_prepared(kind, "new", test_provider("other"), None)
+			.await
+			.unwrap();
+		assert_eq!(uid("other").await, original_uid);
+
+		store.delete(kind, "other", None).await.unwrap();
+		store
+			.upsert_prepared(vec![test_provider("other")], None)
+			.await
+			.unwrap();
+		assert_ne!(uid("other").await, original_uid);
 	}
 
 	#[test]
