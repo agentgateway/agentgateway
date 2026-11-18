@@ -1587,9 +1587,9 @@ pub mod from_messages {
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
 		let capabilities = crate::model_catalog::anthropic_thinking_capabilities(&req.model, catalog);
-		if let Some(messages::ThinkingInput::Enabled { display, .. }) = req.thinking
-			&& capabilities.adaptive
+		if capabilities.adaptive
 			&& !capabilities.legacy
+			&& let Some(messages::ThinkingInput::Enabled { display, .. }) = req.thinking
 		{
 			req.thinking = Some(messages::ThinkingInput::Adaptive { display });
 			req
@@ -2080,7 +2080,7 @@ pub mod from_messages {
 						"type": "enabled",
 						"budget_tokens": budget_tokens
 					}),
-					*display,
+					display.as_deref(),
 				),
 				messages::ThinkingInput::Disabled {} => (
 					serde_json::json!({
@@ -2092,7 +2092,7 @@ pub mod from_messages {
 					serde_json::json!({
 						"type": "adaptive"
 					}),
-					*display,
+					display.as_deref(),
 				),
 			};
 			if let Some(display) = display {
