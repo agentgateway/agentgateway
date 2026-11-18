@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -40,91 +39,79 @@ func TestSelectModelsDevProviders(t *testing.T) {
 }
 
 func sampleAPI() map[string]modelsDevProvider {
-	return map[string]modelsDevProvider{
-		"openai": {ID: "openai", Models: map[string]modelsDevModel{
+	api, err := modelsDevDecodeAPI(strings.NewReader(`{
+		"openai": {"models": {
 			"chatgpt-image-latest": {},
-			"gpt-4": {
-				Status: "deprecated",
-				Cost:   &modelsDevCost{Input: "30", Output: "60"},
+			"gpt-4": {"status": "deprecated", "cost": {"text": {"input": {"price": 30}, "output": {"price": 60}}}},
+			"gpt-5.6": {
+				"cost": {"text": {
+					"input": {"price": 1, "cache": {"read": 0.1, "write": 1.25}, "overrides": [
+						{"when": {"context": {"gt": 200000}}, "price": 2, "cache": {"write": 2.5}}
+					]},
+					"output": {"price": 5, "overrides": [{"when": {"context": {"gt": 200000}}, "price": 10}]}
+				}},
+				"experimental": {"modes": {"fast": {"service_tier": "priority", "cost": {"text": {
+					"input": {"price": 2, "cache": {"write": 2.5}}, "output": {"price": 10}
+				}}}}}
 			},
-			"gpt-5.6": modelsDevSampleModel(`{"cost": {"input": 1, "output": 5, "cache_read": 0.1, "cache_write": 1.25, "tiers": [{"input": 2, "output": 10, "cache_write": 2.5, "tier": {"type": "context", "size": 200000}}]}, "experimental": {"modes": {"fast": {"cost": {"input": 2, "output": 10, "cache_write": 2.5}, "provider": {"body": {"service_tier": "priority"}}}}}}`),
-			"gpt-4o-mini": modelsDevSampleModel(`{
+			"gpt-4o-mini": {
 				"name": "GPT-4o mini",
 				"release_date": "2024-07-18",
-				"cost": {"input": 0.15, "output": 0.6, "cache_read": 0.075, "cache_write": 0.1875},
-				"reasoning": false,
-				"tool_call": true,
-				"temperature": true,
+				"cost": {"text": {"input": {"price": 0.15, "cache": {"read": 0.075, "write": 0.1875}}, "output": {"price": 0.6}}},
+				"capabilities": {"reasoning": {"supported": false}, "tools": {"supported": true}, "temperature": true},
 				"limit": {"context": 128000, "output": 16384},
-				"modalities": {"input": ["text", "image"], "output": ["text"]},
+				"modalities": {"input": ["text", "image/png", "image/jpeg"], "output": ["text"]},
 				"experimental": {"modes": {
-					"fast": {"cost": {"input": 0.25, "output": 1}, "provider": {"body": {"service_tier": "priority"}}},
-					"ultrafast": {"cost": {"input": 1, "output": 4}, "provider": {"body": {"service_tier": "ultrafast"}}}
+					"fast": {"body": {"service_tier": "priority"}, "cost": {"text": {"input": {"price": 0.25}, "output": {"price": 1}}}},
+					"ultrafast": {"cost": {"text": {"input": {"price": 1}, "output": {"price": 4}}}}
 				}}
-			}`),
-			"gpt-4o-mini-audio-preview": {
-				Cost: &modelsDevCost{Input: "0.15", Output: "0.6", InputAudio: "10", OutputAudio: "20"},
 			},
+			"gpt-4o-mini-audio-preview": {"cost": {
+				"text": {"input": {"price": 0.15}, "output": {"price": 0.6}},
+				"audio": {"input": {"price": 10}, "output": {"price": 20}}
+			}}
 		}},
-		"anthropic": {ID: "anthropic", Models: map[string]modelsDevModel{
+		"anthropic": {"models": {
 			"claude-opus-4-7": {
-				Family:           "claude-opus",
-				Cost:             &modelsDevCost{Input: "5", Output: "25"},
-				ReasoningOptions: []modelsDevReasoningOption{{Type: "effort", Values: []*string{new("low"), new("high")}}},
+				"family": "claude-opus", "cost": {"text": {"input": {"price": 5}, "output": {"price": 25}}},
+				"capabilities": {"reasoning": {"effort": ["low", "high"]}}
 			},
-			"claude-opus-5-5": modelsDevSampleModel(`{"family": "claude-opus", "cost": {"input": 4, "output": 20}, "experimental": {"modes": {"fast": {"cost": {"input": 8, "output": 40}, "provider": {"body": {"speed": "fast"}}}}}}`),
+			"claude-opus-5-5": {
+				"family": "claude-opus",
+				"cost": {
+					"text": {"input": {"price": 4}, "output": {"price": 20}},
+					"multipliers": [{"when": {"service_tier": {"equals": "fast"}}, "factor": {"text": 2}}]
+				}
+			},
 			"claude-opus-4-6": {
-				Family: "claude-opus",
-				Cost:   &modelsDevCost{Input: "5", Output: "25"},
-				ReasoningOptions: []modelsDevReasoningOption{
-					{Type: "toggle"},
-					{Type: "effort", Values: []*string{new("low"), new("high")}},
-					{Type: "budget_tokens", Min: new(int64(1024))},
-				},
+				"family": "claude-opus", "cost": {"text": {"input": {"price": 5}, "output": {"price": 25}}},
+				"capabilities": {"reasoning": {"toggle": true, "effort": ["low", "high"], "budget": {"min": 1024, "max": -1}}}
 			},
 			"claude-sonnet-4-5": {
-				Family:           "claude-sonnet",
-				Cost:             &modelsDevCost{Input: "3", Output: "15", CacheRead: "0.3", CacheWrite: "3.75"},
-				ReasoningOptions: []modelsDevReasoningOption{{Type: "budget_tokens"}},
-			},
+				"family": "claude-sonnet", "cost": {"text": {
+					"input": {"price": 3, "cache": {"read": 0.3, "write": {"5m": 3.75, "1h": 6}}}, "output": {"price": 15}
+				}},
+				"capabilities": {"reasoning": {"budget": {}}}
+			}
 		}},
-		"google": {ID: "google", Models: map[string]modelsDevModel{
-			"gemini-2.5-pro": {
-				Cost: &modelsDevCost{
-					Input: "1.25", Output: "10", CacheRead: "0.125",
-					Tiers: []modelsDevTier{{
-						Input: "2.5", Output: "15", CacheRead: "0.25",
-						Tier: modelsDevTierKind{Type: "context", Size: 200000},
-					}},
-				},
-			},
-		}},
-		"openrouter": {ID: "openrouter", Models: map[string]modelsDevModel{
-			"volatile-model": {
-				Cost: &modelsDevCost{Input: "1", Output: "2"},
-			},
-		}},
-		"alibaba-cn": {ID: "alibaba-cn", Models: map[string]modelsDevModel{
-			"qwen3-omni-flash": {
-				Cost: &modelsDevCost{Input: "0.058", Output: "0.23", InputAudio: "3.584", OutputAudio: "7.168"},
-			},
-		}},
-		"freebie": {ID: "freebie", Models: map[string]modelsDevModel{
-			"identity": {},
-		}},
-	}
-}
-
-func modelsDevSampleModel(s string) modelsDevModel {
-	var m modelsDevModel
-	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		"google": {"models": {"gemini-2.5-pro": {"cost": {"text": {
+			"input": {"price": 1.25, "cache": {"read": 0.125}, "overrides": [
+				{"when": {"context": {"gt": 200000}}, "price": 2.5, "cache": {"read": 0.25}}
+			]},
+			"output": {"price": 10, "overrides": [{"when": {"context": {"gt": 200000}}, "price": 15}]}
+		}}}}},
+		"openrouter": {"models": {}},
+		"alibaba-cn": {"models": {}},
+		"freebie": {"models": {}}
+	}`))
+	if err != nil {
 		panic(err)
 	}
-	return m
+	return api
 }
 
 func TestTransformIncludesLegacyModelsWhenRequested(t *testing.T) {
-	cat, warns, err := modelsDevTransform(sampleAPI(), []string{"openai"}, true)
+	cat, warns, err := modelsDevTransform(sampleAPI(), []string{"openai"}, true, "2026-11-18")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,14 +127,14 @@ func TestTransformOmitsModelsWithoutCost(t *testing.T) {
 	api := map[string]modelsDevProvider{
 		"openai": {Models: map[string]modelsDevModel{"chatgpt-image-latest": {}}},
 	}
-	_, _, err := modelsDevTransform(api, []string{"openai"}, false)
+	_, _, err := modelsDevTransform(api, []string{"openai"}, false, "2026-11-18")
 	if err == nil || !strings.Contains(err.Error(), "no importable models") {
 		t.Fatalf("expected no importable models error, got %v", err)
 	}
 }
 
 func TestTransformSkipsUnsupportedProvider(t *testing.T) {
-	_, warns, err := modelsDevTransform(sampleAPI(), []string{"alibaba-cn"}, false)
+	_, warns, err := modelsDevTransform(sampleAPI(), []string{"alibaba-cn"}, false, "2026-11-18")
 	if err == nil || !strings.Contains(err.Error(), "no providers matched") {
 		t.Fatalf("expected no providers matched error, got %v", err)
 	}
@@ -157,7 +144,7 @@ func TestTransformSkipsUnsupportedProvider(t *testing.T) {
 }
 
 func TestTransformMatchesGoldenCatalog(t *testing.T) {
-	cat, warns, err := modelsDevTransform(sampleAPI(), []string{"anthropic", "google", "openai"}, false)
+	cat, warns, err := modelsDevTransform(sampleAPI(), []string{"anthropic", "google", "openai"}, false, "2026-11-18")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,10 +179,10 @@ func TestTransformMatchesGoldenCatalog(t *testing.T) {
 func TestTransformRoundsOverPreciseRate(t *testing.T) {
 	api := map[string]modelsDevProvider{
 		"openai": {Models: map[string]modelsDevModel{
-			"m": {Cost: &modelsDevCost{Input: json.Number("0.049999999999999996")}},
+			"m": {Cost: &modelsDevCost{Text: modelsDevModalityCost{Input: modelsDevPrice{modelsDevPriceValues: modelsDevPriceValues{Price: "0.049999999999999996"}}}}},
 		}},
 	}
-	cat, warns, err := modelsDevTransform(api, []string{"openai"}, false)
+	cat, warns, err := modelsDevTransform(api, []string{"openai"}, false, "2026-11-18")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,21 +197,170 @@ func TestTransformRoundsOverPreciseRate(t *testing.T) {
 func TestTransformRejectsNegativeRate(t *testing.T) {
 	api := map[string]modelsDevProvider{
 		"openai": {Models: map[string]modelsDevModel{
-			"m": {Cost: &modelsDevCost{Input: json.Number("-1")}},
+			"m": {Cost: &modelsDevCost{Text: modelsDevModalityCost{Input: modelsDevPrice{modelsDevPriceValues: modelsDevPriceValues{Price: "-1"}}}}},
 		}},
 	}
-	if _, _, err := modelsDevTransform(api, []string{"openai"}, false); err == nil {
+	if _, _, err := modelsDevTransform(api, []string{"openai"}, false, "2026-11-18"); err == nil {
 		t.Fatal("expected error for negative rate")
 	}
 }
 
 func TestTransformMissingProviderWarnsAndEmptyErrors(t *testing.T) {
 	// azure is supported by the proxy but absent from this source snapshot.
-	_, warns, err := modelsDevTransform(sampleAPI(), []string{"azure"}, false)
+	_, warns, err := modelsDevTransform(sampleAPI(), []string{"azure"}, false, "2026-11-18")
 	if err == nil {
 		t.Fatal("expected error when no providers match")
 	}
 	if len(warns) != 1 || !strings.Contains(warns[0], "not found") {
 		t.Fatalf("expected not-found warning, got %v", warns)
+	}
+}
+
+func TestModelsDevV2PricingAndDecisionEndpoints(t *testing.T) {
+	api, err := modelsDevDecodeAPI(strings.NewReader(`{
+		"typesafe": {"models": {"jev-latest": {
+			"type": "decision",
+			"api": {"systemone": {}},
+			"modalities": {"input": ["text", "image/png", "image/jpeg"], "output": ["decision"]},
+			"capabilities": {"structured_output": true},
+			"cost": {"text": {"input": {"price": 0.042}, "output": {"price": 0}}}
+		}}},
+		"openai": {"models": {
+			"tiered": {"cost": {
+				"text": {
+					"input": {
+						"price": 1, "cache": {"read": 0.1, "explicit": {"write": {"5m": 1.25, "1h": 3}}},
+						"overrides": [{"when": {"context": {"gte": 200001}}, "price": 2}]
+					},
+					"output": {"price": 5}
+				},
+				"multipliers": [
+					{"when": {"service_tier": {"equals": "priority"}}, "factor": {"text": {"input": {"price": 2, "cache": {"explicit": 2}}, "output": 2}}},
+					{"when": {"service_tier": {"equals": "priority"}, "region": {"equals": "us"}}, "factor": 3}
+				]
+			}},
+			"duration": {"cost": {"audio": {"input": {"unit": "second", "price": 0.002}}}},
+			"characters": {"cost": {"text": {"input": {"unit": "character", "price": 22}}}}
+		}}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, warns, err := modelsDevTransform(api, []string{"openai", "typesafe"}, false, "2026-11-18")
+	if err != nil || len(warns) != 0 {
+		t.Fatalf("import failed: %v (%v)", err, warns)
+	}
+	if err := cat.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	jev := cat.Providers["typesafe"].Models["jev-latest"]
+	if !reflect.DeepEqual(jev.Endpoints, []string{"/systemone"}) ||
+		!reflect.DeepEqual(jev.Modalities.Input, []string{"text", "image"}) ||
+		jev.Capabilities.StructuredOutput == nil || !*jev.Capabilities.StructuredOutput ||
+		jev.Rates.Input != "0.042" || jev.Rates.Output != "0" {
+		t.Fatalf("unexpected Jev entry: %+v", jev)
+	}
+	models := cat.Providers["openai"].Models
+	if _, ok := models["characters"]; ok {
+		t.Fatal("character pricing must not become token pricing")
+	}
+	if got := models["duration"].Rates.PerAudioMinute; got != "0.12" {
+		t.Fatalf("per-minute rate = %q, want 0.12", got)
+	}
+	tiered := models["tiered"]
+	want := []Tier{
+		{ContextOver: 200000, Rates: Rates{Input: "2"}},
+		{ServiceTier: "priority", Rates: Rates{Input: "2", Output: "10", CacheWrite: "2.5", CacheWriteDetails: map[string]Money{"1h": "6"}}},
+		{ServiceTier: "priority", ContextOver: 200000, Rates: Rates{Input: "4", Output: "10", CacheWrite: "2.5", CacheWriteDetails: map[string]Money{"1h": "6"}}},
+	}
+	if !reflect.DeepEqual(tiered.Tiers, want) {
+		t.Fatalf("tiers = %+v, want %+v", tiered.Tiers, want)
+	}
+}
+
+func TestModelsDevPricingAsOf(t *testing.T) {
+	api, err := modelsDevDecodeAPI(strings.NewReader(`{
+		"openai": {"models": {"dated": {"cost": {
+			"text": {"input": {"price": 2, "overrides": [
+				{"when": {"date": {"gte": "2026-12-01"}}, "price": 4},
+				{"when": {"websocket": {"equals": true}}, "price": 1}
+			]}, "output": {"price": 10}},
+			"multipliers": [
+				{"when": {"service_tier": {"equals": "ultrafast"}, "date": {"lt": "2027-03-01"}}, "factor": 3},
+				{"when": {"service_tier": {"equals": "ultrafast"}, "date": {"gte": "2027-03-01"}}, "factor": 6},
+				{"when": {"date": {"gte": "2027-03-01"}}, "factor": {"text": {"output": 2}}},
+				{"when": {"region": {"equals": "us"}}, "factor": 1.1},
+				{"when": {"not": {"region": {"equals": "global"}}}, "factor": 1.1},
+				{"when": {"utc_hours": {"lt": "04:00"}}, "factor": 0.5}
+			]
+		}}}}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		date      string
+		base      Rates
+		ultrafast Rates
+	}{
+		{"2026-11-30", Rates{Input: "2", Output: "10"}, Rates{Input: "6", Output: "30"}},
+		{"2026-12-01", Rates{Input: "4", Output: "10"}, Rates{Input: "12", Output: "30"}},
+		{"2027-03-01", Rates{Input: "4", Output: "20"}, Rates{Input: "24", Output: "120"}},
+	} {
+		t.Run(tt.date, func(t *testing.T) {
+			cat, warns, err := modelsDevTransform(api, []string{"openai"}, false, tt.date)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantWarnings := []string{"openai/dated: skipping unsupported models.dev pricing conditions: utc_hours, websocket"}
+			if !reflect.DeepEqual(warns, wantWarnings) {
+				t.Fatalf("warnings = %v, want %v", warns, wantWarnings)
+			}
+			model := cat.Providers["openai"].Models["dated"]
+			wantTiers := []Tier{{ServiceTier: "ultrafast", Rates: tt.ultrafast}}
+			if !reflect.DeepEqual(model.Rates, tt.base) || !reflect.DeepEqual(model.Tiers, wantTiers) {
+				t.Fatalf("rates = %+v and tiers = %+v, want %+v and %+v", model.Rates, model.Tiers, tt.base, wantTiers)
+			}
+		})
+	}
+}
+
+func TestModelsDevScalarCacheWriteReplacesTTLRates(t *testing.T) {
+	api, err := modelsDevDecodeAPI(strings.NewReader(`{
+		"anthropic": {"models": {
+			"conditional": {"family": "claude-opus", "cost": {"text": {"input": {
+				"price": 1, "cache": {"explicit": {"write": {"5m": 1, "1h": 2}}},
+				"overrides": [
+					{"when": {"context": {"gt": 100000}}, "cache": {"write": 1.25}},
+					{"when": {"service_tier": {"equals": "priority"}}, "cache": {"write": 3}}
+				]
+			}}}},
+			"mode": {"family": "claude-opus",
+				"cost": {"text": {"input": {"price": 1, "cache": {"write": {"5m": 1, "1h": 2}}}}},
+				"experimental": {"modes": {"fast": {"cost": {"text": {"input": {"price": 1, "cache": {"write": 1.25}}}}}}}
+			}
+		}}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, _, err := modelsDevTransform(api, []string{"anthropic"}, false, "2026-11-18")
+	if err != nil {
+		t.Fatal(err)
+	}
+	models := cat.Providers["anthropic"].Models
+	want := map[string][]Tier{
+		"conditional": {
+			{ContextOver: 100000, Rates: Rates{CacheWrite: "1.25", CacheWriteDetails: map[string]Money{"1h": "1.25"}}},
+			{ServiceTier: "priority", Rates: Rates{CacheWrite: "3", CacheWriteDetails: map[string]Money{"1h": "3"}}},
+		},
+		"mode": {
+			{ServiceTier: "fast", Rates: Rates{CacheWrite: "1.25", CacheWriteDetails: map[string]Money{"1h": "1.25"}}},
+		},
+	}
+	for model, tiers := range want {
+		if got := models[model].Tiers; !reflect.DeepEqual(got, tiers) {
+			t.Errorf("%s tiers = %+v, want %+v", model, got, tiers)
+		}
 	}
 }
