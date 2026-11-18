@@ -1058,6 +1058,10 @@ type RouteContextInputs struct {
 
 	// ParentRefs holds the resolved parent references of each route and model. Build it with RouteParentRefsCollection.
 	ParentRefs krt.Collection[RouteParentRefs]
+
+	// ModelNameIndex finds models sharing an exact name, to reject duplicates per router. Build it with
+	// NewModelNameIndex after ParentRefs is set. When nil, duplicate model names are not checked.
+	ModelNameIndex *ModelNameIndex
 }
 
 // RouteParentRefsCollection resolves the parent references of each route and model, so the many collections

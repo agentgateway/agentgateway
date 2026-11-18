@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,6 +63,43 @@ func TestAgentgatewayModelRouting(tt *testing.T) {
 	t.Run("MultiplePathScopedModelRoutes", func(t base.Test) {
 		testMultiplePathScopedModelRoutes(t, gw)
 	})
+	t.Run("DuplicateModelNames", func(t base.Test) {
+		testDuplicateModelNames(t, gw)
+	})
+}
+
+// Two models with the same exact match.model on one listener must not both be programmed: the oldest wins,
+// the other is rejected with a Conflicted status, and the winner is promoted when it is deleted.
+func testDuplicateModelNames(t base.Test, gw base.Gateway) {
+	oldManifest := manifest("modelrouting", "duplicate-old.yaml")
+	newManifest := manifest("modelrouting", "duplicate-new.yaml")
+
+	t.Apply(oldManifest)
+	assertions.EventuallyAgentgatewayModelCondition(t, "dup-z-old", modelRoutingNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	// creationTimestamp has one-second resolution; make sure the second model is strictly newer.
+	time.Sleep(2 * time.Second)
+	t.Apply(newManifest)
+
+	assertions.EventuallyAgentgatewayModelCondition(t, "dup-a-new", modelRoutingNamespace, gwv1.RouteConditionAccepted, metav1.ConditionFalse)
+	assertions.EventuallyAgentgatewayModelCondition(t, "dup-a-new", modelRoutingNamespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue)
+	assertions.EventuallyAgentgatewayModelCondition(t, "dup-z-old", modelRoutingNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	// A virtual model must not reach the rejected model through its (now ambiguous) name.
+	assertions.EventuallyAgentgatewayModelCondition(t, "dup-virtual", modelRoutingNamespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionFalse)
+
+	// Every request reaches the winning backend; the loser never receives traffic.
+	for range 5 {
+		gw.Send(t, modelRoutingExpectModel("agw-dup-old"), modelRoutingCompletion("dup-gpt")...)
+	}
+	// Unrelated models keep working.
+	gw.Send(t, modelRoutingExpectModel("agw-public-direct"), modelRoutingCompletion("public-direct")...)
+
+	// Deleting the winner promotes the next model.
+	t.Delete(oldManifest)
+	assertions.EventuallyAgentgatewayModelCondition(t, "dup-a-new", modelRoutingNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	assertions.EventuallyAgentgatewayModelCondition(t, "dup-virtual", modelRoutingNamespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue)
+	for range 5 {
+		gw.Send(t, modelRoutingExpectModel("agw-dup-new"), modelRoutingCompletion("dup-gpt")...)
+	}
 }
 
 func testAgentgatewayModelStatus(t base.Test) {
