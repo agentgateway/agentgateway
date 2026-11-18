@@ -1358,20 +1358,13 @@ pub mod typed {
 		Enabled {
 			budget_tokens: u64,
 			#[serde(default, skip_serializing_if = "Option::is_none")]
-			display: Option<ThinkingDisplay>,
+			display: Option<String>,
 		},
 		Disabled {},
 		Adaptive {
 			#[serde(default, skip_serializing_if = "Option::is_none")]
-			display: Option<ThinkingDisplay>,
+			display: Option<String>,
 		},
-	}
-
-	#[derive(Clone, Copy, Serialize, Deserialize, Debug, Eq, PartialEq)]
-	#[serde(rename_all = "snake_case")]
-	pub enum ThinkingDisplay {
-		Summarized,
-		Omitted,
 	}
 
 	#[derive(Clone, Copy, Serialize, Deserialize, Debug, Eq, PartialEq)]

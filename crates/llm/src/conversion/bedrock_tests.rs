@@ -336,7 +336,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 			tool_choice: None,
 			thinking: Some(messages::typed::ThinkingInput::Enabled {
 				budget_tokens: 1024,
-				display: Some(messages::typed::ThinkingDisplay::Omitted),
+				display: Some("omitted".into()),
 			}),
 			output_config: Some(messages::typed::OutputConfig {
 				effort: Some(messages::typed::ThinkingEffort::High),
