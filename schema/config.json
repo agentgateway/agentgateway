@@ -828,14 +828,18 @@
       ]
     },
     "PricingTier": {
-      "type": "string",
-      "enum": [
-        "standard",
-        "flex",
-        "priority",
-        "reserved",
-        "ultrafast",
-        "fast"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "standard",
+            "flex",
+            "priority",
+            "reserved",
+            "ultrafast",
+            "fast"
+          ]
+        }
       ]
     },
     "Limits": {

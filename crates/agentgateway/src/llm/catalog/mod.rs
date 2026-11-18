@@ -28,7 +28,7 @@ const TRACE_POLICY_KIND: &str = "llm_cost";
 const BUILTIN_CATALOG_JSON: &str = include_str!("../../../../../catalog/model-catalog.json");
 
 #[apply(schema!)]
-#[derive(Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub enum PricingTier {
 	Standard,
 	Flex,
@@ -36,6 +36,9 @@ pub enum PricingTier {
 	Reserved,
 	Ultrafast,
 	Fast,
+	#[serde(untagged)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	Unknown(String),
 }
 
 impl PricingTier {
@@ -523,7 +526,7 @@ impl CatalogSnapshot {
 		// Tier selection must be invariant to cache repricing below: cache tokens
 		// may move between input and their cache buckets, but their sum is stable.
 		let context_tokens = provisional_usage.context_tokens();
-		let rates = entry.effective_rates(context_tokens, pricing_tier);
+		let rates = entry.effective_rates(context_tokens, &pricing_tier);
 		if rates.is_empty() {
 			crate::proxy::dtrace::pol_event!(
 				TRACE_POLICY_KIND,

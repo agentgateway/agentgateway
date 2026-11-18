@@ -42,7 +42,9 @@ impl Catalog {
 			.values_mut()
 			.flat_map(|p| p.models.values_mut())
 		{
-			m.tiers.retain(|t| t.unknown.is_empty());
+			m.tiers.retain(|t| {
+				t.unknown.is_empty() && !matches!(t.service_tier.as_ref(), Some(PricingTier::Unknown(_)))
+			});
 		}
 		self.check(false)
 	}
@@ -79,9 +81,9 @@ impl Catalog {
 				}
 				let mut previous = BTreeMap::new();
 				for (index, tier) in pricing.tiers.iter().enumerate() {
-					if strict && let Some(value) = tier.unknown.get("serviceTier") {
+					if strict && let Some(PricingTier::Unknown(value)) = &tier.service_tier {
 						anyhow::bail!(
-							"{provider}/{model} tier {index}: unrecognized serviceTier value {value}"
+							"{provider}/{model} tier {index}: unrecognized serviceTier value {value:?}"
 						);
 					}
 					reject_unknown(
@@ -92,7 +94,7 @@ impl Catalog {
 						&format_args!("{provider}/{model} tier {index} rates"),
 						&tier.rates.unknown,
 					)?;
-					if let Some(prior) = previous.insert(tier.service_tier, tier.context_over)
+					if let Some(prior) = previous.insert(tier.service_tier.as_ref(), tier.context_over)
 						&& tier.context_over <= prior
 					{
 						anyhow::bail!(
@@ -438,7 +440,7 @@ impl Rates {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "camelCase")]
@@ -455,46 +457,6 @@ pub struct Tier {
 	#[serde(flatten, skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub unknown: Unknown,
-}
-
-// An unrecognized serviceTier value goes into `unknown`, so `validate_newer` drops the tier instead
-// of failing the whole catalog.
-impl<'de> Deserialize<'de> for Tier {
-	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-		#[derive(Deserialize)]
-		#[serde(rename_all = "camelCase")]
-		struct Raw {
-			#[serde(default)]
-			context_over: u64,
-			#[serde(default)]
-			service_tier: Option<serde_json::Value>,
-			rates: Rates,
-			#[serde(flatten)]
-			unknown: Unknown,
-		}
-		let Raw {
-			context_over,
-			service_tier,
-			rates,
-			mut unknown,
-		} = Raw::deserialize(deserializer)?;
-		let service_tier = match service_tier {
-			None | Some(serde_json::Value::Null) => None,
-			Some(value) => match PricingTier::deserialize(&value) {
-				Ok(tier) => Some(tier),
-				Err(_) => {
-					unknown.insert("serviceTier".to_string(), value);
-					None
-				},
-			},
-		};
-		Ok(Tier {
-			context_over,
-			service_tier,
-			rates,
-			unknown,
-		})
-	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -661,17 +623,15 @@ impl Model {
 	#[cfg(test)]
 	pub fn breakdown(&self, usage: &Usage) -> Breakdown {
 		self
-			.effective_rates(usage.context_tokens(), PricingTier::Standard)
+			.effective_rates(usage.context_tokens(), &PricingTier::Standard)
 			.breakdown(usage)
 	}
 
-	pub(super) fn effective_rates(&self, context_tokens: u64, service_tier: PricingTier) -> Rates {
-		let select = |service_tier: Option<PricingTier>| {
-			self
-				.tiers
-				.iter()
-				.rev()
-				.find(|tier| tier.service_tier == service_tier && context_tokens > tier.context_over)
+	pub(super) fn effective_rates(&self, context_tokens: u64, service_tier: &PricingTier) -> Rates {
+		let select = |service_tier: Option<&PricingTier>| {
+			self.tiers.iter().rev().find(|tier| {
+				tier.service_tier.as_ref() == service_tier && context_tokens > tier.context_over
+			})
 		};
 		// Service-tier rates overlay the context tier, so components a service tier omits use the
 		// context-appropriate standard rate.
@@ -760,7 +720,7 @@ mod tests {
 		assert!(
 			!mini
 				.unwrap()
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty(),
 			"and is priced"
 		);
@@ -900,6 +860,18 @@ mod tests {
 			r#"openai/m tier 1: unrecognized serviceTier value "future""#
 		);
 		let mut catalog: Catalog = serde_json::from_str(json).unwrap();
+		let tier = &catalog.providers["openai"].models["m"].tiers[1];
+		assert_eq!(
+			tier.service_tier,
+			Some(PricingTier::Unknown("future".to_string()))
+		);
+		assert_eq!(serde_json::to_value(tier).unwrap()["serviceTier"], "future");
+		for value in ["42", "true", "{}", "[]"] {
+			assert!(
+				serde_json::from_str::<Tier>(&format!(r#"{{"serviceTier":{value},"rates":{{}}}}"#))
+					.is_err()
+			);
+		}
 		catalog.validate_newer().unwrap();
 		let expected = from_json(
 			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[{"serviceTier":"flex","rates":{"input":"0.5"}}]}}}}}"#,
@@ -1183,30 +1155,30 @@ mod tests {
 		};
 		assert!(
 			entry(Rates::default(), vec![])
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty()
 		);
 		assert!(
 			!entry(input_rate.clone(), vec![])
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty()
 		);
 
 		let tier_only = entry(Rates::default(), vec![tier(100_000, input_rate)]);
 		assert!(
 			tier_only
-				.effective_rates(100_000, PricingTier::Standard)
+				.effective_rates(100_000, &PricingTier::Standard)
 				.is_empty()
 		);
 		assert!(
 			!tier_only
-				.effective_rates(100_001, PricingTier::Standard)
+				.effective_rates(100_001, &PricingTier::Standard)
 				.is_empty()
 		);
 
 		assert!(
 			entry(Rates::default(), vec![tier(100_000, Rates::default())])
-				.effective_rates(100_001, PricingTier::Standard)
+				.effective_rates(100_001, &PricingTier::Standard)
 				.is_empty()
 		);
 	}
