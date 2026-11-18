@@ -53,7 +53,8 @@ const ready: Partial<Record<(typeof routes)[number][0], (page: Page) => Promise<
 		await expect(page.locator('.log-call-preview')).toHaveText('Summarize the result.');
 	},
 	'llm-client-setup': async page => {
-		await expect(page.getByRole('combobox', { name: 'Model' })).toContainText('openai/*');
+		// antd shows the selected model beside the combobox input, not inside it.
+		await expect(page.getByText('openai/*', { exact: true }).first()).toBeVisible();
 	},
 	'mcp-playground': async page => {
 		await expect(page.getByText('No MCP servers', { exact: true })).toHaveCount(0);

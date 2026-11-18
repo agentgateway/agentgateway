@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router';
+import { Button, Input, Table, Tag } from 'antd';
 import { Network, Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -6,6 +6,7 @@ import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import {
+	ButtonLink,
 	ConfirmDialog,
 	Drawer,
 	Dropdown,
@@ -127,19 +128,17 @@ function TrafficListenersEditorPage() {
 				description="Configure bind ports and listeners for generic HTTP and TCP traffic."
 				actions={
 					<div className="button-row">
-						<button className="button" type="button" onClick={() => openBindEditor(null)}>
-							<Plus size={16} />
+						<Button icon={<Plus size={16} />} onClick={() => openBindEditor(null)}>
 							Add bind
-						</button>
-						<button
-							className="button primary"
-							type="button"
+						</Button>
+						<Button
+							type="primary"
+							icon={<Plus size={16} />}
 							disabled={!config.data?.binds?.length}
 							onClick={() => openListenerEditor(0, null)}
 						>
-							<Plus size={16} />
 							Add listener
-						</button>
+						</Button>
 					</div>
 				}
 			/>
@@ -171,10 +170,14 @@ function TrafficListenersEditorPage() {
 						title="No legacy binds configured"
 						description="Use traffic gateways for new HTTP routing configuration."
 						action={
-							<Link className="button primary" to="/traffic/gateways">
-								<Network size={16} />
+							<ButtonLink
+								color="primary"
+								variant="solid"
+								icon={<Network size={16} />}
+								to="/traffic/gateways"
+							>
 								Manage gateways
-							</Link>
+							</ButtonLink>
 						}
 					/>
 				) : (
@@ -202,32 +205,26 @@ function TrafficListenersEditorPage() {
 											</p>
 										</div>
 										<div className="button-row">
-											<span className="badge">{bind.tunnelProtocol ?? 'direct'}</span>
+											<Tag>{bind.tunnelProtocol ?? 'direct'}</Tag>
 											<Tooltip content="Add listener">
-												<button
-													className="icon-button"
-													type="button"
+												<Button
 													aria-label="Add listener"
+													icon={<Plus size={16} />}
 													onClick={() => openListenerEditor(bindIndex, null)}
-												>
-													<Plus size={16} />
-												</button>
+												/>
 											</Tooltip>
 											<Tooltip content="Edit bind">
-												<button
-													className="icon-button"
-													type="button"
+												<Button
 													aria-label="Edit bind"
+													icon={<Pencil size={16} />}
 													onClick={() => openBindEditor(bind, bindIndex)}
-												>
-													<Pencil size={16} />
-												</button>
+												/>
 											</Tooltip>
 											<Tooltip content="Delete bind">
-												<button
-													className="icon-button danger"
-													type="button"
+												<Button
+													danger
 													aria-label="Delete bind"
+													icon={<Trash2 size={16} />}
 													disabled={update.isPending}
 													onClick={() =>
 														setDeleting({
@@ -237,93 +234,90 @@ function TrafficListenersEditorPage() {
 															listenerCount: bind.listeners.length
 														})
 													}
-												>
-													<Trash2 size={16} />
-												</button>
+												/>
 											</Tooltip>
 										</div>
 									</div>
 									{bind.listeners.length ? (
-										<div className="table-wrap">
-											<table>
-												<thead>
-													<tr>
-														<th>Name</th>
-														<th>Hostname</th>
-														<th>Protocol</th>
-														<th>Routes</th>
-														<th>Backends</th>
-														<th />
-													</tr>
-												</thead>
-												<tbody>
-													{bind.listeners.map((listener, listenerIndex) => (
-														<tr
-															key={`${listener.name}-${
-																// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-																listenerIndex
-															}`}
-														>
-															<td className="strong">
-																{listenerDisplayName(listener, listenerIndex)}
-															</td>
-															<td>{listener.hostname || '*'}</td>
-															<td>
-																<span className="badge">{listener.protocol ?? 'HTTP'}</span>
-															</td>
-															<td>
-																{(listener.routes?.length ?? 0) + (listener.tcpRoutes?.length ?? 0)}
-															</td>
-															<td>{listenerBackendCount(listener)}</td>
-															<td className="row-actions">
-																<Tooltip content="Add route">
-																	<Link
-																		className="icon-button"
-																		aria-label="Add route"
-																		to="/traffic/routes"
-																		search={{
-																			listener: `${bindIndex}:${listenerIndex}`
-																		}}
-																	>
-																		<RouteIcon size={16} />
-																	</Link>
-																</Tooltip>
-																<Tooltip content="Edit listener">
-																	<button
-																		className="icon-button"
-																		type="button"
-																		aria-label="Edit listener"
-																		onClick={() =>
-																			openListenerEditor(bindIndex, listener, listenerIndex)
-																		}
-																	>
-																		<Pencil size={16} />
-																	</button>
-																</Tooltip>
-																<Tooltip content="Delete listener">
-																	<button
-																		className="icon-button danger"
-																		type="button"
-																		aria-label="Delete listener"
-																		disabled={update.isPending}
-																		onClick={() =>
-																			setDeleting({
-																				kind: 'listener',
-																				bindIndex,
-																				listenerIndex,
-																				label: listenerDisplayName(listener, listenerIndex)
-																			})
-																		}
-																	>
-																		<Trash2 size={16} />
-																	</button>
-																</Tooltip>
-															</td>
-														</tr>
-													))}
-												</tbody>
-											</table>
-										</div>
+										<Table<TrafficListener>
+											size="middle"
+											rowKey={listener => bind.listeners.indexOf(listener)}
+											dataSource={bind.listeners}
+											pagination={false}
+											columns={[
+												{
+													title: 'Name',
+													key: 'name',
+													render: (_, listener, listenerIndex) => (
+														<strong>{listenerDisplayName(listener, listenerIndex)}</strong>
+													)
+												},
+												{
+													title: 'Hostname',
+													key: 'hostname',
+													render: (_, listener) => listener.hostname || '*'
+												},
+												{
+													title: 'Protocol',
+													key: 'protocol',
+													render: (_, listener) => <Tag>{listener.protocol ?? 'HTTP'}</Tag>
+												},
+												{
+													title: 'Routes',
+													key: 'routes',
+													render: (_, listener) =>
+														(listener.routes?.length ?? 0) + (listener.tcpRoutes?.length ?? 0)
+												},
+												{
+													title: 'Backends',
+													key: 'backends',
+													render: (_, listener) => listenerBackendCount(listener)
+												},
+												{
+													key: 'actions',
+													align: 'right',
+													render: (_, listener, listenerIndex) => (
+														<div className="row-actions">
+															<Tooltip content="Add route">
+																<ButtonLink
+																	color="default"
+																	variant="outlined"
+																	aria-label="Add route"
+																	icon={<RouteIcon size={16} />}
+																	to="/traffic/routes"
+																	search={{ listener: `${bindIndex}:${listenerIndex}` }}
+																/>
+															</Tooltip>
+															<Tooltip content="Edit listener">
+																<Button
+																	aria-label="Edit listener"
+																	icon={<Pencil size={16} />}
+																	onClick={() =>
+																		openListenerEditor(bindIndex, listener, listenerIndex)
+																	}
+																/>
+															</Tooltip>
+															<Tooltip content="Delete listener">
+																<Button
+																	danger
+																	aria-label="Delete listener"
+																	icon={<Trash2 size={16} />}
+																	disabled={update.isPending}
+																	onClick={() =>
+																		setDeleting({
+																			kind: 'listener',
+																			bindIndex,
+																			listenerIndex,
+																			label: listenerDisplayName(listener, listenerIndex)
+																		})
+																	}
+																/>
+															</Tooltip>
+														</div>
+													)
+												}
+											]}
+										/>
 									) : (
 										<EmptyState
 											title="No listeners on this bind"
@@ -479,7 +473,7 @@ function BindEditor(props: {
 			{error ? <StatusBanner state="bad" title={error} /> : null}
 			<div className="form-grid">
 				<Field label="Port" tooltip={props.help.field<TrafficBind>('LocalBind', 'port')}>
-					<input value={port} onChange={event => setPort(event.target.value)} />
+					<Input value={port} onChange={event => setPort(event.target.value)} />
 				</Field>
 			</div>
 		</Drawer>
@@ -586,7 +580,7 @@ function ListenerEditor(props: {
 					path="name"
 					tooltip={props.help.field<TrafficListener>('LocalListener', 'name')}
 				>
-					<input
+					<Input
 						value={listener.name ?? ''}
 						onChange={event => setListener({ ...listener, name: event.target.value })}
 						placeholder="public-http"
@@ -601,7 +595,7 @@ function ListenerEditor(props: {
 						'Can be an exact hostname or wildcard. Leave blank to match all hostnames.'
 					)}
 				>
-					<input
+					<Input
 						value={listener.hostname ?? ''}
 						onChange={event => setListener({ ...listener, hostname: event.target.value || null })}
 						placeholder="*"
@@ -629,7 +623,7 @@ function ListenerEditor(props: {
 						path="tls.cert"
 						tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'cert')}
 					>
-						<input
+						<Input
 							value={cert}
 							onChange={event => setCert(event.target.value)}
 							placeholder="/etc/certs/tls.crt"
@@ -640,7 +634,7 @@ function ListenerEditor(props: {
 						path="tls.key"
 						tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'key')}
 					>
-						<input
+						<Input
 							value={key}
 							onChange={event => setKey(event.target.value)}
 							placeholder="/etc/certs/tls.key"

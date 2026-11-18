@@ -1,3 +1,4 @@
+import { InputNumber } from 'antd';
 import { ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
@@ -10,6 +11,7 @@ import { ListEditor } from '@/policies/ListEditor';
 import {
 	hasUnsupportedTarget,
 	KeyValueEditor,
+	OptionCheckbox,
 	TargetEditor,
 	targetFrom
 } from '@/policies/PolicyFormControls';
@@ -168,11 +170,7 @@ export function ExtAuthzPolicyEditor(props: {
 						label="Deny status"
 						tooltip={props.help.field<ExtAuthz>('ExtAuthz', 'failureMode.denyWithStatus')}
 					>
-						<input
-							type="number"
-							value={denyStatus}
-							onChange={event => setDenyStatus(Number(event.target.value))}
-						/>
+						<InputNumber value={denyStatus} onChange={value => setDenyStatus(Number(value ?? 0))} />
 					</Field>
 				) : null}
 				<ListEditor
@@ -182,29 +180,21 @@ export function ExtAuthzPolicyEditor(props: {
 					placeholder="authorization"
 					onChange={setIncludeRequestHeaders}
 				/>
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={includeBody}
-						onChange={event => setIncludeBody(event.target.checked)}
-					/>
-					<span>
-						<strong>Include request body</strong>
-						<small>{props.help.field<ExtAuthz>('ExtAuthz', 'includeRequestBody')}</small>
-					</span>
-				</label>
+				<OptionCheckbox
+					checked={includeBody}
+					onChange={setIncludeBody}
+					title="Include request body"
+					description={props.help.field<ExtAuthz>('ExtAuthz', 'includeRequestBody')}
+				/>
 				{includeBody ? (
 					<div className="form-grid">
 						<Field
 							label="Max request bytes"
 							tooltip={props.help.field<BodyOptions>('BodyOptions', 'maxRequestBytes')}
 						>
-							<input
-								type="number"
-								value={maxRequestBytes}
-								onChange={event =>
-									setMaxRequestBytes(event.target.value === '' ? '' : Number(event.target.value))
-								}
+							<InputNumber
+								value={maxRequestBytes === '' ? null : maxRequestBytes}
+								onChange={value => setMaxRequestBytes(value == null ? '' : Number(value))}
 								placeholder="8192"
 							/>
 						</Field>
@@ -212,30 +202,18 @@ export function ExtAuthzPolicyEditor(props: {
 							label="Body options"
 							tooltip={props.help.field<ExtAuthz>('ExtAuthz', 'includeRequestBody')}
 						>
-							<label className="config-option-row">
-								<input
-									type="checkbox"
-									checked={allowPartialMessage}
-									onChange={event => setAllowPartialMessage(event.target.checked)}
-								/>
-								<span>
-									<strong>Allow partial message</strong>
-									<small>
-										{props.help.field<BodyOptions>('BodyOptions', 'allowPartialMessage')}
-									</small>
-								</span>
-							</label>
-							<label className="config-option-row">
-								<input
-									type="checkbox"
-									checked={packAsBytes}
-									onChange={event => setPackAsBytes(event.target.checked)}
-								/>
-								<span>
-									<strong>Pack as bytes</strong>
-									<small>{props.help.field<BodyOptions>('BodyOptions', 'packAsBytes')}</small>
-								</span>
-							</label>
+							<OptionCheckbox
+								checked={allowPartialMessage}
+								onChange={setAllowPartialMessage}
+								title="Allow partial message"
+								description={props.help.field<BodyOptions>('BodyOptions', 'allowPartialMessage')}
+							/>
+							<OptionCheckbox
+								checked={packAsBytes}
+								onChange={setPackAsBytes}
+								title="Pack as bytes"
+								description={props.help.field<BodyOptions>('BodyOptions', 'packAsBytes')}
+							/>
 						</FieldGroup>
 					</div>
 				) : null}

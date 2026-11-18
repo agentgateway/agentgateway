@@ -33,6 +33,7 @@ import { UiSettingsPage } from '@/pages/settings/UiSettings';
 import { TrafficGatewaysPage } from '@/pages/TrafficGateways';
 import { TrafficListenersPage } from '@/pages/TrafficListeners';
 import { TrafficRoutesPage } from '@/pages/TrafficRoutes';
+import { ThemeProvider } from '@/theme';
 import '@fontsource/geist-sans/latin-400.css';
 import '@fontsource/geist-sans/latin-500.css';
 import '@fontsource/geist-sans/latin-600.css';
@@ -292,7 +293,9 @@ if (!rootElement) throw new Error('Missing root element');
 createRoot(rootElement).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>
-			<RouterProvider router={router} />
+			<ThemeProvider>
+				<RouterProvider router={router} />
+			</ThemeProvider>
 		</QueryClientProvider>
 	</React.StrictMode>
 );

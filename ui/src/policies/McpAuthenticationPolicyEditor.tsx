@@ -1,10 +1,11 @@
+import { Input } from 'antd';
 import { DatabaseZap, FileKey2, Globe2, KeyRound, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
 import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
-import { Field, FieldGroup, StatusBanner } from '@/components/Primitives';
+import { Field, FieldGroup, SegmentedControl, StatusBanner } from '@/components/Primitives';
 import type { LocalMcpAuthentication } from '@/gateway-config';
 import { ListEditor } from '@/policies/ListEditor';
 import { PolicySection } from '@/policies/PolicyLayout';
@@ -120,38 +121,19 @@ export function McpAuthenticationPolicyEditor(props: {
 					label="JWKS source"
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'jwks')}
 				>
-					<div className="segmented-control compact">
-						<button
-							className={jwksMode === 'url' ? 'active' : ''}
-							type="button"
-							onClick={() => {
-								setJwksMode('url');
-								setJwksValue('');
-							}}
-						>
-							Remote URL
-						</button>
-						<button
-							className={jwksMode === 'file' ? 'active' : ''}
-							type="button"
-							onClick={() => {
-								setJwksMode('file');
-								setJwksValue('');
-							}}
-						>
-							Local file
-						</button>
-						<button
-							className={jwksMode === 'inline' ? 'active' : ''}
-							type="button"
-							onClick={() => {
-								setJwksMode('inline');
-								setJwksValue('{\n  "keys": []\n}');
-							}}
-						>
-							Inline JSON
-						</button>
-					</div>
+					<SegmentedControl
+						ariaLabel="JWKS source"
+						value={jwksMode}
+						options={[
+							{ value: 'url', label: 'Remote URL' },
+							{ value: 'file', label: 'Local file' },
+							{ value: 'inline', label: 'Inline JSON' }
+						]}
+						onChange={mode => {
+							setJwksMode(mode);
+							setJwksValue(mode === 'inline' ? '{\n  "keys": []\n}' : '');
+						}}
+					/>
 				</FieldGroup>
 				{jwksMode === 'inline' ? (
 					<FieldGroup label="Inline JWKS" path="jwks">
@@ -162,7 +144,7 @@ export function McpAuthenticationPolicyEditor(props: {
 						label={jwksMode === 'url' ? 'JWKS URL' : 'JWKS file'}
 						path={jwksMode === 'url' ? 'jwks.url' : 'jwks.file'}
 					>
-						<input
+						<Input
 							value={jwksValue}
 							onChange={event => setJwksValue(event.target.value)}
 							placeholder={
@@ -185,7 +167,7 @@ export function McpAuthenticationPolicyEditor(props: {
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'issuer')}
 					path="issuer"
 				>
-					<input
+					<Input
 						value={issuer}
 						onChange={event => setIssuer(event.target.value)}
 						placeholder="https://issuer.example.com"
@@ -203,7 +185,7 @@ export function McpAuthenticationPolicyEditor(props: {
 					label="Client ID"
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'clientId')}
 				>
-					<input
+					<Input
 						value={clientId ?? ''}
 						onChange={event => setClientId(event.target.value)}
 						placeholder="optional OAuth client ID"

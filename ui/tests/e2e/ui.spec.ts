@@ -260,6 +260,7 @@ test('hybrid settings shows file diff without applying it', async ({ page }) => 
 	await expect(diff).toBeVisible();
 	const save = diff.getByRole('button', { name: 'Save' });
 	await expect(save).toBeDisabled();
+	await expect(save).toBeInViewport();
 	await save.hover({ force: true });
 	await expect(page.getByRole('tooltip').getByText(/read-only in hybrid mode/)).toBeVisible();
 	expect(gateway.postedConfigs).toHaveLength(0);
@@ -553,7 +554,7 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 	await page.getByLabel('Virtual model name').fill('balanced');
 	await expect(page.getByRole('button', { name: 'Save virtual model' })).toBeDisabled();
 
-	await page.getByRole('textbox', { name: 'Specific model' }).fill('gpt-5.4-nano');
+	await page.getByRole('combobox', { name: 'Specific model' }).fill('gpt-5.4-nano');
 	await page.getByRole('button', { name: 'Save virtual model' }).click();
 
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
@@ -585,6 +586,9 @@ test('dropdown menu fits its longest option', async ({ page }) => {
 
 	await page.getByRole('combobox', { name: 'Integration' }).click();
 	const menu = page.locator('.custom-select-menu');
+	await expect(menu).toBeVisible();
+	// antd animates the menu in; measure it once the appear transition ends.
+	await expect(menu).not.toHaveClass(/ant-slide-up-appear/);
 	const box = await menu.boundingBox();
 	expect(box?.width).toBeGreaterThan(64);
 	expect(box?.width).toBeLessThanOrEqual(420);
@@ -594,7 +598,7 @@ test('dropdown menu fits its longest option', async ({ page }) => {
 	expect(truncated).toBe(0);
 
 	// Searching down to one short option keeps the menu steady.
-	await page.getByRole('combobox', { name: 'Search Integration' }).fill('OpenAI JavaScript');
+	await page.getByRole('combobox', { name: 'Integration' }).fill('OpenAI JavaScript');
 	await expect(page.getByRole('option')).toHaveCount(1);
 	expect((await menu.boundingBox())?.width).toBe(box?.width);
 });
@@ -607,6 +611,9 @@ test('dropdown menu stays on screen at the right edge', async ({ page }) => {
 	});
 
 	await page.getByRole('combobox', { name: 'Integration' }).click();
+	await expect(page.locator('.custom-select-menu')).toBeVisible();
+	// antd animates the menu in; measure it once the appear transition ends.
+	await expect(page.locator('.custom-select-menu')).not.toHaveClass(/ant-slide-up-appear/);
 	const box = await page.locator('.custom-select-menu').boundingBox();
 	expect(box?.width).toBeGreaterThan(64);
 	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
@@ -618,20 +625,28 @@ test('dropdown menu in a drawer', async ({ page }) => {
 	await page.goto('/llm/models');
 	await page.getByRole('button', { name: 'Add model' }).first().click();
 	const provider = page.getByRole('combobox', { name: 'Provider', exact: true });
-	const menu = page.locator('.custom-select-menu');
+	const menu = page.locator('.custom-select-menu:visible');
+	const trigger = page.locator('.custom-select').filter({ has: provider });
 	const drawerBody = page.locator('.drawer-body');
 
 	// A full-width form dropdown keeps a menu matching its trigger.
 	await provider.click();
-	expect((await menu.boundingBox())?.width).toBe((await provider.boundingBox())?.width);
-	await provider.click();
+	await expect(menu).toBeVisible();
+	// antd animates the menu in; measure it once the appear transition ends.
+	await expect(menu).not.toHaveClass(/ant-slide-up-appear/);
+	expect((await menu.boundingBox())?.width).toBe((await trigger.boundingBox())?.width);
+	await provider.press('Escape');
+	await expect(menu).toHaveCount(0);
 
 	// A compact one at the drawer's right edge stays inside without adding a horizontal scrollbar.
 	await page.addStyleTag({
 		content:
-			'.drawer-body .custom-select:has(.custom-select-trigger[aria-label="Provider"]) { width: 64px; margin-left: auto; }'
+			'.drawer-body .custom-select:has(input[aria-label="Provider"]) { width: 64px; margin-left: auto; }'
 	});
 	await provider.click();
+	await expect(menu).toBeVisible();
+	// antd animates the menu in; measure it once the appear transition ends.
+	await expect(menu).not.toHaveClass(/ant-slide-up-appear/);
 	const box = await menu.boundingBox();
 	const bodyBox = await drawerBody.boundingBox();
 	expect(box?.width).toBeGreaterThan(64);
@@ -650,8 +665,11 @@ test('trims whitespace from a new model name and explicit model', async ({ page 
 	await page.getByRole('combobox', { name: 'Provider' }).click();
 	await page.getByRole('option', { name: 'openai-shared configured' }).click();
 	await page.getByLabel('Incoming model match').fill('  my-model ');
-	await page.getByRole('button', { name: 'Explicit', exact: true }).click();
-	await page.getByRole('textbox', { name: 'Explicit outgoing model' }).fill('  gpt-4o-mini ');
+	await page
+		.locator('label')
+		.filter({ has: page.getByRole('radio', { name: 'Explicit', exact: true }) })
+		.click();
+	await page.getByRole('combobox', { name: 'Explicit outgoing model' }).fill('  gpt-4o-mini ');
 	await page.getByRole('button', { name: 'Save model' }).click();
 
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
@@ -791,10 +809,10 @@ test('XDS mode offers Client Setup with models from the config dump', async ({ p
 	await expect(page.getByText('This page configures the client only')).toBeVisible();
 	await expect(page.getByText('Enter the gateway base URL')).toBeVisible();
 
-	const modelInput = page.getByRole('textbox', { name: 'Model', exact: true });
+	const modelInput = page.getByRole('combobox', { name: 'Model', exact: true });
 	await expect(modelInput).toHaveValue('gpt-4o');
 	await page.getByRole('button', { name: 'Show Model options' }).click();
-	const modelOptions = page.getByRole('listbox', { name: 'Model' });
+	const modelOptions = page.getByRole('listbox');
 	await expect(modelOptions.getByRole('option')).toHaveText([
 		'gpt-4o',
 		'resilient',
@@ -823,7 +841,7 @@ test('XDS mode Client Setup keeps a cleared model and asks for a concrete name',
 	await page.goto('/llm/client-setup');
 	await page.getByLabel('Gateway base URL').fill('https://gw.example.com');
 
-	const modelInput = page.getByRole('textbox', { name: 'Model', exact: true });
+	const modelInput = page.getByRole('combobox', { name: 'Model', exact: true });
 	const summary = page.locator('.client-setup-summary');
 
 	await modelInput.fill('');
@@ -875,7 +893,7 @@ test('render-prop Field hint describes its input', async ({ page }) => {
 	await mockXdsGateway(page, xdsDump([...xdsDumpModels(), xdsWildcardModel()]));
 	await page.goto('/llm/client-setup');
 
-	const model = page.getByRole('textbox', { name: 'Model', exact: true });
+	const model = page.getByRole('combobox', { name: 'Model', exact: true });
 	await model.fill('gpt-5-*');
 	await model.press('Escape');
 	await expect(page.getByRole('textbox', { name: 'Specific model' })).toHaveAccessibleDescription(
@@ -891,13 +909,13 @@ test('catalog composite describes its focused input and label focuses it', async
 	await mockGateway(page, config);
 	await page.goto('/llm/client-setup');
 
-	const specificModel = page.getByRole('textbox', { name: 'Specific model' });
+	const specificModel = page.getByRole('combobox', { name: 'Specific model' });
 	await expect(specificModel).toHaveAccessibleDescription(
 		'Model uses a wildcard; specify the specific model.'
 	);
 	await page.getByText('Specific model', { exact: true }).click();
 	await expect(specificModel).toBeFocused();
-	await expect(page.getByRole('listbox', { name: 'Specific model' })).toBeVisible();
+	await expect(page.getByRole('listbox')).toBeVisible();
 });
 
 test('region composite describes its focused input and label focuses it', async ({ page }) => {
@@ -917,7 +935,7 @@ test('region composite describes its focused input and label focuses it', async 
 		.getByRole('button', { name: 'Edit provider' })
 		.click();
 
-	const region = page.getByRole('textbox', { name: 'Vertex region' });
+	const region = page.getByRole('combobox', { name: 'Vertex region' });
 	await expect(region).toHaveAccessibleDescription('Optional. If unset, Vertex uses global.');
 	await page.getByText('Vertex region', { exact: true }).click();
 	await expect(region).toBeFocused();
@@ -927,9 +945,9 @@ test('Playground Specific model hint describes the wildcard input', async ({ pag
 	await mockGateway(page);
 	await page.goto('/llm/playground');
 
-	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('combobox', { name: 'Model', exact: true }).click();
 	await page.getByRole('option', { name: 'openai/*' }).click();
-	await expect(page.getByRole('textbox', { name: 'Specific model' })).toHaveAccessibleDescription(
+	await expect(page.getByRole('combobox', { name: 'Specific model' })).toHaveAccessibleDescription(
 		'Model uses a wildcard; specify the specific model.'
 	);
 });
@@ -1058,7 +1076,7 @@ test('hybrid model edits use the unified resource API', async ({ page }) => {
 	});
 
 	await page.goto('/llm/client-setup');
-	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('combobox', { name: 'Model', exact: true }).click();
 	await expect(page.getByRole('option', { name: 'db-model-renamed' })).toBeVisible();
 	await page.getByRole('option', { name: 'db-model-renamed' }).click();
 	const clientRecipe = page.locator('.client-recipe-card');
@@ -1069,7 +1087,7 @@ test('hybrid model edits use the unified resource API', async ({ page }) => {
 	await expect(clientRecipe).toContainText('dummy_key');
 
 	await page.goto('/llm/playground');
-	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('combobox', { name: 'Model', exact: true }).click();
 	await expect(page.getByRole('option', { name: 'db-model-renamed' })).toBeVisible();
 });
 
@@ -1175,7 +1193,10 @@ test('creates an OpenAPI MCP target', async ({ page }) => {
 
 	await page.getByRole('button', { name: 'Add server' }).first().click();
 	await page.getByLabel('Server name').fill('weather');
-	await page.getByRole('button', { name: 'OpenAPI' }).click();
+	await page
+		.locator('label')
+		.filter({ has: page.getByRole('radio', { name: 'OpenAPI' }) })
+		.click();
 	for (const name of ['URL', 'Schema']) {
 		const formControls = await page.evaluate(text => {
 			const span = [...document.querySelectorAll('.field-label')].find(
@@ -1189,8 +1210,10 @@ test('creates an OpenAPI MCP target', async ({ page }) => {
 		}, name);
 		expect(formControls, `${name} visible label contains no form controls`).toBe(0);
 	}
-	await page.getByLabel('URL', { exact: true }).fill('http://localhost:8101/mcp');
-	await page.getByLabel('Schema', { exact: true }).fill('https://example.com/weather-openapi.json');
+	await page.getByRole('textbox', { name: 'URL', exact: true }).fill('http://localhost:8101/mcp');
+	await page
+		.getByRole('textbox', { name: 'Schema', exact: true })
+		.fill('https://example.com/weather-openapi.json');
 	await page.getByRole('button', { name: 'Save server' }).click();
 
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
@@ -1696,7 +1719,7 @@ test('LLM playground waits for the listener after applying CORS', async ({ page 
 		await route.fulfill({ status: 401, body: 'API key required' });
 	});
 	await page.goto('/llm/playground');
-	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('combobox', { name: 'Model', exact: true }).click();
 	await page.getByRole('option', { name: /resilient/ }).click();
 	await page.getByLabel('User message').fill('ping');
 	await page.getByRole('button', { name: 'Apply CORS', exact: true }).click();
@@ -1721,7 +1744,7 @@ test('LLM playground can retry when the CORS listener stays unavailable', async 
 		await route.fulfill({ status: 200, body: '{}' });
 	});
 	await page.goto('/llm/playground');
-	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('combobox', { name: 'Model', exact: true }).click();
 	await page.getByRole('option', { name: /resilient/ }).click();
 	await page.getByLabel('User message').fill('ping');
 	const apply = page.getByRole('button', { name: 'Apply CORS', exact: true });
@@ -1740,7 +1763,7 @@ test('LLM playground sends selected virtual model name', async ({ page }) => {
 	const gateway = await mockGateway(page);
 	await page.goto('/llm/playground');
 
-	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('combobox', { name: 'Model', exact: true }).click();
 	await page.getByRole('option', { name: /resilient/ }).click();
 	await page.getByLabel('User message').fill('ping');
 	await page.getByRole('button', { name: 'Send' }).click();
@@ -1760,7 +1783,9 @@ test('MCP playground initializes, lists tools, and calls a tool', async ({ page 
 
 	await page.getByRole('button', { name: 'Initialize', exact: true }).click();
 	await expect(page.getByText('initialized')).toBeVisible();
-	await expect(page.getByRole('combobox', { name: 'Tool' })).toContainText('echo');
+	await expect(
+		page.locator('.ant-select').filter({ has: page.getByRole('combobox', { name: 'Tool' }) })
+	).toContainText('echo');
 
 	await page.getByLabel('text *').fill('hello');
 	await page.getByRole('button', { name: 'Call tool' }).click();
@@ -1803,9 +1828,9 @@ test('MCP playground displays tool execution errors', async ({ page }) => {
 	await page.getByLabel('text *').fill('hello');
 	await page.getByRole('button', { name: 'Call tool' }).click();
 
-	const status = page.locator('.mcp-result-status .badge');
+	const status = page.locator('.mcp-result-status .ant-tag');
 	await expect(status).toHaveText('tool error');
-	await expect(status).toHaveClass(/bad/);
+	await expect(status).toHaveClass(/ant-tag-error/);
 	await expect(page.locator('.mcp-result-card > strong')).toHaveText('Tool error');
 	await expect(page.locator('.mcp-text-output')).toHaveText('tool failed');
 });
@@ -1834,9 +1859,9 @@ test('MCP playground displays empty tool execution errors', async ({ page }) => 
 	await page.getByLabel('text *').fill('hello');
 	await page.getByRole('button', { name: 'Call tool' }).click();
 
-	const status = page.locator('.mcp-result-status .badge');
+	const status = page.locator('.mcp-result-status .ant-tag');
 	await expect(status).toHaveText('tool error');
-	await expect(status).toHaveClass(/bad/);
+	await expect(status).toHaveClass(/ant-tag-error/);
 	const card = page.locator('.mcp-result-card');
 	await expect(page.locator('.mcp-result-card > strong')).toHaveText('Tool error');
 	await expect(card.locator('.json-block')).toContainText('"isError": true');
@@ -2014,7 +2039,7 @@ test('Playground shows Claude subscription key warning', async ({ page }) => {
 	await mockGateway(page, configWithClaudeSubscriptionKey());
 	await page.goto('/llm/playground');
 
-	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('combobox', { name: 'Model', exact: true }).click();
 	await page.getByRole('option', { name: /claude-sub/ }).click();
 
 	await expect(page.getByText('Claude subscription key detected')).toBeVisible();
@@ -2111,39 +2136,35 @@ test('login loads without protected API requests and preserves the return destin
 	await expect(page.getByText('OAuth started')).toBeVisible();
 });
 
-test('multiselect shows selected values as chips with an overflow count', async ({ page }) => {
+test('group by collapses extra values into a +n tag without clipping', async ({ page }) => {
 	await mockGateway(page);
+	const summary = page.waitForResponse('**/api/logs/analytics/summary');
 	await page.goto('/llm/analytics');
-
+	await summary;
 	const field = page.locator('.multi-check', { hasText: 'Group by' });
-	const trigger = field.locator('.multi-check-trigger');
-	const chips = field.locator('.multi-check-values > .multi-check-chip');
-	const count = field.locator('.multi-check-values > .multi-check-count');
-	const widthBefore = (await trigger.boundingBox())?.width;
-
-	await trigger.click();
-	const popover = field.locator('.multi-check-popover');
-	await popover.getByRole('checkbox', { name: 'Model' }).check();
-	await popover.getByRole('checkbox', { name: 'User', exact: true }).check();
-	await expect(chips).toHaveText(['Model', 'User']);
-	await expect(count).toHaveCount(0);
-
-	// Picking everything can't fit: the rest collapse into +n, and hovering still names them all.
+	await field.getByRole('combobox').click();
 	const labels = ['Model', 'User', 'Group', 'Provider', 'User agent'];
-	for (const label of labels) {
-		await popover.getByRole('checkbox', { name: label, exact: true }).check();
-	}
-	await expect(count).toBeVisible();
-	const shown = await chips.count();
-	expect(shown).toBeGreaterThan(1);
-	await expect(count).toHaveText(`+${labels.length - shown}`);
-	await expect(trigger).toHaveAttribute('title', labels.join(', '));
+	for (const label of labels) await page.getByRole('option', { name: label, exact: true }).click();
+	await page.keyboard.press('Escape');
 
-	// The field keeps its width so the open popover doesn't move while picking.
-	expect((await trigger.boundingBox())?.width).toBe(widthBefore);
+	const rest = field.locator('.ant-select-content-item-rest');
+	const tags = field.locator(
+		'.ant-select-content-item:not([aria-hidden]):not(.ant-select-content-item-rest) .ant-select-selection-item-content'
+	);
+	await expect(rest).toHaveText(/^\+\d+$/);
+	await expect
+		.poll(async () => (await tags.count()) + Number((await rest.innerText()).slice(1)))
+		.toBe(labels.length);
+	expect(
+		await tags.evaluateAll(nodes => nodes.every(node => node.scrollWidth <= node.clientWidth))
+	).toBe(true);
+	await expect(rest.locator('[title]')).toHaveAttribute(
+		'title',
+		labels.slice(await tags.count()).join(', ')
+	);
 });
 
-test('multiselect popover fits long options inside the filter row', async ({ page }) => {
+test('multiselect popup fits long options inside the filter row', async ({ page }) => {
 	const longModel = 'anthropic/claude-sonnet-4-5-20250929-long-deployment-name';
 	const longProvider = 'azure-openai-eastus2-production-deployment-pool';
 	const tooLong = `${'very-long-model-name-'.repeat(20)}end`;
@@ -2162,28 +2183,32 @@ test('multiselect popover fits long options inside the filter row', async ({ pag
 			}
 		})
 	);
+	const summary = page.waitForResponse('**/api/logs/analytics/summary');
 	await page.goto('/llm/analytics');
+	await summary;
 	const row = page.locator('.analytics-controls-left');
 	await expect(row.locator('.multi-check')).toHaveCount(6);
 	const rowBox = await row.boundingBox();
 	if (!rowBox) throw new Error('filter row is not visible');
+	const popup = page.locator('.ant-select-dropdown:visible');
 
 	// A long provider reads in full, even from a field near the row's right edge.
-	const providers = row.locator('.multi-check', { hasText: 'Providers' });
-	await providers.locator('.multi-check-trigger').click();
-	const label = providers.locator('.multi-check-option span', { hasText: longProvider });
-	await expect(label).toBeVisible();
-	expect(await label.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
-	const popover = await providers.locator('.multi-check-popover').boundingBox();
-	if (!popover) throw new Error('popover is not visible');
-	expect(popover.x + popover.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+	await row.getByRole('combobox', { name: 'Providers' }).click();
+	const provider = popup.getByRole('option', { name: longProvider });
+	await expect(provider).toBeVisible();
+	expect(
+		await provider
+			.locator('.ant-select-item-option-content')
+			.evaluate(node => node.scrollWidth <= node.clientWidth)
+	).toBe(true);
+	const providerBox = await popup.boundingBox();
+	if (!providerBox) throw new Error('popup is not visible');
+	expect(providerBox.x + providerBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
 	await page.keyboard.press('Escape');
-	await page.mouse.click(5, 5);
+	await expect(popup).toHaveCount(0);
 
-	// A name wider than the row is capped at the row, and the tooltip still gives it in full.
-	const models = row.locator('.multi-check', { hasText: 'Models' });
-	await models.locator('.multi-check-trigger').click();
-	const capped = await models.locator('.multi-check-popover').boundingBox();
-	expect(capped?.width).toBeLessThanOrEqual(rowBox.width + 1);
-	await expect(models.locator(`.multi-check-option span[title="${tooLong}"]`)).toBeVisible();
+	// A name wider than the row is capped at the row, and hovering still gives it in full.
+	await row.getByRole('combobox', { name: 'Models' }).click();
+	await expect(popup.getByRole('option', { name: tooLong })).toHaveAttribute('title', tooLong);
+	expect((await popup.boundingBox())?.width).toBeLessThanOrEqual(rowBox.width + 1);
 });

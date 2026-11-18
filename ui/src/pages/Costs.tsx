@@ -1,3 +1,4 @@
+import { Button, Input, Table, Tag } from 'antd';
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -23,6 +24,20 @@ type CustomCostRow = {
 	cacheRead: string;
 	cacheWrite: string;
 };
+
+const CUSTOM_COST_COLUMNS: Array<{
+	title: string;
+	field: keyof CustomCostRow;
+	placeholder: string;
+	rate?: boolean;
+}> = [
+	{ title: 'Provider', field: 'provider', placeholder: 'openai' },
+	{ title: 'Model', field: 'model', placeholder: 'gpt-5-mini' },
+	{ title: 'Input', field: 'input', placeholder: '0.25', rate: true },
+	{ title: 'Output', field: 'output', placeholder: '2.00', rate: true },
+	{ title: 'Cache read', field: 'cacheRead', placeholder: '0.025', rate: true },
+	{ title: 'Cache write', field: 'cacheWrite', placeholder: '0.30', rate: true }
+];
 
 type DisplayCostSource = CostCatalogSource & {
 	storage: 'Database' | 'File';
@@ -148,31 +163,25 @@ export function CostsPage() {
 					</div>
 				</div>
 				{sources.length ? (
-					<div className="table-wrap">
-						<table className="data-table">
-							<thead>
-								<tr>
-									<th>Storage</th>
-									<th>Source</th>
-									<th>Type</th>
-								</tr>
-							</thead>
-							<tbody>
-								{sources.map((source, index) => (
-									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-									<tr key={index}>
-										<td>
-											<span className="badge">{source.storage}</span>
-										</td>
-										<td>
-											<code>{source.label}</code>
-										</td>
-										<td>{sourceType(source)}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+					<Table
+						size="middle"
+						pagination={false}
+						rowKey="key"
+						dataSource={sources.map((source, key) => ({ ...source, key }))}
+						columns={[
+							{
+								title: 'Storage',
+								key: 'storage',
+								render: (_, source) => <Tag>{source.storage}</Tag>
+							},
+							{
+								title: 'Source',
+								key: 'source',
+								render: (_, source) => <code>{source.label}</code>
+							},
+							{ title: 'Type', key: 'type', render: (_, source) => sourceType(source) }
+						]}
+					/>
 				) : (
 					<EmptyState
 						title="Using the embedded cost catalog"
@@ -191,9 +200,7 @@ export function CostsPage() {
 					<div className="button-row compact">
 						{editingCustom ? (
 							<>
-								<button
-									className="button"
-									type="button"
+								<Button
 									disabled={saving}
 									onClick={() => {
 										setCustomDraft(customRows);
@@ -202,20 +209,13 @@ export function CostsPage() {
 									}}
 								>
 									Cancel
-								</button>
-								<button
-									className="button primary"
-									type="button"
-									disabled={saving}
-									onClick={() => void saveCustomCosts()}
-								>
+								</Button>
+								<Button type="primary" loading={saving} onClick={() => void saveCustomCosts()}>
 									Save
-								</button>
+								</Button>
 							</>
 						) : (
-							<button className="button" type="button" onClick={() => setEditingCustom(true)}>
-								Edit
-							</button>
+							<Button onClick={() => setEditingCustom(true)}>Edit</Button>
 						)}
 					</div>
 				</div>
@@ -224,150 +224,68 @@ export function CostsPage() {
 						{customError}
 					</StatusBanner>
 				) : null}
-				<div className="table-wrap custom-cost-table-wrap">
-					<table className="data-table custom-cost-table">
-						<thead>
-							<tr>
-								<th>Provider</th>
-								<th>Model</th>
-								<th>Input</th>
-								<th>Output</th>
-								<th>Cache read</th>
-								<th>Cache write</th>
-								{editingCustom ? <th aria-label="Actions" /> : null}
-							</tr>
-						</thead>
-						<tbody>
-							{(editingCustom ? customDraft : customRows).map((row, index) => (
-								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								<tr key={index}>
-									<td>
-										{editingCustom ? (
-											<input
-												value={row.provider}
-												onChange={event =>
-													patchCustomRow(index, {
-														provider: event.target.value
-													})
-												}
-												placeholder="openai"
-											/>
-										) : (
-											row.provider
-										)}
-									</td>
-									<td>
-										{editingCustom ? (
-											<input
-												value={row.model}
-												onChange={event => patchCustomRow(index, { model: event.target.value })}
-												placeholder="gpt-5-mini"
-											/>
-										) : (
-											row.model
-										)}
-									</td>
-									<td>
-										{editingCustom ? (
-											<input
-												className="cost-rate-input"
-												value={row.input}
-												onChange={event => patchCustomRow(index, { input: event.target.value })}
-												placeholder="0.25"
-											/>
-										) : (
-											displayRate(row.input)
-										)}
-									</td>
-									<td>
-										{editingCustom ? (
-											<input
-												className="cost-rate-input"
-												value={row.output}
-												onChange={event => patchCustomRow(index, { output: event.target.value })}
-												placeholder="2.00"
-											/>
-										) : (
-											displayRate(row.output)
-										)}
-									</td>
-									<td>
-										{editingCustom ? (
-											<input
-												className="cost-rate-input"
-												value={row.cacheRead}
-												onChange={event =>
-													patchCustomRow(index, {
-														cacheRead: event.target.value
-													})
-												}
-												placeholder="0.025"
-											/>
-										) : (
-											displayRate(row.cacheRead)
-										)}
-									</td>
-									<td>
-										{editingCustom ? (
-											<input
-												className="cost-rate-input"
-												value={row.cacheWrite}
-												onChange={event =>
-													patchCustomRow(index, {
-														cacheWrite: event.target.value
-													})
-												}
-												placeholder="0.30"
-											/>
-										) : (
-											displayRate(row.cacheWrite)
-										)}
-									</td>
-									{editingCustom ? (
-										<td>
-											<button
-												className="icon-button danger"
-												type="button"
+				<Table
+					size="middle"
+					pagination={false}
+					rowKey="key"
+					scroll={{ x: 920 }}
+					locale={{ emptyText: 'No custom costs.' }}
+					dataSource={(editingCustom ? customDraft : customRows).map((row, key) => ({
+						...row,
+						key
+					}))}
+					columns={[
+						...CUSTOM_COST_COLUMNS.map(column => ({
+							title: column.title,
+							key: column.field,
+							render: (_: unknown, row: CustomCostRow & { key: number }) =>
+								editingCustom ? (
+									<Input
+										aria-label={column.title}
+										className={column.rate ? 'cost-rate-input' : undefined}
+										value={row[column.field]}
+										placeholder={column.placeholder}
+										onChange={event =>
+											patchCustomRow(row.key, { [column.field]: event.target.value })
+										}
+									/>
+								) : column.rate ? (
+									displayRate(row[column.field])
+								) : (
+									row[column.field]
+								)
+						})),
+						...(editingCustom
+							? [
+									{
+										key: 'actions',
+										onHeaderCell: () => ({ 'aria-label': 'Actions' }),
+										width: 56,
+										render: (_: unknown, row: CustomCostRow & { key: number }) => (
+											<Button
+												danger
 												aria-label="Remove custom cost"
+												icon={<Trash2 size={15} />}
 												onClick={() =>
 													setCustomDraft(current =>
-														current.filter((_, itemIndex) => itemIndex !== index)
+														current.filter((_, itemIndex) => itemIndex !== row.key)
 													)
 												}
-											>
-												<Trash2 size={15} />
-											</button>
-										</td>
-									) : null}
-								</tr>
-							))}
-							{editingCustom && customDraft.length === 0 ? (
-								<tr>
-									<td colSpan={7}>
-										<span className="muted-copy inline">No custom costs.</span>
-									</td>
-								</tr>
-							) : null}
-							{!editingCustom && customRows.length === 0 ? (
-								<tr>
-									<td colSpan={6}>
-										<span className="muted-copy inline">No custom costs.</span>
-									</td>
-								</tr>
-							) : null}
-						</tbody>
-					</table>
-				</div>
+											/>
+										)
+									}
+								]
+							: [])
+					]}
+				/>
 				{editingCustom ? (
 					<div className="button-row custom-cost-actions">
-						<button
-							className="button"
-							type="button"
+						<Button
+							icon={<Plus size={16} />}
 							onClick={() => setCustomDraft(current => [...current, emptyCustomCostRow()])}
 						>
-							<Plus size={16} />
 							Add model cost
-						</button>
+						</Button>
 					</div>
 				) : null}
 			</Panel>

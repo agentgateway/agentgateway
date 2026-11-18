@@ -3,7 +3,8 @@ import Editor from '@monaco-editor/react';
 
 import { celEditorOptions, celLanguage, configureCelMonaco } from '@/celMonaco';
 import { configureConfigYamlMonaco } from '@/configMonaco';
-import { configureConfigMonacoWorkers } from '@/monacoWorkers';
+import { configureConfigMonacoWorkers, monacoTheme } from '@/monacoWorkers';
+import { useTheme } from '@/theme';
 
 configureConfigMonacoWorkers();
 
@@ -19,6 +20,7 @@ type MiniEditorProps = {
 
 export function MiniMonacoEditor(props: MiniEditorProps) {
 	const monacoLanguage = props.language === 'cel' ? celLanguage : props.language;
+	const { theme } = useTheme();
 	return (
 		<div className={miniEditorClassName(props.className, props.invalid)}>
 			<Editor
@@ -30,7 +32,7 @@ export function MiniMonacoEditor(props: MiniEditorProps) {
 							: undefined
 				}
 				language={monacoLanguage}
-				theme={document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'}
+				theme={monacoTheme(theme)}
 				value={props.value}
 				onChange={value => props.onChange(value ?? '')}
 				onMount={(editor, monaco) => {

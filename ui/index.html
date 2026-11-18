@@ -5,6 +5,28 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<link rel="icon" href="%BASE_URL%favicon.svg">
 		<title>agentgateway</title>
+		<!-- Sets the theme before the app loads, so the page doesn't flash the wrong background. -->
+		<script>
+		(() => {
+			let theme = null;
+			try {
+				theme = localStorage.getItem('theme');
+			} catch {}
+			if (theme !== 'light' && theme !== 'dark') {
+				theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+			}
+			document.documentElement.dataset.theme = theme;
+		})();
+		</script>
+		<style>
+		html {
+			background: #f8f9fb;
+		}
+		html[data-theme='dark'] {
+			background: #030712;
+			color-scheme: dark;
+		}
+		</style>
 	</head>
 	<body>
 		<div id="root"></div>

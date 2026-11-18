@@ -1,3 +1,4 @@
+import { Button, Tag } from 'antd';
 import {
 	ArrowLeft,
 	Bot,
@@ -195,7 +196,12 @@ export function TrafficPolicySection(props: {
 
 	return (
 		<section className="traffic-policy-section">
-			<button className="traffic-policy-summary" type="button" onClick={() => setDrawerOpen(true)}>
+			<Button
+				className="traffic-policy-summary"
+				type="text"
+				block
+				onClick={() => setDrawerOpen(true)}
+			>
 				<span className="policy-form-section-icon">
 					<Shield size={17} />
 				</span>
@@ -210,7 +216,7 @@ export function TrafficPolicySection(props: {
 					</small>
 				</span>
 				<ChevronRight size={17} />
-			</button>
+			</Button>
 
 			{drawerOpen && selectedMeta ? (
 				<TrafficPolicyEditorDrawer
@@ -278,11 +284,11 @@ function TrafficPolicyCatalog(props: {
 function TrafficPolicyTile(props: { policy: TrafficPolicyItem; onOpen: (key: string) => void }) {
 	const Icon = props.policy.icon;
 	return (
-		<button
+		<Button
 			className={
 				props.policy.enabled ? 'traffic-policy-list-item enabled' : 'traffic-policy-list-item'
 			}
-			type="button"
+			block
 			onClick={() => props.onOpen(props.policy.key)}
 		>
 			<span className="policy-icon">
@@ -292,10 +298,10 @@ function TrafficPolicyTile(props: { policy: TrafficPolicyItem; onOpen: (key: str
 				<strong>{props.policy.title}</strong>
 				<small>{props.policy.summary || props.policy.description}</small>
 			</span>
-			<span className={props.policy.enabled ? 'badge ok' : 'badge'}>
+			<Tag color={props.policy.enabled ? 'success' : undefined}>
 				{props.policy.enabled ? 'enabled' : 'disabled'}
-			</span>
-		</button>
+			</Tag>
+		</Button>
 	);
 }
 
@@ -324,25 +330,20 @@ function TrafficPolicyEditorDrawer(props: {
 			headerActions={
 				<>
 					<Tooltip content="Back to policies">
-						<button
-							className="icon-button"
-							type="button"
+						<Button
 							aria-label="Back to policies"
+							icon={<ArrowLeft size={17} />}
 							onClick={props.onBack}
-						>
-							<ArrowLeft size={17} />
-						</button>
+						/>
 					</Tooltip>
 					<Tooltip content={enabled ? 'Delete policy' : 'Policy is not enabled'}>
-						<button
-							className="icon-button danger"
-							type="button"
+						<Button
+							danger
 							aria-label="Delete policy"
 							disabled={!enabled}
+							icon={<Trash2 size={17} />}
 							onClick={() => props.onSave(null)}
-						>
-							<Trash2 size={17} />
-						</button>
+						/>
 					</Tooltip>
 				</>
 			}

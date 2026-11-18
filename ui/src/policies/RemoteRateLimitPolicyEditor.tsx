@@ -1,3 +1,4 @@
+import { Button, Input } from 'antd';
 import { Gauge, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -109,7 +110,7 @@ export function RemoteRateLimitPolicyEditor(props: {
 						path="domain"
 						tooltip={props.help.field<RemoteRateLimit>('RemoteRateLimit', 'domain')}
 					>
-						<input
+						<Input
 							value={domain}
 							onChange={event => setDomain(event.target.value)}
 							placeholder="agentgateway"
@@ -168,14 +169,12 @@ export function RemoteRateLimitPolicyEditor(props: {
 						/>
 					))}
 				</div>
-				<button
-					className="button"
-					type="button"
+				<Button
+					icon={<Plus size={16} />}
 					onClick={() => setDescriptors([...descriptors, emptyDescriptor()])}
 				>
-					<Plus size={16} />
 					Add descriptor
-				</button>
+				</Button>
 			</PolicySection>
 		</form>
 	);
@@ -208,14 +207,12 @@ function DescriptorEditor(props: {
 						{props.descriptor.entries.length === 1 ? 'entry' : 'entries'}
 					</small>
 				</div>
-				<button
-					className="icon-button danger"
-					type="button"
+				<Button
+					danger
 					aria-label="Remove descriptor"
+					icon={<Trash2 size={16} />}
 					onClick={props.onRemove}
-				>
-					<Trash2 size={16} />
-				</button>
+				/>
 			</div>
 			<FieldGroup
 				label="Type"
@@ -239,7 +236,7 @@ function DescriptorEditor(props: {
 					{props.descriptor.entries.map((entry, index) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						<div className="remote-entry-row" key={index}>
-							<input
+							<Input
 								className="mono-input compact"
 								value={entry.key}
 								onChange={event => updateEntry(index, { key: event.target.value })}
@@ -252,10 +249,10 @@ function DescriptorEditor(props: {
 								onChange={value => updateEntry(index, { value })}
 								placeholder='request.headers["x-user"]'
 							/>
-							<button
-								className="icon-button danger"
-								type="button"
+							<Button
+								danger
 								aria-label="Remove descriptor entry"
+								icon={<Trash2 size={16} />}
 								onClick={() => {
 									const next = props.descriptor.entries.filter(
 										(_, entryIndex) => entryIndex !== index
@@ -265,15 +262,12 @@ function DescriptorEditor(props: {
 										entries: next.length ? next : [{ key: '', value: '' }]
 									});
 								}}
-							>
-								<Trash2 size={16} />
-							</button>
+							/>
 						</div>
 					))}
 				</div>
-				<button
-					className="button"
-					type="button"
+				<Button
+					icon={<Plus size={16} />}
 					onClick={() =>
 						props.onChange({
 							...props.descriptor,
@@ -281,9 +275,8 @@ function DescriptorEditor(props: {
 						})
 					}
 				>
-					<Plus size={16} />
 					Add entry
-				</button>
+				</Button>
 			</FieldGroup>
 			<div className="form-grid">
 				<FieldGroup
