@@ -26,6 +26,7 @@ pub fn path(route: RouteType) -> &'static str {
 	match route {
 		RouteType::Embeddings => "/v1beta/openai/embeddings",
 		RouteType::Rerank => "/rerank",
+		RouteType::Decisions => "/v1beta/decisions",
 		_ => "/v1beta/openai/chat/completions",
 	}
 }

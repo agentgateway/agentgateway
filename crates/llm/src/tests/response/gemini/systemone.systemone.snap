@@ -1,0 +1,93 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/gemini/systemone.json
+info:
+  answers:
+    q_3:
+      type: score
+      score: 1.1
+      legend:
+        "0":
+          label: Low
+          description: Can wait
+        "1": Medium
+        "2": High
+      probabilities:
+        "2": 0.2
+        "0": 0.1
+        "1": 0.7
+      confidence: 0.7
+    q_2:
+      type: choice
+      choice: o_000
+      probabilities:
+        o_000: 0.88
+        o_001: 0.12
+      confidence: 0.88
+    q_1:
+      type: noul
+      noul: 0.8
+      confidence: 0.8
+    q_0:
+      type: noul
+      noul: 0.93
+      confidence: 0.93
+  usage:
+    total_input_tokens: 212
+    total_output_tokens: 0
+---
+{
+  "response": {
+    "model": "jev-1.13.0",
+    "usage": {
+      "input_tokens": 212,
+      "output_tokens": 0
+    },
+    "answers": {
+      "refund": {
+        "type": "noul",
+        "noul": 0.93
+      },
+      "policy": {
+        "type": "noul",
+        "noul": 0.8
+      },
+      "category": {
+        "type": "choice",
+        "choice": "damage",
+        "probabilities": {
+          "damage": 0.88,
+          "shipping": 0.12
+        },
+        "confidence": 0.76
+      },
+      "urgency": {
+        "type": "score",
+        "score": 1.1,
+        "legend": {
+          "0": {
+            "label": "Low",
+            "description": "Can wait"
+          },
+          "1": "Medium",
+          "2": {
+            "label": "High",
+            "sla_minutes": 5
+          }
+        },
+        "probabilities": {
+          "0": 0.1,
+          "1": 0.7,
+          "2": 0.2
+        },
+        "confidence": 0.5499999999999999
+      }
+    }
+  },
+  "parsed": {
+    "input_tokens": 212,
+    "output_tokens": 0,
+    "total_tokens": 212,
+    "provider_model": "jev-1.13.0"
+  }
+}

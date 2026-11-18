@@ -57,10 +57,18 @@ jobs:
     - name: Start validation dependencies
       if: ${{ startsWith(matrix.os, 'blacksmith-') }}
       run: tools/manage-validation-deps.sh start
+    - name: Start Postgres
+      if: ${{ startsWith(matrix.os, 'blacksmith-') }}
+      run: |
+        docker run -d --name agw-test-postgres -e POSTGRES_PASSWORD=test -p 127.0.0.1:55432:5432 postgres:17-alpine
+        timeout 60 bash -c 'until docker exec agw-test-postgres pg_isready -U postgres -h 127.0.0.1; do sleep 1; done'
     - name: Test
       run: make test
       env:
         KEYCLOAK_AVAILABLE: ${{ startsWith(matrix.os, 'blacksmith-') && '1' || '' }}
+        # Postgres integration tests run only where the step above starts the database.
+        AGW_TEST_POSTGRES_URL: ${{ startsWith(matrix.os, 'blacksmith-') && 'postgres://postgres:test@127.0.0.1:55432/postgres' || '' }}
+        AGW_TEST_REQUIRE_POSTGRES: ${{ startsWith(matrix.os, 'blacksmith-') && '1' || '' }}
         # Generate Cargo's per-crate build report for the artifact below.
         TIMINGS: true
     - name: Upload cargo timings
@@ -69,6 +77,9 @@ jobs:
         name: cargo-timings-proxy-test-${{ runner.os }}
         path: target/cargo-timings/cargo-timing*.html
         retention-days: 2
+    - name: Stop Postgres
+      if: ${{ always() && startsWith(matrix.os, 'blacksmith-') }}
+      run: docker rm -f agw-test-postgres
     - name: Stop validation dependencies
       if: ${{ always() && startsWith(matrix.os, 'blacksmith-') }}
       run: tools/manage-validation-deps.sh stop

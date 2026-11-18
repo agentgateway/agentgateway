@@ -118,7 +118,7 @@ impl ModelDiscovery {
 						ProviderFormat::Rerank if !converted && !matches!(provider, AIProvider::Azure(_)) => {
 							Some("/rerank")
 						},
-						ProviderFormat::Decisions if custom => Some("/decisions"),
+						ProviderFormat::Decisions => Some("/decisions"),
 						ProviderFormat::SystemOne if custom => Some("/systemone"),
 						ProviderFormat::AnthropicTokenCount if custom => Some("/messages/count_tokens"),
 						ProviderFormat::GeminiCountTokens if custom => Some("/models/{model}:countTokens"),

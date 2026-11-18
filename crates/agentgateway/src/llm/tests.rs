@@ -1753,6 +1753,38 @@ async fn vertex_anthropic_messages_prepares_vertex_body() {
 	);
 }
 
+#[test]
+fn vertex_anthropic_drops_unsupported_beta_headers() {
+	// Vertex rejects the whole request if any anthropic-beta value is one it does not support.
+	let provider = vertex_provider("claude-haiku-4-5@20251001");
+	for route_type in [RouteType::Messages, RouteType::AnthropicTokenCount] {
+		for (beta, expected) in [
+			(
+				"claude-code-20250219,advisor-tool-2026-03-01",
+				Some("claude-code-20250219"),
+			),
+			("advisor-tool-2026-03-01", None),
+		] {
+			let mut req = crate::http::tests_common::request(
+				"https://example.com/v1/messages",
+				::http::Method::POST,
+				&[("anthropic-beta", beta)],
+			);
+			provider
+				.set_required_fields(&mut req, route_type, None, None)
+				.unwrap();
+			assert_eq!(
+				req
+					.headers()
+					.get("anthropic-beta")
+					.map(|v| v.to_str().unwrap()),
+				expected,
+				"{route_type:?} / {beta}"
+			);
+		}
+	}
+}
+
 #[tokio::test]
 async fn provider_model_is_set_before_llm_transformations() {
 	use crate::http::auth::BackendInfo;
@@ -3070,6 +3102,143 @@ fn setup_request_drops_inbound_query_only_when_translated() {
 			.expect("setup_request should succeed");
 		assert_eq!(req.uri().query(), expected_query, "{route_type:?}");
 	}
+}
+
+#[test]
+fn setup_request_preserves_gemini_query_auth_with_host_override() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let decision_request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "test",
+		"questions": [{"type": "predicate", "instructions": "test?"}]
+	}))
+	.expect("decision request should parse");
+	let (_, state) = conversion::gemini::from_decisions::translate(&decision_request)
+		.expect("decision request should translate");
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Decisions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-decision-1".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::GeminiDecisions(state.into())),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/decisions?key=client-key&foo=bar",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Decisions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/decisions");
+	assert_eq!(req.uri().query(), Some("key=client-key"));
+}
+
+#[test]
+fn setup_request_drops_gemini_query_auth_when_api_key_header_is_present() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let decision_request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "test",
+		"questions": [{"type": "predicate", "instructions": "test?"}]
+	}))
+	.expect("decision request should parse");
+	let (_, state) = conversion::gemini::from_decisions::translate(&decision_request)
+		.expect("decision request should translate");
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Decisions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-decision-1".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::GeminiDecisions(state.into())),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/decisions?key=client-key&foo=bar",
+		http::Method::POST,
+		&[("x-goog-api-key", "backend-key")],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Decisions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/decisions");
+	assert_eq!(req.uri().query(), None);
+	assert_eq!(req.headers()["x-goog-api-key"], "backend-key");
+}
+
+#[test]
+fn setup_request_drops_translated_query_with_host_override() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-2.5-flash".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::VertexGemini),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/messages?beta=true",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/messages");
+	assert_eq!(req.uri().query(), None);
 }
 
 #[test]

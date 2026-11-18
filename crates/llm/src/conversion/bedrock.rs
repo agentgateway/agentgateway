@@ -2241,7 +2241,7 @@ pub mod from_messages {
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
 		let message = super::error_message(bytes);
 		let m = types::messages::typed::MessagesErrorResponse {
-			r#type: "".to_owned(),
+			r#type: "error".to_owned(),
 			error: types::messages::typed::MessagesError {
 				r#type: "invalid_request_error".to_string(),
 				message,
@@ -4098,8 +4098,8 @@ mod helpers {
 
 	pub fn cache_creation(usage: &bedrock::TokenUsage) -> Option<CacheCreation> {
 		(!usage.cache_details.is_empty()).then(|| CacheCreation {
-			ephemeral_5m_input_tokens: usage.cache_write_input_tokens_for("5m"),
-			ephemeral_1h_input_tokens: usage.cache_write_input_tokens_for("1h"),
+			ephemeral_5m_input_tokens: Some(usage.cache_write_input_tokens_for("5m").unwrap_or_default()),
+			ephemeral_1h_input_tokens: Some(usage.cache_write_input_tokens_for("1h").unwrap_or_default()),
 		})
 	}
 

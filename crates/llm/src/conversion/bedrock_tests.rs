@@ -1496,6 +1496,53 @@ fn test_embeddings_response_translation_nova() {
 }
 
 #[test]
+fn test_messages_cache_creation_has_both_ttl_counts() {
+	for (details, expected) in [
+		(json!([]), serde_json::Value::Null),
+		(
+			json!([{"ttl": "5m", "inputTokens": 12}]),
+			json!({"ephemeral_5m_input_tokens": 12, "ephemeral_1h_input_tokens": 0}),
+		),
+		(
+			json!([{"ttl": "1h", "inputTokens": 7}]),
+			json!({"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 7}),
+		),
+		(
+			json!([{"ttl": "5m", "inputTokens": 12}, {"ttl": "1h", "inputTokens": 7}]),
+			json!({"ephemeral_5m_input_tokens": 12, "ephemeral_1h_input_tokens": 7}),
+		),
+		(
+			json!([{"ttl": "5m", "inputTokens": 0}]),
+			json!({"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0}),
+		),
+	] {
+		let usage = serde_json::from_value(json!({
+			"inputTokens": 3, "outputTokens": 1, "totalTokens": 4,
+			"cacheDetails": details,
+		}))
+		.unwrap();
+		assert_eq!(
+			serde_json::to_value(helpers::cache_creation(&usage)).unwrap(),
+			expected
+		);
+	}
+}
+
+#[test]
+fn test_messages_error_translation_has_error_discriminator() {
+	let translated =
+		from_messages::translate_error(&Bytes::from_static(br#"{"message":"Model not found"}"#))
+			.unwrap();
+	assert_eq!(
+		serde_json::from_slice::<serde_json::Value>(&translated).unwrap(),
+		json!({
+			"type": "error",
+			"error": {"type": "invalid_request_error", "message": "Model not found"},
+		})
+	);
+}
+
+#[test]
 fn test_embeddings_error_translation() {
 	let error_body =
 		bytes::Bytes::from(serde_json::to_vec(&json!({"message": "Model not found"})).unwrap());
