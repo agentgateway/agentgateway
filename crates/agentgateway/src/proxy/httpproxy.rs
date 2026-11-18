@@ -322,17 +322,10 @@ async fn apply_request_policies(
 	rp.response_compressor =
 		compression.and_then(|c| Some(c.response.as_ref()?.compress.as_ref()?.for_request(req)));
 
-	let mut route_retry = pol.retry.select("retry", req);
-	// Evaluate the retry precondition (if any) against the request before it is consumed.
-	if let Some(retry) = route_retry.as_ref()
-		&& let Some(pre) = retry.precondition.as_ref()
-	{
-		let exec = cel::Executor::new_request(req);
-		if !exec.eval_bool(pre.as_ref()) {
-			debug!("retry precondition not met, disabling retries");
-			route_retry = None;
-		}
-	}
+	let route_retry = pol
+		.retry
+		.select("retry", req)
+		.filter(|retry| retry.matches_request(req));
 	l.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
 
 	rp.llm_request_policies.local_rate_limit = pol
@@ -3940,18 +3933,7 @@ fn should_retry(
 	req_snapshot: Option<&cel::RequestSnapshot>,
 ) -> bool {
 	match res {
-		Ok(resp) => {
-			if pol.codes.contains(&resp.status()) {
-				return true;
-			}
-			// A condition can match responses that status codes alone cannot, e.g. APIs that
-			// return a 200 but signal failure via a header.
-			if let Some(cond) = pol.condition.as_ref() {
-				let exec = cel::Executor::new_response(req_snapshot, resp);
-				return exec.eval_bool(cond.as_ref());
-			}
-			false
-		},
+		Ok(resp) => pol.matches_response(req_snapshot, resp),
 		Err(SnapshottedProxyError(e)) => e.is_retryable(),
 	}
 }
