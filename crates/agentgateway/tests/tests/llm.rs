@@ -899,7 +899,7 @@ llm:
 		agentgateway::ModelCatalogSource::Inline {
 			inline: r#"{"metadata":{"generatedAt":"2099-01-01T00:00:00Z"},"providers":{
 				"openai":{"models":{"gpt-5.5":{},"text-embedding-3-small":{"endpoints":["/embeddings"]},"gpt-decision":{"endpoints":["/decisions"]},"gpt-image-2":{"endpoints":["/images/generations","/images/edits"]}}},
-				"gcp.gemini":{"models":{"gemini-2.5-flash":{},"gemini-2.5-flash-image":{"endpoints":["/images/generations","/images/edits"]},"gemini-decision-1":{"endpoints":["/decisions"]}}},
+				"gcp.gemini":{"models":{"gemini-2.5-flash":{},"gemini-2.5-flash-image":{"endpoints":["/images/generations","/images/edits"]},"gemini-decision-1":{"endpoints":[]}}},
 				"gcp.vertex_ai":{"models":{"gemini-embedding-001":{"endpoints":["/embeddings"]}}},
 				"aws.bedrock":{"models":{"anthropic.claude-sonnet-4-5":{"modalities":{"input":["text"],"output":["text"]}},"meta.llama3-70b-instruct-v1:0":{"modalities":{"input":["text"],"output":["text"]}},"amazon.titan-embed-text-v2:0":{}}},
 				"togetherai":{"models":{"FLUX.1-schnell":{"endpoints":["/images/generations","/images/edits"]}}}
