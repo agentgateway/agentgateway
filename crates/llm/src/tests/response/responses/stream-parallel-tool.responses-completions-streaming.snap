@@ -1,0 +1,55 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/stream-parallel-tool.json
+---
+data: {"id":"resp_stream_parallel","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":"call_columbus","type":"function","function":{"name":"get_weather"}}],"role":"assistant"}}],"created":123,"model":"gpt-5.5","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp_stream_parallel","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"function":{"arguments":"{\"location\":\"Columbus, OH\"}"}}]}}],"created":123,"model":"gpt-5.5","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp_stream_parallel","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":1,"id":"call_new_york","type":"function","function":{"name":"get_weather"}}]}}],"created":123,"model":"gpt-5.5","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp_stream_parallel","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":1,"function":{"arguments":"{\"location\":"}}]}}],"created":123,"model":"gpt-5.5","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp_stream_parallel","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":1,"function":{"arguments":"\"New York, NY\"}"}}]}}],"created":123,"model":"gpt-5.5","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp_stream_parallel","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"created":123,"model":"gpt-5.5","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":120,"completion_tokens":40,"total_tokens":160,"prompt_tokens_details":{"cached_tokens":64},"cache_read_input_tokens":64}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 120,
+  "output_tokens": 40,
+  "total_tokens": 160,
+  "reasoning_tokens": 16,
+  "cached_input_tokens": 64,
+  "provider_model": "gpt-5.5",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_columbus",
+          "name": "get_weather",
+          "arguments": {
+            "location": "Columbus, OH"
+          }
+        },
+        {
+          "type": "tool_call",
+          "id": "call_new_york",
+          "name": "get_weather",
+          "arguments": {
+            "location": "New York, NY"
+          }
+        }
+      ],
+      "finish_reason": "tool_use"
+    }
+  ]
+}

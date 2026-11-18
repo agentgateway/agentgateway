@@ -1,0 +1,117 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/parallel_tool.json
+info:
+  id: resp_parallel_tool
+  object: response
+  created_at: 123
+  status: completed
+  model: gpt-5.5
+  service_tier: default
+  output:
+    - type: reasoning
+      id: rs_1
+      summary: []
+    - type: function_call
+      id: fc_1
+      call_id: call_columbus
+      name: get_weather
+      arguments: "{\"location\":\"Columbus, OH\"}"
+      status: completed
+    - type: function_call
+      id: fc_2
+      call_id: call_new_york
+      name: get_weather
+      arguments: "{\"location\":\"New York, NY\"}"
+      status: completed
+  parallel_tool_calls: true
+  usage:
+    input_tokens: 120
+    input_tokens_details:
+      cached_tokens: 64
+    output_tokens: 40
+    output_tokens_details:
+      reasoning_tokens: 16
+    total_tokens: 160
+---
+{
+  "response": {
+    "model": "gpt-5.5",
+    "service_tier": "default",
+    "usage": {
+      "prompt_tokens": 120,
+      "completion_tokens": 40,
+      "total_tokens": 160,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 64
+      },
+      "cache_read_input_tokens": 64
+    },
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "type": "function",
+              "id": "call_columbus",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"location\":\"Columbus, OH\"}"
+              }
+            },
+            {
+              "type": "function",
+              "id": "call_new_york",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"location\":\"New York, NY\"}"
+              }
+            }
+          ]
+        },
+        "index": 0,
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "id": "[id]",
+    "created": "[date]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 120,
+    "output_tokens": 40,
+    "total_tokens": 160,
+    "reasoning_tokens": 16,
+    "cached_input_tokens": 64,
+    "service_tier": "default",
+    "provider_model": "gpt-5.5",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_columbus",
+            "name": "get_weather",
+            "arguments": {
+              "location": "Columbus, OH"
+            }
+          },
+          {
+            "type": "tool_call",
+            "id": "call_new_york",
+            "name": "get_weather",
+            "arguments": {
+              "location": "New York, NY"
+            }
+          }
+        ],
+        "finish_reason": "tool_calls"
+      }
+    ]
+  }
+}

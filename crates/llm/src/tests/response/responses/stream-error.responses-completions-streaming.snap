@@ -1,0 +1,16 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/stream-error.json
+---
+data: {"error":{"message":"provider failed","type":"rate_limit_error","param":null,"code":"rate_limit_exceeded"}}
+
+data: [DONE]
+
+
+
+{
+  "provider_model": "gpt-5.6-luna",
+  "completion": [
+    ""
+  ]
+}

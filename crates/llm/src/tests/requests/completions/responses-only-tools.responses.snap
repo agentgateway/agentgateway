@@ -1,0 +1,99 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/responses-only-tools.json
+info:
+  model: gpt-5.5
+  messages:
+    - role: developer
+      content: Answer with the weather tool.
+    - role: user
+      content: What is the weather in Columbus?
+  max_completion_tokens: 2048
+  reasoning_effort: high
+  stream: true
+  stream_options:
+    include_usage: true
+  parallel_tool_calls: false
+  tool_choice: required
+  tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Get the current weather in a location
+        strict: true
+        parameters:
+          type: object
+          properties:
+            location:
+              type: string
+          required:
+            - location
+          additionalProperties: false
+---
+{
+  "request": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "What is the weather in Columbus?"
+          }
+        ]
+      }
+    ],
+    "model": "gpt-5.5",
+    "max_output_tokens": 2048,
+    "stream": true,
+    "instructions": "Answer with the weather tool.",
+    "store": false,
+    "tools": [
+      {
+        "type": "function",
+        "name": "get_weather",
+        "description": "Get the current weather in a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    ],
+    "tool_choice": "required",
+    "parallel_tool_calls": false,
+    "reasoning": {
+      "effort": "high"
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-5.5",
+    "provider": "responses",
+    "streaming": true,
+    "params": {
+      "max_tokens": 2048,
+      "reasoning_effort": "high"
+    },
+    "prompt": [
+      {
+        "role": "developer",
+        "content": "Answer with the weather tool."
+      },
+      {
+        "role": "user",
+        "content": "What is the weather in Columbus?"
+      }
+    ]
+  }
+}

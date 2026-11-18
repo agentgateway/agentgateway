@@ -1,0 +1,99 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/parallel-tool-call.json
+info:
+  model: gpt-3.5-turbo
+  messages:
+    - role: user
+      content: How is the weather in Columbus and New York?
+    - role: assistant
+      content: ~
+      tool_calls:
+        - id: call_1
+          type: function
+          function:
+            name: get_weather
+            arguments: "{\"location\":\"Columbus, OH\"}"
+        - id: call_2
+          type: function
+          function:
+            name: get_weather
+            arguments: "{\"location\":\"New York, NY\"}"
+    - role: tool
+      tool_call_id: call_1
+      content: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+    - role: tool
+      tool_call_id: call_2
+      content: "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+---
+{
+  "request": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "How is the weather in Columbus and New York?"
+          }
+        ]
+      },
+      {
+        "type": "function_call",
+        "call_id": "call_1",
+        "name": "get_weather",
+        "arguments": "{\"location\":\"Columbus, OH\"}",
+        "status": "completed"
+      },
+      {
+        "type": "function_call",
+        "call_id": "call_2",
+        "name": "get_weather",
+        "arguments": "{\"location\":\"New York, NY\"}",
+        "status": "completed"
+      },
+      {
+        "type": "function_call_output",
+        "call_id": "call_1",
+        "output": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }",
+        "status": "completed"
+      },
+      {
+        "type": "function_call_output",
+        "call_id": "call_2",
+        "output": "{ \"temperature\": 22, \"condition\": \"Sunny\" }",
+        "status": "completed"
+      }
+    ],
+    "model": "gpt-3.5-turbo",
+    "stream": false,
+    "store": false
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-3.5-turbo",
+    "provider": "responses",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "How is the weather in Columbus and New York?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+      },
+      {
+        "role": "tool",
+        "content": "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+      }
+    ]
+  }
+}

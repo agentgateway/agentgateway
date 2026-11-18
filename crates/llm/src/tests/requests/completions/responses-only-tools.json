@@ -1,0 +1,29 @@
+{
+  "model": "gpt-5.5",
+  "messages": [
+    { "role": "developer", "content": "Answer with the weather tool." },
+    { "role": "user", "content": "What is the weather in Columbus?" }
+  ],
+  "max_completion_tokens": 2048,
+  "reasoning_effort": "high",
+  "stream": true,
+  "stream_options": { "include_usage": true },
+  "parallel_tool_calls": false,
+  "tool_choice": "required",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get the current weather in a location",
+        "strict": true,
+        "parameters": {
+          "type": "object",
+          "properties": { "location": { "type": "string" } },
+          "required": ["location"],
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

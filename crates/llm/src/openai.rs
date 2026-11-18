@@ -1,7 +1,7 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
 
-use crate::{RouteType, apply};
+use crate::{ChatFormat, RouteType, apply};
 
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "OpenAIProvider"))]
@@ -16,6 +16,49 @@ pub struct Provider {
 
 impl super::Provider for Provider {
 	const NAME: Strng = strng::literal!("openai");
+}
+
+impl Provider {
+	// Formats come from catalog tags; untagged models get both.
+	pub fn supported_formats_for_model(
+		request_model: &str,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Vec<ChatFormat> {
+		let formats: Vec<ChatFormat> = catalog
+			.and_then(|c| c.get_model_tags(&request_model.to_ascii_lowercase()))
+			.map(|tags| {
+				[ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
+					.into_iter()
+					.filter(|f| tags.contains(f.tag()))
+					.collect()
+			})
+			.unwrap_or_default();
+		if formats.is_empty() {
+			vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
+		} else {
+			formats
+		}
+	}
+
+	// gpt-5.4+ reject tools + reasoning_effort on Chat Completions.
+	pub fn requires_responses(
+		request_model: &str,
+		req: &crate::types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> bool {
+		req.tools.as_ref().is_some_and(|tools| !tools.is_empty())
+			&& req.reasoning_effort.as_ref().is_some_and(|effort| {
+				!matches!(
+					effort,
+					crate::types::completions::typed::ReasoningEffort::None
+				)
+			}) && catalog.is_some_and(|c| {
+			c.model_has_tag(
+				&request_model.to_ascii_lowercase(),
+				crate::model_catalog::tags::OPENAI_RESPONSES_FOR_REASONING_TOOLS,
+			)
+		})
+	}
 }
 
 #[apply(schema!)]
