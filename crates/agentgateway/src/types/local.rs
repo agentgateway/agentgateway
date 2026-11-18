@@ -1275,6 +1275,35 @@ struct LocalBind {
 	mode: BindMode,
 }
 
+impl LocalBind {
+	fn key_and_port(&self) -> anyhow::Result<(Strng, u16)> {
+		// A standard bind requires a numeric port; an internal bind may omit the port to act as
+		// the wildcard fallback that serves any destination port via in-process routing.
+		if self.port.is_none() && self.mode != BindMode::Internal {
+			bail!("a bind without a port must set mode: internal");
+		}
+		// The runtime treats an internal bind with port 0 as the wildcard, whether the port was
+		// omitted or explicitly set to 0. Keep both representations on the single `bind/wildcard`
+		// key (and address port 0) so they are indistinguishable downstream.
+		let bind_port = self.port.unwrap_or(0);
+		let is_wildcard = self.mode == BindMode::Internal && bind_port == 0;
+		let bind_name = if is_wildcard {
+			strng::literal!("bind/wildcard")
+		} else {
+			strng::format!("bind/{bind_port}")
+		};
+		Ok((bind_name, bind_port))
+	}
+}
+
+fn default_bind_ip(config: &crate::Config) -> IpAddr {
+	if cfg!(target_family = "unix") && config.ipv6_enabled {
+		IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+	} else {
+		IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+	}
+}
+
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -3286,21 +3315,7 @@ async fn convert(
 	))
 	.await?;
 	for b in binds {
-		// A standard bind requires a numeric port; an internal bind may omit the port to act as
-		// the wildcard fallback that serves any destination port via in-process routing.
-		if b.port.is_none() && b.mode != BindMode::Internal {
-			bail!("a bind without a port must set mode: internal");
-		}
-		// The runtime treats an internal bind with port 0 as the wildcard, whether the port was
-		// omitted or explicitly set to 0. Keep both representations on the single `bind/wildcard`
-		// key (and address port 0) so they are indistinguishable downstream.
-		let bind_port = b.port.unwrap_or(0);
-		let is_wildcard = b.mode == BindMode::Internal && bind_port == 0;
-		let bind_name = if is_wildcard {
-			strng::literal!("bind/wildcard")
-		} else {
-			strng::format!("bind/{bind_port}")
-		};
+		let (bind_name, bind_port) = b.key_and_port()?;
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
 			let (l, routes, tcp_routes, pol, backends) = Box::pin(convert_listener(
@@ -3318,16 +3333,10 @@ async fn convert(
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
 		}
-		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), bind_port)
-		} else {
-			// Windows and IPv6 don't mix well apparently?
-			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), bind_port)
-		};
 		let b = BindSnapshot {
 			bind: Arc::new(Bind {
 				key: bind_name,
-				address: sockaddr,
+				address: SocketAddr::new(default_bind_ip(config), bind_port),
 				protocol: b
 					.protocol
 					.map(BindProtocol::from)
@@ -3855,12 +3864,9 @@ async fn convert_gateways(
 			}
 			refs.insert(gateway_name, listener_keys);
 		}
-		let default_address = if cfg!(target_family = "unix") && config.ipv6_enabled {
-			IpAddr::V6(Ipv6Addr::UNSPECIFIED)
-		} else {
-			IpAddr::V4(Ipv4Addr::UNSPECIFIED)
-		};
-		let address = gateway_config.bind_address.unwrap_or(default_address);
+		let address = gateway_config
+			.bind_address
+			.unwrap_or_else(|| default_bind_ip(config));
 		all_binds.push(BindSnapshot {
 			bind: Arc::new(Bind {
 				key: strng::format!("bind/{port}"),
@@ -5140,16 +5146,10 @@ async fn convert_llm_config(
 	listener_set.insert(listener);
 
 	// Create bind
-	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
-	} else {
-		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
-	};
-
 	let bind = BindSnapshot {
 		bind: Arc::new(Bind {
 			key: strng::format!("bind/{}", port),
-			address: sockaddr,
+			address: SocketAddr::new(default_bind_ip(config), port),
 			protocol: if tls_enabled {
 				BindProtocol::tls
 			} else {
@@ -5236,16 +5236,10 @@ async fn convert_mcp_config(
 	let mut listener_set = ListenerSet::default();
 	listener_set.insert(listener);
 
-	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
-	} else {
-		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
-	};
-
 	let bind = BindSnapshot {
 		bind: Arc::new(Bind {
 			key: strng::format!("bind/{}", port),
-			address: sockaddr,
+			address: SocketAddr::new(default_bind_ip(config), port),
 			protocol: BindProtocol::http,
 			tunnel_protocol: TunnelProtocol::Direct,
 			mode: BindMode::Standard,
