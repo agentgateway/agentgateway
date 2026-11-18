@@ -167,7 +167,7 @@ pprof = { version = "0.15", features = [
     "protobuf-codec",
     "criterion",
 ] }
-prometheus-client =  { version = "0.25", features = [
+prometheus-client =  { version = "0.26", features = [
     "prometheus_protobuf",
     "protobuf-protox"
 ] }
