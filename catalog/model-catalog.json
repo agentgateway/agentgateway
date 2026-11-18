@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-16T08:39:26Z"
+    "generatedAt": "2026-11-18T08:24:59Z"
   },
   "providers": {
     "anthropic": {
@@ -13698,7 +13698,7 @@
             "cacheRead": "0.2"
           },
           "limits": {
-            "context": 1000000,
+            "context": 1048576,
             "output": 262144
           },
           "modalities": {
@@ -16962,6 +16962,43 @@
             "temperature": true
           }
         },
+        "Qwen/Qwen4-Max": {
+          "name": "Qwen4 Max",
+          "released": "2026-11-16",
+          "rates": {
+            "input": "1.413",
+            "output": "4.24",
+            "cacheRead": "0.071"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 262144
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
         "XiaomiMiMo/MiMo-V2.5": {
           "name": "MiMo-V2.5",
           "status": "deprecated",
@@ -18094,7 +18131,8 @@
           "released": "2025-08-05",
           "rates": {
             "input": "0.037",
-            "output": "0.17"
+            "output": "0.17",
+            "cacheRead": "0.0185"
           },
           "limits": {
             "context": 131072,
@@ -18127,7 +18165,8 @@
           "released": "2025-08-05",
           "rates": {
             "input": "0.03",
-            "output": "0.14"
+            "output": "0.14",
+            "cacheRead": "0.015"
           },
           "limits": {
             "context": 131072,
@@ -26537,6 +26576,31 @@
             "temperature": true
           }
         },
+        "zai-org/GLM-4.5": {
+          "name": "GLM-4.5",
+          "released": "2025-07-28",
+          "rates": {
+            "input": "0.6",
+            "output": "2.2"
+          },
+          "limits": {
+            "context": 131072,
+            "output": 98304
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolCall": true,
+            "temperature": true
+          }
+        },
         "zai-org/GLM-4.5-Air": {
           "name": "GLM-4.5-Air",
           "released": "2025-07-28",
@@ -26602,6 +26666,32 @@
           "modalities": {
             "input": [
               "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolCall": true,
+            "temperature": true
+          }
+        },
+        "zai-org/GLM-4.6V": {
+          "name": "GLM-4.6V",
+          "released": "2025-12-08",
+          "rates": {
+            "input": "0.3",
+            "output": "0.9"
+          },
+          "limits": {
+            "context": 131072,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
             ],
             "output": [
               "text"
@@ -30868,6 +30958,144 @@
           "reasoning": {
             "effort": [
               "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "gpt-6.2-astra": {
+          "name": "GPT-6.2 Astra",
+          "released": "2026-11-17",
+          "rates": {
+            "input": "8",
+            "output": "40",
+            "cacheRead": "0.4",
+            "cacheWrite": "10",
+            "cacheWriteDetails": {
+              "12h": "20"
+            }
+          },
+          "tiers": [
+            {
+              "contextOver": 272000,
+              "rates": {
+                "input": "16",
+                "output": "60",
+                "cacheRead": "0.8",
+                "cacheWrite": "20",
+                "cacheWriteDetails": {
+                  "12h": "40"
+                }
+              }
+            },
+            {
+              "serviceTier": "priority",
+              "rates": {
+                "input": "16",
+                "output": "80",
+                "cacheRead": "0.8",
+                "cacheWrite": "20",
+                "cacheWriteDetails": {
+                  "12h": "40"
+                }
+              }
+            }
+          ],
+          "limits": {
+            "context": 1050000,
+            "input": 922000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "gpt-6.2-sol": {
+          "name": "GPT-6.2 Sol",
+          "released": "2026-11-17",
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1",
+            "cacheWrite": "2.5",
+            "cacheWriteDetails": {
+              "12h": "5"
+            }
+          },
+          "tiers": [
+            {
+              "contextOver": 272000,
+              "rates": {
+                "input": "4",
+                "output": "15",
+                "cacheRead": "0.2",
+                "cacheWrite": "5",
+                "cacheWriteDetails": {
+                  "12h": "10"
+                }
+              }
+            },
+            {
+              "serviceTier": "priority",
+              "rates": {
+                "input": "4",
+                "output": "20",
+                "cacheRead": "0.2",
+                "cacheWrite": "5",
+                "cacheWriteDetails": {
+                  "12h": "10"
+                }
+              }
+            }
+          ],
+          "limits": {
+            "context": 1050000,
+            "input": 922000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": false
+          },
+          "reasoning": {
+            "effort": [
               "low",
               "medium",
               "high",
