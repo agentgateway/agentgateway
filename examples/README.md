@@ -51,6 +51,7 @@ span more than one agentgateway traffic type.
 * [traffic-egress-proxy](traffic-egress-proxy/README.md): use agentgateway as an allowlisted CONNECT egress proxy with dynamic public backends and a fixed in-cluster route.
 * [traffic-a2a](traffic-a2a/README.md): proxy [A2A](https://a2aproject.github.io/A2A/) traffic.
 * [traffic-aws-agentcore](traffic-aws-agentcore/README.md): proxy AWS AgentCore traffic with JWT auth and user-id header forwarding.
+* [traffic-cognito](traffic-cognito/README.md): authenticate requests with Amazon Cognito access tokens and restrict a path to a Cognito group.
 * [traffic-token-exchange](traffic-token-exchange/README.md): exchange inbound user credentials for per-upstream tokens — via `extAuthz` + CEL, the `backendAuth.oauth` RFC 8693 token-exchange grant, or the RFC 7523 JWT bearer grant.
 * [traffic-cross-app-access](traffic-cross-app-access/README.md): use Cross App Access (OAuth Identity Assertion Authorization Grant / ID-JAG) to exchange an authenticated user's identity for a backend-scoped access token — with local Keycloak, xaa.dev, or Okta+Auth0 demos.
 * [traffic-jwt-sign](traffic-jwt-sign/README.md): sign a short-lived JWT with a private key on every backend request, for upstreams like the Snowflake SQL API that require keypair JWTs instead of static credentials.
