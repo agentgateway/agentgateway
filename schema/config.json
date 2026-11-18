@@ -5541,6 +5541,17 @@
     "PromptGuard": {
       "type": "object",
       "properties": {
+        "tokenization": {
+          "description": "Reversible replacement of sensitive text before provider calls.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tokenization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "streaming": {
           "description": "Apply prompt guards to streaming responses and realtime websocket messages.",
           "$ref": "#/$defs/PromptGuardStreamingMode"
@@ -5558,6 +5569,17 @@
           "items": {
             "$ref": "#/$defs/ResponseGuard"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Tokenization": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "description": "Replace standard email addresses in Chat Completions text with request-scoped tokens and restore them in replies, including streams.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false
