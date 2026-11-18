@@ -33,6 +33,7 @@ fn substrate_control_api_wire_tags() {
 		}),
 		audiences: vec!["x".into()],
 		expiration_seconds: 1,
+		client_certificate_sha256: Vec::new(),
 	};
 	assert_eq!(
 		prost::Message::encode_to_vec(&request),

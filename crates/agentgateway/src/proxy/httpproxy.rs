@@ -1407,7 +1407,8 @@ impl HTTPProxy {
 		// has been established. Backend TLS applies to the gateway-to-backend leg.
 		let transport = build_backend_transport(
 			&self.inputs,
-			&backend_call, req
+			&backend_call,
+			req
 				.extensions()
 				.get::<WaypointService>()
 				.is_some()

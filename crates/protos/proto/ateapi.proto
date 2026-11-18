@@ -107,8 +107,7 @@ message ClientCertificateSource {
 message ActorClientCertificateSource {}
 
 message CredentialClientCertificateSource {
-  string certificate_uri = 1;
-  string private_key_uri = 2;
+  string credential_uri = 3;
 }
 
 message TLSPassthroughRule {
@@ -149,6 +148,7 @@ message MintActorJwtRequest {
   ObjectRef actor = 1;
   repeated string audiences = 2;
   int64 expiration_seconds = 3;
+  bytes client_certificate_sha256 = 4;
 }
 
 message MintActorJwtResponse {

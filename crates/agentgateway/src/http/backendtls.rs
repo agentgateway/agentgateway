@@ -19,10 +19,11 @@ use crate::types::agent::{parse_cert, parse_key};
 use crate::types::discovery::Identity;
 use crate::{apply, transport};
 
-/// A client identity fetched for one authorized Substrate egress request.
+/// A client identity selected for authorized Substrate egress requests.
 #[derive(Clone, Debug)]
 pub(crate) struct ClientCertificate {
 	certified_key: Arc<CertifiedKey>,
+	validity: x509_parser::certificate::Validity,
 	pub(crate) fingerprint: [u8; 32],
 }
 
@@ -34,12 +35,15 @@ impl ClientCertificate {
 		)
 	}
 
+	pub(crate) fn from_pem_bundle(pem: &[u8]) -> anyhow::Result<Self> {
+		Self::from_pem(pem, pem)
+	}
+
 	pub(crate) fn from_der(
 		chain: Vec<CertificateDer<'static>>,
 		private_key: PrivateKeyDer<'static>,
 	) -> anyhow::Result<Self> {
 		use sha2::{Digest, Sha256};
-		use x509_parser::extensions::ParsedExtension;
 		use x509_parser::prelude::FromDer;
 
 		let leaf = chain
@@ -58,15 +62,14 @@ impl ClientCertificate {
 		{
 			anyhow::bail!("client certificate leaf is a CA");
 		}
-		let client_auth = leaf.extensions().iter().any(|extension| {
-			matches!(
-				extension.parsed_extension(),
-				ParsedExtension::ExtendedKeyUsage(usage) if usage.client_auth
-			)
-		});
-		if !client_auth {
+		if leaf
+			.extended_key_usage()
+			.map_err(|err| anyhow::anyhow!("invalid extended key usage: {err}"))?
+			.is_some_and(|usage| !usage.value.client_auth)
+		{
 			anyhow::bail!("client certificate leaf does not permit client authentication");
 		}
+		let validity = leaf.validity().clone();
 		let mut hasher = Sha256::new();
 		for certificate in &chain {
 			hasher.update((certificate.as_ref().len() as u64).to_be_bytes());
@@ -79,8 +82,21 @@ impl ClientCertificate {
 		)?);
 		Ok(Self {
 			certified_key,
+			validity,
 			fingerprint: hasher.finalize().into(),
 		})
+	}
+
+	pub(crate) fn is_valid_now(&self) -> bool {
+		self.validity.is_valid()
+	}
+
+	pub(crate) fn validity(&self) -> &x509_parser::certificate::Validity {
+		&self.validity
+	}
+
+	pub(crate) fn leaf_sha256(&self) -> [u8; 32] {
+		crate::crypto::digest::sha256(self.certified_key.cert[0].as_ref())
 	}
 
 	pub(crate) fn apply_to(&self, base: &VersionedBackendTLS) -> VersionedBackendTLS {
@@ -1040,12 +1056,32 @@ mod tests {
 		let pem = certificate.pem();
 		let key_pem = key.serialize_pem();
 
-		let dynamic = ClientCertificate::from_pem(pem.as_bytes(), key_pem.as_bytes()).unwrap();
+		let bundle = format!("{pem}{key_pem}");
+		let dynamic = ClientCertificate::from_pem_bundle(bundle.as_bytes()).unwrap();
 		assert_ne!(dynamic.fingerprint, [0; 32]);
 
 		let other_key = rcgen::KeyPair::generate().unwrap().serialize_pem();
-		assert!(ClientCertificate::from_pem(pem.as_bytes(), other_key.as_bytes()).is_err());
+		assert!(ClientCertificate::from_pem_bundle(format!("{pem}{other_key}").as_bytes()).is_err());
+		assert!(ClientCertificate::from_pem_bundle(pem.as_bytes()).is_err());
+		assert!(ClientCertificate::from_pem_bundle(format!("{bundle}{other_key}").as_bytes()).is_err());
 		assert!(ClientCertificate::from_pem(b"not PEM", key_pem.as_bytes()).is_err());
+	}
+
+	#[test]
+	fn dynamic_client_certificate_allows_absent_extended_key_usage() {
+		for (usages, accepted) in [
+			(vec![], true),
+			(vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth], true),
+			(vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth], false),
+		] {
+			let key = rcgen::KeyPair::generate().unwrap();
+			let mut params = rcgen::CertificateParams::default();
+			params.extended_key_usages = usages.clone();
+			let certificate = params.self_signed(&key).unwrap();
+			let result =
+				ClientCertificate::from_pem(certificate.pem().as_bytes(), key.serialize_pem().as_bytes());
+			assert_eq!(result.is_ok(), accepted, "usages: {usages:?}");
+		}
 	}
 
 	#[test]

@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ::http::{HeaderName, HeaderValue};
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use quick_cache::sync::Cache;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use tonic::Code;
@@ -23,6 +25,7 @@ use crate::{cel, *};
 
 const DEFAULT_CREDENTIAL_CACHE_CAPACITY: usize = 8192;
 const DEFAULT_CREDENTIAL_CACHE_TTL: Duration = Duration::from_secs(300);
+const INVALID_CERTIFICATE_CACHE_TTL: Duration = Duration::from_secs(5);
 const CREDENTIAL_FETCH_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// The inner HTTP transport, independent of the actor's CONNECT transport or URI scheme.
@@ -45,6 +48,9 @@ pub struct SubstrateEgress {
 	#[serde(skip, default = "default_credential_cache")]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	credential_cache: CredentialCache,
+	#[serde(skip, default = "default_credential_cache")]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	certificate_cache: CredentialCache<Result<ClientCertificate, String>>,
 }
 
 /// An inline credential-provider backend selected by credential URI authority.
@@ -68,8 +74,8 @@ pub struct CredentialProvider {
 }
 
 #[derive(Debug, Clone)]
-struct CredentialCache {
-	entries: Arc<Cache<CredentialCacheKey, CachedCredential>>,
+struct CredentialCache<T = Vec<u8>> {
+	entries: Arc<Cache<CredentialCacheKey, CachedCredential<T>>>,
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -80,42 +86,46 @@ struct CredentialCacheKey {
 }
 
 #[derive(Clone)]
-struct CachedCredential {
-	secret: Vec<u8>,
+struct CachedCredential<T> {
+	secret: T,
 	fetched_at: Instant,
+	ttl: Duration,
 }
 
-impl CredentialCache {
+impl<T: Clone> CredentialCache<T> {
 	fn new(capacity: usize) -> Self {
 		Self {
 			entries: Arc::new(Cache::new(capacity)),
 		}
 	}
 
-	fn get(&self, key: &CredentialCacheKey, now: Instant, ttl: Duration) -> Option<Vec<u8>> {
+	fn get(&self, key: &CredentialCacheKey, now: Instant) -> Option<T> {
 		if let Some(entry) = self.entries.get(key) {
-			if now.duration_since(entry.fetched_at) <= ttl {
+			if now.duration_since(entry.fetched_at) < entry.ttl {
 				return Some(entry.secret);
 			}
-			self
-				.entries
-				.remove_if(key, |entry| now.duration_since(entry.fetched_at) > ttl);
+			self.entries.remove_if(key, |entry| {
+				now.duration_since(entry.fetched_at) >= entry.ttl
+			});
 		}
 		None
 	}
 
-	fn insert(&self, key: CredentialCacheKey, secret: Vec<u8>, now: Instant) {
-		self.entries.insert(
-			key,
-			CachedCredential {
-				secret,
-				fetched_at: now,
-			},
-		);
+	fn insert(&self, key: CredentialCacheKey, secret: T, now: Instant, ttl: Duration) {
+		if !ttl.is_zero() {
+			self.entries.insert(
+				key,
+				CachedCredential {
+					secret,
+					fetched_at: now,
+					ttl,
+				},
+			);
+		}
 	}
 }
 
-fn default_credential_cache() -> CredentialCache {
+fn default_credential_cache<T: Clone>() -> CredentialCache<T> {
 	CredentialCache::new(DEFAULT_CREDENTIAL_CACHE_CAPACITY)
 }
 
@@ -151,21 +161,24 @@ impl RequestPolicyTrait for SubstrateEgress {
 			.unwrap_or(hostname);
 		let target = Target::from((hostname, destination.port));
 		req.extensions_mut().insert(DynamicBackendOverride(target));
-		if let Some(source) = matched_rule
+		let binding = if let Some(source) = matched_rule
 			.https
 			.as_ref()
 			.and_then(|rule| rule.upstream_tls.as_ref())
 			.and_then(|tls| tls.client_certificate.as_ref())
 		{
-			let certificate = self
-				.provider_client_certificate(client, &identity, source)
-				.await?;
+			let certificate = self.client_certificate(client, &identity, source).await?;
+			let thumbprint = certificate.leaf_sha256();
 			req.extensions_mut().insert(certificate);
-		}
+			Some(thumbprint)
+		} else {
+			None
+		};
 		self
 			.apply_effects(
 				client,
 				&identity,
+				binding,
 				matched_rule
 					.http
 					.as_ref()
@@ -209,6 +222,7 @@ impl SubstrateEgress {
 		&self,
 		client: &PolicyClient,
 		identity: &ActorIdentity,
+		binding: Option<[u8; 32]>,
 		effects: Option<&protos::ateapi::HttpRuleEffects>,
 		req: &mut Request,
 	) -> Result<(), ProxyError> {
@@ -224,7 +238,7 @@ impl SubstrateEgress {
 					let provider = self.provider_for_uri(uri)?;
 					self.credential(client, identity, provider, uri).await?
 				},
-				("", Some(source)) => self.actor_jwt(client, identity, source).await?,
+				("", Some(source)) => self.actor_jwt(client, identity, source, binding).await?,
 				_ => {
 					return Err(ProxyError::SubstrateEgressDenied(
 						"credential effect must specify exactly one credential source".to_owned(),
@@ -242,21 +256,34 @@ impl SubstrateEgress {
 		client: &PolicyClient,
 		identity: &ActorIdentity,
 		source: &protos::ateapi::ActorJwtSource,
+		binding: Option<[u8; 32]>,
 	) -> Result<Vec<u8>, ProxyError> {
-		let mut audiences = source.audiences.clone();
-		audiences.sort_unstable();
-		let key = CredentialCacheKey {
-			actor_identity: actor_spiffe_uri(&identity.atespace, &identity.actor_name),
-			actor_uid: identity.actor_uid.clone(),
-			uri: format!("actor-jwt:{}:{audiences:?}", source.expiration_seconds),
-		};
-		let ttl = Duration::from_secs(
+		let key = if binding.is_none() || identity.actor_uid.is_some() {
+			let mut audiences = source.audiences.clone();
+			audiences.sort_unstable();
+			let thumbprint = binding
+				.map(|sha256| URL_SAFE_NO_PAD.encode(sha256))
+				.unwrap_or_default();
+			Some(CredentialCacheKey {
+				actor_identity: actor_spiffe_uri(&identity.atespace, &identity.actor_name),
+				actor_uid: identity.actor_uid.clone(),
+				uri: format!(
+					"actor-jwt:{}:{thumbprint}:{audiences:?}",
+					source.expiration_seconds
+				),
+			})
+		} else {
+			None
+		}; let ttl = Duration::from_secs(
 			u64::try_from(source.expiration_seconds)
 				.unwrap_or_default()
 				.saturating_mul(2)
 				/ 3,
 		);
-		if let Some(jwt) = self.credential_cache.get(&key, Instant::now(), ttl) {
+		if let Some(jwt) = key
+			.as_ref()
+			.and_then(|key| self.credential_cache.get(key, Instant::now()))
+		{
 			return Ok(jwt);
 		}
 
@@ -270,6 +297,7 @@ impl SubstrateEgress {
 			}),
 			audiences: source.audiences.clone(),
 			expiration_seconds: source.expiration_seconds,
+			client_certificate_sha256: binding.map_or_else(Vec::new, |sha256| sha256.to_vec()),
 		});
 		let mut span = policy_client.start_grpc_span(
 			&mut request,
@@ -285,7 +313,11 @@ impl SubstrateEgress {
 		drop(span);
 		let response = response.map_err(actor_jwt_error)?.into_inner();
 		let jwt = credential_secret(response.actor_jwt.into_bytes())?;
-		self.credential_cache.insert(key, jwt.clone(), requested_at);
+		if let Some(key) = key {
+			self
+				.credential_cache
+				.insert(key, jwt.clone(), requested_at, ttl);
+		}
 		Ok(jwt)
 	}
 
@@ -303,10 +335,24 @@ impl SubstrateEgress {
 			uri: uri.to_owned(),
 		};
 		let ttl = provider.cache_ttl.unwrap_or(DEFAULT_CREDENTIAL_CACHE_TTL);
-		if let Some(secret) = self.credential_cache.get(&key, Instant::now(), ttl) {
+		if let Some(secret) = self.credential_cache.get(&key, Instant::now()) {
 			return Ok(secret);
 		}
 
+		let secret =
+			credential_secret(Self::fetch_secret(client, provider, uri, actor_identity).await?)?;
+		self
+			.credential_cache
+			.insert(key, secret.clone(), Instant::now(), ttl);
+		Ok(secret)
+	}
+
+	async fn fetch_secret(
+		client: &PolicyClient,
+		provider: &CredentialProvider,
+		uri: &str,
+		actor_identity: String,
+	) -> Result<Vec<u8>, ProxyError> {
 		let policy_client =
 			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
 		let channel = provider.target.grpc_channel(policy_client.clone());
@@ -328,19 +374,15 @@ impl SubstrateEgress {
 			span.record_grpc_result(&response);
 		}
 		drop(span);
-		let response = response
-			.map_err(|status| credential_provider_error(uri, status))?
-			.into_inner();
-		let secret = credential_secret(response.opaque_bytes)?;
-		if !ttl.is_zero() {
-			self
-				.credential_cache
-				.insert(key, secret.clone(), Instant::now());
-		}
-		Ok(secret)
+		Ok(
+			response
+				.map_err(|status| credential_provider_error(uri, status))?
+				.into_inner()
+				.opaque_bytes,
+		)
 	}
 
-	async fn provider_client_certificate(
+	async fn client_certificate(
 		&self,
 		client: &PolicyClient,
 		identity: &ActorIdentity,
@@ -355,24 +397,44 @@ impl SubstrateEgress {
 				"client certificate source is missing".to_owned(),
 			));
 		};
-		let certificate_provider = self.provider_for_uri(&source.certificate_uri)?;
-		let key_provider = self.provider_for_uri(&source.private_key_uri)?;
-		let certificate = self
-			.fetch_pem_secret(
-				client,
-				identity,
-				certificate_provider,
-				&source.certificate_uri,
-			)
-			.await?;
-		let key = self
-			.fetch_pem_secret(client, identity, key_provider, &source.private_key_uri)
-			.await?;
-		ClientCertificate::from_pem(&certificate, &key).map_err(|error| {
-			ProxyError::SubstrateEgressDenied(format!(
-				"credential provider returned an invalid client certificate: {error}"
-			))
-		})
+		let uri = &source.credential_uri;
+		let provider = self.provider_for_uri(uri)?;
+		let actor_identity = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
+		let ttl = provider.cache_ttl.unwrap_or(DEFAULT_CREDENTIAL_CACHE_TTL);
+		let key = identity
+			.actor_uid
+			.as_ref()
+			.filter(|_| !ttl.is_zero())
+			.map(|uid| CredentialCacheKey {
+				actor_identity: actor_identity.clone(),
+				actor_uid: Some(uid.clone()),
+				uri: uri.clone(),
+			});
+		if let Some(cached) = key
+			.as_ref()
+			.and_then(|key| self.certificate_cache.get(key, Instant::now()))
+		{
+			match cached {
+				Ok(cert) if cert.is_valid_now() => return Ok(cert),
+				Err(message) => return Err(ProxyError::SubstrateEgressDenied(message)),
+				Ok(_) => {},
+			}
+		}
+
+		let pem = Self::fetch_secret(client, provider, uri, actor_identity).await?;
+		let result = ClientCertificate::from_pem_bundle(&pem)
+			.map_err(|err| format!("credential provider returned an invalid client certificate: {err}"));
+		if let Some(key) = key {
+			let ttl = if result.is_ok() {
+				ttl
+			} else {
+				ttl.min(INVALID_CERTIFICATE_CACHE_TTL)
+			};
+			self
+				.certificate_cache
+				.insert(key, result.clone(), Instant::now(), ttl);
+		}
+		result.map_err(ProxyError::SubstrateEgressDenied)
 	}
 
 	async fn actor_client_certificate(
@@ -383,6 +445,17 @@ impl SubstrateEgress {
 		let actor_uid = identity.actor_uid.clone().ok_or_else(|| {
 			ProxyError::SubstrateEgressDenied("actor identity is missing a UID".to_owned())
 		})?;
+		let cache_key = CredentialCacheKey {
+			actor_identity: actor_spiffe_uri(&identity.atespace, &identity.actor_name),
+			actor_uid: Some(actor_uid.clone()),
+			uri: "actor-certificate".into(),
+		};
+		if let Some(Ok(cert)) = self.certificate_cache.get(&cache_key, Instant::now())
+			&& cert.is_valid_now()
+		{
+			return Ok(cert);
+		}
+
 		let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).map_err(|error| {
 			ProxyError::SubstrateEgressUnavailable(format!(
 				"could not generate actor client certificate key: {error}"
@@ -424,55 +497,26 @@ impl SubstrateEgress {
 			.map(CertificateDer::from)
 			.collect::<Vec<_>>();
 		validate_actor_client_certificate(&chain, identity, &actor_uid)?;
-		ClientCertificate::from_der(chain, PrivateKeyDer::Pkcs8(key.serialize_der().into())).map_err(
-			|error| {
-				ProxyError::SubstrateEgressDenied(format!(
-					"actor certificate issuer returned an invalid client certificate: {error}"
-				))
-			},
-		)
-	}
-
-	/// Fetches a PEM credential without caching so provider authorization and rotation apply to every request.
-	async fn fetch_pem_secret(
-		&self,
-		client: &PolicyClient,
-		identity: &ActorIdentity,
-		provider: &CredentialProvider,
-		uri: &str,
-	) -> Result<Vec<u8>, ProxyError> {
-		let actor_identity = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
-		let policy_client =
-			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
-		let channel = provider.target.grpc_channel(policy_client.clone());
-		let mut request = tonic::Request::new(protos::credprovider::FetchSecretRequest {
-			uri: uri.to_owned(),
-			actor_spiffe_id: actor_identity,
-		});
-		let mut span = policy_client.start_grpc_span(
-			&mut request,
-			provider.target.target.as_ref(),
-			"/substrate.credprovider.v1.CredentialProvider/FetchSecret",
+		let certificate =
+			ClientCertificate::from_der(chain, PrivateKeyDer::Pkcs8(key.serialize_der().into()))
+				.map_err(|error| {
+					ProxyError::SubstrateEgressDenied(format!(
+						"actor certificate issuer returned an invalid client certificate: {error}"
+					))
+				})?;
+		let now = Instant::now();
+		let validity = certificate.validity();
+		let not_before = validity.not_before.timestamp();
+		let lifetime = validity.not_after.timestamp() - not_before;
+		let refresh_at = not_before + lifetime * 2 / 3;
+		let remaining = refresh_at - x509_parser::time::ASN1Time::now().timestamp();
+		self.certificate_cache.insert(
+			cache_key,
+			Ok(certificate.clone()),
+			now,
+			Duration::from_secs(u64::try_from(remaining).unwrap_or_default()),
 		);
-		let mut provider =
-			protos::credprovider::credential_provider_client::CredentialProviderClient::new(channel);
-		let response = tokio::time::timeout(CREDENTIAL_FETCH_TIMEOUT, provider.fetch_secret(request))
-			.await
-			.unwrap_or_else(|_| Err(tonic::Status::deadline_exceeded("FetchSecret timed out")));
-		if let Some(span) = span.as_deref_mut() {
-			span.record_grpc_result(&response);
-		}
-		drop(span);
-		let secret = response
-			.map_err(|status| credential_provider_error(uri, status))?
-			.into_inner()
-			.opaque_bytes;
-		if secret.is_empty() {
-			return Err(ProxyError::SubstrateEgressDenied(
-				"credential provider returned an empty client certificate secret".to_owned(),
-			));
-		}
-		Ok(secret)
+		Ok(certificate)
 	}
 
 	fn provider_for_uri(&self, uri: &str) -> Result<&CredentialProvider, ProxyError> {
@@ -601,7 +645,9 @@ fn validate_actor_client_certificate(
 		)
 	});
 	if !client_auth {
-		return Err(invalid("actor certificate leaf does not permit client authentication"));
+		return Err(invalid(
+			"actor certificate leaf does not permit client authentication",
+		));
 	}
 	const ACTOR_IDENTITY_OID: &str = "1.3.6.1.4.1.11129.2.12.2";
 	let extensions = leaf
@@ -610,7 +656,9 @@ fn validate_actor_client_certificate(
 		.filter(|extension| extension.oid.to_id_string() == ACTOR_IDENTITY_OID)
 		.collect::<Vec<_>>();
 	if extensions.len() != 1 {
-		return Err(invalid("actor certificate has an invalid identity extension"));
+		return Err(invalid(
+			"actor certificate has an invalid identity extension",
+		));
 	}
 	let extension = extensions[0];
 	let actor: serde_json::Value = serde_json::from_slice(extension.value)
@@ -619,7 +667,9 @@ fn validate_actor_client_certificate(
 		|| actor["ActorName"] != identity.actor_name
 		|| actor["ActorUid"] != actor_uid
 	{
-		return Err(invalid("actor certificate identity does not match the actor"));
+		return Err(invalid(
+			"actor certificate identity does not match the actor",
+		));
 	}
 	Ok(())
 }
@@ -863,16 +913,188 @@ mod tests {
 	use std::net::IpAddr;
 
 	use super::*;
+	use crate::test_helpers::{ateapimock, credprovidermock, policy_client};
 
-	fn minted_actor_certificate(actor_uid: &str) -> (Vec<CertificateDer<'static>>, rcgen::KeyPair) {
-		let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	#[tokio::test]
+	async fn actor_jwt_cache_separates_bearer_and_rotated_certificates() {
+		use std::sync::atomic::{AtomicUsize, Ordering};
+
+		use protos::ateapi::{ActorJwtSource, MintActorJwtRequest, MintActorJwtResponse};
+
+		struct Issuer(Arc<AtomicUsize>);
+
+		#[async_trait::async_trait]
+		impl ateapimock::Handler for Issuer {
+			async fn mint_actor_jwt(
+				&mut self,
+				req: &MintActorJwtRequest,
+			) -> Result<MintActorJwtResponse, tonic::Status> {
+				let call = self.0.fetch_add(1, Ordering::Relaxed);
+				Ok(MintActorJwtResponse {
+					actor_jwt: format!("{call}:{:?}", req.client_certificate_sha256),
+					..Default::default()
+				})
+			}
+		}
+
+		let calls = Arc::new(AtomicUsize::new(0));
+		let api = ateapimock::AteApiMock::new({
+			let calls = calls.clone();
+			move || Issuer(calls.clone())
+		})
+		.spawn()
+		.await;
+		let policy: SubstrateEgress = serde_json::from_value(serde_json::json!({
+			"host": api.address.to_string()
+		}))
+		.unwrap();
+		let client = policy_client();
+		let identity = ActorIdentity {
+			atespace: "demo".into(),
+			actor_name: "my-actor".into(),
+			actor_uid: Some("uid-1".into()),
+		};
+		let source = ActorJwtSource {
+			audiences: vec!["https://api.example.com".into()],
+			expiration_seconds: 900,
+		};
+		let mint = |binding| policy.actor_jwt(&client, &identity, &source, binding);
+		assert_eq!(mint(None).await.unwrap(), b"0:[]");
+		for (call, sha256) in [(1, [1; 32]), (2, [2; 32])] {
+			let binding = Some(sha256);
+			let expected = format!("{call}:{sha256:?}").into_bytes();
+			assert_eq!(mint(binding).await.unwrap(), expected);
+			assert_eq!(mint(binding).await.unwrap(), expected);
+		}
+		assert_eq!(mint(None).await.unwrap(), b"0:[]");
+		assert_eq!(calls.load(Ordering::Relaxed), 3);
+	}
+
+	#[tokio::test]
+	async fn provider_client_certificate_caches_valid_bundles_and_retries_invalid_bundles() {
+		use std::sync::atomic::{AtomicUsize, Ordering};
+
+		use protos::ateapi::client_certificate_source::Source;
+		use protos::ateapi::{ClientCertificateSource, CredentialClientCertificateSource};
+		use protos::credprovider::{FetchSecretRequest, FetchSecretResponse};
+
+		const URI: &str = "ate-secret://kubernetes.io/default/ns/cert/client.pem";
+		const ACTOR: &str = "spiffe://substrate-actor.local/actor/demo/my-actor";
+
+		struct BundleProvider {
+			calls: Arc<AtomicUsize>,
+			pem: Vec<u8>,
+		}
+
+		#[async_trait::async_trait]
+		impl credprovidermock::Handler for BundleProvider {
+			async fn fetch_secret(
+				&mut self,
+				req: &FetchSecretRequest,
+			) -> Result<FetchSecretResponse, tonic::Status> {
+				assert_eq!(req.uri, URI);
+				assert_eq!(req.actor_spiffe_id, ACTOR);
+				let call = self.calls.fetch_add(1, Ordering::Relaxed);
+				Ok(FetchSecretResponse {
+					opaque_bytes: if call == 0 {
+						Vec::new()
+					} else {
+						self.pem.clone()
+					},
+				})
+			}
+		}
+
+		let key = rcgen::KeyPair::generate().unwrap();
+		let cert = rcgen::CertificateParams::default()
+			.self_signed(&key)
+			.unwrap();
+		let pem = format!("{}{}", cert.pem(), key.serialize_pem()).into_bytes();
+		let calls = Arc::new(AtomicUsize::new(0));
+		let provider = credprovidermock::CredentialProviderMock::new({
+			let calls = calls.clone();
+			move || BundleProvider {
+				calls: calls.clone(),
+				pem: pem.clone(),
+			}
+		})
+		.spawn()
+		.await;
+
+		let policy: SubstrateEgress = serde_json::from_value(serde_json::json!({
+			"host": provider.address.to_string(),
+			"credentialProviders": [{
+				"uriAuthority": "kubernetes.io",
+				"target": { "host": provider.address.to_string() }
+			}]
+		}))
+		.unwrap();
+		let client = policy_client();
+		let identity = ActorIdentity {
+			atespace: "demo".into(),
+			actor_name: "my-actor".into(),
+			actor_uid: Some("uid-1".into()),
+		};
+		let source = ClientCertificateSource {
+			source: Some(Source::Credential(CredentialClientCertificateSource {
+				credential_uri: URI.into(),
+			})),
+		};
+		let fetch = || policy.client_certificate(&client, &identity, &source);
+		assert!(matches!(
+			fetch().await,
+			Err(ProxyError::SubstrateEgressDenied(_))
+		));
+		assert!(matches!(
+			fetch().await,
+			Err(ProxyError::SubstrateEgressDenied(_))
+		));
+		assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+		let cache_key = CredentialCacheKey {
+			actor_identity: ACTOR.into(),
+			actor_uid: identity.actor_uid.clone(),
+			uri: URI.into(),
+		};
+		assert!(
+			policy
+				.certificate_cache
+				.get(&cache_key, Instant::now() + Duration::from_secs(5))
+				.is_none()
+		);
+		let cert = fetch().await.unwrap();
+		assert_eq!(fetch().await.unwrap().fingerprint, cert.fingerprint);
+		assert_eq!(calls.load(Ordering::Relaxed), 2);
+		assert!(
+			policy
+				.certificate_cache
+				.get(&cache_key, Instant::now() + Duration::from_secs(5))
+				.is_some()
+		);
+
+		let mut uncached = policy.clone();
+		uncached.credential_providers[0].cache_ttl = Some(Duration::ZERO);
+		uncached
+			.client_certificate(&client, &identity, &source)
+			.await
+			.unwrap();
+		uncached
+			.client_certificate(&client, &identity, &source)
+			.await
+			.unwrap();
+		assert_eq!(calls.load(Ordering::Relaxed), 4);
+	}
+
+	fn actor_certificate_params(actor_uid: &str, client_auth: bool) -> rcgen::CertificateParams {
 		let mut params = rcgen::CertificateParams::default();
 		params.subject_alt_names.push(rcgen::SanType::URI(
 			"spiffe://substrate-actor.local/actor/demo/my-actor"
 				.try_into()
 				.unwrap(),
 		));
-		params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+		if client_auth {
+			params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+		}
 		params
 			.custom_extensions
 			.push(rcgen::CustomExtension::from_oid_content(
@@ -885,8 +1107,102 @@ mod tests {
 				.to_string()
 				.into_bytes(),
 			));
-		let certificate = params.self_signed(&key).unwrap();
+		params
+	}
+
+	fn minted_actor_certificate(
+		actor_uid: &str,
+		client_auth: bool,
+	) -> (Vec<CertificateDer<'static>>, rcgen::KeyPair) {
+		let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+		let certificate = actor_certificate_params(actor_uid, client_auth)
+			.self_signed(&key)
+			.unwrap();
 		(vec![CertificateDer::from(certificate.der().to_vec())], key)
+	}
+
+	#[tokio::test]
+	async fn actor_client_certificate_cache_refreshes_at_two_thirds_and_separates_uids() {
+		use std::sync::atomic::{AtomicUsize, Ordering};
+
+		use protos::ateapi::{MintActorCertificateRequest, MintActorCertificateResponse};
+
+		struct Issuer(Arc<AtomicUsize>);
+
+		#[async_trait::async_trait]
+		impl ateapimock::Handler for Issuer {
+			async fn mint_actor_certificate(
+				&mut self,
+				req: &MintActorCertificateRequest,
+			) -> Result<MintActorCertificateResponse, tonic::Status> {
+				self.0.fetch_add(1, Ordering::Relaxed);
+				let mut csr = rcgen::CertificateSigningRequestParams::from_der(
+					&req.certificate_signing_request.as_slice().into(),
+				)
+				.unwrap();
+				csr.params = actor_certificate_params(&req.actor_uid, true);
+				csr.params.not_before = std::time::SystemTime::now().into();
+				csr.params.not_after = csr.params.not_before + Duration::from_secs(3600);
+				let issuer = rcgen::Issuer::new(
+					rcgen::CertificateParams::default(),
+					rcgen::KeyPair::generate().unwrap(),
+				);
+				let cert = csr.signed_by(&issuer).unwrap();
+				Ok(MintActorCertificateResponse {
+					actor_certificates: vec![cert.der().to_vec()],
+				})
+			}
+		}
+
+		let calls = Arc::new(AtomicUsize::new(0));
+		let api = ateapimock::AteApiMock::new({
+			let calls = calls.clone();
+			move || Issuer(calls.clone())
+		})
+		.spawn()
+		.await;
+		let policy: SubstrateEgress = serde_json::from_value(serde_json::json!({
+			"host": api.address.to_string()
+		}))
+		.unwrap();
+		let client = policy_client();
+		let identity = ActorIdentity {
+			atespace: "demo".into(),
+			actor_name: "my-actor".into(),
+			actor_uid: Some("uid-1".into()),
+		};
+		let fetch = |identity| policy.actor_client_certificate(&client, identity);
+		let first = fetch(&identity).await.unwrap().leaf_sha256();
+		assert_eq!(fetch(&identity).await.unwrap().leaf_sha256(), first);
+		assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+		let recreated = ActorIdentity {
+			actor_uid: Some("uid-2".into()),
+			..identity.clone()
+		};
+		assert_ne!(fetch(&recreated).await.unwrap().leaf_sha256(), first);
+		assert_eq!(calls.load(Ordering::Relaxed), 2);
+
+		let cache_key = CredentialCacheKey {
+			actor_identity: actor_spiffe_uri(&identity.atespace, &identity.actor_name),
+			actor_uid: identity.actor_uid.clone(),
+			uri: "actor-certificate".into(),
+		};
+		let now = Instant::now();
+		assert!(
+			policy
+				.certificate_cache
+				.get(&cache_key, now + Duration::from_secs(39 * 60))
+				.is_some()
+		);
+		assert!(
+			policy
+				.certificate_cache
+				.get(&cache_key, now + Duration::from_secs(41 * 60))
+				.is_none()
+		);
+		assert_ne!(fetch(&identity).await.unwrap().leaf_sha256(), first);
+		assert_eq!(calls.load(Ordering::Relaxed), 3);
 	}
 
 	#[test]
@@ -896,11 +1212,13 @@ mod tests {
 			actor_name: "my-actor".to_owned(),
 			actor_uid: Some("uid-1".to_owned()),
 		};
-		let (chain, key) = minted_actor_certificate("uid-1");
+		let (chain, key) = minted_actor_certificate("uid-1", true);
 		validate_actor_client_certificate(&chain, &identity, "uid-1").unwrap();
 		ClientCertificate::from_der(chain, PrivateKeyDer::Pkcs8(key.serialize_der().into())).unwrap();
 
-		let (chain, _) = minted_actor_certificate("other-uid");
+		let (chain, _) = minted_actor_certificate("other-uid", true);
+		assert!(validate_actor_client_certificate(&chain, &identity, "uid-1").is_err());
+		let (chain, _) = minted_actor_certificate("uid-1", false);
 		assert!(validate_actor_client_certificate(&chain, &identity, "uid-1").is_err());
 	}
 
@@ -1313,15 +1631,17 @@ mod tests {
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		let now = Instant::now();
-		cache.insert(key.clone(), b"token".to_vec(), now);
-		assert_eq!(
-			cache.get(&key, now, DEFAULT_CREDENTIAL_CACHE_TTL),
-			Some(b"token".to_vec())
+		cache.insert(
+			key.clone(),
+			b"token".to_vec(),
+			now,
+			DEFAULT_CREDENTIAL_CACHE_TTL,
 		);
+		assert_eq!(cache.get(&key, now), Some(b"token".to_vec()));
+		assert_eq!(cache.get(&key, now + DEFAULT_CREDENTIAL_CACHE_TTL), None);
 
-		let stale_at = now - DEFAULT_CREDENTIAL_CACHE_TTL - Duration::from_secs(1);
-		cache.insert(key.clone(), b"stale".to_vec(), stale_at);
-		assert_eq!(cache.get(&key, now, DEFAULT_CREDENTIAL_CACHE_TTL), None);
+		cache.insert(key.clone(), b"uncached".to_vec(), now, Duration::ZERO);
+		assert_eq!(cache.get(&key, now), None);
 	}
 
 	#[test]
@@ -1333,7 +1653,12 @@ mod tests {
 			actor_uid: Some("uid-1".to_owned()),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
-		cache.insert(key.clone(), b"one".to_vec(), now);
+		cache.insert(
+			key.clone(),
+			b"one".to_vec(),
+			now,
+			DEFAULT_CREDENTIAL_CACHE_TTL,
+		);
 
 		let another_actor = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/actor/default/two".to_owned(),
@@ -1347,18 +1672,9 @@ mod tests {
 			actor_uid: Some("uid-2".to_owned()),
 			..key
 		};
-		assert_eq!(
-			cache.get(&another_actor, now, DEFAULT_CREDENTIAL_CACHE_TTL),
-			None
-		);
-		assert_eq!(
-			cache.get(&another_uri, now, DEFAULT_CREDENTIAL_CACHE_TTL),
-			None
-		);
-		assert_eq!(
-			cache.get(&another_uid, now, DEFAULT_CREDENTIAL_CACHE_TTL),
-			None
-		);
+		assert_eq!(cache.get(&another_actor, now), None);
+		assert_eq!(cache.get(&another_uri, now), None);
+		assert_eq!(cache.get(&another_uid, now), None);
 	}
 
 	#[test]
