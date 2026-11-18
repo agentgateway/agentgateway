@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
+	fileLlmResources,
 	mockGateway,
 	mockXdsGateway,
 	populatedConfig,
@@ -297,6 +298,7 @@ test('raw configuration lists hybrid database resources with masked keys', async
 						kind: 'llm.model',
 						id: 'model-id',
 						value: { id: 'model-id', name: 'test-model' },
+						source: 'database',
 						revision: 2,
 						createdAt: '2026-07-10T00:00:00Z',
 						updatedAt: '2026-07-10T01:00:00Z'
@@ -312,6 +314,7 @@ test('raw configuration lists hybrid database resources with masked keys', async
 								name: 'Test key'
 							}
 						},
+						source: 'database',
 						revision: 1,
 						createdAt: '2026-07-10T00:00:00Z',
 						updatedAt: '2026-07-10T01:00:00Z'
@@ -986,6 +989,7 @@ test('hybrid model edits use the unified resource API', async ({ page }) => {
 			provider: 'openai',
 			params: { model: 'gpt-db' }
 		},
+		source: 'database',
 		revision: 1,
 		createdAt: '2026-07-10T00:00:00Z',
 		updatedAt: '2026-07-10T00:00:00Z'
@@ -1019,10 +1023,15 @@ test('hybrid model edits use the unified resource API', async ({ page }) => {
 	);
 	await page.route('**/api/config/resources**', async route => {
 		if (route.request().method() === 'GET') {
+			const kind = new URL(route.request().url()).pathname.split('/').at(-1);
+			const filter = kind === 'resources' ? undefined : kind;
+			const resources = fileLlmResources(config, filter);
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
-				body: JSON.stringify({ resources: [dbResource] })
+				body: JSON.stringify({
+					resources: !filter || filter === dbResource.kind ? [...resources, dbResource] : resources
+				})
 			});
 			return;
 		}
@@ -1055,7 +1064,7 @@ test('hybrid model edits use the unified resource API', async ({ page }) => {
 	await page.getByLabel('Incoming model match').fill('file-model-renamed');
 	await page.getByRole('button', { name: 'View diff' }).click();
 	const diffDrawer = page.locator('.drawer.nested');
-	await expect(diffDrawer.getByRole('heading', { name: 'Model config diff' })).toBeVisible();
+	await expect(diffDrawer.getByRole('heading', { name: 'Model resource diff' })).toBeVisible();
 	await expect(diffDrawer.getByRole('button', { name: 'Save' })).toBeDisabled();
 	expect(resourceWrites).toHaveLength(0);
 	await diffDrawer.getByRole('button', { name: 'Close' }).first().click();
@@ -1103,6 +1112,7 @@ test('database-backed MCP servers are available across hybrid UI pages', async (
 				name: 'db-weather',
 				mcp: { host: 'http://weather.example/mcp' }
 			},
+			source: 'database',
 			revision: 1,
 			createdAt: '2026-07-23T00:00:00Z',
 			updatedAt: '2026-07-23T00:00:00Z'
@@ -1111,6 +1121,7 @@ test('database-backed MCP servers are available across hybrid UI pages', async (
 			kind: 'mcp.settings',
 			id: 'default',
 			value: { port: 3000 },
+			source: 'database',
 			revision: 1,
 			createdAt: '2026-07-23T00:00:00Z',
 			updatedAt: '2026-07-23T00:00:00Z'
@@ -1441,6 +1452,7 @@ test('new hybrid traffic gateways save as database resources', async ({ page }) 
 			kind: 'traffic.gateway',
 			id: 'db-public',
 			value: { name: 'db-public', port: 8080 },
+			source: 'database',
 			revision: 1,
 			createdAt: '2026-07-23T00:00:00Z',
 			updatedAt: '2026-07-23T00:00:00Z'
@@ -1523,6 +1535,7 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 			kind: 'ui.policy',
 			id: 'oidc',
 			value: { issuer: 'https://idp.example.com' },
+			source: 'database',
 			revision: 1,
 			createdAt: '2026-07-23T00:00:00Z',
 			updatedAt: '2026-07-23T00:00:00Z'
@@ -1531,6 +1544,7 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 			kind: 'llm.policy',
 			id: 'apiKey',
 			value: { mode: 'optional' },
+			source: 'database',
 			revision: 1,
 			createdAt: '2026-07-23T00:00:00Z',
 			updatedAt: '2026-07-23T00:00:00Z'
@@ -1586,6 +1600,7 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 				kind,
 				id,
 				value,
+				source: 'database',
 				revision: 1,
 				createdAt: '2026-07-23T00:00:00Z',
 				updatedAt: '2026-07-23T00:00:00Z'

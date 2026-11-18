@@ -21,23 +21,31 @@ import {
 	isDatabaseConfigResource,
 	makeEmptyLlmProvider,
 	providerDisplayName,
-	providerLabel,
-	upsertLlmProvider
+	providerLabel
 } from '@/config';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import {
 	resetFinishedSaves,
+	useConfigResourcesByKind,
 	useDeleteConfigResource,
-	useLlmConfigData,
+	useRuntimeInfo,
 	useUpsertConfigResource
 } from '@/hooks';
 import { ProviderConfigEditor } from '@/pages/models/ProviderConfigEditor';
 import { cleanEmpty } from '@/policies/policyUtils';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
-import type { GatewayConfig, LlmModel, LlmProvider, ProviderName } from '@/types';
+import type { LlmModel, LlmProvider, ProviderName } from '@/types';
 
 export function ProvidersPage() {
-	const { config, hybrid, resources, models, providers, isLoading, error } = useLlmConfigData();
+	const runtime = useRuntimeInfo();
+	const hybrid = runtime.data?.ui.configStoreMode === 'hybrid';
+	const providerQuery = useConfigResourcesByKind('llm.provider');
+	const modelQuery = useConfigResourcesByKind('llm.model');
+	const resources = providerQuery.data?.resources;
+	const providers = resources?.map(resource => resource.value) ?? [];
+	const models = modelQuery.data?.resources.map(resource => resource.value) ?? [];
+	const isLoading = runtime.isLoading || providerQuery.isLoading || modelQuery.isLoading;
+	const error = runtime.error ?? providerQuery.error ?? modelQuery.error;
 	const upsertResource = useUpsertConfigResource();
 	const deleteResource = useDeleteConfigResource();
 	const help = useSchemaHelp();
@@ -253,7 +261,6 @@ export function ProvidersPage() {
 				<ProviderEditor
 					key={activeEditing.previousName ?? 'new'}
 					initial={activeEditing.provider}
-					config={config.data}
 					databaseBacked={editingDatabaseProvider}
 					previousName={activeEditing.previousName}
 					help={help}
@@ -283,7 +290,6 @@ export function ProvidersPage() {
 
 function ProviderEditor(props: {
 	initial: LlmProvider;
-	config?: GatewayConfig;
 	databaseBacked: boolean;
 	previousName?: string;
 	help: SchemaHelp;
@@ -336,22 +342,17 @@ function ProviderEditor(props: {
 			}}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
-					config={props.config}
-					resourceDiff={
-						props.databaseBacked
-							? {
-									original: props.previousName ? props.initial : {},
-									modified: preview ?? {}
-								}
-							: undefined
-					}
-					diffTitle={props.databaseBacked ? 'Provider resource diff' : 'Provider config diff'}
+					allowHybridWrite={props.databaseBacked}
+					resourceDiff={{
+						original: props.previousName ? props.initial : {},
+						modified: preview ?? {}
+					}}
+					diffTitle="Provider resource diff"
 					saveLabel="Save provider"
 					saving={props.saving}
 					onCancel={requestClose}
 					onSave={save}
 					beforeDiff={validateBeforeDiff}
-					applyDiff={next => upsertLlmProvider(next, preview ?? provider, props.previousName)}
 				/>
 			)}
 		>
