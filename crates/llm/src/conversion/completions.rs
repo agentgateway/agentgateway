@@ -13,35 +13,6 @@ use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
 #[path = "completions_tests.rs"]
 mod tests;
 
-/// Parse a Google error response, handling both single object and array-wrapped formats.
-/// Google's OpenAI-compatible endpoints consistently return `[{"error": {...}}]`
-/// rather than `{"error": {...}}` when using the Vertex AI shim.
-pub(crate) fn parse_google_error(
-	bytes: &Bytes,
-) -> Result<types::completions::typed::GoogleErrorResponse, crate::AIError> {
-	serde_json::from_slice::<types::completions::typed::GoogleErrorResponse>(bytes).or_else(|_| {
-		serde_json::from_slice::<Vec<types::completions::typed::GoogleErrorResponse>>(bytes)
-			.map_err(logged_response_parsing(bytes))?
-			.into_iter()
-			.next()
-			.ok_or_else(|| {
-				crate::AIError::InvalidResponse(agent_core::strng::literal!(
-					"error response missing error details"
-				))
-			})
-	})
-}
-
-pub(crate) fn google_error_type(error: &types::completions::typed::GoogleError) -> &'static str {
-	match error.status.as_deref() {
-		Some("INVALID_ARGUMENT") | Some("FAILED_PRECONDITION") => "invalid_request_error",
-		Some("NOT_FOUND") => "not_found_error",
-		Some("PERMISSION_DENIED") | Some("UNAUTHENTICATED") => "authentication_error",
-		Some("RESOURCE_EXHAUSTED") => "rate_limit_error",
-		_ => "api_error",
-	}
-}
-
 pub(crate) fn parse_chat_completion_error(
 	bytes: &Bytes,
 ) -> Result<types::completions::typed::ChatCompletionErrorResponse, crate::AIError> {
@@ -51,11 +22,11 @@ pub(crate) fn parse_chat_completion_error(
 
 /// Translate a Google error response into an OpenAI Chat Completions error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, crate::AIError> {
-	let res = parse_google_error(bytes)?;
+	let res = super::gemini::parse_google_error(bytes)?;
 	let m = types::completions::typed::ChatCompletionErrorResponse {
 		event_id: None,
 		error: types::completions::typed::ChatCompletionError {
-			r#type: Some(google_error_type(&res.error).to_string()),
+			r#type: Some(super::gemini::google_error_type(res.error.status.as_deref()).to_string()),
 			message: res.error.message.clone(),
 			param: None,
 			code: res.error.status.clone().map(serde_json::Value::String),

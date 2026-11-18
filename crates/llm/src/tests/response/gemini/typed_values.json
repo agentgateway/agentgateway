@@ -1,0 +1,9 @@
+{
+  "answers": {
+    "q_3": {"type": "score", "score": 1.8, "probabilities": {"2": 0.85, "1": 0.1, "0": 0.05}, "confidence": 0.85},
+    "q_2": {"type": "choice", "choice": "o_002", "probabilities": {"o_002": 0.7, "o_001": 0.1, "o_000": 0.15, "o_003": 0.05}, "confidence": 0.7},
+    "q_1": {"type": "noul", "noul": 0.9, "confidence": 0.9},
+    "q_0": {"type": "noul", "noul": 0.99, "confidence": 0.99}
+  },
+  "usage": {"total_input_tokens": 200, "total_output_tokens": 0}
+}

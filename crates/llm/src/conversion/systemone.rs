@@ -27,26 +27,7 @@ pub mod from_decisions {
 	pub fn translate(req: &decisions::Request) -> Result<(Vec<u8>, State), AIError> {
 		let req = json::convert::<_, d::DecisionRequest>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Decisions, err))?;
-		let state = match req.input {
-			d::DecisionInput::Text(text) => serde_json::Value::String(text),
-			d::DecisionInput::Messages(items) => items
-				.into_iter()
-				.map(|d::DecisionInputItem::Message(m)| {
-					let content = match m.content {
-						d::DecisionInputContent::Text(text) => text,
-						d::DecisionInputContent::Parts(parts) => parts
-							.into_iter()
-							.map(|part| match part {
-								d::DecisionInputContentPart::InputText(t) => Ok(t.text),
-								d::DecisionInputContentPart::InputImage(_) => Err(AIError::UnsupportedContent),
-							})
-							.collect::<Result<Vec<_>, _>>()?
-							.join("\n"),
-					};
-					Ok(serde_json::json!({"role": m.role, "content": content}))
-				})
-				.collect::<Result<_, AIError>>()?,
-		};
+		let state = super::super::decisions_input_value(req.input)?;
 		let translated = req
 			.questions
 			.into_iter()
@@ -232,6 +213,7 @@ pub mod from_systemone {
 	use async_openai::types::decisions as d;
 	use indexmap::IndexMap;
 
+	use crate::conversion::value_text as text;
 	use crate::types::systemone::{Request, typed as systemone};
 	use crate::{AIError, json};
 
@@ -240,13 +222,6 @@ pub mod from_systemone {
 	pub struct State {
 		/// Score criteria, by question key, to rebuild the legend.
 		legends: HashMap<String, Vec<serde_json::Value>>,
-	}
-
-	fn text(v: serde_json::Value) -> String {
-		match v {
-			serde_json::Value::String(s) => s,
-			v => v.to_string(),
-		}
 	}
 
 	pub fn translate(req: &Request) -> Result<(Vec<u8>, State), AIError> {
