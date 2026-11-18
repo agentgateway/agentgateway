@@ -531,18 +531,25 @@
         },
         "serviceTier": {
           "description": "The service tier the provider served the request under.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "enum": [
-            "standard",
-            "flex",
-            "priority",
-            "reserved",
-            "ultrafast",
-            "fast",
-            null
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "standard",
+                    "flex",
+                    "priority",
+                    "reserved",
+                    "ultrafast",
+                    "fast"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "timeToFirstToken": {

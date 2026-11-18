@@ -42,7 +42,9 @@ impl Catalog {
 			.values_mut()
 			.flat_map(|p| p.models.values_mut())
 		{
-			m.tiers.retain(|t| t.unknown.is_empty());
+			m.tiers.retain(|t| {
+				t.unknown.is_empty() && !matches!(t.service_tier.as_ref(), Some(PricingTier::Unknown(_)))
+			});
 		}
 		self.check(false)
 	}
@@ -79,6 +81,11 @@ impl Catalog {
 				}
 				let mut previous = BTreeMap::new();
 				for (index, tier) in pricing.tiers.iter().enumerate() {
+					if strict && let Some(PricingTier::Unknown(value)) = &tier.service_tier {
+						anyhow::bail!(
+							"{provider}/{model} tier {index}: unrecognized serviceTier value {value:?}"
+						);
+					}
 					reject_unknown(
 						&format_args!("{provider}/{model} tier {index}"),
 						&tier.unknown,
@@ -87,7 +94,7 @@ impl Catalog {
 						&format_args!("{provider}/{model} tier {index} rates"),
 						&tier.rates.unknown,
 					)?;
-					if let Some(prior) = previous.insert(tier.service_tier, tier.context_over)
+					if let Some(prior) = previous.insert(tier.service_tier.as_ref(), tier.context_over)
 						&& tier.context_over <= prior
 					{
 						anyhow::bail!(
@@ -616,17 +623,15 @@ impl Model {
 	#[cfg(test)]
 	pub fn breakdown(&self, usage: &Usage) -> Breakdown {
 		self
-			.effective_rates(usage.context_tokens(), PricingTier::Standard)
+			.effective_rates(usage.context_tokens(), &PricingTier::Standard)
 			.breakdown(usage)
 	}
 
-	pub(super) fn effective_rates(&self, context_tokens: u64, service_tier: PricingTier) -> Rates {
-		let select = |service_tier: Option<PricingTier>| {
-			self
-				.tiers
-				.iter()
-				.rev()
-				.find(|tier| tier.service_tier == service_tier && context_tokens > tier.context_over)
+	pub(super) fn effective_rates(&self, context_tokens: u64, service_tier: &PricingTier) -> Rates {
+		let select = |service_tier: Option<&PricingTier>| {
+			self.tiers.iter().rev().find(|tier| {
+				tier.service_tier.as_ref() == service_tier && context_tokens > tier.context_over
+			})
 		};
 		// Service-tier rates overlay the context tier, so components a service tier omits use the
 		// context-appropriate standard rate.
@@ -715,7 +720,7 @@ mod tests {
 		assert!(
 			!mini
 				.unwrap()
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty(),
 			"and is priced"
 		);
@@ -834,6 +839,42 @@ mod tests {
 		catalog.validate_newer().unwrap();
 		let expected = from_json(
 			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[{"contextOver":100,"rates":{"input":"3"}}]}}}}}"#,
+		)
+		.unwrap();
+		assert_eq!(
+			serde_json::to_value(&catalog).unwrap(),
+			serde_json::to_value(&expected).unwrap()
+		);
+	}
+
+	#[test]
+	fn newer_catalog_drops_tiers_with_unknown_service_tier() {
+		let json = r#"{"providers":{"openai":{"models":{"m":{
+			"rates":{"input":"1"},
+			"tiers":[
+				{"serviceTier":"flex","rates":{"input":"0.5"}},
+				{"serviceTier":"future","rates":{"input":"9"}}
+			]}}}}}"#;
+		assert_eq!(
+			from_json(json).unwrap_err().to_string(),
+			r#"openai/m tier 1: unrecognized serviceTier value "future""#
+		);
+		let mut catalog: Catalog = serde_json::from_str(json).unwrap();
+		let tier = &catalog.providers["openai"].models["m"].tiers[1];
+		assert_eq!(
+			tier.service_tier,
+			Some(PricingTier::Unknown("future".to_string()))
+		);
+		assert_eq!(serde_json::to_value(tier).unwrap()["serviceTier"], "future");
+		for value in ["42", "true", "{}", "[]"] {
+			assert!(
+				serde_json::from_str::<Tier>(&format!(r#"{{"serviceTier":{value},"rates":{{}}}}"#))
+					.is_err()
+			);
+		}
+		catalog.validate_newer().unwrap();
+		let expected = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[{"serviceTier":"flex","rates":{"input":"0.5"}}]}}}}}"#,
 		)
 		.unwrap();
 		assert_eq!(
@@ -1114,30 +1155,30 @@ mod tests {
 		};
 		assert!(
 			entry(Rates::default(), vec![])
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty()
 		);
 		assert!(
 			!entry(input_rate.clone(), vec![])
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty()
 		);
 
 		let tier_only = entry(Rates::default(), vec![tier(100_000, input_rate)]);
 		assert!(
 			tier_only
-				.effective_rates(100_000, PricingTier::Standard)
+				.effective_rates(100_000, &PricingTier::Standard)
 				.is_empty()
 		);
 		assert!(
 			!tier_only
-				.effective_rates(100_001, PricingTier::Standard)
+				.effective_rates(100_001, &PricingTier::Standard)
 				.is_empty()
 		);
 
 		assert!(
 			entry(Rates::default(), vec![tier(100_000, Rates::default())])
-				.effective_rates(100_001, PricingTier::Standard)
+				.effective_rates(100_001, &PricingTier::Standard)
 				.is_empty()
 		);
 	}
