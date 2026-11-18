@@ -74,6 +74,7 @@ export const providerNames: ProviderName[] = [
 	'meta',
 	'perplexity',
 	'nebius',
+	'coreweave',
 	'custom'
 ];
 
@@ -129,6 +130,7 @@ export function providerDisplayName(provider: ProviderName | string): string {
 		meta: 'Meta',
 		perplexity: 'Perplexity',
 		nebius: 'Nebius Token Factory',
+		coreweave: 'CoreWeave Serverless Inference',
 		custom: 'Custom'
 	};
 	return names[provider] ?? provider;

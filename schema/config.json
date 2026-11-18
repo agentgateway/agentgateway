@@ -12948,7 +12948,8 @@
         "meta",
         "perplexity",
         "typesafe",
-        "nebius"
+        "nebius",
+        "coreweave"
       ]
     },
     "LocalLLMProviderDefaults": {

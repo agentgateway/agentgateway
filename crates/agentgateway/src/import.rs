@@ -1557,6 +1557,7 @@ fn map_provider(provider: &str) -> Option<&'static str> {
 		"fireworks_ai" | "fireworks" => Some("fireworks"),
 		"perplexity" => Some("perplexity"),
 		"nebius" => Some("nebius"),
+		"wandb" | "coreweave" => Some("coreweave"),
 		_ => None,
 	}
 }
