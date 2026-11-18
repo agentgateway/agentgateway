@@ -295,6 +295,12 @@ opt-level = 1
 [profile.dev.package.libsqlite3-sys]
 opt-level = 1
 
+[profile.dev.package.agentgateway]
+# Keep file/line backtraces with less debug-info generation.
+debug = "line-tables-only"
+# Smaller units reduce the amount of LLVM work after a local edit.
+codegen-units = 2048
+
 # Keep file/line backtraces while reducing test code generation.
 [profile.test.package.agentgateway]
 debug = "line-tables-only"
