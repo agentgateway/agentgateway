@@ -740,7 +740,7 @@ static SDK_CONFIG: OnceCell<SdkConfig> = OnceCell::const_new();
 async fn sdk_config<'a>(client: &client::Client) -> &'a SdkConfig {
 	SDK_CONFIG
 		.get_or_init(|| async {
-			aws_config::defaults(BehaviorVersion::v2026_01_12())
+			aws_config::defaults(BehaviorVersion::v2026_11_17())
 				.http_client(client.clone())
 				.load()
 				.await
