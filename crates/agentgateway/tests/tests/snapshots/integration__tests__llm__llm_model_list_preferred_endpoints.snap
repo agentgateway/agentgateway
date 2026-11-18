@@ -42,9 +42,7 @@ expression: endpoints
     "/models/{model}:generateContent"
   ],
   "gemini-2.5-flash-image": null,
-  "gemini-decision-1": [
-    "/decisions"
-  ],
+  "gemini-decision-1": null,
   "gpt-5.5": [
     "/chat/completions",
     "/responses"
