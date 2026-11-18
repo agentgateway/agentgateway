@@ -313,6 +313,23 @@ func (p *GoogleModelArmorPolicy) BackendSimple() *BackendSimple {
 	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
 }
 
+// PromptGuardPolicy configures calls to a prompt guard provider.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type PromptGuardPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to the prompt guard provider.
+	// +optional
+	Auth *PromptGuardAuth `json:"auth,omitempty"`
+}
+
+func (p *PromptGuardPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
 type Health struct {
 	// CEL expression that determines whether a response indicates an unhealthy backend.
 	// When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
@@ -1867,6 +1884,57 @@ func (a *GoogleModelArmorAuth) BackendAuth() *BackendAuth {
 	}
 	return &BackendAuth{
 		GCP: a.GCP,
+	}
+}
+
+// PromptGuardAuth configures credentials for prompt guard provider requests.
+// Which methods are supported depends on the guard:
+//   - `openAIModeration`: `key` or `secretRef`.
+//   - `bedrockGuardrails`: `key`, `secretRef`, or `aws`.
+//   - `googleModelArmor`: `gcp`.
+//
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;aws;gcp
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) : true",message="location may only be set for key or secretRef auth"
+type PromptGuardAuth struct {
+	// Inline key. This option is the least secure; usage of a `Secret` is
+	// preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the key, defaulting to a Kubernetes `Secret`. By
+	// default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where keys are inserted. Defaults to the `Authorization` header with the
+	// `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+
+	// AWS authentication method. Use `aws: {}` for default AWS SDK credential
+	// discovery.
+	// +optional
+	AWS *AwsAuth `json:"aws,omitempty"`
+
+	// Google authentication method. Use `gcp: {}` for default Google
+	// credential discovery.
+	// +optional
+	GCP *GcpAuth `json:"gcp,omitempty"`
+}
+
+func (a *PromptGuardAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		Location:  a.Location,
+		AWS:       a.AWS,
+		GCP:       a.GCP,
 	}
 }
 

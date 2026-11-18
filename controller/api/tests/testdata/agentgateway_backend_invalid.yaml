@@ -69,10 +69,10 @@ spec:
       ai:
         promptGuard:
           request:
-          - openAIModeration:
-              policies:
-                auth:
-                  oauthTokenExchange: {}
+          - openAIModeration: {}
+            policies:
+              auth:
+                oauthTokenExchange: {}
 ---
 _err: AI policies require AI
 apiVersion: agentgateway.dev/v1alpha1

@@ -1,0 +1,156 @@
+# Deprecated provider-level policies must translate the same as guard-level policies.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw-deprecated-guard-policies
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    ai:
+      promptGuard:
+        request:
+          - openAIModeration:
+              policies:
+                auth:
+                  key: test-key
+                tls:
+                  insecureSkipVerify: All
+          - openAIModeration: {}
+            policies:
+              auth:
+                key: test-key
+              tls:
+                insecureSkipVerify: All
+          - bedrockGuardrails:
+              identifier: guardrail
+              version: DRAFT
+              region: us-west-2
+              policies:
+                auth:
+                  aws: {}
+          - bedrockGuardrails:
+              identifier: guardrail
+              version: DRAFT
+              region: us-west-2
+            policies:
+              auth:
+                aws: {}
+        response:
+          - googleModelArmor:
+              templateId: template
+              projectId: project
+              policies:
+                auth:
+                  gcp: {}
+          - googleModelArmor:
+              templateId: template
+              projectId: project
+            policies:
+              auth:
+                gcp: {}
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        ai:
+          promptGuard:
+            request:
+            - openaiModeration:
+                action: REJECT_AUDIT_ACTION_REJECT
+                inlinePolicies:
+                - backendTls:
+                    verification: INSECURE_ALL
+                - auth:
+                    key:
+                      secret: test-key
+            - openaiModeration:
+                action: REJECT_AUDIT_ACTION_REJECT
+                inlinePolicies:
+                - backendTls:
+                    verification: INSECURE_ALL
+                - auth:
+                    key:
+                      secret: test-key
+            - bedrockGuardrails:
+                action: REJECT_AUDIT_ACTION_REJECT
+                identifier: guardrail
+                inlinePolicies:
+                - auth:
+                    aws:
+                      implicit: {}
+                region: us-west-2
+                version: DRAFT
+            - bedrockGuardrails:
+                action: REJECT_AUDIT_ACTION_REJECT
+                identifier: guardrail
+                inlinePolicies:
+                - auth:
+                    aws:
+                      implicit: {}
+                region: us-west-2
+                version: DRAFT
+            response:
+            - googleModelArmor:
+                action: REJECT_AUDIT_ACTION_REJECT
+                inlinePolicies:
+                - auth:
+                    gcp:
+                      accessToken: {}
+                location: us-central1
+                projectId: project
+                templateId: template
+            - googleModelArmor:
+                action: REJECT_AUDIT_ACTION_REJECT
+                inlinePolicies:
+                - auth:
+                    gcp:
+                      accessToken: {}
+                location: us-central1
+                projectId: project
+                templateId: template
+      key: backend/default/agw-deprecated-guard-policies:ai:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw-deprecated-guard-policies
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw-deprecated-guard-policies
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
