@@ -52,7 +52,6 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "durationfmt",
- "fs-err",
  "go-parse-duration",
  "hex",
  "http",
@@ -6976,8 +6975,9 @@ dependencies = [
 
 [[package]]
 name = "tiktoken"
-version = "4.1.2"
-source = "git+https://github.com/howardjohn/rust-tiktoken?rev=14ea59ef50aed1d2935bbce06d8811427b7b972f#14ea59ef50aed1d2935bbce06d8811427b7b972f"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89b03b47578d75021830b8ea5b36d5077e38f1823ddd65c04a347d77f25cfe4e"
 dependencies = [
  "regex",
  "rustc-hash 2.1.3",
