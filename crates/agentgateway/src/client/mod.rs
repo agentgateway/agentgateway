@@ -564,15 +564,21 @@ pub struct Config {
 	pub max_ttl: Option<Duration>,
 }
 
-/// Rejects loopback and link-local destinations, checked after DNS resolution.
-fn check_not_loopback(dest: SocketAddr) -> Result<(), ProxyError> {
+fn check_dynamic_backend_address(dest: SocketAddr) -> Result<(), ProxyError> {
 	let ip = dest.ip().to_canonical();
-	let link_local = match ip {
-		std::net::IpAddr::V4(ip) => ip.is_link_local(),
-		std::net::IpAddr::V6(ip) => ip.is_unicast_link_local(),
+	let denied = match ip {
+		std::net::IpAddr::V4(ip) => ip.octets()[0] == 0 || ip.is_loopback() || ip.is_link_local(),
+		std::net::IpAddr::V6(ip) => {
+			ip.is_unspecified()
+				|| ip.is_loopback()
+				|| ip.is_unicast_link_local()
+				|| ip == "fd20:ce::254".parse::<std::net::Ipv6Addr>().unwrap()
+				|| ip == "fd00:ec2::254".parse::<std::net::Ipv6Addr>().unwrap()
+				|| ip == "fd00:ec2::23".parse::<std::net::Ipv6Addr>().unwrap()
+		},
 	};
-	if ip.is_loopback() || link_local || (ip.is_unspecified() && dest.port() != 0) {
-		return Err(ProxyError::DynamicBackendLoopback);
+	if denied {
+		return Err(ProxyError::DynamicBackendAddressDenied);
 	}
 	Ok(())
 }
@@ -692,7 +698,7 @@ impl Client {
 			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
 		if dynamic_backend && !self.allow_dynamic_loopback {
-			check_not_loopback(dest)?;
+			check_dynamic_backend_address(dest)?;
 		}
 
 		let transport_name = connection.transport.name();
@@ -775,7 +781,7 @@ impl Client {
 				.await
 				.and_then(|dest| {
 					if deny_loopback {
-						check_not_loopback(dest)?;
+						check_dynamic_backend_address(dest)?;
 					}
 					Ok(dest)
 				})
@@ -999,6 +1005,38 @@ mod tests {
 			.expect("deadline should be set");
 		assert!(deadline >= before + max_age - max_age / 10);
 		assert!(deadline <= std::time::Instant::now() + max_age);
+	}
+
+	#[test]
+	fn dynamic_backend_address_filter_matches_substrate() {
+		for address in [
+			"0.1.2.3:80",
+			"127.0.0.1:80",
+			"169.254.169.254:80",
+			"[::]:80",
+			"[::1]:80",
+			"[fe80::1]:80",
+			"[fd20:ce::254]:80",
+			"[fd00:ec2::254]:80",
+			"[fd00:ec2::23]:80",
+			"[::ffff:127.0.0.1]:80",
+		] {
+			assert!(
+				check_dynamic_backend_address(address.parse().unwrap()).is_err(),
+				"{address} should be denied"
+			);
+		}
+		for address in [
+			"10.0.0.1:80",
+			"192.168.1.1:80",
+			"[fd00::1]:80",
+			"1.1.1.1:80",
+		] {
+			assert!(
+				check_dynamic_backend_address(address.parse().unwrap()).is_ok(),
+				"{address} should be allowed"
+			);
+		}
 	}
 
 	#[test]
