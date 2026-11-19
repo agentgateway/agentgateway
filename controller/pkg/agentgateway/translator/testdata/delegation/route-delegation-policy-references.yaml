@@ -368,4 +368,22 @@ status:
     namespace: team1
   spec: null
   status:
-    parents: []
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: backendRef pool-ns/pool-without-grant not accessible to a HTTPRoute
+          in namespace "team1" (missing a ReferenceGrant?)
+        reason: RefNotPermitted
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        name: parent
+        namespace: default
