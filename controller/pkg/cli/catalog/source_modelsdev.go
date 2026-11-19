@@ -50,6 +50,7 @@ var modelsDevProviderIDs = map[string]string{
 	"meta":             "meta",
 	"perplexity-agent": "perplexity",
 	"nebius":           "nebius",
+	"wandb":            "coreweave",
 }
 
 // modelsDevTypeEndpoints maps a models.dev model type to the client endpoints serving it.

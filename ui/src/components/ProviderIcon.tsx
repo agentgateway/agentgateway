@@ -6,6 +6,8 @@ import bedrockIcon from '@/assets/providers/bedrock.svg';
 import cerebrasIcon from '@/assets/providers/cerebras.svg';
 import cohereIcon from '@/assets/providers/cohere.svg';
 import copilotIcon from '@/assets/providers/copilot.svg';
+import coreweaveIcon from '@/assets/providers/coreweave.svg';
+import coreweaveDarkIcon from '@/assets/providers/coreweave-dark.svg';
 import deepinfraIcon from '@/assets/providers/deepinfra.svg';
 import deepseekIcon from '@/assets/providers/deepseek.svg';
 import fireworksIcon from '@/assets/providers/fireworks.svg';
@@ -53,11 +55,13 @@ const providerIcons: Record<string, string> = {
 	meta: metaIcon,
 	perplexity: perplexityIcon,
 	nebius: nebiusIcon,
+	coreweave: coreweaveIcon,
 	custom: agwIcon
 };
 
 const darkProviderIcons: Record<string, string> = {
-	typesafe: typesafeDarkIcon
+	typesafe: typesafeDarkIcon,
+	coreweave: coreweaveDarkIcon
 };
 
 const monochromeProviders = new Set<string>([

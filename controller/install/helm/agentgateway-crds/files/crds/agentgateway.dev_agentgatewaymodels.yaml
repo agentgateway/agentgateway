@@ -6710,6 +6710,7 @@ spec:
                 - Cerebras
                 - Cohere
                 - Copilot
+                - CoreWeave
                 - Custom
                 - Deepinfra
                 - Deepseek
