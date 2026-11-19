@@ -544,6 +544,16 @@ fn rewrite_authorization_server_metadata(
 		_ => {},
 	}
 
+	// With clientId set the gateway answers registration itself, whatever the provider.
+	if auth.client_id.is_some()
+		&& let Some(obj) = resp.as_object_mut()
+	{
+		obj.insert(
+			"registration_endpoint".to_string(),
+			serde_json::Value::String(format!("{current_uri}/client-registration")),
+		);
+	}
+
 	rewrite_authorization_server_issuer(req, auth, resp)
 }
 
@@ -1093,6 +1103,55 @@ mod tests {
 		assert_eq!(
 			metadata["registration_endpoint"],
 			"https://public.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+	}
+
+	#[rstest::rstest]
+	fn client_id_advertises_gateway_registration_endpoint(
+		#[values(None, Some(McpIDP::Auth0 {}))] provider: Option<McpIDP>,
+		#[values(true, false)] upstream_has_registration_endpoint: bool,
+	) {
+		let mut auth = default_auth();
+		auth.provider = provider.clone();
+		auth.client_id = Some("pre-registered".to_string());
+		let req = internal_metadata_request().body(Body::empty()).unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+		if !upstream_has_registration_endpoint {
+			metadata
+				.as_object_mut()
+				.unwrap()
+				.remove("registration_endpoint");
+		}
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://internal.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+		assert_eq!(
+			metadata["authorization_endpoint"],
+			match provider {
+				Some(McpIDP::Auth0 {}) => "https://idp.example.com/authorize?audience=mcp",
+				_ => "https://idp.example.com/authorize",
+			}
+		);
+	}
+
+	#[rstest::rstest]
+	fn registration_endpoint_passes_through_without_client_id(
+		#[values(None, Some(McpIDP::Auth0 {}))] provider: Option<McpIDP>,
+	) {
+		let mut auth = default_auth();
+		auth.provider = provider;
+		let req = internal_metadata_request().body(Body::empty()).unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://idp.example.com/register"
 		);
 	}
 

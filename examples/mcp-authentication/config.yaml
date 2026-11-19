@@ -149,6 +149,8 @@ binds:
             #       exact: /.well-known/oauth-protected-resource/auth0/mcp
             #   - path:
             #       exact: /.well-known/oauth-authorization-server/auth0/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/auth0/mcp/client-registration
             #   policies:
             #     cors:
             #       allowHeaders:
