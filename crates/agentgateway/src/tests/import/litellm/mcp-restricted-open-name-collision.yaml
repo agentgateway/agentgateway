@@ -1,0 +1,17 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: sk-test-master-key
+mcp_servers:
+  aaa_restricted:
+    alias: shared-target
+    url: "http://restricted:8081/mcp"
+    transport: "http"
+    allow_all_keys: false
+  zzz_open:
+    alias: shared-target
+    url: "http://open:8081/mcp"
+    transport: "http"
+    allow_all_keys: true

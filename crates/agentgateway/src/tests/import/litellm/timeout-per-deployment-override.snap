@@ -1,0 +1,37 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/timeout-per-deployment-override.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      timeout:
+        backendRequestTimeout: 30s
+findings:
+  - sourcePath: "model_list[0].litellm_params.timeout"
+    status: manual
+    message: Per-deployment LiteLLM timeout was not mapped; agentgateway applies at most one router_settings.timeout across all models
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: router_settings.timeout
+    status: approximate
+    message: Mapped LiteLLM router_settings.timeout to the single global llm.policies.timeout backendRequestTimeout; LiteLLM allows a per-deployment override that agentgateway cannot represent

@@ -1,5 +1,5 @@
 ---
-source: crates/agentgateway/src/import.rs
+source: crates/agentgateway/src/import/litellm.rs
 description: src/tests/import/litellm/unmapped-fields.yaml
 ---
 source: litellm
@@ -19,6 +19,11 @@ config:
         provider: openAI
         params:
           model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: $LITELLM_MASTER_KEY
+        mode: strict
 findings:
   - sourcePath: "model_list[0].model_info.id"
     status: manual
@@ -33,8 +38,8 @@ findings:
     status: manual
     message: "LiteLLM credential \"shared\" is not referenced by an imported model and was not emitted"
   - sourcePath: general_settings.master_key
-    status: manual
-    message: Requires manual review and was not emitted
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
   - sourcePath: environment_variables.LOG_LEVEL
     status: manual
     message: Requires manual review and was not emitted

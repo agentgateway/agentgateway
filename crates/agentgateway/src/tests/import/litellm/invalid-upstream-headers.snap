@@ -1,5 +1,5 @@
 ---
-source: crates/agentgateway/src/import.rs
+source: crates/agentgateway/src/import/litellm.rs
 description: src/tests/import/litellm/invalid-upstream-headers.yaml
 ---
 source: litellm
@@ -38,3 +38,6 @@ findings:
   - sourcePath: "model_list[0]"
     status: exact
     message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"

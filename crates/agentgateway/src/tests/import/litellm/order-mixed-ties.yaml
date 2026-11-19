@@ -1,0 +1,21 @@
+router_settings:
+  routing_strategy: simple-shuffle
+model_list:
+- model_name: chat
+  litellm_params:
+    model: bedrock/anthropic.claude-sonnet-5
+    aws_region_name: eu-west-2
+    order: 1
+    rpm: 100
+- model_name: chat
+  litellm_params:
+    model: bedrock/anthropic.claude-opus-5-5
+    aws_region_name: eu-west-2
+    order: 1
+    rpm: 900
+- model_name: chat
+  litellm_params:
+    model: bedrock/openai.gpt-oss-120b-1:0
+    aws_region_name: eu-west-2
+    order: 2
+    rpm: 50

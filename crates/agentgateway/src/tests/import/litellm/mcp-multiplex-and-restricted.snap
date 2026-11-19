@@ -1,0 +1,59 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/mcp-multiplex-and-restricted.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: test-tools
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Renamed \"test_tools\" to \"test-tools\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"test-tools\""
+  - sourcePath: mcp_servers.test_tools_restricted
+    status: approximate
+    message: "Renamed \"test_tools_restricted\" to \"test-tools-restricted\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.test_tools_restricted
+    status: unsupported
+    message: "This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied"

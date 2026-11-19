@@ -15,7 +15,7 @@ fn import_file(path: PathBuf, output: Option<PathBuf>, source: &str) -> anyhow::
 	};
 	let result = agentgateway::import::import_config_with_options(source, &contents, &options)?;
 	let imported = agentgateway::yaml::to_string(&result.config)?;
-	for finding in result.findings {
+	for finding in &result.findings {
 		eprintln!(
 			"{}: {}: {}",
 			finding.status.as_str(),
@@ -23,6 +23,7 @@ fn import_file(path: PathBuf, output: Option<PathBuf>, source: &str) -> anyhow::
 			finding.message
 		);
 	}
+	print_summary(&result.findings);
 	match output {
 		Some(path) if path != std::path::Path::new("-") => {
 			fs_err::write(&path, imported)?;
@@ -31,6 +32,33 @@ fn import_file(path: PathBuf, output: Option<PathBuf>, source: &str) -> anyhow::
 		_ => print!("{imported}"),
 	}
 	Ok(())
+}
+
+/// Prints a closing summary so a reader doesn't have to scroll back through every
+/// interleaved per-field line to see what still needs their attention: how many findings
+/// landed in each status, then every `manual`/`unsupported` one listed together.
+fn print_summary(findings: &[agentgateway::import::ImportFinding]) {
+	use agentgateway::import::ImportStatus;
+
+	let count = |status: ImportStatus| findings.iter().filter(|f| f.status == status).count();
+	let exact = count(ImportStatus::Exact);
+	let approximate = count(ImportStatus::Approximate);
+	let manual = count(ImportStatus::Manual);
+	let unsupported = count(ImportStatus::Unsupported);
+
+	eprintln!(
+		"\nImport summary: {exact} exact, {approximate} approximate, {manual} manual, {unsupported} unsupported"
+	);
+	let needs_review: Vec<_> = findings
+		.iter()
+		.filter(|f| matches!(f.status, ImportStatus::Manual | ImportStatus::Unsupported))
+		.collect();
+	if !needs_review.is_empty() {
+		eprintln!("Needs manual review:");
+		for finding in needs_review {
+			eprintln!("  - {}: {}", finding.source_path, finding.message);
+		}
+	}
 }
 
 fn import_database_url(output: Option<&Path>) -> String {

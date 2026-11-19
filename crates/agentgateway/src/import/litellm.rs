@@ -1,310 +1,19 @@
-//! Import external gateway configuration into standalone agentgateway configuration.
-//!
-//! Importers normalize source-specific configuration into [`ImportPlan`]. The shared
-//! emitter then produces and validates agentgateway configuration, keeping source
-//! adapters independent from the target configuration format.
-
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, bail};
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-/// LiteLLM's `ROUTER_MAX_FALLBACKS`, the recursion depth cap for fallback attempts.
-const DEFAULT_MAX_FALLBACKS: usize = 5;
+use crate::import::{
+	ConfigImporter, ImportFinding, ImportPlan, ImportStatus, ImportedInboundAPIKey, ImportedModel,
+	ImportedModelProvider, ImportedProvider, ImportedRoute, imported_model_name, move_string,
+	normalize_environment_references, report_unmapped_fields, sanitize_mcp_target_name,
+	unique_imported_provider_name,
+};
+use crate::types::local::McpBackendHost;
 
-/// A source-specific configuration adapter.
-pub trait ConfigImporter: Send + Sync {
-	fn source(&self) -> &'static str;
-	fn import(&self, input: &str) -> anyhow::Result<ImportPlan>;
-}
-
-/// Source-neutral representation consumed by the agentgateway configuration emitter.
-#[derive(Debug, Default)]
-pub struct ImportPlan {
-	pub providers: Vec<ImportedProvider>,
-	pub models: Vec<ImportedModel>,
-	pub routes: IndexMap<String, ImportedRoute>,
-	pub findings: Vec<ImportFinding>,
-	/// Outlier-detection policy applied to emitted model backends that do not override it. Populated from
-	/// source-wide health settings (for example LiteLLM `router_settings.cooldown_time`).
-	pub model_health: Option<Value>,
-}
-
-#[derive(Debug)]
-pub struct ImportedProvider {
-	pub name: String,
-	pub provider: String,
-	pub params: Map<String, Value>,
-	pub request_headers: IndexMap<String, String>,
-}
-
-#[derive(Debug)]
-pub enum ImportedModelProvider {
-	Inline(String),
-	Reference(String),
-}
-
-#[derive(Debug)]
-pub struct ImportedModel {
-	pub name: String,
-	pub provider: ImportedModelProvider,
-	pub params: Map<String, Value>,
-	pub defaults: Map<String, Value>,
-	pub request_headers: IndexMap<String, String>,
-	pub request_headers_override_defaults: bool,
-	pub weight: usize,
-	/// False when the deployment overrides source-wide health settings, so
-	/// [`ImportPlan::model_health`] is not applied to it.
-	pub inherits_model_health: bool,
-}
-
-#[derive(Debug, Default)]
-pub struct ImportedRoute {
-	pub targets: Vec<String>,
-	pub fallback_groups: Vec<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum ImportStatus {
-	Exact,
-	Approximate,
-	Manual,
-	Unsupported,
-}
-
-impl ImportStatus {
-	pub fn as_str(self) -> &'static str {
-		match self {
-			Self::Exact => "exact",
-			Self::Approximate => "approximate",
-			Self::Manual => "manual",
-			Self::Unsupported => "unsupported",
-		}
-	}
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ImportFinding {
-	pub source_path: String,
-	pub status: ImportStatus,
-	pub message: String,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ImportResult {
-	pub source: String,
-	pub config: Value,
-	pub findings: Vec<ImportFinding>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ImportOptions {
-	pub database_url: String,
-}
-
-impl Default for ImportOptions {
-	fn default() -> Self {
-		Self {
-			database_url: "sqlite://data.db".to_string(),
-		}
-	}
-}
-
-pub fn available_sources() -> Vec<&'static str> {
-	importers()
-		.iter()
-		.map(|importer| importer.source())
-		.collect()
-}
-
-pub fn import_config(source: &str, input: &str) -> anyhow::Result<ImportResult> {
-	import_config_with_options(source, input, &ImportOptions::default())
-}
-
-pub fn import_config_with_options(
-	source: &str,
-	input: &str,
-	options: &ImportOptions,
-) -> anyhow::Result<ImportResult> {
-	let importer = importers()
-		.into_iter()
-		.find(|importer| importer.source().eq_ignore_ascii_case(source))
-		.ok_or_else(|| {
-			anyhow::anyhow!(
-				"unsupported import source {source:?}; supported sources: {}",
-				available_sources().join(", ")
-			)
-		})?;
-	let plan = importer.import(input)?;
-	emit(importer.source(), plan, options)
-}
-
-fn importers() -> Vec<Box<dyn ConfigImporter>> {
-	vec![Box::new(LiteLlmImporter)]
-}
-
-fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Result<ImportResult> {
-	let ImportPlan {
-		providers,
-		models,
-		routes,
-		findings,
-		model_health,
-	} = plan;
-	let model_by_name: HashMap<_, _> = models
-		.iter()
-		.map(|model| (model.name.as_str(), model))
-		.collect();
-	let internal_names = models
-		.iter()
-		.map(|model| model.name.as_str())
-		.collect::<HashSet<_>>();
-	let direct_model_names = routes
-		.iter()
-		.filter_map(|(public_name, route)| {
-			let [target] = route.targets.as_slice() else {
-				return None;
-			};
-			if !route.fallback_groups.is_empty()
-				|| (internal_names.contains(public_name.as_str()) && public_name != target)
-			{
-				return None;
-			}
-			Some((target.clone(), public_name.clone()))
-		})
-		.collect::<HashMap<_, _>>();
-	let emitted_models = models
-		.iter()
-		.map(|model| {
-			let direct_name = direct_model_names.get(&model.name);
-			let mut value = Map::new();
-			value.insert(
-				"name".to_string(),
-				json!(direct_name.unwrap_or(&model.name)),
-			);
-			if direct_name.is_none() {
-				value.insert("visibility".to_string(), json!("internal"));
-			}
-			let provider = match &model.provider {
-				ImportedModelProvider::Inline(provider) => json!(provider),
-				ImportedModelProvider::Reference(reference) => {
-					json!({"reference": reference})
-				},
-			};
-			value.insert("provider".to_string(), provider);
-			value.insert("params".to_string(), Value::Object(model.params.clone()));
-			if !model.defaults.is_empty() {
-				value.insert(
-					"defaults".to_string(),
-					Value::Object(model.defaults.clone()),
-				);
-			}
-			if model.request_headers_override_defaults || !model.request_headers.is_empty() {
-				value.insert(
-					"requestHeaders".to_string(),
-					json!({"set": model.request_headers}),
-				);
-			}
-			if model.inherits_model_health
-				&& let Some(health) = &model_health
-			{
-				value.insert("health".to_string(), health.clone());
-			}
-			Value::Object(value)
-		})
-		.collect::<Vec<_>>();
-
-	let mut virtual_models = Vec::new();
-	for (name, route) in routes {
-		if route.targets.is_empty() {
-			continue;
-		}
-		if let [target] = route.targets.as_slice()
-			&& direct_model_names.get(target) == Some(&name)
-		{
-			continue;
-		}
-		let routing = if route.fallback_groups.is_empty() {
-			let targets = route
-				.targets
-				.iter()
-				.map(|target| {
-					let weight = model_by_name.get(target.as_str()).map_or(1, |m| m.weight);
-					let target = direct_model_names.get(target).unwrap_or(target);
-					json!({"model": target, "weight": weight})
-				})
-				.collect::<Vec<_>>();
-			json!({"weighted": {"targets": targets}})
-		} else {
-			let mut targets = route
-				.targets
-				.iter()
-				.map(|target| {
-					let target = direct_model_names.get(target).unwrap_or(target);
-					json!({"model": target, "priority": 0})
-				})
-				.collect::<Vec<_>>();
-			for (priority, fallback_group) in route.fallback_groups.iter().enumerate() {
-				for fallback in fallback_group {
-					let fallback = direct_model_names.get(fallback).unwrap_or(fallback);
-					targets.push(json!({"model": fallback, "priority": priority + 1}));
-				}
-			}
-			json!({"failover": {"targets": targets}})
-		};
-		virtual_models.push(json!({"name": name, "routing": routing}));
-	}
-
-	let mut config = crate::types::local::default_standalone_config(&options.database_url);
-	let mut llm = Map::from_iter([
-		("gateways".to_string(), json!("default")),
-		("models".to_string(), Value::Array(emitted_models)),
-	]);
-	if !providers.is_empty() {
-		let providers = providers
-			.into_iter()
-			.map(|provider| {
-				let mut value = Map::from_iter([
-					("name".to_string(), json!(provider.name)),
-					("provider".to_string(), json!(provider.provider)),
-					("params".to_string(), Value::Object(provider.params)),
-				]);
-				if !provider.request_headers.is_empty() {
-					value.insert(
-						"defaults".to_string(),
-						json!({
-							"requestHeaders": {"set": provider.request_headers}
-						}),
-					);
-				}
-				Value::Object(value)
-			})
-			.collect();
-		llm.insert("providers".to_string(), Value::Array(providers));
-	}
-	if !virtual_models.is_empty() {
-		llm.insert("virtualModels".to_string(), Value::Array(virtual_models));
-	}
-	config
-		.as_object_mut()
-		.expect("default standalone config must be an object")
-		.insert("llm".to_string(), Value::Object(llm));
-	let yaml = crate::yaml::to_string(&config)?;
-	let _: crate::types::local::LocalConfig =
-		crate::yaml::from_str(&yaml).context("generated agentgateway configuration is invalid")?;
-	Ok(ImportResult {
-		source: source.to_string(),
-		config,
-		findings,
-	})
-}
-
-struct LiteLlmImporter;
+pub(super) struct LiteLlmImporter;
 
 #[derive(Debug, Deserialize)]
 struct LiteLlmConfig {
@@ -320,6 +29,10 @@ struct LiteLlmConfig {
 	general_settings: Map<String, Value>,
 	#[serde(default)]
 	environment_variables: Map<String, Value>,
+	#[serde(default)]
+	guardrails: Vec<Value>,
+	#[serde(default)]
+	mcp_servers: Map<String, Value>,
 	#[serde(flatten)]
 	other: Map<String, Value>,
 }
@@ -387,8 +100,8 @@ impl ConfigImporter for LiteLlmImporter {
 	fn import(&self, input: &str) -> anyhow::Result<ImportPlan> {
 		let config: LiteLlmConfig =
 			crate::yaml::from_str(input).context("invalid LiteLLM configuration")?;
-		if config.model_list.is_empty() {
-			bail!("LiteLLM configuration does not contain any model_list entries");
+		if config.model_list.is_empty() && config.mcp_servers.is_empty() {
+			bail!("LiteLLM configuration does not contain any model_list or mcp_servers entries");
 		}
 
 		let mut plan = ImportPlan::default();
@@ -517,33 +230,19 @@ impl ConfigImporter for LiteLlmImporter {
 				message,
 			});
 		}
+		// Resolved before pass-through endpoints and MCP servers, both of which reuse
+		// plan.inbound_api_key rather than re-deriving master_key themselves.
+		apply_litellm_inbound_api_key(
+			&config.general_settings,
+			&config.environment_variables,
+			&mut plan,
+		)?;
 		apply_litellm_health(&config.router_settings, &mut plan);
-		for (setting, value) in &config.router_settings {
-			let source_path = format!("router_settings.{setting}");
-			if setting == "cache_responses" {
-				report_litellm_response_cache(&mut plan.findings, &source_path, value);
-				continue;
-			}
-			let cache_message = match setting.as_str() {
-				"redis_url" | "redis_host" | "redis_port" | "redis_password" | "redis_db"
-				| "cache_kwargs" => Some(
-					"LiteLLM router Redis coordination settings were not emitted; review shared routing, cooldown, and usage state separately from response caching. These settings can also configure the backend when router response caching is enabled",
-				),
-				"caching_groups" => Some(
-					"LiteLLM response-cache sharing across model groups was not preserved; review cache-key isolation when configuring response caching manually",
-				),
-				_ => None,
-			};
-			if let Some(message) = cache_message {
-				report_litellm_cache_value(
-					&mut plan.findings,
-					&source_path,
-					value,
-					ImportStatus::Manual,
-					message,
-				);
-				continue;
-			}
+		import_litellm_timeout(&config.router_settings, &mut plan);
+		import_litellm_pass_through_endpoints(&config.general_settings, &mut plan);
+		import_litellm_guardrails(&config.guardrails, &mut plan);
+		import_litellm_mcp_servers(&config.mcp_servers, &config.litellm_settings, &mut plan);
+		for setting in config.router_settings.keys() {
 			match setting.as_str() {
 				"fallbacks"
 				| "routing_strategy"
@@ -551,7 +250,8 @@ impl ConfigImporter for LiteLlmImporter {
 				| "allowed_fails"
 				| "allowed_fails_policy"
 				| "cooldown_time"
-				| "disable_cooldowns" => continue,
+				| "disable_cooldowns"
+				| "timeout" => continue,
 				"max_fallbacks" => {
 					let (status, message) = match config.router_settings.get(setting).and_then(Value::as_u64)
 					{
@@ -593,6 +293,32 @@ impl ConfigImporter for LiteLlmImporter {
 						),
 					});
 				},
+				"cache_responses" => {
+					report_litellm_response_cache(
+						&mut plan.findings,
+						&format!("router_settings.{setting}"),
+						&config.router_settings[setting],
+					);
+				},
+				"redis_url" | "redis_host" | "redis_port" | "redis_password" | "redis_db"
+				| "cache_kwargs" => {
+					report_litellm_cache_value(
+						&mut plan.findings,
+						&format!("router_settings.{setting}"),
+						&config.router_settings[setting],
+						ImportStatus::Manual,
+						"LiteLLM router Redis coordination settings were not emitted; review shared routing, cooldown, and usage state separately from response caching. These settings can also configure the backend when router response caching is enabled",
+					);
+				},
+				"caching_groups" => {
+					report_litellm_cache_value(
+						&mut plan.findings,
+						&format!("router_settings.{setting}"),
+						&config.router_settings[setting],
+						ImportStatus::Manual,
+						"LiteLLM response-cache sharing across model groups was not preserved; review cache-key isolation when configuring response caching manually",
+					);
+				},
 				_ => {
 					plan.findings.push(ImportFinding {
 						source_path: format!("router_settings.{setting}"),
@@ -613,6 +339,13 @@ impl ConfigImporter for LiteLlmImporter {
 					report_litellm_database(&mut plan.findings, &format!("{section}.{setting}"));
 					continue;
 				}
+				if section == "general_settings"
+					&& matches!(
+						setting.as_str(),
+						"pass_through_endpoints" | "master_key" | "litellm_key_header_name"
+					) {
+					continue;
+				}
 				plan.findings.push(ImportFinding {
 					source_path: format!("{section}.{setting}"),
 					status: ImportStatus::Manual,
@@ -620,16 +353,23 @@ impl ConfigImporter for LiteLlmImporter {
 				});
 			}
 		}
-		for (setting, value) in &config.litellm_settings {
-			if matches!(setting.as_str(), "fallbacks" | "default_fallbacks") {
+		for setting in config.litellm_settings.keys() {
+			if matches!(
+				setting.as_str(),
+				"fallbacks" | "default_fallbacks" | "mcp_aliases"
+			) {
 				continue;
 			}
 			if setting == "cache" {
-				report_litellm_response_cache(&mut plan.findings, "litellm_settings.cache", value);
+				report_litellm_response_cache(
+					&mut plan.findings,
+					"litellm_settings.cache",
+					&config.litellm_settings[setting],
+				);
 				continue;
 			}
 			if setting == "cache_params" {
-				report_litellm_cache_params(&mut plan.findings, value);
+				report_litellm_cache_params(&mut plan.findings, &config.litellm_settings[setting]);
 				continue;
 			}
 			if setting == "database_url" {
@@ -649,6 +389,7 @@ impl ConfigImporter for LiteLlmImporter {
 			ImportStatus::Unsupported,
 			"Unrecognized LiteLLM top-level field was not emitted",
 		);
+		finalize_litellm_plan(&mut plan);
 		Ok(plan)
 	}
 }
@@ -772,6 +513,90 @@ fn report_litellm_cache_value(
 			}
 		},
 		_ => {},
+	}
+}
+
+/// Resolves two LiteLLM-specific decisions that the shared emitter can't make on its own, since
+/// they depend on what LiteLLM itself requires rather than on the target schema:
+///
+/// - LiteLLM requires a key for `/mcp`. If no inbound key was emitted (e.g. an invalid
+///   `litellm_key_header_name`), drop the migrated MCP target(s) here, before the plan ever
+///   reaches the emitter, rather than mirror a policy that doesn't exist onto an otherwise-open
+///   gateway - matching how a DB-restricted server is already dropped rather than exposed
+///   unprotected. If an inbound key does exist, mirror it onto the MCP gateway the same way.
+/// - A plan with no imported models never gets an `llm:` block (standalone configuration has no
+///   use for one with zero models), so any finding that already claimed something was mapped
+///   into it (the timeout policy, the master_key policy) would be describing fields that were
+///   never actually emitted. Retract those and record why nothing landed instead.
+fn finalize_litellm_plan(plan: &mut ImportPlan) {
+	if !plan.mcp_targets.is_empty() {
+		if plan.inbound_api_key.is_some() {
+			plan.findings.push(ImportFinding {
+				source_path: "general_settings.master_key".to_string(),
+				status: ImportStatus::Approximate,
+				message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied".to_string(),
+			});
+		} else {
+			// None of these servers will actually be emitted, so drop every per-server finding
+			// that claimed otherwise - each would contradict the single "not emitted" finding
+			// that follows.
+			plan.findings.retain(|finding| {
+				!finding
+					.message
+					.starts_with("Mapped LiteLLM MCP server to agentgateway target")
+					&& !finding
+						.message
+						.starts_with("Multiple MCP servers are multiplexed")
+					&& !finding.message.starts_with("Mapped static_headers")
+					&& !finding.message.starts_with("Renamed ")
+			});
+			plan.findings.push(ImportFinding {
+				source_path: "mcp_servers".to_string(),
+				status: ImportStatus::Unsupported,
+				message: "No inbound API key was emitted, so the migrated MCP target(s) could not be protected and were not emitted".to_string(),
+			});
+			plan.mcp_targets.clear();
+		}
+	}
+
+	if plan.models.is_empty() {
+		let had_timeout = plan.timeout.is_some();
+		let had_guardrails = plan.guardrails.is_some();
+		let had_inbound_api_key = plan.inbound_api_key.is_some();
+		plan.findings.retain(|finding| {
+			!finding
+				.message
+				.starts_with("Mapped LiteLLM router_settings.timeout")
+				&& !finding.message.starts_with("Mapped LiteLLM's master_key")
+				&& !finding.message.contains("against every configured model")
+		});
+		if had_timeout {
+			plan.findings.push(ImportFinding {
+				source_path: "router_settings.timeout".to_string(),
+				status: ImportStatus::Unsupported,
+				message: "No models were imported, so there is no llm: block for this timeout policy to attach to, and it was not emitted"
+					.to_string(),
+			});
+		}
+		// Only claim the key wasn't emitted anywhere if it genuinely wasn't: when MCP targets
+		// exist, the key is already mirrored onto mcp.policies.apiKey above, and that finding
+		// already says so - pushing this one too would contradict it.
+		if had_inbound_api_key && plan.mcp_targets.is_empty() {
+			plan.findings.push(ImportFinding {
+				source_path: "general_settings.master_key".to_string(),
+				status: ImportStatus::Unsupported,
+				message: "No models were imported, so there is no llm: block for this inbound apiKey policy to attach to, and it was not emitted"
+					.to_string(),
+			});
+		}
+		if had_guardrails {
+			plan.findings.push(ImportFinding {
+				source_path: "guardrails".to_string(),
+				status: ImportStatus::Unsupported,
+				message: "No models were imported, so there is no llm: block for these guardrails to attach to, and they were not emitted"
+					.to_string(),
+			});
+		}
 	}
 }
 
@@ -956,6 +781,856 @@ fn report_unmapped_litellm_health(
 			});
 		}
 	}
+}
+
+/// Maps LiteLLM's router-wide per-attempt timeout onto agentgateway's `llm.policies.timeout`.
+///
+/// Unlike model health, standalone configuration has no per-model timeout field, so this is the
+/// only timeout attachment point in the `llm:` block and applies across every emitted model.
+/// LiteLLM allows a per-deployment `litellm_params.timeout` override; agentgateway cannot
+/// represent that, so deployments setting it are flagged separately in [`import_litellm_model`].
+fn import_litellm_timeout(router_settings: &Map<String, Value>, plan: &mut ImportPlan) {
+	let Some(timeout) = router_settings.get("timeout") else {
+		return;
+	};
+	// Bounded well above any realistic request timeout so a huge or malformed value is reported
+	// as a finding instead of producing a duration string the config loader cannot parse at all.
+	const MAX_TIMEOUT_SECONDS: f64 = 86_400.0;
+	let seconds = timeout
+		.as_f64()
+		.filter(|seconds| *seconds > 0.0 && *seconds <= MAX_TIMEOUT_SECONDS);
+	let Some(seconds) = seconds else {
+		plan.findings.push(ImportFinding {
+			source_path: "router_settings.timeout".to_string(),
+			status: ImportStatus::Manual,
+			message: format!(
+				"LiteLLM router timeout must be a positive number of seconds no greater than {MAX_TIMEOUT_SECONDS} and was not mapped"
+			),
+		});
+		return;
+	};
+	plan.timeout = Some(json!({
+		"backendRequestTimeout": format!("{seconds}s"),
+	}));
+	plan.findings.push(ImportFinding {
+		source_path: "router_settings.timeout".to_string(),
+		status: ImportStatus::Approximate,
+		message: "Mapped LiteLLM router_settings.timeout to the single global llm.policies.timeout backendRequestTimeout; LiteLLM allows a per-deployment override that agentgateway cannot represent"
+			.to_string(),
+	});
+}
+
+/// Maps LiteLLM `general_settings.pass_through_endpoints` to standalone top-level `routes`
+/// entries, outside the `llm:` block entirely. Each entry proxies one path to an arbitrary
+/// upstream URL, rewriting the path when the target's own path differs from the route path.
+///
+/// A pass-through endpoint that requires auth reuses `plan.inbound_api_key` (resolved earlier,
+/// from the same `general_settings.master_key`/`litellm_key_header_name` the inbound LLM/MCP
+/// policies use) rather than re-deriving it, so all three never disagree about whether
+/// `master_key` is usable or what header it's checked on.
+fn import_litellm_pass_through_endpoints(
+	general_settings: &Map<String, Value>,
+	plan: &mut ImportPlan,
+) {
+	let Some(endpoints) = general_settings.get("pass_through_endpoints") else {
+		return;
+	};
+	let Value::Array(endpoints) = endpoints else {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.pass_through_endpoints".to_string(),
+			status: ImportStatus::Manual,
+			message: "LiteLLM pass_through_endpoints must be an array and was not emitted".to_string(),
+		});
+		return;
+	};
+	for (index, endpoint) in endpoints.iter().enumerate() {
+		let source_path = format!("general_settings.pass_through_endpoints[{index}]");
+		let Value::Object(endpoint) = endpoint else {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "LiteLLM pass-through endpoint must be an object and was not emitted".to_string(),
+			});
+			continue;
+		};
+		let mut endpoint = endpoint.clone();
+		let path = match endpoint.remove("path") {
+			Some(Value::String(path)) if path.starts_with('/') => path.clone(),
+			Some(Value::String(_)) => {
+				plan.findings.push(ImportFinding {
+					source_path: format!("{source_path}.path"),
+					status: ImportStatus::Manual,
+					message: "LiteLLM pass-through path must start with '/' and was not emitted".to_string(),
+				});
+				continue;
+			},
+			_ => {
+				plan.findings.push(ImportFinding {
+					source_path: format!("{source_path}.path"),
+					status: ImportStatus::Manual,
+					message: "LiteLLM pass-through endpoint has no path and was not emitted".to_string(),
+				});
+				continue;
+			},
+		};
+		let Some(Value::String(target)) = endpoint.remove("target") else {
+			plan.findings.push(ImportFinding {
+				source_path: format!("{source_path}.target"),
+				status: ImportStatus::Manual,
+				message: "LiteLLM pass-through endpoint has no target and was not emitted".to_string(),
+			});
+			continue;
+		};
+		let target_url = match url::Url::parse(&target) {
+			Ok(url) => url,
+			Err(error) => {
+				plan.findings.push(ImportFinding {
+					source_path: format!("{source_path}.target"),
+					status: ImportStatus::Manual,
+					message: format!(
+						"LiteLLM pass-through target {target:?} is not a valid URL ({error}) and was not emitted"
+					),
+				});
+				continue;
+			},
+		};
+		let scheme = target_url.scheme();
+		if scheme != "http" && scheme != "https" {
+			plan.findings.push(ImportFinding {
+				source_path: format!("{source_path}.target"),
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"LiteLLM pass-through target scheme {scheme:?} is not supported and was not emitted"
+				),
+			});
+			continue;
+		}
+		let Some(host) = target_url.host_str() else {
+			plan.findings.push(ImportFinding {
+				source_path: format!("{source_path}.target"),
+				status: ImportStatus::Manual,
+				message: "LiteLLM pass-through target has no host and was not emitted".to_string(),
+			});
+			continue;
+		};
+		let port = target_url
+			.port_or_known_default()
+			.expect("http and https always have a known default port");
+		let target_path = target_url.path();
+
+		let mut route_policies = Map::new();
+		if target_path != path && !target_path.is_empty() {
+			route_policies.insert(
+				"urlRewrite".to_string(),
+				json!({"path": {"full": target_path}}),
+			);
+		}
+		if scheme == "https" {
+			route_policies.insert("backendTLS".to_string(), json!({}));
+		}
+
+		let auth = match endpoint.remove("auth") {
+			None | Some(Value::Bool(false)) => false,
+			Some(Value::Bool(true)) => true,
+			Some(other) => {
+				plan.findings.push(ImportFinding {
+					source_path: format!("{source_path}.auth"),
+					status: ImportStatus::Manual,
+					message: format!(
+						"LiteLLM pass-through auth {other:?} is not a boolean; treated as requiring auth rather than defaulting to open"
+					),
+				});
+				true
+			},
+		};
+		let mut emitted = true;
+		if auth {
+			let resolved_key = plan
+				.inbound_api_key
+				.as_ref()
+				.map(|api_key| (api_key.key.clone(), api_key.location.clone()));
+			match resolved_key {
+				Some((key, location)) => {
+					let mut policy = Map::from_iter([
+						("keys".to_string(), json!([{"key": key}])),
+						("mode".to_string(), json!("strict")),
+					]);
+					if let Some(location) = location {
+						policy.insert("location".to_string(), location);
+					}
+					route_policies.insert("apiKey".to_string(), Value::Object(policy));
+					plan.findings.push(ImportFinding {
+						source_path: format!("{source_path}.auth"),
+						status: ImportStatus::Approximate,
+						message: "Required inbound auth using LiteLLM's master_key; pass-through auth also accepts any virtual key, which config.yaml alone cannot provide"
+							.to_string(),
+					});
+				},
+				None => {
+					plan.findings.push(ImportFinding {
+						source_path: format!("{source_path}.auth"),
+						status: ImportStatus::Unsupported,
+						message: "LiteLLM pass-through endpoint requires auth, but general_settings.master_key is missing or invalid; this endpoint was not emitted rather than opened without authentication"
+							.to_string(),
+					});
+					emitted = false;
+				},
+			}
+		}
+		if !emitted {
+			continue;
+		}
+
+		let forward_headers = match endpoint.remove("forward_headers") {
+			None | Some(Value::Bool(false)) => false,
+			Some(Value::Bool(true)) => true,
+			Some(other) => {
+				plan.findings.push(ImportFinding {
+					source_path: format!("{source_path}.forward_headers"),
+					status: ImportStatus::Manual,
+					message: format!(
+						"LiteLLM pass-through forward_headers {other:?} is not a boolean and was treated as false"
+					),
+				});
+				false
+			},
+		};
+		if !forward_headers {
+			plan.findings.push(ImportFinding {
+				source_path: format!("{source_path}.forward_headers"),
+				status: ImportStatus::Manual,
+				message: "LiteLLM forward_headers is false or unset; agentgateway forwards all incoming headers by default and this could not be restricted automatically"
+					.to_string(),
+			});
+		}
+
+		report_unmapped_fields(
+			&mut plan.findings,
+			&source_path,
+			&endpoint,
+			ImportStatus::Manual,
+			"LiteLLM pass-through endpoint field requires manual review and was not emitted",
+		);
+
+		let mut route = Map::from_iter([
+			("matches".to_string(), json!([{"path": {"exact": path}}])),
+			(
+				"backends".to_string(),
+				json!([{"host": format!("{host}:{port}")}]),
+			),
+		]);
+		if !route_policies.is_empty() {
+			route.insert("policies".to_string(), Value::Object(route_policies));
+		}
+		plan.pass_through_routes.push(Value::Object(route));
+		plan.findings.push(ImportFinding {
+			source_path,
+			status: ImportStatus::Approximate,
+			message: format!(
+				"Mapped LiteLLM pass-through endpoint to a standalone route proxying to {host}:{port}"
+			),
+		});
+	}
+}
+
+/// Maps LiteLLM's top-level `guardrails` to agentgateway's `llm.policies.guardrails`
+/// (`PromptGuard`). Only `guardrail: bedrock` is mapped; other provider types are left
+/// `Unsupported`. LiteLLM's `default_on: false` makes a guardrail opt-in per request or virtual
+/// key, which config.yaml alone cannot express and which standalone `PromptGuard` has no
+/// equivalent for: every emitted guardrail runs on every request against every model, which is
+/// a broader scope than an opt-in source guardrail.
+fn import_litellm_guardrails(guardrails: &[Value], plan: &mut ImportPlan) {
+	let mut request_guards = Vec::new();
+	let mut response_guards = Vec::new();
+	for (index, guardrail) in guardrails.iter().enumerate() {
+		let source_path = format!("guardrails[{index}]");
+		let Value::Object(guardrail) = guardrail else {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "LiteLLM guardrail entry must be an object and was not emitted".to_string(),
+			});
+			continue;
+		};
+		let label = guardrail
+			.get("guardrail_name")
+			.and_then(Value::as_str)
+			.unwrap_or("this guardrail")
+			.to_string();
+		let Some(Value::Object(params)) = guardrail.get("litellm_params") else {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "LiteLLM guardrail has no litellm_params and was not emitted".to_string(),
+			});
+			continue;
+		};
+		let mut params = params.clone();
+		let guardrail_type = params.remove("guardrail");
+		let Some(Value::String(guardrail_type)) = guardrail_type else {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "LiteLLM guardrail litellm_params.guardrail must be a string and was not emitted"
+					.to_string(),
+			});
+			continue;
+		};
+		if guardrail_type != "bedrock" {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"LiteLLM guardrail type {guardrail_type:?} has no mapping; only bedrock is mapped"
+				),
+			});
+			continue;
+		}
+		let guardrail_identifier = params.remove("guardrailIdentifier");
+		let guardrail_version = params.remove("guardrailVersion");
+		let region = params.remove("aws_region_name");
+		let (
+			Some(Value::String(guardrail_identifier)),
+			Some(Value::String(guardrail_version)),
+			Some(Value::String(region)),
+		) = (&guardrail_identifier, &guardrail_version, &region)
+		else {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "LiteLLM bedrock guardrail requires string guardrailIdentifier, guardrailVersion, and aws_region_name and was not emitted"
+					.to_string(),
+			});
+			continue;
+		};
+		let bedrock = json!({
+			"guardrailIdentifier": normalize_environment_references(json!(guardrail_identifier)),
+			"guardrailVersion": normalize_environment_references(json!(guardrail_version)),
+			"region": normalize_environment_references(json!(region)),
+		});
+		let modes = params.remove("mode");
+		let mode_list: Vec<String> = match &modes {
+			Some(Value::Array(items)) => {
+				let strings: Vec<String> = items
+					.iter()
+					.filter_map(|v| v.as_str().map(str::to_string))
+					.collect();
+				if strings.len() != items.len() {
+					plan.findings.push(ImportFinding {
+						source_path: format!("{source_path}.litellm_params.mode"),
+						status: ImportStatus::Manual,
+						message: "LiteLLM guardrail mode entries must be strings; non-string entries were not evaluated"
+							.to_string(),
+					});
+				}
+				strings
+			},
+			Some(Value::String(mode)) => vec![mode.clone()],
+			_ => Vec::new(),
+		};
+		if mode_list.is_empty() {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "LiteLLM guardrail litellm_params.mode is required to know whether to run before or after the LLM call and was not emitted"
+					.to_string(),
+			});
+			continue;
+		}
+		let mut attached = false;
+		for mode in &mode_list {
+			match mode.as_str() {
+				"pre_call" => {
+					request_guards.push(json!({"bedrockGuardrails": bedrock}));
+					attached = true;
+				},
+				"post_call" => {
+					response_guards.push(json!({"bedrockGuardrails": bedrock}));
+					attached = true;
+				},
+				other => {
+					plan.findings.push(ImportFinding {
+						source_path: source_path.clone(),
+						status: ImportStatus::Unsupported,
+						message: format!(
+							"LiteLLM guardrail mode {other:?} is not supported; only pre_call and post_call are mapped"
+						),
+					});
+				},
+			}
+		}
+		if !attached {
+			continue;
+		}
+		let default_on = params.remove("default_on");
+		let (status, message) = match default_on {
+			Some(Value::Bool(false)) | None => (
+				ImportStatus::Approximate,
+				format!(
+					"LiteLLM runs {label} only when a request or virtual key opts in (default_on: false or unset); agentgateway applies it to every request against every configured model, which is stricter than the source, never weaker"
+				),
+			),
+			Some(Value::Bool(true)) => (
+				ImportStatus::Approximate,
+				format!(
+					"Mapped {label} to run on every request against every configured model, matching LiteLLM's default_on: true"
+				),
+			),
+			Some(_) => (
+				ImportStatus::Manual,
+				format!("{label}'s default_on must be a boolean; it was still mapped as always-on"),
+			),
+		};
+		report_unmapped_fields(
+			&mut plan.findings,
+			&format!("{source_path}.litellm_params"),
+			&params,
+			ImportStatus::Manual,
+			"LiteLLM guardrail parameter requires manual review and was not emitted",
+		);
+		plan.findings.push(ImportFinding {
+			source_path,
+			status,
+			message,
+		});
+	}
+	if request_guards.is_empty() && response_guards.is_empty() {
+		return;
+	}
+	let mut guardrails_json = Map::new();
+	if !request_guards.is_empty() {
+		guardrails_json.insert("request".to_string(), Value::Array(request_guards));
+	}
+	if !response_guards.is_empty() {
+		guardrails_json.insert("response".to_string(), Value::Array(response_guards));
+	}
+	plan.guardrails = Some(Value::Object(guardrails_json));
+}
+
+/// Maps LiteLLM's `general_settings.master_key` (and an optional custom
+/// `litellm_key_header_name`) to a standalone inbound `apiKey` policy.
+fn apply_litellm_inbound_api_key(
+	settings: &Map<String, Value>,
+	environment_variables: &Map<String, Value>,
+	plan: &mut ImportPlan,
+) -> anyhow::Result<()> {
+	let Some(master_key) = settings.get("master_key") else {
+		let message = if environment_variables.contains_key("LITELLM_MASTER_KEY") {
+			"No master_key in config.yaml, but environment_variables.LITELLM_MASTER_KEY is set; LiteLLM loads environment_variables into its own process environment at startup, so that value is very likely the real master_key. This importer does not read environment_variables for security-sensitive values automatically; copy it into general_settings.master_key (or add general_settings.master_key: os.environ/LITELLM_MASTER_KEY if you'd rather keep the literal value out of config.yaml) to make it visible"
+				.to_string()
+		} else {
+			"No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+				.to_string()
+		};
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.master_key".to_string(),
+			status: ImportStatus::Manual,
+			message,
+		});
+		if settings.contains_key("litellm_key_header_name") {
+			plan.findings.push(ImportFinding {
+				source_path: "general_settings.litellm_key_header_name".to_string(),
+				status: ImportStatus::Manual,
+				message:
+					"LiteLLM custom API-key header has no master_key to authenticate and was not emitted"
+						.to_string(),
+			});
+		}
+		return Ok(());
+	};
+
+	let Value::String(master_key) = master_key else {
+		bail!("general_settings.master_key must be a string, got {master_key}");
+	};
+
+	let mut literal_key_contains_dollar = false;
+	match master_key.strip_prefix("os.environ/") {
+		Some("") => bail!("general_settings.master_key's environment reference must name a variable"),
+		Some(_) => {},
+		None => {
+			if master_key.is_empty() {
+				bail!("general_settings.master_key must not be empty");
+			}
+			literal_key_contains_dollar = master_key.contains('$');
+		},
+	}
+	// Reuse the same `os.environ/NAME` -> `$NAME` normalization every other
+	// imported field already goes through, so the master key expands the same
+	// way as everything else agentgateway's config loader resolves.
+	let Value::String(key) = normalize_environment_references(Value::String(master_key.clone()))
+	else {
+		unreachable!("normalize_environment_references preserves the String variant");
+	};
+
+	let master_key_caveat =
+		"Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key)";
+	let virtual_key_caveat =
+		"Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone.";
+	let (location, status, message) = match settings.get("litellm_key_header_name") {
+		None => (
+			None,
+			ImportStatus::Approximate,
+			format!(
+				"{master_key_caveat} to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. {virtual_key_caveat}"
+			),
+		),
+		Some(Value::String(name)) => {
+			let Ok(name) = ::http::HeaderName::from_bytes(name.as_bytes()) else {
+				bail!("general_settings.litellm_key_header_name {name:?} is not a valid HTTP header name");
+			};
+			(
+				Some(json!({"header": {"name": name.as_str()}})),
+				ImportStatus::Approximate,
+				format!(
+					"{master_key_caveat} and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. {virtual_key_caveat}"
+				),
+			)
+		},
+		Some(other) => {
+			bail!("general_settings.litellm_key_header_name must be a string, got {other}")
+		},
+	};
+
+	plan.inbound_api_key = Some(ImportedInboundAPIKey { key, location });
+	plan.findings.push(ImportFinding {
+		source_path: "general_settings.master_key".to_string(),
+		status,
+		message,
+	});
+	if literal_key_contains_dollar {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.master_key".to_string(),
+			status: ImportStatus::Manual,
+			message: "This literal master_key contains '$'; agentgateway's config loader expands $VAR references in string values, so this key may not load as written. Move it to an environment variable with os.environ/VAR_NAME instead"
+				.to_string(),
+		});
+	}
+	if matches!(
+		settings.get("litellm_key_header_name"),
+		Some(Value::String(_))
+	) {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.litellm_key_header_name".to_string(),
+			status: ImportStatus::Exact,
+			message: "Mapped LiteLLM's custom API-key header name to the inbound API-key policy"
+				.to_string(),
+		});
+	}
+	Ok(())
+}
+
+/// Maps LiteLLM's top-level `mcp_servers` to standalone `mcp.targets` on the existing `default`
+/// gateway, carrying environment-backed stdio values and static headers into the plan, mapping
+/// transports explicitly, and accounting for `alias`/`litellm_settings.mcp_aliases`.
+fn import_litellm_mcp_servers(
+	mcp_servers: &Map<String, Value>,
+	litellm_settings: &Map<String, Value>,
+	plan: &mut ImportPlan,
+) {
+	if mcp_servers.is_empty() {
+		return;
+	}
+	let mut emitted_count = 0usize;
+	let mcp_aliases: HashMap<&str, &str> = match litellm_settings.get("mcp_aliases") {
+		Some(Value::Object(aliases)) => aliases
+			.iter()
+			.filter_map(|(alias, server)| server.as_str().map(|server| (server, alias.as_str())))
+			.collect(),
+		_ => HashMap::new(),
+	};
+	let mut used_names: HashSet<String> = HashSet::new();
+	for (server_key, server) in mcp_servers {
+		let source_path = format!("mcp_servers.{server_key}");
+		let Value::Object(server) = server else {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "LiteLLM MCP server must be an object and was not emitted".to_string(),
+			});
+			continue;
+		};
+		let mut server = server.clone();
+
+		// A restricted server goes through the same mapping as an open one - only the final push
+		// differs (dropped with an Unsupported finding instead of emitted).
+		// LiteLLM defaults a missing allow_all_keys to false (load_servers_from_config in
+		// litellm/proxy/mcp_server/mcp_server_manager.py); only an explicit true counts as open.
+		let allow_all_keys_value = server.remove("allow_all_keys");
+		let allow_all_keys_restriction: Option<&str> = match &allow_all_keys_value {
+			None => Some("omitted"),
+			Some(Value::Bool(false)) => Some("false"),
+			Some(Value::Bool(true)) => None,
+			Some(_) => {
+				plan.findings.push(ImportFinding {
+					source_path: source_path.clone(),
+					status: ImportStatus::Manual,
+					message: "LiteLLM allow_all_keys must be a boolean; treating this server as restricted (LiteLLM's own default is false)".to_string(),
+				});
+				Some("non-boolean")
+			},
+		};
+		let is_restricted = allow_all_keys_restriction.is_some();
+
+		let display_name = match server.remove("alias") {
+			Some(Value::String(alias)) => alias,
+			_ => mcp_aliases
+				.get(server_key.as_str())
+				.map(|alias| alias.to_string())
+				.unwrap_or_else(|| server_key.clone()),
+		};
+		let Some(target_name) = sanitize_mcp_target_name(&display_name) else {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "This server has no name that can be represented as an agentgateway MCP target name and was not emitted"
+					.to_string(),
+			});
+			continue;
+		};
+		if target_name != display_name {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.clone(),
+				status: ImportStatus::Approximate,
+				message: format!(
+					"Renamed {display_name:?} to {target_name:?} to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+				),
+			});
+		}
+		let transport = match server.remove("transport") {
+			None => "http".to_string(),
+			Some(Value::String(transport)) => transport,
+			Some(_) => {
+				plan.findings.push(ImportFinding {
+					source_path,
+					status: ImportStatus::Manual,
+					message: "LiteLLM MCP transport must be a string and was not emitted".to_string(),
+				});
+				continue;
+			},
+		};
+		let spec = match transport.as_str() {
+			"http" => build_remote_mcp_target_spec(&mut server, &source_path, plan, "mcp"),
+			"sse" => build_remote_mcp_target_spec(&mut server, &source_path, plan, "sse"),
+			"stdio" => build_stdio_mcp_target_spec(&mut server, &source_path, plan),
+			other => {
+				plan.findings.push(ImportFinding {
+					source_path,
+					status: ImportStatus::Unsupported,
+					message: format!(
+						"LiteLLM MCP transport {other:?} is not supported by this importer and was not emitted"
+					),
+				});
+				continue;
+			},
+		};
+		let Some(mut spec) = spec else {
+			continue;
+		};
+
+		// Reserved only now that the spec is confirmed buildable - a server that fails
+		// transport/url/command validation above must not claim this name, or a later, valid
+		// server sanitizing to the same name would be wrongly dropped as a collision. A
+		// restricted server is never emitted at all, so it must not reserve its name either.
+		if !is_restricted && !used_names.insert(target_name.clone()) {
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"Sanitized target name {target_name:?} collides with another server and was not emitted"
+				),
+			});
+			continue;
+		}
+
+		match server.remove("auth_type") {
+			None => {},
+			Some(Value::String(auth_type)) if auth_type == "none" => {},
+			Some(Value::String(auth_type)) => {
+				plan.findings.push(ImportFinding {
+					source_path: source_path.clone(),
+					status: ImportStatus::Manual,
+					message: format!(
+						"LiteLLM MCP auth_type {auth_type:?} has no mapping; connections to this target will be unauthenticated until configured manually"
+					),
+				});
+			},
+			Some(_) => {
+				plan.findings.push(ImportFinding {
+					source_path: source_path.clone(),
+					status: ImportStatus::Manual,
+					message: "LiteLLM MCP auth_type must be a string; connections to this target will be unauthenticated until configured manually".to_string(),
+				});
+			},
+		}
+		if server.remove("extra_headers").is_some() {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.clone(),
+				status: ImportStatus::Manual,
+				message: "LiteLLM extra_headers forwards specific caller headers per request; agentgateway has no equivalent at this target and it was not emitted"
+					.to_string(),
+			});
+		}
+		if let Some(static_headers) = server.remove("static_headers") {
+			match static_headers {
+				Value::Object(headers) if transport == "stdio" && !headers.is_empty() => {
+					plan.findings.push(ImportFinding {
+						source_path: source_path.clone(),
+						status: ImportStatus::Unsupported,
+						message:
+							"LiteLLM static_headers has no meaning for a stdio MCP target and was not applied"
+								.to_string(),
+					});
+				},
+				Value::Object(headers) if !headers.is_empty() => {
+					let headers = normalize_environment_references(Value::Object(headers));
+					if let Value::Object(spec_map) = &mut spec {
+						spec_map.insert(
+							"policies".to_string(),
+							json!({"requestHeaderModifier": {"set": headers}}),
+						);
+					}
+					plan.findings.push(ImportFinding {
+						source_path: source_path.clone(),
+						status: ImportStatus::Exact,
+						message: "Mapped static_headers to a fixed request header modifier on this target"
+							.to_string(),
+					});
+				},
+				Value::Object(_) => {},
+				_ => {
+					plan.findings.push(ImportFinding {
+						source_path: source_path.clone(),
+						status: ImportStatus::Manual,
+						message: "LiteLLM static_headers must be an object and was not emitted".to_string(),
+					});
+				},
+			}
+		}
+
+		report_unmapped_fields(
+			&mut plan.findings,
+			&source_path,
+			&server,
+			ImportStatus::Manual,
+			"LiteLLM MCP server field requires manual review and was not emitted",
+		);
+		if is_restricted {
+			let message = if allow_all_keys_restriction == Some("omitted") {
+				"LiteLLM defaults an omitted allow_all_keys to false, so this server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+			} else {
+				"This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+			};
+			plan.findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Unsupported,
+				message: message.to_string(),
+			});
+			continue;
+		}
+		if let Value::Object(spec_map) = &mut spec {
+			spec_map.insert("name".to_string(), json!(target_name));
+		}
+		plan.mcp_targets.push(spec);
+		emitted_count += 1;
+		plan.findings.push(ImportFinding {
+			source_path,
+			status: ImportStatus::Approximate,
+			message: format!("Mapped LiteLLM MCP server to agentgateway target {target_name:?}"),
+		});
+	}
+	if emitted_count > 1 {
+		plan.findings.push(ImportFinding {
+			source_path: "mcp_servers".to_string(),
+			status: ImportStatus::Manual,
+			message: "Multiple MCP servers are multiplexed behind one endpoint; agentgateway's default conditional tool-name prefixing may not match LiteLLM's own per-server/alias tool naming exactly"
+				.to_string(),
+		});
+	}
+}
+
+/// Builds the `mcp`/`sse` remote transport spec (shared shape: just a `url`).
+fn build_remote_mcp_target_spec(
+	server: &mut Map<String, Value>,
+	source_path: &str,
+	plan: &mut ImportPlan,
+	tag: &str,
+) -> Option<Value> {
+	let Some(Value::String(url)) = server.remove("url") else {
+		plan.findings.push(ImportFinding {
+			source_path: source_path.to_string(),
+			status: ImportStatus::Manual,
+			message: "LiteLLM remote MCP server requires a url and was not emitted".to_string(),
+		});
+		return None;
+	};
+	// An env-var reference isn't resolved until agentgateway loads the real config, so its
+	// eventual value can't be validated here; only a literal url is checked now.
+	if !url.starts_with("os.environ/") {
+		let host = json!({"host": &url});
+		let valid = serde_json::from_value::<McpBackendHost>(host)
+			.ok()
+			.and_then(|backend| backend.process().ok())
+			.is_some();
+		if !valid {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.to_string(),
+				status: ImportStatus::Manual,
+				message: "LiteLLM MCP server url could not be resolved to a valid host and was not emitted"
+					.to_string(),
+			});
+			return None;
+		}
+	}
+	let url = normalize_environment_references(json!(url));
+	Some(json!({tag: {"host": url}}))
+}
+
+/// Builds the `stdio` transport spec, normalizing `os.environ/`-style environment references in
+/// `env` the same way the rest of the importer does for model parameters.
+fn build_stdio_mcp_target_spec(
+	server: &mut Map<String, Value>,
+	source_path: &str,
+	plan: &mut ImportPlan,
+) -> Option<Value> {
+	let Some(Value::String(command)) = server.remove("command") else {
+		plan.findings.push(ImportFinding {
+			source_path: source_path.to_string(),
+			status: ImportStatus::Manual,
+			message: "LiteLLM stdio MCP server requires command and was not emitted".to_string(),
+		});
+		return None;
+	};
+	let args = match server.remove("args") {
+		None => Vec::new(),
+		Some(Value::Array(items)) if items.iter().all(Value::is_string) => items
+			.into_iter()
+			.map(|item| item.as_str().expect("checked above").to_string())
+			.collect(),
+		Some(_) => {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.to_string(),
+				status: ImportStatus::Manual,
+				message: "LiteLLM stdio args must be an array of strings and was not emitted".to_string(),
+			});
+			return None;
+		},
+	};
+	let env = match server.remove("env") {
+		None => Map::new(),
+		Some(Value::Object(env)) => match normalize_environment_references(Value::Object(env)) {
+			Value::Object(env) => env,
+			_ => unreachable!("normalize_environment_references preserves the Object variant"),
+		},
+		Some(_) => {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.to_string(),
+				status: ImportStatus::Manual,
+				message: "LiteLLM stdio env must be an object and was not emitted".to_string(),
+			});
+			return None;
+		},
+	};
+	Some(json!({"stdio": {"cmd": command, "args": args, "env": env}}))
 }
 
 impl LiteLlmCredentials {
@@ -1425,6 +2100,14 @@ fn import_litellm_model(
 				.to_string(),
 		});
 	}
+	if params.remove("timeout").is_some() {
+		findings.push(ImportFinding {
+			source_path: format!("{source_path}.litellm_params.timeout"),
+			status: ImportStatus::Manual,
+			message: "Per-deployment LiteLLM timeout was not mapped; agentgateway applies at most one router_settings.timeout across all models"
+				.to_string(),
+		});
+	}
 
 	let rpm = params.remove("rpm");
 	let tpm = params.remove("tpm");
@@ -1475,6 +2158,22 @@ fn import_litellm_model(
 			message,
 		});
 	}
+	let order = match params.remove("order") {
+		None => None,
+		Some(value) => match value.as_i64() {
+			Some(parsed) => Some(parsed),
+			None => {
+				findings.push(ImportFinding {
+					source_path: format!("{source_path}.litellm_params.order"),
+					status: ImportStatus::Manual,
+					message: "LiteLLM order must be an integer and was not used for routing priority"
+						.to_string(),
+				});
+				None
+			},
+		},
+	};
+
 	let mut defaults = Map::new();
 	for key in [
 		"temperature",
@@ -1513,6 +2212,8 @@ fn import_litellm_model(
 			request_headers_override_defaults: false,
 			weight,
 			inherits_model_health: !health_override,
+			order,
+			source_path: source_path.to_string(),
 		},
 		credential_name,
 		model_upstream_headers,
@@ -1779,55 +2480,8 @@ fn build_request_headers(
 	headers
 }
 
-fn move_string(
-	source: &mut Map<String, Value>,
-	from: &str,
-	target: &mut Map<String, Value>,
-	to: &str,
-) {
-	if let Some(value) = source.remove(from) {
-		target.insert(to.to_string(), normalize_environment_references(value));
-	}
-}
-
-fn normalize_environment_references(value: Value) -> Value {
-	match value {
-		Value::String(value) => match value.strip_prefix("os.environ/") {
-			Some(environment) => json!(format!("${environment}")),
-			None => json!(value),
-		},
-		Value::Array(values) => Value::Array(
-			values
-				.into_iter()
-				.map(normalize_environment_references)
-				.collect(),
-		),
-		Value::Object(values) => Value::Object(
-			values
-				.into_iter()
-				.map(|(key, value)| (key, normalize_environment_references(value)))
-				.collect(),
-		),
-		value => value,
-	}
-}
-
-fn report_unmapped_fields(
-	findings: &mut Vec<ImportFinding>,
-	prefix: &str,
-	values: &Map<String, Value>,
-	status: ImportStatus,
-	message: &str,
-) {
-	for key in values.keys() {
-		let separator = if prefix.is_empty() { "" } else { "." };
-		findings.push(ImportFinding {
-			source_path: format!("{prefix}{separator}{key}"),
-			status,
-			message: message.to_string(),
-		});
-	}
-}
+/// LiteLLM's `ROUTER_MAX_FALLBACKS`, the recursion depth cap for fallback attempts.
+const DEFAULT_MAX_FALLBACKS: usize = 5;
 
 fn apply_fallbacks(value: &Value, source_path: &str, plan: &mut ImportPlan) {
 	let Some(entries) = value.as_array() else {
@@ -2115,57 +2769,8 @@ fn extend_fallback_chain<'a>(
 	}
 }
 
-fn sanitize_name(name: &str) -> String {
-	let sanitized = name
-		.chars()
-		.map(|character| {
-			if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
-				character
-			} else {
-				'-'
-			}
-		})
-		.collect::<String>();
-	if sanitized.is_empty() {
-		"model".to_string()
-	} else {
-		sanitized
-	}
-}
-
-fn imported_model_name(source: &str, public_name: &str, deployment: usize) -> String {
-	format!(
-		"imported/{}/{}/{}",
-		sanitize_name(source),
-		sanitize_name(public_name),
-		deployment
-	)
-}
-
-fn unique_imported_provider_name(
-	source: &str,
-	credential: &str,
-	providers: &[ImportedProvider],
-) -> String {
-	let base = format!(
-		"imported/{}/{}",
-		sanitize_name(source),
-		sanitize_name(credential)
-	);
-	if !providers.iter().any(|candidate| candidate.name == base) {
-		return base;
-	}
-	for suffix in 2.. {
-		let candidate = format!("{base}/{suffix}");
-		if !providers.iter().any(|provider| provider.name == candidate) {
-			return candidate;
-		}
-	}
-	unreachable!()
-}
-
 #[cfg(test)]
-#[path = "tests/import/cache.rs"]
+#[path = "../tests/import/cache.rs"]
 mod cache_tests;
 
 #[cfg(test)]
@@ -2174,6 +2779,7 @@ mod tests {
 	use std::path::{Path, PathBuf};
 
 	use super::*;
+	use crate::import::{ImportResult, import_config};
 
 	fn fixture_path(name: &str) -> PathBuf {
 		Path::new("src/tests/import/litellm").join(format!("{name}.yaml"))
@@ -2190,10 +2796,41 @@ mod tests {
 			description => input_path.to_string_lossy().to_string(),
 			omit_expression => true,
 			prepend_module_to_snapshot => false,
-			snapshot_path => "tests/import/litellm",
+			snapshot_path => "../tests/import/litellm",
 		}, {
 			insta::assert_yaml_snapshot!(name, result);
 		});
+	}
+
+	fn assert_litellm_bail(name: &str, expected_message_substring: &str) {
+		let input_path = fixture_path(name);
+		let input = fs::read_to_string(&input_path)
+			.unwrap_or_else(|error| panic!("{}: {error}", input_path.display()));
+		let error = import_config("litellm", &input)
+			.expect_err(&format!("{}: expected an error", input_path.display()));
+		let message = error.to_string();
+		assert!(
+			message.contains(expected_message_substring),
+			"{}: expected {expected_message_substring:?} in {message:?}",
+			input_path.display()
+		);
+	}
+
+	/// Like [`assert_litellm_bail`], but requires the exact message: several
+	/// `master_key` failure modes only differ by wording, and a substring match
+	/// on "master_key" alone can't tell them apart.
+	fn assert_litellm_bail_exact(name: &str, expected_message: &str) {
+		let input_path = fixture_path(name);
+		let input = fs::read_to_string(&input_path)
+			.unwrap_or_else(|error| panic!("{}: {error}", input_path.display()));
+		let error = import_config("litellm", &input)
+			.expect_err(&format!("{}: expected an error", input_path.display()));
+		assert_eq!(
+			error.to_string(),
+			expected_message,
+			"{}",
+			input_path.display()
+		);
 	}
 
 	#[test]
@@ -2252,6 +2889,68 @@ mod tests {
 	}
 
 	#[test]
+	fn imports_litellm_inbound_api_key_policy() {
+		assert_litellm_golden("inbound-api-key");
+	}
+
+	#[test]
+	fn imports_literal_litellm_master_key() {
+		assert_litellm_golden("inbound-api-key-literal");
+	}
+
+	#[test]
+	fn rejects_empty_litellm_master_key() {
+		assert_litellm_bail_exact(
+			"inbound-api-key-empty-literal",
+			"general_settings.master_key must not be empty",
+		);
+	}
+
+	#[test]
+	fn warns_on_literal_litellm_master_key_containing_dollar() {
+		assert_litellm_golden("inbound-api-key-literal-dollar");
+	}
+
+	#[test]
+	fn reports_litellm_api_key_header_without_master_key() {
+		assert_litellm_golden("inbound-api-key-header-without-master-key");
+	}
+
+	#[test]
+	fn points_at_environment_variables_master_key_when_general_settings_lacks_one() {
+		assert_litellm_golden("inbound-api-key-master-key-in-environment-variables");
+	}
+
+	#[test]
+	fn rejects_invalid_litellm_api_key_header_name() {
+		assert_litellm_bail("inbound-api-key-invalid-header", "litellm_key_header_name");
+	}
+
+	#[test]
+	fn rejects_non_string_litellm_master_key() {
+		assert_litellm_bail_exact(
+			"inbound-api-key-non-string",
+			"general_settings.master_key must be a string, got 12345",
+		);
+	}
+
+	#[test]
+	fn rejects_empty_litellm_master_key_environment_reference() {
+		assert_litellm_bail_exact(
+			"inbound-api-key-empty-env",
+			"general_settings.master_key's environment reference must name a variable",
+		);
+	}
+
+	#[test]
+	fn rejects_non_string_litellm_api_key_header_name() {
+		assert_litellm_bail(
+			"inbound-api-key-non-string-header",
+			"litellm_key_header_name",
+		);
+	}
+
+	#[test]
 	fn reports_credential_conflicts_without_dropping_model_overrides() {
 		assert_litellm_golden("credential-conflicts");
 	}
@@ -2264,6 +2963,182 @@ mod tests {
 	#[test]
 	fn maps_litellm_cooldown_settings_to_model_health_eviction() {
 		assert_litellm_golden("cooldown-eviction");
+	}
+
+	#[test]
+	fn maps_litellm_router_timeout_to_llm_policies_timeout() {
+		assert_litellm_golden("timeout");
+	}
+
+	#[test]
+	fn maps_fractional_litellm_router_timeout() {
+		assert_litellm_golden("timeout-fractional");
+	}
+
+	#[test]
+	fn reports_invalid_litellm_router_timeout_without_emitting_policy() {
+		assert_litellm_golden("timeout-invalid");
+	}
+
+	#[test]
+	fn reports_unmapped_per_deployment_litellm_timeout_override() {
+		assert_litellm_golden("timeout-per-deployment-override");
+	}
+
+	#[test]
+	fn maps_litellm_http_mcp_server_to_mcp_target() {
+		assert_litellm_golden("mcp-server-http");
+	}
+
+	#[test]
+	fn maps_litellm_sse_mcp_server_with_static_headers() {
+		assert_litellm_golden("mcp-server-sse-static-headers");
+	}
+
+	#[test]
+	fn maps_litellm_stdio_mcp_server() {
+		assert_litellm_golden("mcp-server-stdio");
+	}
+
+	#[test]
+	fn mirrors_custom_api_key_header_onto_mcp_policies() {
+		assert_litellm_golden("mcp-server-with-custom-header");
+	}
+
+	#[test]
+	fn drops_all_mcp_targets_when_no_inbound_key_exists() {
+		assert_litellm_golden("mcp-drop-without-master-key");
+	}
+
+	#[test]
+	fn multiplexes_an_open_and_a_restricted_server_behind_one_endpoint() {
+		assert_litellm_golden("mcp-multiplex-and-restricted");
+	}
+
+	#[test]
+	fn maps_litellm_mcp_server_alias_and_mcp_aliases() {
+		assert_litellm_golden("mcp-alias");
+	}
+
+	#[test]
+	fn reports_invalid_litellm_mcp_servers_without_emitting_them() {
+		assert_litellm_golden("mcp-invalid");
+	}
+
+	#[test]
+	fn imports_mcp_only_litellm_config_without_llm_block() {
+		assert_litellm_golden("mcp-only-no-models");
+	}
+
+	#[test]
+	fn defaults_omitted_allow_all_keys_to_restricted() {
+		assert_litellm_golden("mcp-allow-all-keys-absent");
+	}
+
+	#[test]
+	fn treats_non_boolean_allow_all_keys_as_restricted() {
+		assert_litellm_golden("mcp-allow-all-keys-non-boolean");
+	}
+
+	#[test]
+	fn does_not_drop_an_open_mcp_server_when_a_restricted_server_shares_its_name() {
+		assert_litellm_golden("mcp-restricted-open-name-collision");
+	}
+
+	#[test]
+	fn maps_litellm_bedrock_guardrail_to_prompt_guard() {
+		assert_litellm_golden("guardrail-bedrock");
+	}
+
+	#[test]
+	fn maps_litellm_bedrock_guardrail_with_default_on_true() {
+		assert_litellm_golden("guardrail-bedrock-default-on");
+	}
+
+	#[test]
+	fn reports_unsupported_litellm_guardrail_type() {
+		assert_litellm_golden("guardrail-unsupported-type");
+	}
+
+	#[test]
+	fn reports_invalid_litellm_guardrails_without_emitting_them() {
+		assert_litellm_golden("guardrail-invalid");
+	}
+
+	#[test]
+	fn maps_litellm_pass_through_endpoint_to_standalone_route() {
+		assert_litellm_golden("pass-through-endpoint");
+	}
+
+	#[test]
+	fn pass_through_endpoint_auth_honors_custom_header() {
+		assert_litellm_golden("pass-through-endpoint-custom-header");
+	}
+
+	#[test]
+	fn maps_litellm_pass_through_endpoint_without_auth_or_rewrite() {
+		assert_litellm_golden("pass-through-endpoint-no-auth-no-rewrite");
+	}
+
+	#[test]
+	fn does_not_emit_litellm_pass_through_endpoint_requiring_auth_without_master_key() {
+		assert_litellm_golden("pass-through-endpoint-auth-without-master-key");
+	}
+
+	#[test]
+	fn reports_invalid_litellm_pass_through_endpoints_without_emitting_them() {
+		assert_litellm_golden("pass-through-endpoint-invalid");
+	}
+
+	#[test]
+	fn maps_https_pass_through_endpoint_and_reports_unmapped_fields() {
+		assert_litellm_golden("pass-through-endpoint-https-and-fields");
+	}
+
+	#[test]
+	fn reports_stdio_mcp_static_headers_and_malformed_args_env() {
+		assert_litellm_golden("mcp-server-stdio-invalid");
+	}
+
+	#[test]
+	fn switches_weighted_routing_to_order_based_failover_without_fallbacks() {
+		assert_litellm_golden("order-priority-no-fallbacks");
+	}
+
+	#[test]
+	fn shifts_fallback_priority_tiers_after_order_based_failover() {
+		assert_litellm_golden("order-priority-with-fallbacks");
+	}
+
+	#[test]
+	fn leaves_weighted_routing_when_order_is_only_set_on_some_deployments() {
+		assert_litellm_golden("order-partial");
+	}
+
+	#[test]
+	fn reports_invalid_litellm_order_without_using_it_for_priority() {
+		assert_litellm_golden("order-invalid");
+	}
+
+	#[test]
+	fn leaves_weighted_routing_when_order_is_tied_across_deployments() {
+		assert_litellm_golden("order-tied");
+	}
+
+	#[test]
+	fn drops_stale_rpm_weight_findings_for_a_mixed_order_tie() {
+		assert_litellm_golden("order-mixed-ties");
+	}
+
+	#[test]
+	fn does_not_emit_llm_policies_timeout_when_router_timeout_absent() {
+		let mut plan = ImportPlan::default();
+		import_litellm_timeout(
+			json!({}).as_object().expect("router settings object"),
+			&mut plan,
+		);
+		assert!(plan.timeout.is_none());
+		assert!(plan.findings.is_empty());
 	}
 
 	#[test]
@@ -2669,10 +3544,5 @@ router_settings:
 	#[test]
 	fn counts_unimported_fallback_targets_against_depth() {
 		assert_litellm_golden("default-fallbacks-unimported-depth");
-	}
-
-	#[test]
-	fn lists_registered_sources_in_stable_order() {
-		assert_eq!(available_sources(), vec!["litellm"]);
 	}
 }

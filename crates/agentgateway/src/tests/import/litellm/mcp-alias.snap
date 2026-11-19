@@ -1,0 +1,59 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/mcp-alias.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://github-mcp:8080/mcp"
+        name: github
+      - mcp:
+          host: "http://zapier-mcp:8080/mcp"
+        name: zapier
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.github_mcp_server
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"github\""
+  - sourcePath: mcp_servers.zapier_production
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"zapier\""
+  - sourcePath: mcp_servers
+    status: manual
+    message: "Multiple MCP servers are multiplexed behind one endpoint; agentgateway's default conditional tool-name prefixing may not match LiteLLM's own per-server/alias tool naming exactly"
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied"

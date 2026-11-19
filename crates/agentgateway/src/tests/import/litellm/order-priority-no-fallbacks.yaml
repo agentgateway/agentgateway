@@ -1,0 +1,11 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: bedrock/anthropic.claude-sonnet-5
+    aws_region_name: eu-west-2
+    order: 1
+- model_name: chat
+  litellm_params:
+    model: bedrock/anthropic.claude-opus-5-5
+    aws_region_name: eu-west-2
+    order: 2

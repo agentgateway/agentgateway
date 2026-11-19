@@ -1,0 +1,19 @@
+model_list:
+- model_name: chat-primary
+  litellm_params:
+    model: bedrock/anthropic.claude-sonnet-5
+    aws_region_name: eu-west-2
+    order: 1
+- model_name: chat-primary
+  litellm_params:
+    model: bedrock/anthropic.claude-opus-5-5
+    aws_region_name: eu-west-2
+    order: 2
+- model_name: chat-fallback
+  litellm_params:
+    model: bedrock/anthropic.claude-sonnet-4-6
+    aws_region_name: eu-west-2
+
+litellm_settings:
+  fallbacks:
+    - chat-primary: ["chat-fallback"]

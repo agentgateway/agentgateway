@@ -1,5 +1,5 @@
 ---
-source: crates/agentgateway/src/import.rs
+source: crates/agentgateway/src/import/litellm.rs
 description: src/tests/import/litellm/default-fallbacks-wildcard.yaml
 ---
 source: litellm
@@ -35,3 +35,6 @@ findings:
   - sourcePath: router_settings.default_fallbacks
     status: exact
     message: default_fallbacks changed no routes; every chain already matches the explicit fallbacks or self-exclusion removed every candidate
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"

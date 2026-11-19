@@ -1,0 +1,70 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/mcp-server-stdio-invalid.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - stdio:
+          cmd: npx
+          args: []
+          env: {}
+        name: fs-with-headers
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.fs_with_headers
+    status: approximate
+    message: "Renamed \"fs_with_headers\" to \"fs-with-headers\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.fs_with_headers
+    status: unsupported
+    message: LiteLLM static_headers has no meaning for a stdio MCP target and was not applied
+  - sourcePath: mcp_servers.fs_with_headers
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"fs-with-headers\""
+  - sourcePath: mcp_servers.fs_bad_args
+    status: approximate
+    message: "Renamed \"fs_bad_args\" to \"fs-bad-args\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.fs_bad_args
+    status: manual
+    message: LiteLLM stdio args must be an array of strings and was not emitted
+  - sourcePath: mcp_servers.fs_bad_env
+    status: approximate
+    message: "Renamed \"fs_bad_env\" to \"fs-bad-env\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.fs_bad_env
+    status: manual
+    message: LiteLLM stdio env must be an object and was not emitted
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mirrored the inbound API-key policy onto the MCP gateway so /mcp also requires master_key; LiteLLM's own DB-managed per-key MCP grants were not available here and were not applied"

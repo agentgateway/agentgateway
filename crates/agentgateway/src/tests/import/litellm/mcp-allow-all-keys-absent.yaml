@@ -1,0 +1,10 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: sk-test-master-key
+mcp_servers:
+  test_tools:
+    url: "http://mcp-test-server:8081/mcp"
+    transport: "http"

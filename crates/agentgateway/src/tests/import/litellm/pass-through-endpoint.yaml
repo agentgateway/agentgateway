@@ -1,0 +1,11 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  pass_through_endpoints:
+  - path: "/echo"
+    target: "http://mcp-test-server:8081/healthz"
+    auth: true
+    forward_headers: true

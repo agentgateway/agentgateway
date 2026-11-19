@@ -852,6 +852,82 @@ async fn api_key() {
 	// No match
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 401);
+
+	// A bare credential value with no "bearer " prefix must not match: the
+	// policy's location is header-based with a required prefix, not a raw
+	// shared-secret comparison.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", "sk-123")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+}
+
+/// Request-level coverage for the LiteLLM importer's `general_settings.master_key` mapping
+/// with a custom `litellm_key_header_name`: the generated `apiKey` policy accepts the raw
+/// key on that header. LiteLLM itself would also accept the same key with a Bearer prefix
+/// on this header; this importer's mapping does not replicate that fallback.
+#[tokio::test]
+async fn migrated_litellm_custom_header_master_key_enforces_inbound_api_key() {
+	let litellm_config = r#"
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: literal-master-key
+  litellm_key_header_name: X-LiteLLM-Key
+"#;
+	let imported =
+		agentgateway::import::import_config("litellm", litellm_config).expect("litellm config imports");
+	let policies = imported.config["llm"]["policies"].clone();
+	assert_ne!(
+		policies,
+		Value::Null,
+		"importer must emit an apiKey policy for a configured master_key"
+	);
+
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind.attach_route_policy(policies).await;
+
+	// Valid credential, on the migrated custom header.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("x-litellm-key", "literal-master-key")],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+
+	// Missing credential.
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 401);
+
+	// Incorrect credential.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("x-litellm-key", "wrong-key")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+
+	// LiteLLM itself would also accept this key with a Bearer prefix on this header; the
+	// importer's own finding says it doesn't replicate that fallback, so a prefixed value
+	// must be rejected here too.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("x-litellm-key", "Bearer literal-master-key")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
 }
 
 #[tokio::test]

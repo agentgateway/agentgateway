@@ -1,0 +1,8 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  pass_through_endpoints:
+  - path: "/status"
+    target: "http://mcp-test-server:8081/status"

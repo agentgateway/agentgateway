@@ -1,0 +1,7 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+general_settings: {}
+environment_variables:
+  LITELLM_MASTER_KEY: sk-not-actually-imported
