@@ -2649,7 +2649,7 @@ struct LocalLLMPolicy {
 	/// Guardrails to apply to every configured model.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	guardrails: Option<PromptGuard>,
-	/// Local rate limits for incoming requests.
+	/// Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.
 	#[serde(default)]
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
 	/// Remote rate limit checks for incoming requests.
@@ -3155,7 +3155,7 @@ pub struct FilterOrPolicy {
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	backend_auth: Option<LocalBackendAuth>,
-	/// Local rate limits for incoming requests.
+	/// Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
 	/// Remote rate limit checks for incoming requests.
