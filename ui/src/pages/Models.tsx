@@ -12,7 +12,7 @@ import {
 	Trash2
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { CatalogModelSelector } from '@/components/CatalogModelSelector';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
@@ -153,9 +153,19 @@ function ModelsEditorPage() {
 	const providerQuery = useConfigResourcesByKind('llm.provider');
 	const modelResources = modelQuery.data?.resources;
 	const virtualModelResources = virtualModelQuery.data?.resources;
-	const models = modelResources?.map(resource => resource.value) ?? [];
-	const virtualModels = virtualModelResources?.map(resource => resource.value) ?? [];
-	const providers = providerQuery.data?.resources.map(resource => resource.value) ?? [];
+	const providerResources = providerQuery.data?.resources;
+	const models = useMemo(
+		() => modelResources?.map(resource => resource.value) ?? [],
+		[modelResources]
+	);
+	const virtualModels = useMemo(
+		() => virtualModelResources?.map(resource => resource.value) ?? [],
+		[virtualModelResources]
+	);
+	const providers = useMemo(
+		() => providerResources?.map(resource => resource.value) ?? [],
+		[providerResources]
+	);
 	const isLoading =
 		runtime.isLoading ||
 		modelQuery.isLoading ||
