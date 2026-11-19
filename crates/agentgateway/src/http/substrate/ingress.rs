@@ -49,6 +49,24 @@ enum ResumeError {
 }
 
 impl ResumeError {
+	fn route_outcome(&self) -> RouteOutcome {
+		match self {
+			Self::ParkingFull => RouteOutcome::NoCapacity,
+			Self::InvalidResponse(_) => RouteOutcome::ResumeError,
+			Self::Status(status) => match status.code() {
+				Code::Cancelled => RouteOutcome::Cancelled,
+				Code::DeadlineExceeded => RouteOutcome::Timeout,
+				Code::ResourceExhausted => RouteOutcome::NoCapacity,
+				Code::FailedPrecondition => RouteOutcome::FailedPrecondition,
+				Code::Aborted => RouteOutcome::LockConflict,
+				Code::NotFound => RouteOutcome::NotFound,
+				Code::Unavailable => RouteOutcome::Unavailable,
+				Code::PermissionDenied => RouteOutcome::Denied,
+				_ => RouteOutcome::ResumeError,
+			},
+		}
+	}
+
 	fn into_proxy_error(self, actor: &ActorRef) -> ProxyError {
 		let (status, body, reason) = match self {
 			Self::ParkingFull => (
@@ -618,7 +636,7 @@ impl SubstrateRequestState {
 				Ok(Target::Address(target))
 			},
 			Err((error, source)) => {
-				self.route_outcome = Some(RouteOutcome::ResumeError);
+				self.route_outcome = Some(error.route_outcome());
 				pol_event!(
 					TRACE_POLICY_KIND,
 					Severity::Error,
@@ -833,6 +851,30 @@ mod tests {
 					.as_ref(),
 				expected.as_bytes()
 			);
+		}
+	}
+
+	#[test]
+	fn resume_errors_keep_substrate_route_outcomes() {
+		for (error, expected) in [
+			(
+				super::ResumeError::Status(Status::permission_denied("denied")),
+				super::RouteOutcome::Denied,
+			),
+			(
+				super::ResumeError::Status(Status::not_found("missing")),
+				super::RouteOutcome::NotFound,
+			),
+			(
+				super::ResumeError::Status(Status::unavailable("down")),
+				super::RouteOutcome::Unavailable,
+			),
+			(
+				super::ResumeError::ParkingFull,
+				super::RouteOutcome::NoCapacity,
+			),
+		] {
+			assert_eq!(error.route_outcome(), expected);
 		}
 	}
 
