@@ -183,7 +183,7 @@
           ]
         },
         "fileAccess": {
-          "description": "Limits file reads triggered by configuration API validation.\nThe longest matching prefix wins. A tie goes to `deny`.",
+          "description": "Restricts which resource files configuration API validation may use.\nThe longest matching prefix wins. A tie goes to `deny`.",
           "anyOf": [
             {
               "$ref": "#/$defs/FileAccess"
@@ -1046,7 +1046,7 @@
       ]
     },
     "FileAccess": {
-      "description": "Limits file reads triggered by configuration API validation.\n\nThe longest matching prefix wins. A tie goes to `deny`.",
+      "description": "Restricts which resource files configuration API validation may use.\n\nThe longest matching prefix wins. A tie goes to `deny`.",
       "type": "object",
       "properties": {
         "allow": {

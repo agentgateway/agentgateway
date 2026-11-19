@@ -49,7 +49,7 @@ pub enum ResourceRef {
 	Http { url: http::Uri, kind: ResourceKind },
 }
 
-/// Limits file reads triggered by configuration API validation.
+/// Restricts which resource files configuration API validation may use.
 ///
 /// The longest matching prefix wins. A tie goes to `deny`.
 #[apply(schema!)]
@@ -66,15 +66,13 @@ pub struct FileAccess {
 impl FileAccess {
 	const BUILTIN_DENY: [&str; 3] = ["/dev", "/proc", "/sys"];
 
-	/// Checks the requested path against the prefix rules.
-	/// When the path resolves, checks that the target is an allowed regular file.
+	/// Checks the requested path and its resolved target against the prefix rules,
+	/// and that the target is a regular file.
 	pub fn check(&self, path: &Path) -> anyhow::Result<()> {
-		let resolved = fs_err::canonicalize(path).ok();
+		let resolved = fs_err::canonicalize(path)?;
 		let allowed = self.allowed(path, |prefix| prefix.to_path_buf())
-			&& resolved.as_deref().is_none_or(|resolved| {
-				self.allowed(resolved, |prefix| {
-					fs_err::canonicalize(prefix).unwrap_or_else(|_| prefix.to_path_buf())
-				})
+			&& self.allowed(&resolved, |prefix| {
+				fs_err::canonicalize(prefix).unwrap_or_else(|_| prefix.to_path_buf())
 			});
 		if !allowed {
 			anyhow::bail!(
@@ -82,9 +80,7 @@ impl FileAccess {
 				path.display()
 			);
 		}
-		if let Some(resolved) = resolved
-			&& !fs_err::metadata(&resolved)?.is_file()
-		{
+		if !fs_err::metadata(&resolved)?.is_file() {
 			anyhow::bail!("file {} is not a regular file", path.display());
 		}
 		Ok(())
@@ -161,7 +157,7 @@ impl ResourceFetcher {
 	}
 
 	/// Reads from the manager cache when present, otherwise fetches once without retaining or watching.
-	/// Uncached files must pass `file_access`.
+	/// Files must pass `file_access`, cached or not.
 	pub fn cached_or_direct(manager: ResourceManager, file_access: FileAccess) -> Self {
 		Self {
 			mode: ResourceFetcherMode::CachedOrDirect(manager, file_access),
@@ -473,11 +469,11 @@ impl ResourceManager {
 		resource: ResourceRef,
 		file_access: &FileAccess,
 	) -> anyhow::Result<Bytes> {
-		if let Some(content) = self.cached(&resource) {
-			return Ok(content);
-		}
 		if let ResourceRef::File(path) = &resource {
 			file_access.check(path)?;
+		}
+		if let Some(content) = self.cached(&resource) {
+			return Ok(content);
 		}
 		fetch_direct(&self.inner.client, &resource)
 			.await

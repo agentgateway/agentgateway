@@ -178,7 +178,7 @@ pub struct RawConfig {
 	database: Option<database::DatabaseConfig>,
 	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
 	storage: Option<RawStorageConfig>,
-	/// Limits file reads triggered by configuration API validation.
+	/// Restricts which resource files configuration API validation may use.
 	/// The longest matching prefix wins. A tie goes to `deny`.
 	file_access: Option<resource_manager::FileAccess>,
 
