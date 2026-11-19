@@ -134,6 +134,7 @@ fn test_metadata_from_header() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	// Simulate transformation CEL setting x-bedrock-metadata header
@@ -193,6 +194,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = messages::typed::Request {
@@ -248,6 +250,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = messages::typed::Request {
@@ -305,6 +308,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let catalog = crate::model_catalog::TestCatalog::new([(
@@ -377,6 +381,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = messages::typed::Request {
@@ -456,6 +461,7 @@ fn test_enabled_thinking_applies_sampling_constraints_and_preserves_tool_choice(
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	// Manual extended thinking rejects forced tool use, so the client's tool_choice must be
@@ -555,6 +561,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = messages::typed::Request {
@@ -603,6 +610,7 @@ fn test_completions_image_data_url_maps_to_converse_image_block() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::completions::Request = serde_json::from_value(json!({
@@ -647,6 +655,7 @@ fn test_completions_image_url_to_bedrock_returns_error() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 	let req: types::completions::Request = serde_json::from_value(json!({
 		"model": "gpt-4o",
@@ -672,6 +681,7 @@ fn test_completions_request_metadata_only_uses_bedrock_header() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = types::completions::typed::Request {
@@ -759,6 +769,7 @@ fn test_completions_json_schema_response_format_maps_to_converse_output_config()
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let schema = json!({
@@ -857,6 +868,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = types::completions::typed::Request {
@@ -934,6 +946,7 @@ fn test_completions_explicit_thinking_budget_forces_enabled_thinking() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = types::completions::typed::Request {
@@ -1014,6 +1027,7 @@ fn test_responses_request_metadata_only_uses_bedrock_header() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1059,6 +1073,7 @@ fn test_responses_reasoning_effort_maps_to_enabled_thinking_budget() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1095,6 +1110,7 @@ fn test_responses_explicit_thinking_budget_forces_enabled_thinking() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1134,6 +1150,7 @@ fn test_responses_vendor_extension_thinking_budget_forces_enabled_thinking() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1580,6 +1597,7 @@ fn test_prompt_caching_message_offset() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 	let roles = ["user", "assistant", "user", "assistant", "user"];
 	// (message count, offset, expected cached message index)
@@ -1660,6 +1678,7 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = messages::Request {
@@ -1720,6 +1739,7 @@ fn test_messages_long_tool_name_round_trip_response() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req = messages::Request {
@@ -1814,6 +1834,7 @@ fn test_responses_assistant_input_image_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1847,6 +1868,7 @@ fn test_responses_input_image_remote_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1880,6 +1902,7 @@ fn test_responses_input_image_non_base64_data_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1913,6 +1936,7 @@ fn test_responses_input_image_non_image_data_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1946,6 +1970,7 @@ fn test_responses_input_image_empty_media_type_data_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1979,6 +2004,7 @@ fn test_responses_input_image_file_id_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -2007,6 +2033,7 @@ fn test_responses_system_input_file_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -2041,6 +2068,7 @@ fn test_responses_input_file_id_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -2072,6 +2100,7 @@ fn test_responses_input_file_remote_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -2104,6 +2133,7 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_api: None,
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
