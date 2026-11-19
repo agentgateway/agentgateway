@@ -278,13 +278,16 @@ impl Provider {
 		native_chat: bool,
 	) -> Strng {
 		if matches!(endpoint, BedrockEndpoint::Mantle) {
+			let openai_prefix = mantle_serves_under_openai_prefix(model);
 			return match route_type {
+				super::RouteType::Responses if openai_prefix => strng::literal!("/openai/v1/responses"),
 				super::RouteType::Responses => strng::literal!("/v1/responses"),
 				super::RouteType::Messages => strng::literal!("/anthropic/v1/messages"),
 				super::RouteType::AnthropicTokenCount => {
 					strng::literal!("/anthropic/v1/messages/count_tokens")
 				},
 				super::RouteType::Models => strng::literal!("/v1/models"),
+				_ if openai_prefix => strng::literal!("/openai/v1/chat/completions"),
 				_ => strng::literal!("/v1/chat/completions"),
 			};
 		}
@@ -325,6 +328,19 @@ impl Provider {
 			},
 		}
 	}
+}
+
+// Mantle serves these model families under `/openai/v1` and rejects them on `/v1` with "isn't
+// supported on this route"; every other Mantle model (GPT OSS, Gemma 3, DeepSeek, Qwen, ...) is
+// served under `/v1`. Source: the Programmatic Access table of each Bedrock model card.
+const MANTLE_OPENAI_PREFIX_FAMILIES: &[&str] = &["openai.gpt-", "google.gemma-4", "xai.grok-"];
+const MANTLE_V1_EXCEPTIONS: &[&str] = &["openai.gpt-oss-"];
+
+fn mantle_serves_under_openai_prefix(model: &str) -> bool {
+	MANTLE_OPENAI_PREFIX_FAMILIES
+		.iter()
+		.any(|p| model.starts_with(p))
+		&& !MANTLE_V1_EXCEPTIONS.iter().any(|p| model.starts_with(p))
 }
 
 #[cfg(test)]
@@ -451,14 +467,43 @@ mod tests {
 			"/anthropic/v1/messages"
 		);
 		assert_eq!(
-			p.get_path_for_route(RouteType::Responses, false, "m", ep, p.native_chat(ep))
+			p.get_path_for_route(RouteType::Models, false, "m", ep, p.native_chat(ep))
 				.as_str(),
-			"/v1/responses"
+			"/v1/models"
 		);
+	}
+
+	// One row per Mantle model card family, so a /v1 model can never drift onto /openai/v1.
+	#[rstest::rstest]
+	#[case::gpt_5_4("openai.gpt-5.4", "/openai/v1")]
+	#[case::gpt_5_6_sol("openai.gpt-5.6-sol", "/openai/v1")]
+	#[case::gpt_5_6_cyber("openai.gpt-5.6-cyber", "/openai/v1")]
+	#[case::daybreak_blue("openai.gpt-daybreak-blue-5.6-sol", "/openai/v1")]
+	#[case::gpt_6_astra("openai.gpt-6-astra", "/openai/v1")]
+	#[case::gpt_6_1_sol("openai.gpt-6.1-sol", "/openai/v1")]
+	#[case::gemma_4_e2b("google.gemma-4-e2b", "/openai/v1")]
+	#[case::gemma_4_31b("google.gemma-4-31b", "/openai/v1")]
+	#[case::grok_4_3("xai.grok-4.3", "/openai/v1")]
+	#[case::grok_4_6("xai.grok-4.6", "/openai/v1")]
+	#[case::gpt_oss_120b("openai.gpt-oss-120b", "/v1")]
+	#[case::gpt_oss_safeguard_20b("openai.gpt-oss-safeguard-20b", "/v1")]
+	#[case::gemma_3_12b("google.gemma-3-12b-it", "/v1")]
+	#[case::deepseek("deepseek.v3.2", "/v1")]
+	#[case::qwen("qwen.qwen3-32b", "/v1")]
+	#[case::mistral("mistral.mistral-large-3", "/v1")]
+	#[case::kimi("moonshotai.kimi-k2.5", "/v1")]
+	#[case::glm("zai.glm-5", "/v1")]
+	fn mantle_openai_paths_follow_the_model_card_prefix(#[case] model: &str, #[case] prefix: &str) {
+		let p = provider(BedrockEndpointPreference::MantleOnly);
+		let ep = BedrockEndpoint::Mantle;
+		let path = |rt| {
+			p.get_path_for_route(rt, false, model, ep, p.native_chat(ep))
+				.to_string()
+		};
+		assert_eq!(path(RouteType::Responses), format!("{prefix}/responses"));
 		assert_eq!(
-			p.get_path_for_route(RouteType::Completions, false, "m", ep, p.native_chat(ep))
-				.as_str(),
-			"/v1/chat/completions"
+			path(RouteType::Completions),
+			format!("{prefix}/chat/completions")
 		);
 	}
 
