@@ -3,8 +3,9 @@ import { useState } from 'react';
 
 import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
-import { Field, FieldGroup } from '@/components/Primitives';
+import { Field, FieldGroup, StatusBanner } from '@/components/Primitives';
 import type { RateLimitSpec } from '@/gateway-config';
+import { useRuntimeInfo } from '@/hooks';
 import type { LocalRateLimitConfig, LocalRateLimitDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -29,6 +30,8 @@ export function LocalRateLimitPolicyEditor(props: {
 		}
 	] as LocalRateLimitDraft;
 	const merged = useMergedEdits(props.localRateLimit, preview);
+	const runtime = useRuntimeInfo();
+	const hybrid = runtime.data?.ui.configStoreMode === 'hybrid';
 
 	if (
 		props.localRateLimit &&
@@ -48,6 +51,11 @@ export function LocalRateLimitPolicyEditor(props: {
 			}}
 		>
 			<LostFieldsWarning lost={merged.lost} />
+			{hybrid ? (
+				<StatusBanner state="info" title="Each gateway instance counts separately">
+					Use Remote rate limit for a shared limit.
+				</StatusBanner>
+			) : null}
 			<div className="form-grid">
 				<FieldGroup
 					label="Limit type"
