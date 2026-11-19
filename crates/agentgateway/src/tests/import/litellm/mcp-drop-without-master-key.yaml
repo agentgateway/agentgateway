@@ -1,0 +1,13 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+mcp_servers:
+  test_tools:
+    url: "http://mcp-test-server:8081/mcp"
+    transport: "http"
+    allow_all_keys: true
+  test_tools_restricted:
+    url: "http://mcp-test-server:8081/mcp"
+    transport: "http"
+    allow_all_keys: false

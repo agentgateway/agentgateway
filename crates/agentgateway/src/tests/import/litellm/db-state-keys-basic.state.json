@@ -1,0 +1,43 @@
+{
+  "teams": [
+    {
+      "team_id": "team-1",
+      "models": ["open-weight"],
+      "blocked": false
+    }
+  ],
+  "keys": [
+    {
+      "key_hash": "45726683d4b5813db3289489e8ca5a5b8e20474750494e529391c966dd173705",
+      "key_alias": "no-team-full-list",
+      "team_id": null,
+      "models": ["chat-primary"],
+      "expires": null,
+      "blocked": null
+    },
+    {
+      "key_hash": "c32794cbd82f8575beeb5aebf3fe4ba21f90811f121fbc37287fd5d6d84a7ab5",
+      "key_alias": "inherits-team-list",
+      "team_id": "team-1",
+      "models": [],
+      "expires": null,
+      "blocked": null
+    },
+    {
+      "key_hash": "06a8b47325af7878b1cc1a614bd0f762d128ac6a6fc5ec6136bb428cab111698",
+      "key_alias": "zero-overlap-with-team",
+      "team_id": "team-1",
+      "models": ["chat-primary"],
+      "expires": null,
+      "blocked": null
+    },
+    {
+      "key_hash": "b4597164a3402b182d2deef9c005976cd3a490eddd03b51bc7b073900bd53e02",
+      "key_alias": null,
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "teams": [
+    {
+      "team_id": "team-with-mcp-ceiling",
+      "models": [],
+      "blocked": false,
+      "max_budget": null,
+      "spend": null,
+      "object_permission": ["restricted_server"]
+    }
+  ],
+  "keys": [
+    {
+      "key_hash": "90bb583dfe56630a0b4a3fcbe56ecf20ef324e7b8678a8ce81edb7bc3f4a67ec",
+      "key_alias": "team-perm-key-inherits",
+      "team_id": "team-with-mcp-ceiling",
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "mcp_servers": []
+    },
+    {
+      "key_hash": "cfb9499a823476f77f65fe1bcad291071d9fcea85024128572fba71e1c795fe8",
+      "key_alias": "team-perm-key-matches-ceiling",
+      "team_id": "team-with-mcp-ceiling",
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "mcp_servers": ["restricted_server"]
+    },
+    {
+      "key_hash": "3d57c03115596b90ef7975308b8d991f1381d9dc4dcc6c42f1811d39c432be47",
+      "key_alias": "team-perm-key-excluded",
+      "team_id": "team-with-mcp-ceiling",
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "mcp_servers": ["open_server"]
+    }
+  ],
+  "mcp_servers": [
+    {
+      "server_id": "open-id",
+      "server_name": "open_server",
+      "allow_all_keys": true
+    },
+    {
+      "server_id": "restricted-id",
+      "server_name": "restricted_server",
+      "allow_all_keys": false
+    }
+  ]
+}

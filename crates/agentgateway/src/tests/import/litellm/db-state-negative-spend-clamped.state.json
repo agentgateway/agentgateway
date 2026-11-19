@@ -1,0 +1,13 @@
+{
+  "teams": [
+    {"team_id": "team-1", "max_budget": 100.0, "spend": -10.0}
+  ],
+  "keys": [
+    {
+      "key_hash": "ffff6666ffff6666ffff6666ffff6666ffff6666ffff6666ffff6666ffff6666",
+      "key_alias": "pool-share",
+      "team_id": "team-1"
+    }
+  ],
+  "mcp_servers": []
+}

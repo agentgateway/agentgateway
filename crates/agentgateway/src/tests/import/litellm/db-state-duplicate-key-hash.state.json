@@ -1,0 +1,15 @@
+{
+  "teams": [],
+  "keys": [
+    {
+      "key_hash": "dddd4444dddd4444dddd4444dddd4444dddd4444dddd4444dddd4444dddd4444",
+      "key_alias": "a-restricted",
+      "models": ["chat"]
+    },
+    {
+      "key_hash": "dddd4444dddd4444dddd4444dddd4444dddd4444dddd4444dddd4444dddd4444",
+      "key_alias": "b-unrestricted"
+    }
+  ],
+  "mcp_servers": []
+}

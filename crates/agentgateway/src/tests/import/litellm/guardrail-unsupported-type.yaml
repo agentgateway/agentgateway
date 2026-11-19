@@ -1,0 +1,9 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+guardrails:
+- guardrail_name: presidio-pii
+  litellm_params:
+    guardrail: presidio
+    mode: ["pre_call"]

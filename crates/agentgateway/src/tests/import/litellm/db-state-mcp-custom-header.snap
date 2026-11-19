@@ -1,0 +1,65 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-mcp-custom-header.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+        mode: strict
+        location:
+          header:
+            name: x-litellm-key
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: test-tools
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+            metadata:
+              name: master
+        mode: strict
+        location:
+          header:
+            name: x-litellm-key
+      mcpAuthorization:
+        rules:
+          - "(has(mcp.tool) && mcp.tool.target == \"test-tools\") || (has(mcp.prompt) && mcp.prompt.target == \"test-tools\") || (has(mcp.resource) && mcp.resource.target == \"test-tools\")"
+          - "apiKey.name == \"master\""
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: general_settings.litellm_key_header_name
+    status: exact
+    message: "Mapped LiteLLM's custom API-key header name to the inbound API-key policy"
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Renamed \"test_tools\" to \"test-tools\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"test-tools\""

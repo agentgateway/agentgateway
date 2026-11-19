@@ -1,0 +1,53 @@
+{
+  "teams": [],
+  "keys": [
+    {
+      "key_hash": "9abf8211bc2c5869969ff3024818da674bc9061ca5d6699506eeedd4654b1701",
+      "key_alias": "daily-reset-key",
+      "team_id": null,
+      "user_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": 10.0,
+      "spend": 2.0,
+      "soft_budget": null,
+      "budget_duration": "1d",
+      "rpm_limit": null,
+      "tpm_limit": null,
+      "mcp_servers": []
+    },
+    {
+      "key_hash": "104b003508380b5056d5d22ab350386c4952bce6c8c5e0a7fbb56a32b5b6ecf0",
+      "key_alias": "hourly-reset-key",
+      "team_id": null,
+      "user_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": 5.0,
+      "spend": 0.0,
+      "soft_budget": null,
+      "budget_duration": "hourly",
+      "rpm_limit": null,
+      "tpm_limit": null,
+      "mcp_servers": []
+    },
+    {
+      "key_hash": "5d3afe8a1fdd954d6d0bbebe480075a87f225941c1826126aefe9a4298c48494",
+      "key_alias": "weekly-reset-key",
+      "team_id": null,
+      "user_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": 20.0,
+      "spend": 0.0,
+      "soft_budget": null,
+      "budget_duration": "7d",
+      "rpm_limit": null,
+      "tpm_limit": null,
+      "mcp_servers": []
+    }
+  ]
+}

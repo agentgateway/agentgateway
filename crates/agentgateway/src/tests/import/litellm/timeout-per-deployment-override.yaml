@@ -1,0 +1,7 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+    timeout: 10
+router_settings:
+  timeout: 30

@@ -1,0 +1,33 @@
+{
+  "teams": [
+    {
+      "team_id": "team-with-limits",
+      "models": [],
+      "blocked": false,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": "30d",
+      "rpm_limit": 500,
+      "tpm_limit": 1000000,
+      "object_permission": []
+    }
+  ],
+  "keys": [
+    {
+      "key_hash": "ae058b38bff255f5aa1954d4cdd9e348b4f487293a2b6484da8d2511f581222b",
+      "key_alias": "not-consumed-key",
+      "team_id": "team-with-limits",
+      "user_id": "user-abc-123",
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "soft_budget": 15.0,
+      "budget_duration": null,
+      "rpm_limit": 10,
+      "tpm_limit": 20000,
+      "mcp_servers": []
+    }
+  ]
+}

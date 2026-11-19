@@ -1,0 +1,8 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+mcp_servers:
+  known_server:
+    url: "http://mcp-test-server:8081/mcp"
+    transport: "http"

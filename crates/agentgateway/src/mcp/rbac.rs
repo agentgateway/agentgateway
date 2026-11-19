@@ -138,7 +138,7 @@ mod tests {
 
 	use super::*;
 	use crate::http::authorization::PolicySet;
-	use crate::mcp::guardrails::methods::{TOOLS_CALL, TOOLS_LIST};
+	use crate::mcp::guardrails::methods::{PROMPTS_GET, RESOURCES_READ, TOOLS_CALL, TOOLS_LIST};
 
 	fn cel_context(req: ::http::Request<bytes::Bytes>) -> CelExecWrapper {
 		let (parts, body) = req.into_parts();
@@ -149,6 +149,14 @@ mod tests {
 
 	fn tool_resource(target: &str, name: &str) -> ResourceType {
 		ResourceType::Tool(ResourceId::new(target.to_string(), name.to_string()))
+	}
+
+	fn prompt_resource(target: &str, name: &str) -> ResourceType {
+		ResourceType::Prompt(ResourceId::new(target.to_string(), name.to_string()))
+	}
+
+	fn resource_resource(target: &str, name: &str) -> ResourceType {
+		ResourceType::Resource(ResourceId::new(target.to_string(), name.to_string()))
 	}
 
 	fn req_with_claims(claims: serde_json::Value) -> ::http::Request<bytes::Bytes> {
@@ -270,5 +278,24 @@ mod tests {
 
 		assert!(authz.validate(&res, &TOOLS_LIST, &cel));
 		assert!(!authz.validate(&res, &TOOLS_CALL, &cel));
+	}
+
+	// Verifies the has()-guarded cross-resource-type rule shape the LiteLLM --db-state
+	// importer emits (a grant must cover tools, prompts and resources, not just tools).
+	#[test]
+	fn test_mcp_authorization_has_guard_spans_tool_prompt_and_resource() {
+		let authz = authorization_set(
+			r#"(has(mcp.tool) && mcp.tool.target == "x") ||
+			   (has(mcp.prompt) && mcp.prompt.target == "x") ||
+			   (has(mcp.resource) && mcp.resource.target == "x")"#,
+		);
+		let cel = cel_context(req_without_claims());
+
+		assert!(authz.validate(&tool_resource("x", "t"), &TOOLS_CALL, &cel));
+		assert!(authz.validate(&prompt_resource("x", "p"), &PROMPTS_GET, &cel));
+		assert!(authz.validate(&resource_resource("x", "r"), &RESOURCES_READ, &cel));
+		// A different target must still be denied, not error out.
+		assert!(!authz.validate(&tool_resource("y", "t"), &TOOLS_CALL, &cel));
+		assert!(!authz.validate(&prompt_resource("y", "p"), &PROMPTS_GET, &cel));
 	}
 }

@@ -1,0 +1,53 @@
+{
+  "teams": [],
+  "keys": [
+    {
+      "key_hash": "104f6dc2cd8870731ad24984d5212b81ff479a637ec4f0a79593af105459e2fa",
+      "key_alias": "keyA",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null,
+      "mcp_servers": ["test_tools_restricted"]
+    },
+    {
+      "key_hash": "a73c66f711ea669378029fa0e84c2b3ba09cfa16f0c12d8fb0942535e3fc80b6",
+      "key_alias": "keyB",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null,
+      "mcp_servers": []
+    },
+    {
+      "key_hash": "4f71988e7d9d8deeb406cc73575e3b6254ed2049858a980dc27396ceb6969f0a",
+      "key_alias": "keyC-by-id",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null,
+      "mcp_servers": ["server-id-restricted-123"]
+    }
+  ],
+  "mcp_servers": [
+    {
+      "server_id": "server-id-open-abc",
+      "server_name": "test_tools",
+      "allow_all_keys": true
+    },
+    {
+      "server_id": "server-id-restricted-123",
+      "server_name": "test_tools_restricted",
+      "allow_all_keys": false
+    }
+  ]
+}

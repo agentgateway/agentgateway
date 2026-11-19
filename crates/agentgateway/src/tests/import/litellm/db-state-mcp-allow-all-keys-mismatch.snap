@@ -1,0 +1,59 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-mcp-allow-all-keys-mismatch.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+            metadata:
+              name: master
+          - keyHash: "sha256:0dd3257810ad16825f75bcec4d14dfc15959c5cc29f40cf319c4b327533b8449"
+            metadata:
+              name: observer
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.yaml_open_db_closed
+    status: approximate
+    message: "Renamed \"yaml_open_db_closed\" to \"yaml-open-db-closed\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.yaml_open_db_closed
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"yaml-open-db-closed\""
+  - sourcePath: mcp_servers.yaml_closed_db_open
+    status: approximate
+    message: "Renamed \"yaml_closed_db_open\" to \"yaml-closed-db-open\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.yaml_closed_db_open
+    status: unsupported
+    message: "This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"observer\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: db_state.mcp_servers.yaml_open_db_closed
+    status: approximate
+    message: "MCP server \"yaml_open_db_closed\": config.yaml left this server open, but DB-state's allow_all_keys: false disagreed - closed by default, only reachable now via an explicit per-key/per-team grant"
+  - sourcePath: db_state.mcp_servers.yaml_closed_db_open
+    status: manual
+    message: "MCP server \"yaml_closed_db_open\" is open to every key (allow_all_keys) per DB-state, but has no emitted, open agentgateway target to grant access to - check its config.yaml mcp_servers import findings"

@@ -1,0 +1,7 @@
+model_list:
+- model_name: chat-primary
+  litellm_params:
+    model: openai/gpt-4o
+- model_name: open-weight
+  litellm_params:
+    model: bedrock/gpt-oss-120b

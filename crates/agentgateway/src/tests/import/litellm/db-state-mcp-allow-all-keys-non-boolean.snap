@@ -1,0 +1,73 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-mcp-allow-all-keys-non-boolean.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+            metadata:
+              name: master
+          - keyHash: "sha256:9b0623e368f712a81f22d1427fa6c13ced5e95d5d5e431d9332f4dd2638173ca"
+            metadata:
+              name: granted-key
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: test-tools
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:9b0623e368f712a81f22d1427fa6c13ced5e95d5d5e431d9332f4dd2638173ca"
+            metadata:
+              name: granted-key
+          - key: sk-test-master-key
+            metadata:
+              name: master
+        mode: strict
+      mcpAuthorization:
+        rules:
+          - "apiKey.name == \"granted-key\" && ((has(mcp.tool) && mcp.tool.target == \"test-tools\") || (has(mcp.prompt) && mcp.prompt.target == \"test-tools\") || (has(mcp.resource) && mcp.resource.target == \"test-tools\"))"
+          - "apiKey.name == \"master\""
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.test_tools
+    status: manual
+    message: "LiteLLM allow_all_keys must be a boolean; treating this server as restricted (LiteLLM's own default is false)"
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Renamed \"test_tools\" to \"test-tools\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.test_tools
+    status: unsupported
+    message: "This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"granted-key\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: db_state.mcp_servers.test-tools
+    status: approximate
+    message: "Emitted MCP target \"test-tools\", held back because config.yaml set a non-boolean allow_all_keys, which it alone cannot express safely, now restored by a real mcpAuthorization grant"

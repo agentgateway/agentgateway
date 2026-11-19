@@ -1,0 +1,41 @@
+{
+  "teams": [],
+  "keys": [
+    {
+      "key_hash": "0dd3257810ad16825f75bcec4d14dfc15959c5cc29f40cf319c4b327533b8449",
+      "key_alias": "key-unknown-grant",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null,
+      "mcp_servers": ["unknown-grant-xyz"]
+    },
+    {
+      "key_hash": "28d578a24a8935cf09a8ea88e9a0c10c734e83690b1b004f446ab64b446951b4",
+      "key_alias": "key-known-grant",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null,
+      "mcp_servers": ["known_server"]
+    }
+  ],
+  "mcp_servers": [
+    {
+      "server_id": "known-id",
+      "server_name": "known_server",
+      "allow_all_keys": false
+    },
+    {
+      "server_id": "ghost-id",
+      "server_name": "ghost_server",
+      "allow_all_keys": true
+    }
+  ]
+}

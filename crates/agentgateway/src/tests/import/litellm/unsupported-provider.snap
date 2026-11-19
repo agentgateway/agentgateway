@@ -1,5 +1,5 @@
 ---
-source: crates/agentgateway/src/import.rs
+source: crates/agentgateway/src/import/litellm.rs
 description: src/tests/import/litellm/unsupported-provider.yaml
 ---
 source: litellm
@@ -12,10 +12,10 @@ config:
       port: 4000
   ui:
     gateways: default
-  llm:
-    gateways: default
-    models: []
 findings:
   - sourcePath: "model_list[0].litellm_params.model"
     status: unsupported
     message: "LiteLLM provider \"unknown\" is not supported by this importer"
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"

@@ -1,0 +1,71 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-mcp-restricted-open-name-collision.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: gpt-4o
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+            metadata:
+              name: master
+          - keyHash: "sha256:9b0623e368f712a81f22d1427fa6c13ced5e95d5d5e431d9332f4dd2638173ca"
+            metadata:
+              name: granted-key
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://open:8081/mcp"
+        name: shared-target
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:9b0623e368f712a81f22d1427fa6c13ced5e95d5d5e431d9332f4dd2638173ca"
+            metadata:
+              name: granted-key
+          - key: sk-test-master-key
+            metadata:
+              name: master
+        mode: strict
+      mcpAuthorization:
+        rules:
+          - "(has(mcp.tool) && mcp.tool.target == \"shared-target\") || (has(mcp.prompt) && mcp.prompt.target == \"shared-target\") || (has(mcp.resource) && mcp.resource.target == \"shared-target\")"
+          - "apiKey.name == \"granted-key\" && ((has(mcp.tool) && mcp.tool.target == \"shared-target\") || (has(mcp.prompt) && mcp.prompt.target == \"shared-target\") || (has(mcp.resource) && mcp.resource.target == \"shared-target\"))"
+          - "apiKey.name == \"master\""
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for gpt-4o
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.aaa_restricted
+    status: unsupported
+    message: "This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+  - sourcePath: mcp_servers.zzz_open
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"shared-target\""
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"granted-key\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: db_state.mcp_servers.shared-target
+    status: unsupported
+    message: "MCP target \"shared-target\", held back because config.yaml set allow_all_keys: false, which it alone cannot express safely, was not restored; its sanitized name is already used by an emitted server"

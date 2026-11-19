@@ -1,0 +1,74 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-keys-basic.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat-primary
+        provider: openAI
+        params:
+          model: gpt-4o
+      - name: open-weight
+        provider: bedrock
+        params:
+          model: gpt-oss-120b
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:45726683d4b5813db3289489e8ca5a5b8e20474750494e529391c966dd173705"
+            metadata:
+              name: no-team-full-list
+            allowedModels:
+              - chat-primary
+          - keyHash: "sha256:c32794cbd82f8575beeb5aebf3fe4ba21f90811f121fbc37287fd5d6d84a7ab5"
+            metadata:
+              name: inherits-team-list
+            allowedModels:
+              - open-weight
+          - keyHash: "sha256:06a8b47325af7878b1cc1a614bd0f762d128ac6a6fc5ec6136bb428cab111698"
+            metadata:
+              name: zero-overlap-with-team
+            allowedModels: []
+          - keyHash: "sha256:b4597164a3402b182d2deef9c005976cd3a490eddd03b51bc7b073900bd53e02"
+            metadata:
+              name: key-b4597164a340
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat-primary
+  - sourcePath: "model_list[1]"
+    status: exact
+    message: Imported model deployment for open-weight
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"no-team-full-list\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[1]"
+    status: approximate
+    message: "Key has no model list of its own; LiteLLM inherits its team's 1 models. agentgateway has no team construct, so the team's current model list was copied onto this key - a later team model change won't propagate."
+  - sourcePath: "db_state.keys[1]"
+    status: exact
+    message: "Migrated key \"inherits-team-list\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[2]"
+    status: unsupported
+    message: "Key's models have no overlap with its team's models; LiteLLM would deny every model for this key. Migrated with allowedModels: [] (denies all) to match - check whether this key is meant to be usable at all."
+  - sourcePath: "db_state.keys[2]"
+    status: exact
+    message: "Migrated key \"zero-overlap-with-team\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[3]"
+    status: exact
+    message: "Migrated key \"key-b4597164a340\" to llm.policies.apiKey (hash-based, no plaintext)"

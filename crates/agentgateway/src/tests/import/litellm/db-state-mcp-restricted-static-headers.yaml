@@ -1,0 +1,13 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: sk-test-master-key
+mcp_servers:
+  restricted_tools:
+    url: "http://mcp-test-server:8081/mcp"
+    transport: "http"
+    allow_all_keys: false
+    static_headers:
+      x-upstream-token: "os.environ/UPSTREAM_TOKEN"

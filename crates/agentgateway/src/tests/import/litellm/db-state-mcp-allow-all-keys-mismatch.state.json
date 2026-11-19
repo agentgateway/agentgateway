@@ -1,0 +1,29 @@
+{
+  "teams": [],
+  "keys": [
+    {
+      "key_hash": "0dd3257810ad16825f75bcec4d14dfc15959c5cc29f40cf319c4b327533b8449",
+      "key_alias": "observer",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null,
+      "mcp_servers": []
+    }
+  ],
+  "mcp_servers": [
+    {
+      "server_id": "id-open-closed",
+      "server_name": "yaml_open_db_closed",
+      "allow_all_keys": false
+    },
+    {
+      "server_id": "id-closed-open",
+      "server_name": "yaml_closed_db_open",
+      "allow_all_keys": true
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-mcp-grants.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: sk-test-master-key
+            metadata:
+              name: master
+          - keyHash: "sha256:104f6dc2cd8870731ad24984d5212b81ff479a637ec4f0a79593af105459e2fa"
+            metadata:
+              name: keyA
+          - keyHash: "sha256:a73c66f711ea669378029fa0e84c2b3ba09cfa16f0c12d8fb0942535e3fc80b6"
+            metadata:
+              name: keyB
+          - keyHash: "sha256:4f71988e7d9d8deeb406cc73575e3b6254ed2049858a980dc27396ceb6969f0a"
+            metadata:
+              name: keyC-by-id
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: test-tools
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: test-tools-restricted
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:104f6dc2cd8870731ad24984d5212b81ff479a637ec4f0a79593af105459e2fa"
+            metadata:
+              name: keyA
+          - keyHash: "sha256:a73c66f711ea669378029fa0e84c2b3ba09cfa16f0c12d8fb0942535e3fc80b6"
+            metadata:
+              name: keyB
+          - keyHash: "sha256:4f71988e7d9d8deeb406cc73575e3b6254ed2049858a980dc27396ceb6969f0a"
+            metadata:
+              name: keyC-by-id
+          - key: sk-test-master-key
+            metadata:
+              name: master
+        mode: strict
+      mcpAuthorization:
+        rules:
+          - "(has(mcp.tool) && mcp.tool.target == \"test-tools\") || (has(mcp.prompt) && mcp.prompt.target == \"test-tools\") || (has(mcp.resource) && mcp.resource.target == \"test-tools\")"
+          - "apiKey.name == \"keyA\" && ((has(mcp.tool) && mcp.tool.target == \"test-tools-restricted\") || (has(mcp.prompt) && mcp.prompt.target == \"test-tools-restricted\") || (has(mcp.resource) && mcp.resource.target == \"test-tools-restricted\"))"
+          - "apiKey.name == \"keyC-by-id\" && ((has(mcp.tool) && mcp.tool.target == \"test-tools-restricted\") || (has(mcp.prompt) && mcp.prompt.target == \"test-tools-restricted\") || (has(mcp.resource) && mcp.resource.target == \"test-tools-restricted\"))"
+          - "apiKey.name == \"master\""
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Renamed \"test_tools\" to \"test-tools\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.test_tools
+    status: approximate
+    message: "Mapped LiteLLM MCP server to agentgateway target \"test-tools\""
+  - sourcePath: mcp_servers.test_tools_restricted
+    status: approximate
+    message: "Renamed \"test_tools_restricted\" to \"test-tools-restricted\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.test_tools_restricted
+    status: unsupported
+    message: "This server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"keyA\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[1]"
+    status: exact
+    message: "Migrated key \"keyB\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[2]"
+    status: exact
+    message: "Migrated key \"keyC-by-id\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: db_state.mcp_servers.test-tools-restricted
+    status: approximate
+    message: "Emitted MCP target \"test-tools-restricted\", held back because config.yaml set allow_all_keys: false, which it alone cannot express safely, now restored by a real mcpAuthorization grant"

@@ -1,0 +1,6 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  litellm_key_header_name: X-LiteLLM-Key

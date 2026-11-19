@@ -1,0 +1,26 @@
+{
+  "teams": [],
+  "keys": [
+    {
+      "key_hash": "ffddeaab67e8d27315df79fb0e65f3eb8174ff16ebceec0bd6ea68fd6f55072b",
+      "key_alias": "granted-key",
+      "team_id": null,
+      "models": [],
+      "expires": null,
+      "blocked": null,
+      "max_budget": null,
+      "spend": null,
+      "budget_duration": null,
+      "mcp_servers": [
+        "restricted_tools"
+      ]
+    }
+  ],
+  "mcp_servers": [
+    {
+      "server_id": "server-id-restricted-tools",
+      "server_name": "restricted_tools",
+      "allow_all_keys": false
+    }
+  ]
+}

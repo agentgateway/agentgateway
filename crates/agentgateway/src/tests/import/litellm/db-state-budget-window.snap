@@ -1,0 +1,81 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-budget-window.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:9abf8211bc2c5869969ff3024818da674bc9061ca5d6699506eeedd4654b1701"
+            metadata:
+              name: daily-reset-key
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 10
+                onBudgetExceeded: Block
+                window:
+                  rolling: 24h
+          - keyHash: "sha256:104b003508380b5056d5d22ab350386c4952bce6c8c5e0a7fbb56a32b5b6ecf0"
+            metadata:
+              name: hourly-reset-key
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 5
+                onBudgetExceeded: Block
+                window:
+                  rolling: 1h
+          - keyHash: "sha256:5d3afe8a1fdd954d6d0bbebe480075a87f225941c1826126aefe9a4298c48494"
+            metadata:
+              name: weekly-reset-key
+            budgets:
+              - name: litellm
+                limit:
+                  unit: USD
+                  amount: 20
+                onBudgetExceeded: Block
+        mode: strict
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Key has a LiteLLM budget_duration (\"1d\"); LiteLLM resets this on the next UTC calendar day/hour boundary, which is exactly what agentgateway's epoch-aligned rolling window does too, so it was mapped to a resetting budget window"
+  - sourcePath: "db_state.keys[1]"
+    status: exact
+    message: "Key has a LiteLLM budget_duration (\"hourly\"); LiteLLM resets this on the next UTC calendar day/hour boundary, which is exactly what agentgateway's epoch-aligned rolling window does too, so it was mapped to a resetting budget window"
+  - sourcePath: "db_state.keys[2]"
+    status: manual
+    message: "Key has a LiteLLM budget_duration (\"7d\"); only exact daily (\"1d\"/\"24h\"/\"daily\") or hourly (\"1h\"/\"hourly\") durations are mapped - LiteLLM resets weekly/monthly durations on calendar week/month boundaries (a 28-31 day month, a Monday-anchored week) that agentgateway's fixed-length rolling window cannot reproduce exactly, so the migrated budget (if any) never resets"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"daily-reset-key\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[1]"
+    status: exact
+    message: "Migrated key \"hourly-reset-key\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[2]"
+    status: exact
+    message: "Migrated key \"weekly-reset-key\" to llm.policies.apiKey (hash-based, no plaintext)"

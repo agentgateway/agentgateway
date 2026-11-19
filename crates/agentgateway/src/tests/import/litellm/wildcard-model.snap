@@ -1,5 +1,5 @@
 ---
-source: crates/agentgateway/src/import.rs
+source: crates/agentgateway/src/import/litellm.rs
 description: src/tests/import/litellm/wildcard-model.yaml
 ---
 source: litellm
@@ -43,3 +43,6 @@ findings:
   - sourcePath: "model_list[5].litellm_params.model"
     status: unsupported
     message: "LiteLLM upstream wildcard rewrite from public model pattern \"alias-*\" to upstream model pattern \"openai/model-*\" cannot be represented safely and the model was not emitted"
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"

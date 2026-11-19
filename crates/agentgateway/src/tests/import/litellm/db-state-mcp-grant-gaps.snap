@@ -1,0 +1,78 @@
+---
+source: crates/agentgateway/src/import/litellm.rs
+description: src/tests/import/litellm/db-state-mcp-grant-gaps.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:0dd3257810ad16825f75bcec4d14dfc15959c5cc29f40cf319c4b327533b8449"
+            metadata:
+              name: key-unknown-grant
+          - keyHash: "sha256:28d578a24a8935cf09a8ea88e9a0c10c734e83690b1b004f446ab64b446951b4"
+            metadata:
+              name: key-known-grant
+        mode: strict
+  mcp:
+    gateways: default
+    targets:
+      - mcp:
+          host: "http://mcp-test-server:8081/mcp"
+        name: known-server
+    policies:
+      apiKey:
+        keys:
+          - keyHash: "sha256:0dd3257810ad16825f75bcec4d14dfc15959c5cc29f40cf319c4b327533b8449"
+            metadata:
+              name: key-unknown-grant
+          - keyHash: "sha256:28d578a24a8935cf09a8ea88e9a0c10c734e83690b1b004f446ab64b446951b4"
+            metadata:
+              name: key-known-grant
+        mode: strict
+      mcpAuthorization:
+        rules:
+          - "apiKey.name == \"key-known-grant\" && ((has(mcp.tool) && mcp.tool.target == \"known-server\") || (has(mcp.prompt) && mcp.prompt.target == \"known-server\") || (has(mcp.resource) && mcp.resource.target == \"known-server\"))"
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
+  - sourcePath: mcp_servers.known_server
+    status: approximate
+    message: "Renamed \"known_server\" to \"known-server\" to satisfy agentgateway's Gateway-API-style MCP target name pattern (lowercase letters, digits, '-', '.'; no underscores)"
+  - sourcePath: mcp_servers.known_server
+    status: unsupported
+    message: "LiteLLM defaults an omitted allow_all_keys to false, so this server is restricted to specific virtual keys via DB-managed object_permission.mcp_servers grants, which config.yaml alone cannot express; it was not emitted rather than exposing it to every caller"
+  - sourcePath: "db_state.keys[0]"
+    status: exact
+    message: "Migrated key \"key-unknown-grant\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: "db_state.keys[1]"
+    status: exact
+    message: "Migrated key \"key-known-grant\" to llm.policies.apiKey (hash-based, no plaintext)"
+  - sourcePath: db_state.mcp_servers.ghost_server
+    status: manual
+    message: "MCP server \"ghost_server\" is open to every key (allow_all_keys) per DB-state, but has no emitted, open agentgateway target to grant access to - check its config.yaml mcp_servers import findings"
+  - sourcePath: "db_state.keys[0].mcp_servers[0]"
+    status: manual
+    message: "Key \"key-unknown-grant\" is granted MCP server \"unknown-grant-xyz\", which is not a known DB-state MCP server, and was not migrated"
+  - sourcePath: db_state.mcp_servers.known-server
+    status: approximate
+    message: "Emitted MCP target \"known-server\", held back because config.yaml omitted allow_all_keys (LiteLLM defaults this to false), which it alone cannot express safely, now restored by a real mcpAuthorization grant"
