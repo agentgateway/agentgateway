@@ -178,7 +178,8 @@ pub struct RawConfig {
 	database: Option<database::DatabaseConfig>,
 	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
 	storage: Option<RawStorageConfig>,
-	/// Restricts which files may be read by configuration from the API, database, or xDS.
+	/// Limits file reads triggered by configuration API validation.
+	/// The longest matching prefix wins. A tie goes to `deny`.
 	file_access: Option<resource_manager::FileAccess>,
 
 	/// Address of the Certificate Authority used to issue SPIFFE certificates.

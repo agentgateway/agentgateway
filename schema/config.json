@@ -183,7 +183,7 @@
           ]
         },
         "fileAccess": {
-          "description": "Restricts which files may be read by configuration from the API, database, or xDS.",
+          "description": "Limits file reads triggered by configuration API validation.\nThe longest matching prefix wins. A tie goes to `deny`.",
           "anyOf": [
             {
               "$ref": "#/$defs/FileAccess"
@@ -1046,11 +1046,11 @@
       ]
     },
     "FileAccess": {
-      "description": "Restricts which files may be read by configuration from the API, database, or xDS.\nThe local configuration file is not restricted.\n\nThe longest matching prefix decides; `deny` wins a tie.",
+      "description": "Limits file reads triggered by configuration API validation.\n\nThe longest matching prefix wins. A tie goes to `deny`.",
       "type": "object",
       "properties": {
         "allow": {
-          "description": "Path prefixes that may be read. When empty, any path that is not denied may be read.",
+          "description": "Absolute path prefixes to allow. An empty list allows any path that passes the deny rules.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1058,7 +1058,7 @@
           "default": []
         },
         "deny": {
-          "description": "Path prefixes that may not be read, in addition to `/dev`, `/proc`, and `/sys`.",
+          "description": "Absolute path prefixes to deny alongside the default prefixes `/dev`, `/proc`, and `/sys`.",
           "type": "array",
           "items": {
             "type": "string"

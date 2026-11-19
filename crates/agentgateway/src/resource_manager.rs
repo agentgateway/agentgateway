@@ -49,17 +49,16 @@ pub enum ResourceRef {
 	Http { url: http::Uri, kind: ResourceKind },
 }
 
-/// Restricts which files may be read by configuration from the API, database, or xDS.
-/// The local configuration file is not restricted.
+/// Limits file reads triggered by configuration API validation.
 ///
-/// The longest matching prefix decides; `deny` wins a tie.
+/// The longest matching prefix wins. A tie goes to `deny`.
 #[apply(schema!)]
 #[derive(Default)]
 pub struct FileAccess {
-	/// Path prefixes that may be read. When empty, any path that is not denied may be read.
+	/// Absolute path prefixes to allow. An empty list allows any path that passes the deny rules.
 	#[serde(default)]
 	pub allow: Vec<PathBuf>,
-	/// Path prefixes that may not be read, in addition to `/dev`, `/proc`, and `/sys`.
+	/// Absolute path prefixes to deny alongside the default prefixes `/dev`, `/proc`, and `/sys`.
 	#[serde(default)]
 	pub deny: Vec<PathBuf>,
 }
@@ -67,7 +66,8 @@ pub struct FileAccess {
 impl FileAccess {
 	const BUILTIN_DENY: [&str; 3] = ["/dev", "/proc", "/sys"];
 
-	/// Verifies `path` is a readable regular file, both as written and with symlinks resolved.
+	/// Checks the requested path against the prefix rules.
+	/// When the path resolves, checks that the target is an allowed regular file.
 	pub fn check(&self, path: &Path) -> anyhow::Result<()> {
 		let resolved = fs_err::canonicalize(path).ok();
 		let allowed = self.allowed(path, |prefix| prefix.to_path_buf())
