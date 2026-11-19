@@ -165,10 +165,13 @@ monitoring:
 # -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. Changes outside the nested 'config' section, plus 'config.modelCatalog', are applied without restarting the pods. Changes to other nested 'config' settings restart the pods because agentgateway reads them only at startup. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
 config: {}
 
+# -- Sensitive values to store in a secret named after the Helm release, keyed by environment variable name. The chart sets each one as an environment variable on the agentgateway proxy container, so you can reference it in 'config' as '${NAME}', such as 'apiKey: ${OPENAI_API_KEY}'. Changes restart the pods.
+secrets: {}
+
 # Postgres connection used by database mode.
 database:
   postgres:
-    # -- The PostgreSQL connection string that the the chart renders into the ConfigMap. Required in database mode.
+    # -- The PostgreSQL connection string, which the chart renders into the ConfigMap. Required in database mode. To keep a password out of the ConfigMap, store the connection string in 'secrets' and reference it here, such as 'url: ${DATABASE_URL}'.
     url: ""
 
 # OIDC secret that agentgateway uses to sign the Admin UI session cookie.
