@@ -6,6 +6,7 @@ mod dns;
 mod hbone_tunnel;
 mod tls;
 
+use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::task;
 
@@ -564,17 +565,24 @@ pub struct Config {
 	pub max_ttl: Option<Duration>,
 }
 
+const GCE_METADATA_IPV6: Ipv6Addr = Ipv6Addr::new(0xfd20, 0xce, 0, 0, 0, 0, 0, 0x254);
+const EC2_METADATA_IPV6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0xec2, 0, 0, 0, 0, 0, 0x254);
+const EKS_POD_IDENTITY_IPV6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0xec2, 0, 0, 0, 0, 0, 0x23);
+
 fn check_dynamic_backend_address(dest: SocketAddr) -> Result<(), ProxyError> {
 	let ip = dest.ip().to_canonical();
 	let denied = match ip {
+		// IANA reserves 0.0.0.0/8 as "This network"; a proxy connection there is an SSRF risk.
 		std::net::IpAddr::V4(ip) => ip.octets()[0] == 0 || ip.is_loopback() || ip.is_link_local(),
 		std::net::IpAddr::V6(ip) => {
 			ip.is_unspecified()
 				|| ip.is_loopback()
 				|| ip.is_unicast_link_local()
-				|| ip == "fd20:ce::254".parse::<std::net::Ipv6Addr>().unwrap()
-				|| ip == "fd00:ec2::254".parse::<std::net::Ipv6Addr>().unwrap()
-				|| ip == "fd00:ec2::23".parse::<std::net::Ipv6Addr>().unwrap()
+				// Cloud metadata and pod-identity endpoints expose workload credentials.
+				|| matches!(
+					ip,
+					GCE_METADATA_IPV6 | EC2_METADATA_IPV6 | EKS_POD_IDENTITY_IPV6
+				)
 		},
 	};
 	if denied {
