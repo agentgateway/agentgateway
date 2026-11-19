@@ -1,0 +1,38 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-actors
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "actorsroute.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+# jwks were generated using hack/utils/jwt/jwt-generator.go
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: route-actors-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: route-actors
+  traffic:
+    authorization:
+      action: Require
+      policy:
+        matchExpressions:
+          - 'has(jwt.act) && jwt.act.recurse("act").all(a, a.sub in ["agent-a", "agent-b"])'
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: https://agentgateway.dev
+        jwks:
+          inline: '{"keys":[{"use":"sig","kty":"RSA","kid":"7951471159956756843","n":"vD2yZbwFsUV5EBmRCobgI9NNb2mcOPhn2tKaiBqqg08Njz7bcV7vaKGL5H-E4f6FCugkgI7Hbg49jKWXTdR3_BBSSLWeZakpJfg7dubUYzzQG-upgVb7SwGQcLc1GG6_CIy_yJGJCLSNjapKGYU1kfdEZhKZ2JKx2yIbuq8TZy7zXVNz9Km__W3q1CACyGawT_B2y4Q7tdKCV4RwJVNySpnGCdupxJxwhUwp1S2KdYJusHEGwFbarKyJv4g8irrgS1XvsbVV64ZzBU2QBfEFFnoRFyfigkv7LN_vb5O79Q_iFKHRktHkg61mf_qq3MzhtoTUeUceV2a3pVt1YB6nQQ","e":"AQAB"}]}'
