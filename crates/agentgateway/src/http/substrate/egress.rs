@@ -173,20 +173,28 @@ pub(crate) fn reject_upgrade(req: &Request) -> Result<(), ProxyError> {
 	{
 		return Ok(());
 	}
-	let websocket = req
-		.headers()
-		.get_all(::http::header::UPGRADE)
-		.iter()
-		.filter_map(|value| value.to_str().ok())
-		.flat_map(|value| value.split(','))
-		.any(|token| token.trim().eq_ignore_ascii_case("websocket"));
-	Err(ProxyError::SubstrateEgressUpgradeDenied(if websocket {
-		"WebSocket egress is not supported"
-	} else if req.method() == ::http::Method::CONNECT {
-		"CONNECT egress is not supported"
-	} else {
-		"HTTP upgrades, including CONNECT, are denied for actor egress"
-	}))
+	let has_token = |header, token: &str| {
+		req
+			.headers()
+			.get_all(header)
+			.iter()
+			.filter_map(|value| value.to_str().ok())
+			.flat_map(|value| value.split(','))
+			.any(|value| value.trim().eq_ignore_ascii_case(token))
+	};
+	if req.method() == ::http::Method::GET
+		&& has_token(::http::header::CONNECTION, "upgrade")
+		&& has_token(::http::header::UPGRADE, "websocket")
+	{
+		return Ok(());
+	}
+	Err(ProxyError::SubstrateEgressUpgradeDenied(
+		if req.method() == ::http::Method::CONNECT {
+			"CONNECT egress is not supported"
+		} else {
+			"Only WebSocket upgrades are supported for actor egress"
+		},
+	))
 }
 
 impl SubstrateEgress {
@@ -761,6 +769,43 @@ mod tests {
 				.is_ok(),
 				allowed
 			);
+		}
+	}
+
+	#[test]
+	fn only_websocket_upgrades_are_allowed() {
+		for (method, connection, upgrade, allowed) in [
+			(
+				::http::Method::GET,
+				Some("upgrade"),
+				Some("websocket"),
+				true,
+			),
+			(
+				::http::Method::GET,
+				Some("keep-alive, Upgrade"),
+				Some("WebSocket"),
+				true,
+			),
+			(
+				::http::Method::POST,
+				Some("upgrade"),
+				Some("websocket"),
+				false,
+			),
+			(::http::Method::GET, None, Some("websocket"), false),
+			(::http::Method::GET, Some("upgrade"), Some("h2c"), false),
+			(::http::Method::CONNECT, None, None, false),
+		] {
+			let mut builder = ::http::Request::builder().method(method).uri("http://app/");
+			if let Some(connection) = connection {
+				builder = builder.header(::http::header::CONNECTION, connection);
+			}
+			if let Some(upgrade) = upgrade {
+				builder = builder.header(::http::header::UPGRADE, upgrade);
+			}
+			let request = builder.body(crate::http::Body::empty()).unwrap();
+			assert_eq!(reject_upgrade(&request).is_ok(), allowed);
 		}
 	}
 
