@@ -3946,48 +3946,6 @@ pub mod from_responses {
 	}
 }
 
-pub mod from_anthropic_token_count {
-	use crate::{AIError, types};
-
-	pub fn translate(
-		req: &types::count_tokens::Request,
-		headers: &http::HeaderMap,
-	) -> Result<Vec<u8>, AIError> {
-		use base64::Engine;
-		let anthropic_version = headers
-			.get("anthropic-version")
-			.and_then(|v| v.to_str().ok())
-			.unwrap_or(crate::anthropic::ANTHROPIC_VERSION);
-
-		let body = serde_json::to_vec(req).map_err(AIError::RequestMarshal)?;
-		let mut body: serde_json::Map<String, serde_json::Value> =
-			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
-
-		// Remove the model field because its in the URL path not the body
-		body.remove("model");
-
-		// AWS Bedrock's count-tokens endpoint wraps InvokeModel, which requires a valid
-		// Anthropic Messages API request. The `max_tokens` parameter is required by Anthropic's API.
-		// We set it to 1 (the minimum valid value) since token counting doesn't generate output.
-		body
-			.entry("max_tokens")
-			.or_insert(serde_json::Value::Number(1.into()));
-		body
-			.entry("anthropic_version")
-			.or_insert(serde_json::Value::String(anthropic_version.into()));
-
-		let body_json = serde_json::to_vec(&body).map_err(AIError::RequestMarshal)?;
-		let body_b64 = base64::engine::general_purpose::STANDARD.encode(&body_json);
-
-		let xlated = types::bedrock::CountTokensRequest {
-			input: types::bedrock::CountTokensInputInvokeModel {
-				invoke_model: types::bedrock::InvokeModelBody { body: body_b64 },
-			},
-		};
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
-	}
-}
-
 pub use helpers::filter_native_beta_header;
 
 mod helpers {
