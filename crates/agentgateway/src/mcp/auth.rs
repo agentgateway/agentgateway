@@ -216,11 +216,12 @@ pub(super) async fn protected_resource_metadata(
 
 	// Determine the issuer to use - either use the same request URL and path that it was initially with,
 	// or else keep the auth.issuer
-	let issuer = if auth.provider.is_some() {
-		// When a provider is configured, use the same request URL with the well-known prefix stripped
-		strip_oauth_protected_resource_prefix(req)
+	let issuer = if auth.provider.is_some() || auth.client_id.is_some() {
+		// When a provider or clientId is configured, use the same request URL with the well-known prefix stripped.
+		// RFC 8414 discovery drops a trailing slash, so the advertised issuer must not carry one.
+		new_uri.trim_end_matches('/').to_string()
 	} else {
-		// No provider configured, use the original issuer
+		// Neither configured, use the original issuer
 		auth.issuer.clone()
 	};
 
@@ -282,8 +283,8 @@ fn rewrite_authorization_server_issuer(
 	auth: &McpAuthentication,
 	metadata: &mut serde_json::Value,
 ) -> Result<(), ProxyError> {
-	if auth.provider.is_none() {
-		// Without a provider adapter, authorization server metadata should keep advertising the
+	if auth.provider.is_none() && auth.client_id.is_none() {
+		// Without a provider adapter or clientId, authorization server metadata should keep advertising the
 		// upstream IdP issuer (auth.issuer) rather than presenting the gateway as the
 		// authorization server issuer.
 		return Ok(());
@@ -299,6 +300,8 @@ fn rewrite_authorization_server_issuer(
 		));
 	};
 	metadata.insert("issuer".to_string(), serde_json::Value::String(issuer));
+	// An upstream signature covers the IdP's values, which no longer match this document.
+	metadata.remove("signed_metadata");
 	Ok(())
 }
 
@@ -373,10 +376,15 @@ pub(super) async fn authorization_server_metadata(
 	let ureq = ::http::Request::builder()
 		.uri(metadata_uri)
 		.body(crate::http::Body::empty())?;
-	let upstream = client
-		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
-		.simple_call(ureq)
-		.await?;
+	let client = client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc);
+	let mut upstream = client.simple_call(ureq).await?;
+	// Without an adapter the gateway cannot know whether the IdP only serves OIDC Discovery.
+	if !upstream.status().is_success() && matches!(auth.provider, None | Some(McpIDP::Auth0 {})) {
+		let ureq = ::http::Request::builder()
+			.uri(openid_configuration_metadata_url(&auth.issuer))
+			.body(crate::http::Body::empty())?;
+		upstream = client.simple_call(ureq).await?;
+	}
 	let limit = crate::http::response_buffer_limit(&upstream);
 	let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
 		.await
@@ -418,7 +426,12 @@ fn configured_authorization_server(auth: &McpAuthentication) -> Option<String> {
 fn authorization_server_metadata_base_uri(req: &Request, auth: &McpAuthentication) -> String {
 	configured_authorization_server(auth)
 		.map(|issuer| authorization_server_metadata_url(issuer.trim_end_matches('/')))
-		.unwrap_or_else(|| request_uri_for_oauth_metadata(req).to_string())
+		.unwrap_or_else(|| {
+			// Drop any query so endpoints appended to this base stay in the path.
+			let uri = request_uri_for_oauth_metadata(req);
+			let path = uri.path().to_string();
+			uri_with_path(uri, &path)
+		})
 }
 
 fn rewrite_authorization_server_metadata(
@@ -481,14 +494,15 @@ fn rewrite_authorization_server_metadata(
 			// Keycloak doesn't do CORS for client registrations
 			// https://github.com/keycloak/keycloak/issues/39629
 			// We can workaround this by proxying it
-			let Some(serde_json::Value::String(re)) =
+			if let Some(serde_json::Value::String(re)) =
 				json::traverse_mut(resp, &["registration_endpoint"])
-			else {
+			{
+				*re = format!("{current_uri}/client-registration");
+			} else if auth.client_id.is_none() {
 				return Err(ProxyError::ProcessingString(
 					"registration_endpoint missing".to_string(),
 				));
-			};
-			*re = format!("{current_uri}/client-registration");
+			}
 		},
 		Some(McpIDP::Authentik {}) => {
 			// authentik does not support RFC 8707, and has no audience query parameter workaround.
@@ -1152,6 +1166,132 @@ mod tests {
 		assert_eq!(
 			metadata["registration_endpoint"],
 			"https://idp.example.com/register"
+		);
+	}
+
+	#[rstest::rstest]
+	#[case::without_client_id(None, None, "https://issuer.example.com")]
+	#[case::with_client_id(Some("pre-registered"), None, "http://internal.example.com/mcp")]
+	#[case::configured_authorization_server_wins(
+		Some("pre-registered"),
+		Some("https://public.example.com/mcp"),
+		"https://public.example.com/mcp"
+	)]
+	#[tokio::test]
+	async fn protected_resource_authorization_server_without_provider(
+		#[case] client_id: Option<&str>,
+		#[case] configured: Option<&str>,
+		#[case] expected: &str,
+	) {
+		let mut auth = default_auth();
+		auth.client_id = client_id.map(str::to_owned);
+		if let Some(configured) = configured {
+			auth.resource_metadata.extra.insert(
+				"authorizationServers".to_string(),
+				serde_json::json!([configured]),
+			);
+		}
+		let mut req = ::http::Request::builder()
+			.uri("http://internal.example.com/.well-known/oauth-protected-resource/mcp")
+			.body(Body::empty())
+			.unwrap();
+
+		let protected = response_body_to_json(protected_resource_metadata(&mut req, &auth).await).await;
+
+		assert_eq!(protected["authorization_servers"][0], expected);
+	}
+
+	#[test]
+	fn client_id_rewrites_issuer_without_provider() {
+		let mut auth = default_auth();
+		auth.client_id = Some("pre-registered".to_string());
+		let req = internal_metadata_request().body(Body::empty()).unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		assert_eq!(metadata["issuer"], "https://internal.example.com/mcp");
+		assert_eq!(metadata["token_endpoint"], "https://idp.example.com/token");
+	}
+
+	#[rstest::rstest]
+	fn keycloak_requires_upstream_registration_endpoint_only_without_client_id(
+		#[values(None, Some("pre-registered"))] client_id: Option<&str>,
+	) {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Keycloak {});
+		auth.client_id = client_id.map(str::to_owned);
+		let req = internal_metadata_request().body(Body::empty()).unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+		metadata
+			.as_object_mut()
+			.unwrap()
+			.remove("registration_endpoint");
+
+		let result = rewrite_authorization_server_metadata(&req, &auth, &mut metadata);
+
+		if client_id.is_none() {
+			assert!(result.is_err());
+			return;
+		}
+		result.unwrap();
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://internal.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+	}
+
+	#[tokio::test]
+	async fn protected_resource_authorization_server_drops_trailing_slash() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Keycloak {});
+		let mut req = ::http::Request::builder()
+			.uri("http://internal.example.com/.well-known/oauth-protected-resource/mcp/")
+			.body(Body::empty())
+			.unwrap();
+
+		let protected = response_body_to_json(protected_resource_metadata(&mut req, &auth).await).await;
+
+		assert_eq!(protected["resource"], "http://internal.example.com/mcp/");
+		assert_eq!(
+			protected["authorization_servers"][0],
+			"http://internal.example.com/mcp"
+		);
+	}
+
+	#[test]
+	fn registration_endpoint_ignores_metadata_request_query() {
+		let mut auth = default_auth();
+		auth.client_id = Some("pre-registered".to_string());
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp?v=1")
+			.body(Body::empty())
+			.unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+	}
+
+	#[rstest::rstest]
+	fn signed_metadata_is_dropped_only_when_metadata_is_rewritten(
+		#[values(None, Some("pre-registered"))] client_id: Option<&str>,
+	) {
+		let mut auth = default_auth();
+		auth.client_id = client_id.map(str::to_owned);
+		let req = internal_metadata_request().body(Body::empty()).unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+		metadata["signed_metadata"] = serde_json::json!("signed.by.idp");
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		assert_eq!(
+			metadata.get("signed_metadata").is_some(),
+			client_id.is_none()
 		);
 	}
 
