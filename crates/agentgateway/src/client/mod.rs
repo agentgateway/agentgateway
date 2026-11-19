@@ -43,6 +43,9 @@ impl Debug for Client {
 #[derive(Debug, Clone, Copy)]
 pub struct ConnectTimeout(pub Duration);
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DynamicBackendAddressValidation;
+
 pub struct Call {
 	pub req: http::Request,
 	pub target: Target,
@@ -668,6 +671,10 @@ impl Client {
 	}
 
 	pub async fn simple_call(&self, req: http::Request) -> Result<http::Response, ProxyError> {
+		let dynamic_backend = req
+			.extensions()
+			.get::<DynamicBackendAddressValidation>()
+			.is_some();
 		let host = req
 			.uri()
 			.host()
@@ -688,6 +695,9 @@ impl Client {
 		};
 		let target = Target::from((host.trim_start_matches('[').trim_end_matches(']'), port));
 		let transport = self.callout_transport(Transport::Plain(app), &target);
+		if dynamic_backend && transport.skip_dns_resolution() {
+			return Err(ProxyError::DynamicBackendAddressDenied);
+		}
 		let tcp = req
 			.extensions()
 			.get::<ConnectTimeout>()
@@ -705,7 +715,7 @@ impl Client {
 					max_connection_duration: None,
 					backend: None,
 				},
-				dynamic_backend: false,
+				dynamic_backend,
 			})
 			.await
 	}

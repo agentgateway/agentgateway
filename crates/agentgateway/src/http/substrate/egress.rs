@@ -4,9 +4,13 @@ use std::time::{Duration, Instant};
 
 use ::http::{HeaderName, HeaderValue};
 use quick_cache::sync::Cache;
+use secrecy::{ExposeSecret, SecretString};
 use tonic::Code;
+use url::Url;
 
 use super::{ActorIdentity, EgressActorResolution, TRACE_POLICY_KIND};
+use crate::http::auth::BackendAuthError;
+use crate::http::auth::oauth::{DynamicTokenExchange, FetchError};
 use crate::http::{PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::{DynamicBackendOverride, PolicyClient};
@@ -20,6 +24,9 @@ use crate::{cel, *};
 const DEFAULT_CREDENTIAL_CACHE_CAPACITY: usize = 8192;
 const DEFAULT_CREDENTIAL_CACHE_TTL: Duration = Duration::from_secs(300);
 const CREDENTIAL_FETCH_TIMEOUT: Duration = Duration::from_secs(4);
+const TOKEN_EXCHANGE_RESPONSE_LIMIT: usize = 1024 * 1024;
+const TOKEN_EXCHANGE_SUBJECT_LIFETIME: i64 = 300;
+const TOKEN_EXCHANGE_UNKNOWN_EXPIRY_REUSE: Duration = Duration::from_secs(60);
 
 /// The inner HTTP transport, independent of the actor's CONNECT transport or URI scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +48,9 @@ pub struct SubstrateEgress {
 	#[serde(skip, default = "default_credential_cache")]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	credential_cache: CredentialCache,
+	#[serde(skip, default = "default_token_exchange")]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	token_exchange: DynamicTokenExchange,
 }
 
 /// An inline credential-provider backend selected by credential URI authority.
@@ -115,6 +125,14 @@ fn default_credential_cache() -> CredentialCache {
 	CredentialCache::new(DEFAULT_CREDENTIAL_CACHE_CAPACITY)
 }
 
+fn default_token_exchange() -> DynamicTokenExchange {
+	DynamicTokenExchange::new(
+		TOKEN_EXCHANGE_UNKNOWN_EXPIRY_REUSE,
+		CREDENTIAL_FETCH_TIMEOUT,
+		TOKEN_EXCHANGE_RESPONSE_LIMIT,
+	)
+}
+
 impl RequestPolicyTrait for SubstrateEgress {
 	async fn apply(
 		&self,
@@ -151,6 +169,7 @@ impl RequestPolicyTrait for SubstrateEgress {
 			.apply_effects(
 				client,
 				&identity,
+				&policy,
 				matched_rule
 					.http
 					.as_ref()
@@ -182,9 +201,20 @@ pub(crate) fn reject_upgrade(req: &Request) -> Result<(), ProxyError> {
 			.flat_map(|value| value.split(','))
 			.any(|value| value.trim().eq_ignore_ascii_case(token))
 	};
+	let websocket = req
+		.headers()
+		.get_all(::http::header::UPGRADE)
+		.iter()
+		.all(|value| {
+			value.to_str().is_ok_and(|value| {
+				value
+					.split(',')
+					.all(|token| token.trim().eq_ignore_ascii_case("websocket"))
+			})
+		});
 	if req.method() == ::http::Method::GET
 		&& has_token(::http::header::CONNECTION, "upgrade")
-		&& has_token(::http::header::UPGRADE, "websocket")
+		&& websocket
 	{
 		return Ok(());
 	}
@@ -202,22 +232,32 @@ impl SubstrateEgress {
 		&self,
 		client: &PolicyClient,
 		identity: &ActorIdentity,
+		policy: &protos::ateapi::EgressPolicy,
 		effects: Option<&protos::ateapi::HttpRuleEffects>,
 		req: &mut Request,
 	) -> Result<(), ProxyError> {
 		let Some(effects) = effects else {
 			return Ok(());
 		};
-		for injection in &effects.replace_headers {
+		for injection in credential_injections(effects, req.uri().path()) {
 			if !req.headers().contains_key(&injection.header) {
 				continue;
 			}
-			let secret = match (injection.credential_uri.as_str(), &injection.actor_jwt) {
-				(uri, None) if !uri.is_empty() => {
+			let secret = match (
+				injection.credential_uri.as_str(),
+				&injection.actor_jwt,
+				&injection.token_exchange,
+			) {
+				(uri, None, None) if !uri.is_empty() => {
 					let provider = self.provider_for_uri(uri)?;
 					self.credential(client, identity, provider, uri).await?
 				},
-				("", Some(source)) => self.actor_jwt(client, identity, source).await?,
+				("", Some(source), None) => self.actor_jwt(client, identity, source).await?,
+				("", None, Some(source)) => {
+					self
+						.token_exchange(client, identity, policy, source)
+						.await?
+				},
 				_ => {
 					return Err(ProxyError::SubstrateEgressDenied(
 						"credential effect must specify exactly one credential source".to_owned(),
@@ -280,6 +320,43 @@ impl SubstrateEgress {
 		let jwt = credential_secret(response.actor_jwt.into_bytes())?;
 		self.credential_cache.insert(key, jwt.clone(), requested_at);
 		Ok(jwt)
+	}
+
+	async fn token_exchange(
+		&self,
+		client: &PolicyClient,
+		identity: &ActorIdentity,
+		policy: &protos::ateapi::EgressPolicy,
+		source: &protos::ateapi::TokenExchangeSource,
+	) -> Result<Vec<u8>, ProxyError> {
+		let token_url = token_exchange_url(policy, source)?;
+		let subject = self
+			.actor_jwt(
+				client,
+				identity,
+				&protos::ateapi::ActorJwtSource {
+					audiences: vec![source.audience.clone()],
+					expiration_seconds: TOKEN_EXCHANGE_SUBJECT_LIFETIME,
+				},
+			)
+			.await?;
+		let subject = std::str::from_utf8(&subject).map_err(|error| {
+			ProxyError::SubstrateEgressUnavailable(format!("actor JWT is invalid: {error}"))
+		})?;
+		let policy_client =
+			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
+		let token = self
+			.token_exchange
+			.exchange(
+				&policy_client,
+				token_url.as_str(),
+				SecretString::from(subject.to_owned()),
+				&source.audience,
+				&source.scopes,
+			)
+			.await
+			.map_err(token_exchange_error)?;
+		Ok(token.expose_secret().as_bytes().to_vec())
 	}
 
 	async fn credential(
@@ -349,6 +426,158 @@ impl SubstrateEgress {
 fn provider_name(uri: &str) -> Option<&str> {
 	let authority = uri.strip_prefix("ate-secret://")?.split('/').next()?;
 	(!authority.is_empty() && !authority.contains(['?', '#', '@', ':'])).then_some(authority)
+}
+
+fn credential_injections<'a>(
+	effects: &'a protos::ateapi::HttpRuleEffects,
+	path: &str,
+) -> Vec<&'a protos::ateapi::CredentialHeader> {
+	let canonical = canonical_path(path);
+	let mut selected: Vec<(&str, Option<&protos::ateapi::CredentialHeader>)> = Vec::new();
+	for injection in &effects.replace_headers {
+		let matched = injection.path_prefix.is_empty()
+			|| canonical
+				&& canonical_path(&injection.path_prefix)
+				&& path_prefix_matches(&injection.path_prefix, path);
+		if let Some((_, current)) = selected
+			.iter_mut()
+			.find(|(header, _)| header.eq_ignore_ascii_case(&injection.header))
+		{
+			if matched
+				&& current.is_none_or(|current| injection.path_prefix.len() > current.path_prefix.len())
+			{
+				*current = Some(injection);
+			}
+		} else {
+			selected.push((
+				&injection.header,
+				if matched { Some(injection) } else { None },
+			));
+		}
+	}
+	selected
+		.into_iter()
+		.filter_map(|(_, injection)| injection)
+		.collect()
+}
+
+fn path_prefix_matches(prefix: &str, path: &str) -> bool {
+	path.starts_with(prefix)
+		&& (path.len() == prefix.len()
+			|| prefix.ends_with('/')
+			|| path.as_bytes().get(prefix.len()) == Some(&b'/'))
+}
+
+fn canonical_path(path: &str) -> bool {
+	if !path.starts_with('/')
+		|| path
+			.bytes()
+			.any(|byte| byte <= b' ' || byte >= 0x7f || matches!(byte, b'\\' | b'?' | b'#'))
+	{
+		return false;
+	}
+	let lower = path.to_ascii_lowercase();
+	if ["%2e", "%2f", "%5c"]
+		.iter()
+		.any(|encoded| lower.contains(encoded))
+	{
+		return false;
+	}
+	let mut segments = path[1..].split('/').peekable();
+	while let Some(segment) = segments.next() {
+		if (segment.is_empty() && segments.peek().is_some())
+			|| matches!(segment.split(';').next(), Some("." | ".."))
+		{
+			return false;
+		}
+	}
+	true
+}
+
+fn token_exchange_url(
+	policy: &protos::ateapi::EgressPolicy,
+	source: &protos::ateapi::TokenExchangeSource,
+) -> Result<Url, ProxyError> {
+	let valid_scope = |scope: &str| {
+		!scope.is_empty()
+			&& scope.len() <= 256
+			&& scope
+				.bytes()
+				.all(|byte| byte == 0x21 || (0x23..=0x5b).contains(&byte) || (0x5d..=0x7e).contains(&byte))
+	};
+	if source.token_url.len() > 2048
+		|| source.audience.is_empty()
+		|| source.audience.len() > 512
+		|| source.scopes.len() > 16
+		|| source.scopes.iter().any(|scope| !valid_scope(scope))
+	{
+		return Err(ProxyError::SubstrateEgressMisconfigured(
+			"invalid token exchange configuration".to_owned(),
+		));
+	}
+	let url = Url::parse(&source.token_url).map_err(|_| {
+		ProxyError::SubstrateEgressMisconfigured("invalid token exchange configuration".to_owned())
+	})?;
+	let hostname = url.host_str().unwrap_or_default().to_ascii_lowercase();
+	let valid = url.scheme() == "https"
+		&& url.username().is_empty()
+		&& url.password().is_none()
+		&& url.query().is_none()
+		&& url.fragment().is_none()
+		&& valid_hostname(&hostname)
+		&& hostname.parse::<std::net::IpAddr>().is_err()
+		&& url.port_or_known_default().is_some_and(|port| {
+			matching_destination_rule(policy, &hostname, port, MatchPhase::HttpsRequest).is_some()
+		});
+	if !valid {
+		return Err(ProxyError::SubstrateEgressMisconfigured(
+			"token exchange endpoint is not allowed by an HTTPS egress rule".to_owned(),
+		));
+	}
+	Ok(url)
+}
+
+fn token_exchange_error(error: FetchError) -> ProxyError {
+	let detail = error.to_string();
+	match error {
+		FetchError::Response {
+			status,
+			oauth_error,
+			..
+		} => {
+			if matches!(
+				status,
+				::http::StatusCode::BAD_REQUEST | ::http::StatusCode::UNAUTHORIZED
+			) && matches!(
+				oauth_error.as_deref(),
+				Some(
+					"invalid_grant"
+						| "invalid_target"
+						| "unauthorized_client"
+						| "invalid_scope"
+						| "access_denied"
+				)
+			) {
+				return ProxyError::SubstrateEgressDenied(
+					"token exchange endpoint denied the actor".to_owned(),
+				);
+			}
+			if status == ::http::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+				return ProxyError::SubstrateEgressUnavailable(format!(
+					"token exchange endpoint returned {status}"
+				));
+			}
+			ProxyError::SubstrateEgressMisconfigured(format!("token exchange endpoint returned {status}"))
+		},
+		FetchError::Backend(BackendAuthError::Local(_)) => {
+			ProxyError::SubstrateEgressMisconfigured(format!("invalid token exchange request: {detail}"))
+		},
+		FetchError::Backend(BackendAuthError::CredentialProvider(_)) => {
+			ProxyError::SubstrateEgressUnavailable(format!(
+				"token exchange endpoint unavailable: {detail}"
+			))
+		},
+	}
 }
 
 fn actor_spiffe_uri(atespace: &str, actor_name: &str) -> String {
@@ -1028,6 +1257,8 @@ mod tests {
 				prefix: "Bearer ".to_owned(),
 				credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 				actor_jwt: None,
+				token_exchange: None,
+				path_prefix: String::new(),
 			},
 			b"token\n".to_vec(),
 		)
@@ -1056,6 +1287,8 @@ mod tests {
 				prefix: String::new(),
 				credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 				actor_jwt: None,
+				token_exchange: None,
+				path_prefix: String::new(),
 			};
 			assert!(credential_header(&injection, b"token".to_vec()).is_err());
 		}
@@ -1087,9 +1320,48 @@ mod tests {
 			prefix: "Bearer ".to_owned(),
 			credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 			actor_jwt: None,
+			token_exchange: None,
+			path_prefix: String::new(),
 		};
 		assert!(credential_header(&injection, Vec::new()).is_err());
 		assert!(credential_header(&injection, b"bad\nsecret".to_vec()).is_err());
+	}
+
+	#[test]
+	fn credential_injections_use_the_longest_safe_path_prefix() {
+		let injection =
+			|header: &str, prefix: &str, path_prefix: &str| protos::ateapi::CredentialHeader {
+				header: header.to_owned(),
+				prefix: prefix.to_owned(),
+				credential_uri: format!("ate-secret://provider{path_prefix}"),
+				path_prefix: path_prefix.to_owned(),
+				..Default::default()
+			};
+		let effects = protos::ateapi::HttpRuleEffects {
+			replace_headers: vec![
+				injection("Authorization", "Bearer ", "/api/"),
+				injection("authorization", "Basic ", ""),
+				injection("X-Api-Key", "", "/api/"),
+				injection("AUTHORIZATION", "Token ", "/api/v4"),
+			],
+		};
+		for (path, prefixes) in [
+			("/repo", vec!["Basic "]),
+			("/api/users", vec!["Bearer ", ""]),
+			("/api/v4/projects", vec!["Token ", ""]),
+			("/api/v40", vec!["Bearer ", ""]),
+			("/api/../admin", vec!["Basic "]),
+			("/api/%2e%2e/admin", vec!["Basic "]),
+			("/api//v4", vec!["Basic "]),
+		] {
+			assert_eq!(
+				credential_injections(&effects, path)
+					.into_iter()
+					.map(|injection| injection.prefix.as_str())
+					.collect::<Vec<_>>(),
+				prefixes
+			);
+		}
 	}
 
 	#[test]
@@ -1147,6 +1419,33 @@ mod tests {
 			cache.get(&another_uid, now, DEFAULT_CREDENTIAL_CACHE_TTL),
 			None
 		);
+	}
+
+	#[test]
+	fn token_exchange_validates_endpoints() {
+		let policy = protos::ateapi::EgressPolicy {
+			rules: vec![rule(
+				EgressRequestProtocol::Https,
+				&["sts.example.com"],
+				None,
+			)],
+			..Default::default()
+		};
+		let source = protos::ateapi::TokenExchangeSource {
+			token_url: "https://sts.example.com/token".to_owned(),
+			audience: "api.example.com".to_owned(),
+			scopes: vec!["read".to_owned()],
+		};
+		assert!(token_exchange_url(&policy, &source).is_ok());
+		for token_url in [
+			"http://sts.example.com/token",
+			"https://other.example.com/token",
+			"https://127.0.0.1/token",
+		] {
+			let mut source = source.clone();
+			source.token_url = token_url.to_owned();
+			assert!(token_exchange_url(&policy, &source).is_err());
+		}
 	}
 
 	#[test]
