@@ -1,0 +1,14 @@
+{
+  "id": "msg_json_text",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-4-5",
+  "content": [
+    {"type": "thinking", "thinking": "The user wants a score.", "signature": "sig_1"},
+    {"type": "text", "text": "Here is the result:"},
+    {"type": "tool_use", "id": "toolu_json", "name": "json_object_response", "input": {"score": 1}}
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {"input_tokens": 40, "output_tokens": 20}
+}

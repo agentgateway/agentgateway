@@ -1,0 +1,21 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_json_object_after_text.json
+---
+data: {"id":"msg_json","choices":[{"index":0,"delta":{"content":"{\"score\": 1}","role":"assistant"}}],"created":123,"model":"claude-opus-4-5","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"msg_json","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"created":123,"model":"claude-opus-4-5","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":40,"completion_tokens":20,"total_tokens":60}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 40,
+  "output_tokens": 20,
+  "total_tokens": 60,
+  "provider_model": "claude-opus-4-5",
+  "completion": [
+    "{\"score\": 1}"
+  ]
+}

@@ -499,7 +499,7 @@ mod thinking_round_trip {
 			]
 		});
 		let translated =
-			from_completions::translate_response(&Bytes::from(serde_json::to_vec(&body).unwrap()))
+			from_completions::translate_response(&Bytes::from(serde_json::to_vec(&body).unwrap()), false)
 				.unwrap();
 		let translated: Value = serde_json::from_slice(&translated.serialize().unwrap()).unwrap();
 		let message = &translated["choices"][0]["message"];

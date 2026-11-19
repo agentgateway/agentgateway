@@ -1,0 +1,12 @@
+{
+  "id": "msg_json",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-4-5",
+  "content": [
+    {"type": "tool_use", "id": "toolu_json", "name": "json_object_response", "input": {"score": 1}}
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {"input_tokens": 40, "output_tokens": 12}
+}
