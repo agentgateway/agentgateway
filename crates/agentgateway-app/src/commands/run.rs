@@ -73,6 +73,7 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 						database_pool
 							.clone()
 							.expect("hybrid config store requires config.database"),
+						config.storage.resync_interval,
 					)
 					.await?,
 				)
