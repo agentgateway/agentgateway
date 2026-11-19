@@ -774,7 +774,7 @@ impl Client {
 	) -> impl std::future::Future<Output = Result<http::Response, ProxyError>> + '_ {
 		let client = &self.client;
 		let connector = &self.connector;
-		let deny_loopback = call.dynamic_backend && !self.allow_dynamic_loopback;
+		let validate_dynamic_backend_address = call.dynamic_backend && !self.allow_dynamic_loopback;
 		let start = std::time::Instant::now();
 		let Call {
 			mut req,
@@ -788,7 +788,7 @@ impl Client {
 				.resolve_target(connection.transport.skip_dns_resolution(), &target)
 				.await
 				.and_then(|dest| {
-					if deny_loopback {
+					if validate_dynamic_backend_address {
 						check_dynamic_backend_address(dest)?;
 					}
 					Ok(dest)
@@ -1016,7 +1016,7 @@ mod tests {
 	}
 
 	#[test]
-	fn dynamic_backend_address_filter_matches_substrate() {
+	fn dynamic_backend_address_filter_rejects_unsafe_destinations() {
 		for address in [
 			"0.1.2.3:80",
 			"127.0.0.1:80",
