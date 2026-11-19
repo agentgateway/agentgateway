@@ -217,7 +217,7 @@ impl SubstrateEgress {
 		let Some(effects) = effects else {
 			return Ok(());
 		};
-		for injection in &effects.replace_headers {
+		for injection in credential_injections(effects, req.uri().path()) {
 			if !req.headers().contains_key(&injection.header) {
 				continue;
 			}
@@ -458,6 +458,72 @@ impl SubstrateEgress {
 fn provider_name(uri: &str) -> Option<&str> {
 	let authority = uri.strip_prefix("ate-secret://")?.split('/').next()?;
 	(!authority.is_empty() && !authority.contains(['?', '#', '@', ':'])).then_some(authority)
+}
+
+fn credential_injections<'a>(
+	effects: &'a protos::ateapi::HttpRuleEffects,
+	path: &str,
+) -> Vec<&'a protos::ateapi::CredentialHeader> {
+	let canonical = canonical_path(path);
+	let mut selected: Vec<(&str, Option<&protos::ateapi::CredentialHeader>)> = Vec::new();
+	for injection in &effects.replace_headers {
+		let matched = injection.path_prefix.is_empty()
+			|| canonical
+				&& canonical_path(&injection.path_prefix)
+				&& path_prefix_matches(&injection.path_prefix, path);
+		if let Some((_, current)) = selected
+			.iter_mut()
+			.find(|(header, _)| header.eq_ignore_ascii_case(&injection.header))
+		{
+			if matched
+				&& current.is_none_or(|current| injection.path_prefix.len() > current.path_prefix.len())
+			{
+				*current = Some(injection);
+			}
+		} else {
+			selected.push((
+				&injection.header,
+				if matched { Some(injection) } else { None },
+			));
+		}
+	}
+	selected
+		.into_iter()
+		.filter_map(|(_, injection)| injection)
+		.collect()
+}
+
+fn path_prefix_matches(prefix: &str, path: &str) -> bool {
+	path.starts_with(prefix)
+		&& (path.len() == prefix.len()
+			|| prefix.ends_with('/')
+			|| path.as_bytes().get(prefix.len()) == Some(&b'/'))
+}
+
+fn canonical_path(path: &str) -> bool {
+	if !path.starts_with('/')
+		|| path
+			.bytes()
+			.any(|byte| byte <= b' ' || byte >= 0x7f || matches!(byte, b'\\' | b'?' | b'#'))
+	{
+		return false;
+	}
+	let lower = path.to_ascii_lowercase();
+	if ["%2e", "%2f", "%5c"]
+		.iter()
+		.any(|encoded| lower.contains(encoded))
+	{
+		return false;
+	}
+	let mut segments = path[1..].split('/').peekable();
+	while let Some(segment) = segments.next() {
+		if (segment.is_empty() && segments.peek().is_some())
+			|| matches!(segment.split(';').next(), Some("." | ".."))
+		{
+			return false;
+		}
+	}
+	true
 }
 
 fn token_exchange_url(
@@ -1246,6 +1312,7 @@ mod tests {
 				credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 				actor_jwt: None,
 				token_exchange: None,
+				path_prefix: String::new(),
 			},
 			b"token\n".to_vec(),
 		)
@@ -1275,6 +1342,7 @@ mod tests {
 				credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 				actor_jwt: None,
 				token_exchange: None,
+				path_prefix: String::new(),
 			};
 			assert!(credential_header(&injection, b"token".to_vec()).is_err());
 		}
@@ -1307,9 +1375,47 @@ mod tests {
 			credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 			actor_jwt: None,
 			token_exchange: None,
+			path_prefix: String::new(),
 		};
 		assert!(credential_header(&injection, Vec::new()).is_err());
 		assert!(credential_header(&injection, b"bad\nsecret".to_vec()).is_err());
+	}
+
+	#[test]
+	fn credential_injections_use_the_longest_safe_path_prefix() {
+		let injection =
+			|header: &str, prefix: &str, path_prefix: &str| protos::ateapi::CredentialHeader {
+				header: header.to_owned(),
+				prefix: prefix.to_owned(),
+				credential_uri: format!("ate-secret://provider{path_prefix}"),
+				path_prefix: path_prefix.to_owned(),
+				..Default::default()
+			};
+		let effects = protos::ateapi::HttpRuleEffects {
+			replace_headers: vec![
+				injection("Authorization", "Bearer ", "/api/"),
+				injection("authorization", "Basic ", ""),
+				injection("X-Api-Key", "", "/api/"),
+				injection("AUTHORIZATION", "Token ", "/api/v4"),
+			],
+		};
+		for (path, prefixes) in [
+			("/repo", vec!["Basic "]),
+			("/api/users", vec!["Bearer ", ""]),
+			("/api/v4/projects", vec!["Token ", ""]),
+			("/api/v40", vec!["Bearer ", ""]),
+			("/api/../admin", vec!["Basic "]),
+			("/api/%2e%2e/admin", vec!["Basic "]),
+			("/api//v4", vec!["Basic "]),
+		] {
+			assert_eq!(
+				credential_injections(&effects, path)
+					.into_iter()
+					.map(|injection| injection.prefix.as_str())
+					.collect::<Vec<_>>(),
+				prefixes
+			);
+		}
 	}
 
 	#[test]

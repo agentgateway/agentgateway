@@ -113,6 +113,7 @@ message CredentialHeader {
   string credential_uri = 3;
   ActorJwtSource actor_jwt = 4;
   TokenExchangeSource token_exchange = 5;
+  string path_prefix = 6;
 }
 
 message TokenExchangeSource {
