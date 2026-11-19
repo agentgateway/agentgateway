@@ -2681,7 +2681,11 @@ async fn make_backend_call(
 			let (provider, handle) = ai
 				.select_provider(affinity_key)
 				.ok_or(ProxyError::NoHealthyEndpoints)?;
-			log.add(move |l| l.request_handle = Some(handle));
+			if provider.provider_backend.is_some() {
+				log.add(move |l| l.delegated_provider_request_handle = Some(handle));
+			} else {
+				log.add(move |l| l.request_handle = Some(handle));
+			}
 			let sub_backend_name = BackendTargetRef::Backend {
 				name: n.name.as_ref(),
 				namespace: n.namespace.as_ref(),
@@ -2699,6 +2703,15 @@ async fn make_backend_call(
 				..Default::default()
 			};
 			if let Some(provider_backend) = &provider.provider_backend {
+				// A delegated backend may fail before a Service endpoint is selected. Record
+				// its provider policy now so these failures can evict the provider.
+				let provider_policies = provider_defaults
+					.merge(policies.as_ref().clone())
+					.merge(sub_backend_policies);
+				log.add(|l| {
+					l.delegated_provider_health_policy = provider_policies.health.clone();
+					provider_policies.register_cel_expressions(l.cel.ctx());
+				});
 				let provider_backend =
 					super::resolve_simple_backend_with_policies(provider_backend, inputs.as_ref())?;
 				// Use backend_policies (not sub_backend_policies) so policies indexed without a
@@ -2709,10 +2722,7 @@ async fn make_backend_call(
 					&[&provider_backend.inline_policies],
 					None,
 				);
-				let effective_policies = provider_defaults
-					.merge(policies.as_ref().clone())
-					.merge(sub_backend_policies)
-					.merge(provider_backend_policies);
+				let effective_policies = provider_policies.merge(provider_backend_policies);
 
 				build_simple_backend_call(
 					&inputs,
