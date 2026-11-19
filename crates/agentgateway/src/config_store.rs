@@ -552,9 +552,7 @@ fn file_resource_collection(kind: ConfigResourceKind) -> Option<FileResourceColl
 		ConfigResourceKind::LlmVirtualModel => {
 			Some(FileResourceCollection::List(&["llm", "virtualModels"]))
 		},
-		ConfigResourceKind::McpTarget => Some(FileResourceCollection::List(&["mcp", "targets"])),
 		ConfigResourceKind::LlmPolicy => Some(FileResourceCollection::Map(&["llm", "policies"])),
-		ConfigResourceKind::McpPolicy => Some(FileResourceCollection::Map(&["mcp", "policies"])),
 		ConfigResourceKind::UiPolicy => Some(FileResourceCollection::Map(&["ui", "policies"])),
 		ConfigResourceKind::FrontendPolicy => Some(FileResourceCollection::Map(&["frontendPolicies"])),
 		ConfigResourceKind::TrafficGateway => Some(FileResourceCollection::Map(&["gateways"])),
@@ -562,10 +560,215 @@ fn file_resource_collection(kind: ConfigResourceKind) -> Option<FileResourceColl
 		ConfigResourceKind::TrafficTcpRoute => Some(FileResourceCollection::List(&["tcpRoutes"])),
 		ConfigResourceKind::ModelCatalog
 		| ConfigResourceKind::LlmApiKey
+		| ConfigResourceKind::McpTarget
+		| ConfigResourceKind::McpPolicy
 		| ConfigResourceKind::McpSettings
 		| ConfigResourceKind::LlmSettings
 		| ConfigResourceKind::SessionKey => None,
 	}
+}
+
+/// MCP target and policy resources in an endpoint have IDs of the form `<endpoint path>:<name>`.
+fn split_mcp_endpoint_id(id: &str) -> (Option<&str>, &str) {
+	match id.rsplit_once(':') {
+		Some((endpoint, name)) if id.starts_with('/') => (Some(endpoint), name),
+		_ => (None, id),
+	}
+}
+
+fn validate_mcp_endpoint_path(path: &str) -> anyhow::Result<()> {
+	if !path.starts_with('/') || path.ends_with('/') {
+		return Err(
+			ConfigResourceError::InvalidRequest(format!(
+				"mcp endpoint {path:?} must start with '/' and must not end with '/'"
+			))
+			.into(),
+		);
+	}
+	Ok(())
+}
+
+fn file_mcp_endpoint_path(endpoint: &Value) -> Option<&str> {
+	Some(endpoint.get("path")?.as_str()?.trim_end_matches('/'))
+}
+
+/// Returns the object holding MCP targets and policies: `mcp` itself, or the endpoint at `endpoint`.
+fn file_mcp_container<'a>(config: &'a Value, endpoint: Option<&str>) -> Option<&'a Value> {
+	let mcp = config.get("mcp")?;
+	let Some(endpoint) = endpoint else {
+		return Some(mcp);
+	};
+	mcp
+		.get("endpoints")?
+		.as_array()?
+		.iter()
+		.find(|g| file_mcp_endpoint_path(g) == Some(endpoint))
+}
+
+/// Like [`file_mcp_container`], creating the container if it does not exist.
+fn ensure_file_mcp_container<'a>(
+	config: &'a mut Value,
+	endpoint: Option<&str>,
+) -> anyhow::Result<&'a mut Value> {
+	let Some(endpoint) = endpoint else {
+		ensure_file_object(config, &["mcp"])?;
+		return Ok(config.get_mut("mcp").expect("mcp was just created"));
+	};
+	let endpoints = ensure_file_array(config, &["mcp", "endpoints"])?;
+	let index = match endpoints
+		.iter()
+		.position(|g| file_mcp_endpoint_path(g) == Some(endpoint))
+	{
+		Some(index) => index,
+		None => {
+			endpoints.push(serde_json::json!({ "path": endpoint }));
+			endpoints.len() - 1
+		},
+	};
+	Ok(&mut endpoints[index])
+}
+
+fn file_mcp_resources(config: &Value, kind: ConfigResourceKind) -> Vec<(String, Value)> {
+	let endpoints = config
+		.pointer("/mcp/endpoints")
+		.and_then(Value::as_array)
+		.into_iter()
+		.flatten()
+		.filter_map(|g| Some((Some(file_mcp_endpoint_path(g)?), g)));
+	let containers = config
+		.get("mcp")
+		.map(|mcp| (None, mcp))
+		.into_iter()
+		.chain(endpoints);
+	let qualify = |endpoint: Option<&str>, name: &str| match endpoint {
+		Some(endpoint) => format!("{endpoint}:{name}"),
+		None => name.to_string(),
+	};
+	let mut resources = Vec::new();
+	for (endpoint, container) in containers {
+		if kind == ConfigResourceKind::McpPolicy {
+			let policies = container.get("policies").and_then(Value::as_object);
+			resources.extend(
+				policies
+					.into_iter()
+					.flatten()
+					.map(|(id, value)| (qualify(endpoint, id), value.clone())),
+			);
+			continue;
+		}
+		let targets = container.get("targets").and_then(Value::as_array);
+		for target in targets.into_iter().flatten() {
+			let Ok(name) = resource_id(kind, target) else {
+				continue;
+			};
+			let mut target = target.clone();
+			if let (Some(endpoint), Some(object)) = (endpoint, target.as_object_mut()) {
+				object.insert("endpoint".to_string(), Value::String(endpoint.to_string()));
+			}
+			resources.push((qualify(endpoint, &name), target));
+		}
+	}
+	resources
+}
+
+fn file_mcp_resource<'a>(
+	config: &'a Value,
+	kind: ConfigResourceKind,
+	id: &str,
+) -> Option<&'a Value> {
+	let (endpoint, name) = split_mcp_endpoint_id(id);
+	let container = file_mcp_container(config, endpoint)?;
+	if kind == ConfigResourceKind::McpPolicy {
+		return container.get("policies")?.get(name);
+	}
+	container
+		.get("targets")?
+		.as_array()?
+		.iter()
+		.find(|value| resource_id(kind, value).is_ok_and(|current| current == name))
+}
+
+fn upsert_file_mcp_resource(
+	config: &mut Value,
+	prepared: &PreparedResource,
+	previous_id: Option<&str>,
+) -> anyhow::Result<()> {
+	let kind = prepared.kind;
+	let (endpoint, name) = split_mcp_endpoint_id(&prepared.id);
+	let (previous_endpoint, previous_name) = split_mcp_endpoint_id(previous_id.unwrap_or(&prepared.id));
+	let mut value = prepared.value.clone();
+	if let Some(object) = value.as_object_mut() {
+		object.remove("endpoint");
+	}
+	let local = PreparedResource {
+		kind,
+		id: name.to_string(),
+		value,
+	};
+	let previous_name = if endpoint == previous_endpoint {
+		previous_id.map(|_| previous_name)
+	} else {
+		// Moving to another endpoint: remove from the old endpoint, then insert as new.
+		if file_mcp_resource(config, kind, &prepared.id).is_some() {
+			return Err(
+				ConfigResourceError::Conflict(format!(
+					"config resource already exists: {kind}/{}",
+					prepared.id
+				))
+				.into(),
+			);
+		}
+		let previous_id = previous_id.expect("endpoints differ only when renaming");
+		if !delete_file_mcp_resource(config, kind, previous_id)? {
+			return Err(
+				ConfigResourceError::NotFound(format!("config resource not found: {kind}/{previous_id}"))
+					.into(),
+			);
+		}
+		None
+	};
+	let container = ensure_file_mcp_container(config, endpoint)?;
+	if kind == ConfigResourceKind::McpPolicy {
+		upsert_file_map_resource(container, &["policies"], &local, previous_name)
+	} else {
+		upsert_file_list_resource(container, &["targets"], &local, previous_name)
+	}
+}
+
+fn delete_file_mcp_resource(
+	config: &mut Value,
+	kind: ConfigResourceKind,
+	id: &str,
+) -> anyhow::Result<bool> {
+	let (endpoint, name) = split_mcp_endpoint_id(id);
+	if file_mcp_container(config, endpoint).is_none() {
+		return Ok(false);
+	}
+	let container = ensure_file_mcp_container(config, endpoint)?;
+	let deleted = if kind == ConfigResourceKind::McpPolicy {
+		delete_file_map_resource(container, &["policies"], name)?
+	} else {
+		delete_file_list_resource(container, &["targets"], kind, name)?
+	};
+	// Drop the endpoint once it no longer configures anything beyond its path.
+	if let Some(endpoint) = endpoint
+		&& let Some(endpoints) = config
+			.pointer_mut("/mcp/endpoints")
+			.and_then(Value::as_array_mut)
+	{
+		endpoints.retain(|g| {
+			file_mcp_endpoint_path(g) != Some(endpoint)
+				|| g.as_object().is_none_or(|g| {
+					g.iter().any(|(key, value)| match key.as_str() {
+						"path" => false,
+						"targets" => value.as_array().is_none_or(|v| !v.is_empty()),
+						"policies" => value.as_object().is_none_or(|v| !v.is_empty()),
+						_ => true,
+					})
+				})
+		});
+	}
+	Ok(deleted)
 }
 
 /// Lists the resources defined in a file-backed config. API keys are listed as `llm.apiKey`
@@ -593,6 +796,14 @@ pub(crate) fn file_config_resources(
 				.flatten()
 				.map(|(id, value)| (id.clone(), value.clone()))
 				.collect(),
+			None
+				if matches!(
+					kind,
+					ConfigResourceKind::McpTarget | ConfigResourceKind::McpPolicy
+				) =>
+			{
+				file_mcp_resources(config, kind)
+			},
 			None if kind == ConfigResourceKind::LlmApiKey => {
 				array(&["llm", "policies", "apiKey", "keys"])
 					.enumerate()
@@ -639,6 +850,12 @@ pub(crate) fn file_config_resource<'a>(
 			.find(|(index, value)| file_api_key_id(value, *index) == id)
 			.map(|(_, value)| value);
 	}
+	if matches!(
+		kind,
+		ConfigResourceKind::McpTarget | ConfigResourceKind::McpPolicy
+	) {
+		return file_mcp_resource(config, kind, id);
+	}
 	match file_resource_collection(kind)? {
 		FileResourceCollection::Map(path) => crate::json::traverse(config, path)?.get(id),
 		FileResourceCollection::List(path) => crate::json::traverse(config, path)?
@@ -666,6 +883,9 @@ pub(crate) fn upsert_file_config_resource(
 	match prepared.kind {
 		ConfigResourceKind::ModelCatalog => upsert_file_model_catalog(config, &prepared.value),
 		ConfigResourceKind::LlmApiKey => upsert_file_api_key(config, prepared, previous_id),
+		ConfigResourceKind::McpTarget | ConfigResourceKind::McpPolicy => {
+			upsert_file_mcp_resource(config, prepared, previous_id)
+		},
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
 			upsert_file_settings(config, prepared.kind, &prepared.value)
 		},
@@ -674,8 +894,6 @@ pub(crate) fn upsert_file_config_resource(
 		| ConfigResourceKind::LlmModel
 		| ConfigResourceKind::LlmVirtualModel
 		| ConfigResourceKind::LlmPolicy
-		| ConfigResourceKind::McpTarget
-		| ConfigResourceKind::McpPolicy
 		| ConfigResourceKind::TrafficGateway
 		| ConfigResourceKind::TrafficRoute
 		| ConfigResourceKind::TrafficTcpRoute
@@ -698,6 +916,9 @@ pub(crate) fn delete_file_config_resource(
 	match kind {
 		ConfigResourceKind::ModelCatalog => delete_file_model_catalog(config),
 		ConfigResourceKind::LlmApiKey => delete_file_api_key(config, id),
+		ConfigResourceKind::McpTarget | ConfigResourceKind::McpPolicy => {
+			delete_file_mcp_resource(config, kind, id)
+		},
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
 			delete_file_settings(config, kind)
 		},
@@ -706,8 +927,6 @@ pub(crate) fn delete_file_config_resource(
 		| ConfigResourceKind::LlmModel
 		| ConfigResourceKind::LlmVirtualModel
 		| ConfigResourceKind::LlmPolicy
-		| ConfigResourceKind::McpTarget
-		| ConfigResourceKind::McpPolicy
 		| ConfigResourceKind::TrafficGateway
 		| ConfigResourceKind::TrafficRoute
 		| ConfigResourceKind::TrafficTcpRoute
@@ -1059,6 +1278,11 @@ pub(crate) fn prepare_policy_upsert(
 			ConfigResourceError::InvalidRequest(format!("{kind} is not a policy resource")).into(),
 		);
 	}
+	if kind == ConfigResourceKind::McpPolicy
+		&& let (Some(endpoint), _) = split_mcp_endpoint_id(&id)
+	{
+		validate_mcp_endpoint_path(endpoint)?;
+	}
 	if kind == ConfigResourceKind::LlmPolicy && id == "apiKey" && value.get("keys").is_some() {
 		return Err(
 			ConfigResourceError::InvalidRequest(
@@ -1306,20 +1530,31 @@ fn overlay_config_resources(
 			.or_insert_with(|| Value::Array(Vec::new()));
 
 		append_settings(mcp, resources, ConfigResourceKind::McpSettings)?;
+		let (scoped, top_level): (Vec<_>, Vec<_>) = resources
+			.iter()
+			.filter(|resource| {
+				matches!(
+					resource.kind,
+					ConfigResourceKind::McpTarget | ConfigResourceKind::McpPolicy
+				)
+			})
+			.cloned()
+			.partition(|resource| split_mcp_endpoint_id(&resource.id).0.is_some());
 		append_policy_kind(
 			mcp,
 			"policies",
-			resources,
+			&top_level,
 			ConfigResourceKind::McpPolicy,
 			"mcp.policies",
 		)?;
 		append_list_kind(
 			mcp,
-			resources,
+			&top_level,
 			ConfigResourceKind::McpTarget,
 			"targets",
 			"mcp",
 		)?;
+		append_mcp_endpoints(mcp, scoped)?;
 	}
 	if has_traffic_resources {
 		append_traffic_gateways(root, resources)?;
@@ -1418,6 +1653,68 @@ fn append_policy_kind(
 			policy.insert("keys".to_string(), Value::Array(Vec::new()));
 		}
 		policies.insert(resource.id.clone(), value);
+	}
+	Ok(())
+}
+
+/// Appends scoped MCP target and policy resources to their `mcp.endpoints` entry, creating it if needed.
+fn append_mcp_endpoints(
+	mcp: &mut serde_json::Map<String, Value>,
+	resources: Vec<ConfigResource>,
+) -> anyhow::Result<()> {
+	let mut by_endpoint: Vec<(String, Vec<ConfigResource>)> = Vec::new();
+	for mut resource in resources {
+		let (Some(endpoint), name) = split_mcp_endpoint_id(&resource.id) else {
+			continue;
+		};
+		let endpoint = endpoint.to_string();
+		resource.id = name.to_string();
+		if let Some(object) = resource.value.as_object_mut() {
+			object.remove("endpoint");
+		}
+		match by_endpoint.iter_mut().find(|(path, _)| *path == endpoint) {
+			Some((_, resources)) => resources.push(resource),
+			None => by_endpoint.push((endpoint, vec![resource])),
+		}
+	}
+	if by_endpoint.is_empty() {
+		return Ok(());
+	}
+	let Some(endpoints) = mcp
+		.entry("endpoints")
+		.or_insert_with(|| Value::Array(Vec::new()))
+		.as_array_mut()
+	else {
+		anyhow::bail!("local config mcp.endpoints must be an array");
+	};
+	for (path, resources) in by_endpoint {
+		let index = match endpoints
+			.iter()
+			.position(|g| file_mcp_endpoint_path(g) == Some(path.as_str()))
+		{
+			Some(index) => index,
+			None => {
+				endpoints.push(serde_json::json!({ "path": path }));
+				endpoints.len() - 1
+			},
+		};
+		let Some(endpoint) = endpoints[index].as_object_mut() else {
+			anyhow::bail!("local config mcp.endpoints entries must be objects");
+		};
+		append_policy_kind(
+			endpoint,
+			"policies",
+			&resources,
+			ConfigResourceKind::McpPolicy,
+			"mcp.endpoints[].policies",
+		)?;
+		append_list_kind(
+			endpoint,
+			&resources,
+			ConfigResourceKind::McpTarget,
+			"targets",
+			"mcp.endpoints[]",
+		)?;
 	}
 	Ok(())
 }
@@ -1658,9 +1955,26 @@ fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String
 	match kind {
 		ConfigResourceKind::ModelCatalog | ConfigResourceKind::SessionKey => Ok("default".to_string()),
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => Ok("default".to_string()),
+		ConfigResourceKind::McpTarget => {
+			let name = string_field(value, "name", || {
+				format!("{kind} resources require value.name")
+			})?;
+			if name.contains(':') {
+				return Err(
+					ConfigResourceError::InvalidRequest(format!("{kind} name {name:?} must not contain ':'"))
+						.into(),
+				);
+			}
+			match value.get("endpoint").and_then(Value::as_str) {
+				Some(endpoint) => {
+					validate_mcp_endpoint_path(endpoint)?;
+					Ok(format!("{endpoint}:{name}"))
+				},
+				None => Ok(name),
+			}
+		},
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmVirtualModel
-		| ConfigResourceKind::McpTarget
 		| ConfigResourceKind::TrafficGateway
 		| ConfigResourceKind::TrafficRoute
 		| ConfigResourceKind::TrafficTcpRoute => string_field(value, "name", || {
@@ -3235,6 +3549,88 @@ routes:
 				.to_string()
 				.contains("config resource traffic.route/api conflicts with file-owned resource"),
 			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn mcp_endpoint_resources_map_to_endpoints() {
+		let mut config = json!({"mcp": {"targets": [{"name": "tools", "stdio": {"cmd": "a"}}]}});
+		let target = prepare_resource(
+			ConfigResourceKind::McpTarget,
+			json!({"name": "tools", "endpoint": "/eng/mcp", "stdio": {"cmd": "b"}}),
+		)
+		.expect("prepare scoped target");
+		assert_eq!(target.id, "/eng/mcp:tools");
+		upsert_file_config_resource(&mut config, &target, None).expect("add scoped target");
+		let policy = prepare_policy_upsert(
+			ConfigResourceKind::McpPolicy,
+			"/eng/mcp:cors".to_string(),
+			json!({"allowOrigins": ["*"]}),
+		)
+		.expect("prepare scoped policy");
+		upsert_file_config_resource(&mut config, &policy, Some(&policy.id)).expect("add policy");
+		assert_eq!(
+			config.pointer("/mcp/targets"),
+			Some(&json!([{"name": "tools", "stdio": {"cmd": "a"}}]))
+		);
+		assert_eq!(
+			config.pointer("/mcp/endpoints"),
+			Some(&json!([{
+				"path": "/eng/mcp",
+				"targets": [{"name": "tools", "stdio": {"cmd": "b"}}],
+				"policies": {"cors": {"allowOrigins": ["*"]}}
+			}]))
+		);
+		let listed = file_config_resources(&config, Some(ConfigResourceKind::McpTarget));
+		assert_eq!(
+			listed.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
+			["tools", "/eng/mcp:tools"]
+		);
+		assert_eq!(listed[1].value["endpoint"], json!("/eng/mcp"));
+
+		// Moving the target to another endpoint removes it from the old one.
+		let moved = prepare_resource(
+			ConfigResourceKind::McpTarget,
+			json!({"name": "moved", "endpoint": "/mcp", "stdio": {"cmd": "b"}}),
+		)
+		.expect("prepare moved target");
+		upsert_file_config_resource(&mut config, &moved, Some("/eng/mcp:tools")).expect("move");
+		assert_eq!(config.pointer("/mcp/endpoints/0/targets"), Some(&json!([])));
+		assert_eq!(config.pointer("/mcp/endpoints/1/targets/0/name"), Some(&json!("moved")));
+		assert!(
+			delete_file_config_resource(&mut config, ConfigResourceKind::McpPolicy, "/eng/mcp:cors")
+				.expect("delete policy")
+		);
+		assert_eq!(
+			config.pointer("/mcp/endpoints"),
+			Some(&json!([{"path": "/mcp", "targets": [{"name": "moved", "stdio": {"cmd": "b"}}]}]))
+		);
+
+		let materialized: Value = crate::yaml::from_str(
+			&materialize_config(
+				"mcp:\n  endpoints:\n  - path: /eng/mcp\n    statefulMode: stateless\n",
+				&[
+					test_resource(
+						ConfigResourceKind::McpTarget,
+						"/eng/mcp:db",
+						json!({"name": "db", "endpoint": "/eng/mcp", "stdio": {"cmd": "c"}}),
+					),
+					test_resource(
+						ConfigResourceKind::McpTarget,
+						"/sales/mcp:db",
+						json!({"name": "db", "endpoint": "/sales/mcp", "stdio": {"cmd": "d"}}),
+					),
+				],
+			)
+			.expect("materialize"),
+		)
+		.expect("parse materialized");
+		assert_eq!(
+			materialized.pointer("/mcp/endpoints"),
+			Some(&json!([
+				{"path": "/eng/mcp", "statefulMode": "stateless", "targets": [{"name": "db", "stdio": {"cmd": "c"}}]},
+				{"path": "/sales/mcp", "targets": [{"name": "db", "stdio": {"cmd": "d"}}]}
+			]))
 		);
 	}
 
