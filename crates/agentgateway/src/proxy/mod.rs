@@ -40,7 +40,6 @@ impl ProxyError {
 			ProxyError::NoHealthyEndpoints
 			| ProxyError::InvalidBackendType
 			| ProxyError::DnsResolution
-			| ProxyError::DynamicBackendLoopback
 			| ProxyError::NoValidBackends
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
@@ -74,6 +73,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::Authorization(..)) => ProxyResponseReason::Authorization,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
 			ProxyError::AuthorizationFailed
+			| ProxyError::DynamicBackendAddressDenied
 			| ProxyError::SubstrateEgressDenied(_)
 			| ProxyError::SubstrateEgressUpgradeDenied(_)
 			| ProxyError::CsrfValidationFailed => ProxyResponseReason::Authorization,
@@ -201,8 +201,8 @@ pub enum ProxyError {
 	BackendDoesNotExist,
 	#[error("backends required DNS resolution which failed")]
 	DnsResolution,
-	#[error("dynamic backend resolved to a loopback or link-local address")]
-	DynamicBackendLoopback,
+	#[error("dynamic backend resolved to a prohibited address")]
+	DynamicBackendAddressDenied,
 	#[error("failed to apply filters: {0}")]
 	FilterError(#[from] http::filters::Error),
 	#[error("cors: {0}")]
@@ -472,7 +472,7 @@ impl ProxyError {
 			| ProxyError::InvalidBackendType => "no backends available",
 			ProxyError::DnsResolution => "dns resolution failed",
 			ProxyError::FilterError(_) => "filter failed",
-			ProxyError::DynamicBackendLoopback => "backend not allowed",
+			ProxyError::DynamicBackendAddressDenied => "backend not allowed",
 			ProxyError::BackendUnsupportedMirror
 			| ProxyError::Processing(_)
 			| ProxyError::ProcessingString(_) => "internal error",
@@ -576,7 +576,9 @@ impl ProxyError {
 				StatusCode::INTERNAL_SERVER_ERROR
 			},
 			ProxyError::McpAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
-			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
+			ProxyError::AuthorizationFailed | ProxyError::DynamicBackendAddressDenied => {
+				StatusCode::FORBIDDEN
+			},
 			ProxyError::SubstrateEgressDenied(_) | ProxyError::SubstrateEgressUpgradeDenied(_) => {
 				StatusCode::FORBIDDEN
 			},
@@ -584,7 +586,6 @@ impl ProxyError {
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
-			ProxyError::DynamicBackendLoopback => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoHealthyEndpoints => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::UpstreamCallFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::UpstreamCallTimeout => StatusCode::GATEWAY_TIMEOUT,
