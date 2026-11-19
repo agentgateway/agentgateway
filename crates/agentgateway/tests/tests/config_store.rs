@@ -103,9 +103,11 @@ async fn assert_traffic_gateway(gateway: &AgentGateway) -> anyhow::Result<()> {
 	let value: Value = serde_json::from_slice(&body)?;
 	anyhow::ensure!(
 		value["resources"].as_array().is_some_and(|resources| {
-			resources.len() == 1
-				&& resources[0]["id"] == "database"
-				&& resources[0]["value"]["name"] == "database"
+			resources.iter().any(|resource| {
+				resource["source"] == "database"
+					&& resource["id"] == "database"
+					&& resource["value"]["name"] == "database"
+			})
 		}),
 		"persisted traffic gateway did not match: {value}"
 	);

@@ -43,9 +43,7 @@ import {
 	modelWarnings,
 	providerDisplayName,
 	providerLabel,
-	providerReferenceName,
-	upsertModel,
-	upsertVirtualModel
+	providerReferenceName
 } from '@/config';
 import type {
 	LocalLLMConditionalRouting,
@@ -57,8 +55,9 @@ import type {
 import {
 	resetFinishedSaves,
 	useConfigDumpMode,
+	useConfigResourcesByKind,
 	useDeleteConfigResource,
-	useLlmConfigData,
+	useRuntimeInfo,
 	useUpsertConfigResource
 } from '@/hooks';
 import { modelLabel, modelOptionValue, modelSubtitle } from '@/modelLabel';
@@ -104,11 +103,13 @@ import { cleanEmpty, parseYamlText, toYamlText } from '@/policies/policyUtils';
 import type { AuthorizationDraft } from '@/policies/types';
 import { randomUuid } from '@/randomUuid';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
-import type { GatewayConfig, LlmModel, LlmProvider, LlmVirtualModel, ProviderName } from '@/types';
+import type { LlmModel, LlmProvider, LlmVirtualModel, ProviderName } from '@/types';
 
 const TagLink = createLink(Tag);
 
-type ModelRow = { kind: 'model'; model: LlmModel } | { kind: 'virtual'; model: LlmVirtualModel };
+type ModelRow =
+	| { kind: 'model'; model: LlmModel; source: 'file' | 'database' }
+	| { kind: 'virtual'; model: LlmVirtualModel; source: 'file' | 'database' };
 type VirtualRoutingStrategy = 'weighted' | 'failover' | 'conditional';
 type ConditionalVirtualTarget = NonNullable<
 	LlmVirtualModel['routing']['conditional']
@@ -145,8 +146,32 @@ export function ModelsPage() {
 }
 
 function ModelsEditorPage() {
-	const { config, hybrid, resources, models, virtualModels, providers, isLoading, error } =
-		useLlmConfigData();
+	const runtime = useRuntimeInfo();
+	const hybrid = runtime.data?.ui.configStoreMode === 'hybrid';
+	const modelQuery = useConfigResourcesByKind('llm.model');
+	const virtualModelQuery = useConfigResourcesByKind('llm.virtualModel');
+	const providerQuery = useConfigResourcesByKind('llm.provider');
+	const modelResources = modelQuery.data?.resources;
+	const virtualModelResources = virtualModelQuery.data?.resources;
+	const providerResources = providerQuery.data?.resources;
+	const models = useMemo(
+		() => modelResources?.map(resource => resource.value) ?? [],
+		[modelResources]
+	);
+	const virtualModels = useMemo(
+		() => virtualModelResources?.map(resource => resource.value) ?? [],
+		[virtualModelResources]
+	);
+	const providers = useMemo(
+		() => providerResources?.map(resource => resource.value) ?? [],
+		[providerResources]
+	);
+	const isLoading =
+		runtime.isLoading ||
+		modelQuery.isLoading ||
+		virtualModelQuery.isLoading ||
+		providerQuery.isLoading;
+	const error = runtime.error ?? modelQuery.error ?? virtualModelQuery.error ?? providerQuery.error;
 	const upsertResource = useUpsertConfigResource();
 	const deleteResource = useDeleteConfigResource();
 	const help = useSchemaHelp();
@@ -193,21 +218,30 @@ function ModelsEditorPage() {
 		hybrid &&
 			activeEditing &&
 			(!activeEditing.previousId ||
-				isDatabaseConfigResource(resources, 'llm.model', activeEditing.previousId))
+				isDatabaseConfigResource(modelResources, 'llm.model', activeEditing.previousId))
 	);
 	const editingDatabaseVirtualModel = Boolean(
 		hybrid &&
 			activeVirtualEditing &&
 			(!activeVirtualEditing.previousName ||
-				isDatabaseConfigResource(resources, 'llm.virtualModel', activeVirtualEditing.previousName))
+				isDatabaseConfigResource(
+					virtualModelResources,
+					'llm.virtualModel',
+					activeVirtualEditing.previousName
+				))
 	);
-	const modelRows = useMemo(
-		(): ModelRow[] => [
-			...models.map(model => ({ kind: 'model' as const, model })),
-			...virtualModels.map(model => ({ kind: 'virtual' as const, model }))
-		],
-		[models, virtualModels]
-	);
+	const modelRows: ModelRow[] = [
+		...(modelResources ?? []).map(({ source, value }) => ({
+			kind: 'model' as const,
+			model: value,
+			source
+		})),
+		...(virtualModelResources ?? []).map(({ source, value }) => ({
+			kind: 'virtual' as const,
+			model: value,
+			source
+		}))
+	];
 
 	useEffect(() => {
 		function syncSelectedFromUrl() {
@@ -273,12 +307,6 @@ function ModelsEditorPage() {
 
 	function resetSaves() {
 		resetFinishedSaves(upsertResource, deleteResource);
-	}
-
-	function rowDatabaseBacked(row: ModelRow) {
-		return row.kind === 'virtual'
-			? isDatabaseConfigResource(resources, 'llm.virtualModel', row.model.name)
-			: isDatabaseConfigResource(resources, 'llm.model', modelIdentity(row.model));
 	}
 
 	function saveModel(model: LlmModel, previousId?: string) {
@@ -393,7 +421,7 @@ function ModelsEditorPage() {
 												title: 'Source',
 												key: 'source',
 												render: (_: unknown, row: ModelRow) => (
-													<Tag>{rowDatabaseBacked(row) ? 'Database' : 'File'}</Tag>
+													<Tag>{row.source === 'database' ? 'Database' : 'File'}</Tag>
 												)
 											}
 										]
@@ -436,7 +464,7 @@ function ModelsEditorPage() {
 									align: 'right',
 									onHeaderCell: () => ({ 'aria-label': 'Actions' }),
 									render: (_, row) => {
-										const fileOwned = hybrid && !rowDatabaseBacked(row);
+										const fileOwned = hybrid && row.source === 'file';
 										return (
 											<div className="row-actions">
 												<Tooltip content="Open in playground">
@@ -510,7 +538,6 @@ function ModelsEditorPage() {
 					key={activeEditing.previousId ?? 'new'}
 					previousId={activeEditing.previousId}
 					initial={activeEditing.model}
-					config={config.data}
 					databaseBacked={editingDatabaseModel}
 					providers={providers}
 					help={help}
@@ -525,7 +552,6 @@ function ModelsEditorPage() {
 					key={activeVirtualEditing.previousName ?? 'new'}
 					previousName={activeVirtualEditing.previousName}
 					initial={activeVirtualEditing.model}
-					config={config.data}
 					databaseBacked={editingDatabaseVirtualModel}
 					baseModels={models}
 					virtualModels={virtualModels}
@@ -589,7 +615,6 @@ function modelFormFrom(model: LlmModel) {
 
 function ModelEditor(props: {
 	initial: LlmModel;
-	config?: GatewayConfig;
 	databaseBacked: boolean;
 	providers: LlmProvider[];
 	previousId?: string;
@@ -704,22 +729,17 @@ function ModelEditor(props: {
 			}}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
-					config={props.config}
-					resourceDiff={
-						props.databaseBacked
-							? {
-									original: props.previousId ? modelConfigForDisplay(props.initial) : {},
-									modified: modelConfigForDisplay(preview)
-								}
-							: undefined
-					}
-					diffTitle={props.databaseBacked ? 'Model resource diff' : 'Model config diff'}
+					allowHybridWrite={props.databaseBacked}
+					resourceDiff={{
+						original: props.previousId ? modelConfigForDisplay(props.initial) : {},
+						modified: modelConfigForDisplay(preview)
+					}}
+					diffTitle="Model resource diff"
 					saveLabel="Save model"
 					saving={props.saving}
 					onCancel={requestClose}
 					onSave={save}
 					beforeDiff={validateBeforeDiff}
-					applyDiff={next => upsertModel(next, preview ?? model, props.previousId)}
 				/>
 			)}
 		>
@@ -1221,7 +1241,6 @@ function modelPolicySummary(model: Partial<LlmModel>) {
 
 function VirtualModelEditor(props: {
 	initial: LlmVirtualModel;
-	config?: GatewayConfig;
 	databaseBacked: boolean;
 	previousName?: string;
 	baseModels: LlmModel[];
@@ -1389,24 +1408,17 @@ function VirtualModelEditor(props: {
 			}}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
-					config={props.config}
-					resourceDiff={
-						props.databaseBacked
-							? {
-									original: props.previousName ? props.initial : {},
-									modified: preview ?? {}
-								}
-							: undefined
-					}
-					diffTitle={
-						props.databaseBacked ? 'Virtual model resource diff' : 'Virtual model config diff'
-					}
+					allowHybridWrite={props.databaseBacked}
+					resourceDiff={{
+						original: props.previousName ? props.initial : {},
+						modified: preview ?? {}
+					}}
+					diffTitle="Virtual model resource diff"
 					saveLabel="Save virtual model"
 					saving={props.saving}
 					saveDisabled={saveDisabled}
 					onCancel={requestClose}
 					onSave={() => props.onSave(preview ?? model, props.previousName)}
-					applyDiff={next => upsertVirtualModel(next, preview ?? model, props.previousName)}
 				/>
 			)}
 		>

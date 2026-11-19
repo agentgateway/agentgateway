@@ -15,6 +15,7 @@ import {
 	type ConfigResourceValue,
 	deleteConfigResource,
 	listConfigResources,
+	listConfigResourcesByKind,
 	type PolicyResourceKind,
 	putConfigResources,
 	updateConfigResource
@@ -106,7 +107,18 @@ export function useConfigResources(options?: { enabled?: boolean }) {
 	return useQuery({
 		queryKey: ['configResources'],
 		queryFn: listConfigResources,
+		select: data => ({
+			resources: data.resources.filter(resource => resource.source === 'database')
+		}),
 		enabled: options?.enabled ?? true,
+		retry: false
+	});
+}
+
+export function useConfigResourcesByKind<K extends ConfigResourceKind>(kind: K) {
+	return useQuery({
+		queryKey: ['configResources', kind],
+		queryFn: () => listConfigResourcesByKind(kind),
 		retry: false
 	});
 }

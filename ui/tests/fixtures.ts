@@ -407,6 +407,26 @@ export async function mockXdsGateway(page: Page, dump: StoresDump = xdsDump()) {
 	return { writeRequests };
 }
 
+export function fileLlmResources(config: TestConfig, filter?: string) {
+	const llm = record(config.llm);
+	return Object.entries({
+		'llm.model': array(llm.models),
+		'llm.virtualModel': array(llm.virtualModels),
+		'llm.provider': array(llm.providers)
+	}).flatMap(([kind, items]) =>
+		filter && filter !== kind
+			? []
+			: items.map(value => ({
+					kind,
+					id:
+						(kind === 'llm.model' && stringValue(record(value).id)) ||
+						stringValue(record(value).name),
+					source: 'file',
+					value
+				}))
+	);
+}
+
 export async function mockGateway(page: Page, initialConfig: TestConfig = populatedConfig()) {
 	let config = structuredClone(initialConfig);
 	let rawConfig: string | null = null;
@@ -483,7 +503,7 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 		const suffix = path.split('/api/config/resources')[1] ?? '';
 		const [kind, id] = suffix.split('/').filter(Boolean).map(decodeURIComponent);
 		if (route.request().method() === 'GET') {
-			await json(route, { resources: [] });
+			await json(route, { resources: fileLlmResources(config, kind) });
 			return;
 		}
 		if (route.request().method() === 'PUT') {

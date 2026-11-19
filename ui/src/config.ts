@@ -207,53 +207,8 @@ export function startupMcpConfig(
 	return { gateways };
 }
 
-export function upsertModel(config: GatewayConfig, model: LlmModel, previousId?: string) {
-	const llm = ensureLlm(config);
-	llm.models ??= [];
-	const index = llm.models.findIndex(
-		item => modelIdentity(item) === (previousId ?? modelIdentity(model))
-	);
-	if (index >= 0) {
-		llm.models[index] = model;
-	} else {
-		llm.models.push(model);
-	}
-}
-
 export function modelIdentity(model: LlmModel): string {
 	return model.id || model.name;
-}
-
-export function upsertVirtualModel(
-	config: GatewayConfig,
-	model: LlmVirtualModel,
-	previousName?: string
-) {
-	const llm = ensureLlm(config);
-	llm.virtualModels ??= [];
-	const index =
-		llm.virtualModels?.findIndex(item => item.name === (previousName ?? model.name)) ?? -1;
-	if (index >= 0 && llm.virtualModels) {
-		llm.virtualModels[index] = model;
-	} else {
-		llm.virtualModels?.push(model);
-	}
-}
-
-export function upsertLlmProvider(
-	config: GatewayConfig,
-	provider: LlmProvider,
-	previousName?: string
-) {
-	const llm = ensureLlm(config);
-	llm.providers ??= [];
-	const index =
-		llm.providers?.findIndex(item => item.name === (previousName ?? provider.name)) ?? -1;
-	if (index >= 0 && llm.providers) {
-		llm.providers[index] = provider;
-	} else {
-		llm.providers?.push(provider);
-	}
 }
 
 export function isDatabaseConfigResource(
@@ -261,7 +216,9 @@ export function isDatabaseConfigResource(
 	kind: ConfigResourceKind,
 	id: string
 ) {
-	return (resources ?? []).some(resource => resource.kind === kind && resource.id === id);
+	return (resources ?? []).some(
+		resource => resource.kind === kind && resource.id === id && resource.source === 'database'
+	);
 }
 
 export function fileOwnedMcpSettingFields(

@@ -66,6 +66,7 @@ export interface ConfigResource<K extends ConfigResourceKind = ConfigResourceKin
 	kind: K;
 	id: string;
 	value: ConfigResourceValue<K>;
+	source: 'file' | 'database';
 	revision?: number;
 	createdAt?: string;
 	updatedAt?: string;
@@ -77,6 +78,12 @@ export interface ConfigResourcesResponse<K extends ConfigResourceKind = ConfigRe
 
 export function listConfigResources() {
 	return requestJson<ConfigResourcesResponse>('/api/config/resources');
+}
+
+export function listConfigResourcesByKind<K extends ConfigResourceKind>(kind: K) {
+	return requestJson<ConfigResourcesResponse<K>>(
+		`/api/config/resources/${encodeURIComponent(kind)}`
+	);
 }
 
 export function putConfigResources<K extends ConfigResourceKind>(
