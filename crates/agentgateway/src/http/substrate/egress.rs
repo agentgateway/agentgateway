@@ -528,34 +528,36 @@ fn token_exchange_url(
 
 fn token_exchange_error(error: FetchError) -> ProxyError {
 	let detail = error.to_string();
-	if let Some((status, oauth_error)) = error.endpoint_response() {
-		if matches!(
-			status,
-			::http::StatusCode::BAD_REQUEST | ::http::StatusCode::UNAUTHORIZED
-		) && matches!(
-			oauth_error,
-			Some(
-				"invalid_grant"
-					| "invalid_target"
-					| "unauthorized_client"
-					| "invalid_scope"
-					| "access_denied"
-			)
-		) {
-			return ProxyError::SubstrateEgressDenied(
-				"token exchange endpoint denied the actor".to_owned(),
-			);
-		}
-		if status == ::http::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
-			return ProxyError::SubstrateEgressUnavailable(format!(
-				"token exchange endpoint returned {status}"
-			));
-		}
-		return ProxyError::SubstrateEgressMisconfigured(format!(
-			"token exchange endpoint returned {status}"
-		));
-	}
 	match error {
+		FetchError::Response {
+			status,
+			oauth_error,
+			..
+		} => {
+			if matches!(
+				status,
+				::http::StatusCode::BAD_REQUEST | ::http::StatusCode::UNAUTHORIZED
+			) && matches!(
+				oauth_error.as_deref(),
+				Some(
+					"invalid_grant"
+						| "invalid_target"
+						| "unauthorized_client"
+						| "invalid_scope"
+						| "access_denied"
+				)
+			) {
+				return ProxyError::SubstrateEgressDenied(
+					"token exchange endpoint denied the actor".to_owned(),
+				);
+			}
+			if status == ::http::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+				return ProxyError::SubstrateEgressUnavailable(format!(
+					"token exchange endpoint returned {status}"
+				));
+			}
+			ProxyError::SubstrateEgressMisconfigured(format!("token exchange endpoint returned {status}"))
+		},
 		FetchError::Backend(BackendAuthError::Local(_)) => {
 			ProxyError::SubstrateEgressMisconfigured(format!("invalid token exchange request: {detail}"))
 		},
@@ -564,7 +566,6 @@ fn token_exchange_error(error: FetchError) -> ProxyError {
 				"token exchange endpoint unavailable: {detail}"
 			))
 		},
-		FetchError::Client { .. } => unreachable!(),
 	}
 }
 

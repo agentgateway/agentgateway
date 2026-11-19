@@ -953,7 +953,7 @@ async fn fetch_token_uncached(
 	req: &ExchangeRequest,
 ) -> Result<transport::TokenEndpointResponse, FetchError> {
 	let first =
-		transport::request_token(client, &transport::RoutedTokenRequestSpec::from(auth), req).await?;
+		transport::request_token(client, &transport::ConfiguredTokenEndpoint::from(auth), req).await?;
 	let Some(chained_exchange) = &auth.chained_exchange else {
 		return Ok(first);
 	};
@@ -961,7 +961,7 @@ async fn fetch_token_uncached(
 		ExchangeRequest::jwt_bearer_assertion(first.access_token, req.chained_extra_params.clone());
 	transport::request_token(
 		client,
-		&transport::RoutedTokenRequestSpec::from(chained_exchange),
+		&transport::ConfiguredTokenEndpoint::from(chained_exchange),
 		&chained_req,
 	)
 	.await
