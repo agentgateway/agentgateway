@@ -228,3 +228,40 @@ autoscaling:
   #   - type: Pods
   #     value: 2
   #     periodSeconds: 60
+
+# -- (object) Configures a keda ScaledObject for your Deployment.
+# It's mutually exclusive with hpa autoscaling
+keda:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  pollingInterval: 30
+  cooldownPeriod: 300
+  # fallback:
+  #   failureThreshold: 3
+  #   replicas: 11
+  scaledObject:
+    annotations: {}
+  triggers: []
+  # - type: prometheus
+  #   metadata:
+  #     serverAddress: http://<prometheus-host>:9090
+  #     metricName: http_requests_total
+  #     threshold: '100'
+  #     query: sum(rate(http_requests_total{deployment="my-deployment"}[2m]))
+  advanced: {}
+  # restoreToOriginalReplicaCount: false
+  # horizontalPodAutoscalerConfig:
+  #   behavior:
+  #     scaleDown:
+  #       policies:
+  #       - periodSeconds: 180
+  #         type: Pods
+  #         value: 1
+  #       stabilizationWindowSeconds: 300
+  #     scaleUp:
+  #       policies:
+  #       - periodSeconds: 60
+  #         type: Pods
+  #         value: 2
+  #       stabilizationWindowSeconds: 300

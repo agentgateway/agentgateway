@@ -193,4 +193,10 @@ rendered configuration, plus config.modelCatalog, are reloaded without restartin
 {{- else if $postgresUrl -}}
 {{- fail (printf "database.postgres.url is only supported when mode=database (got mode %q)" $mode) -}}
 {{- end -}}
+{{- if and .Values.autoscaling.enabled .Values.keda.enabled -}}
+{{- fail "autoscaling.enabled and keda.enabled are mutually exclusive" -}}
+{{- end -}}
+{{- if and .Values.keda.enabled (empty .Values.keda.triggers) -}}
+{{- fail "keda.enabled requires at least one entry in keda.triggers" -}}
+{{- end -}}
 {{- end -}}

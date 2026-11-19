@@ -1,0 +1,30 @@
+{{- if .Values.keda.enabled -}}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" . }}
+  labels:
+    {{- include "agentgateway-standalone.labels" . | nindent 4 }}
+  {{- if .Values.keda.scaledObject.annotations }}
+  annotations: {{- toYaml .Values.keda.scaledObject.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  scaleTargetRef:
+    name: {{ include "agentgateway-standalone.fullname" . }}
+  pollingInterval: {{ .Values.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.keda.cooldownPeriod }}
+  minReplicaCount: {{ .Values.keda.minReplicas }}
+  maxReplicaCount: {{ .Values.keda.maxReplicas }}
+{{- with .Values.keda.fallback }}
+  fallback:
+    failureThreshold: {{ .failureThreshold | default 3 }}
+    replicas: {{ .replicas | default $.Values.keda.maxReplicas }}
+{{- end }}
+  triggers:
+{{- with .Values.keda.triggers }}
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- if .Values.keda.advanced }}
+  advanced: {{- toYaml .Values.keda.advanced | nindent 4 }}
+{{- end }}
+{{- end }}

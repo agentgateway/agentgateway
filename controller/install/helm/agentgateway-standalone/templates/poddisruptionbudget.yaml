@@ -2,6 +2,8 @@
 {{- if .Values.podDisruptionBudget.enabled -}}
 {{- if .Values.autoscaling.enabled }}
 {{- $replicas = .Values.autoscaling.minReplicas }}
+{{- else if .Values.keda.enabled }}
+{{- $replicas = .Values.keda.minReplicas }}
 {{- end }}
 {{- if gt ($replicas | int) 1 }}
 apiVersion: policy/v1
