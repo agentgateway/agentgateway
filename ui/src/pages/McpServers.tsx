@@ -1,11 +1,13 @@
+import { Link } from '@tanstack/react-router';
 import { Button, Checkbox, Input, Table, Tag } from 'antd';
-import { Info, Pencil, Plus, Server, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Info, Pencil, Plus, Server, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import type { McpSettingsResource } from '@/api/configResourcesApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { LostFieldsWarning, useChangedFields, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
+import { FreeformCombobox } from '@/components/FreeformCombobox';
 import { GatewayBindingEditor, type GatewayBindingValue } from '@/components/GatewayBindingEditor';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import {
@@ -25,11 +27,18 @@ import {
 	fileOwnedMcpSettingFields,
 	isDatabaseConfigResource,
 	makeEmptyMcpTarget,
+	mcpPolicies,
 	mcpSettingsFields,
 	upsertMcpTarget
 } from '@/config';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import { useDeleteConfigResource, useMcpConfigData, useUpsertConfigResource } from '@/hooks';
+import {
+	type McpServerEndpoint,
+	mcpServerEndpoints,
+	splitMcpResourceId,
+	trimTrailingSlash
+} from '@/mcp';
 import { BackendPoliciesField } from '@/policies/PolicyFormControls';
 import { CollapsiblePolicySection, PolicySection } from '@/policies/PolicyLayout';
 import { parseYamlText, toYamlMappingText } from '@/policies/policyUtils';
@@ -37,6 +46,7 @@ import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
 import type {
 	GatewayConfig,
 	McpConfig,
+	McpEndpoint,
 	McpFailureMode,
 	McpPrefixMode,
 	McpStatefulMode,
@@ -62,19 +72,33 @@ export function McpServersPage() {
 	const resources = mcpData.resources;
 	const effectiveConfig = mcpData.data;
 	const mcp = effectiveConfig?.mcp;
-	const targets = useMemo(() => mcp?.targets ?? [], [mcp]);
+	const endpoints = useMemo(() => mcpServerEndpoints(mcp), [mcp]);
+	const endpointPaths = endpoints.flatMap(endpoint =>
+		endpoint.endpoint && endpoint.endpoint !== '/mcp' ? [endpoint.endpoint] : []
+	);
+	const mcpEndpointHasTargets = Boolean(
+		mcp?.endpoints?.some(item => trimTrailingSlash(item.path) === '/mcp' && item.targets?.length)
+	);
+	const targets = endpoints.flatMap(endpoint =>
+		endpoint.targets.map((target, index) => ({
+			target,
+			endpoint: splitMcpResourceId(endpoint.ids[index]).endpoint,
+			id: endpoint.ids[index]
+		}))
+	);
 	const fileOwnedSettingFields = fileOwnedMcpSettingFields(rawConfig.data, hybrid);
 	const saving = upsertResource.isPending || deleteResource.isPending;
 	const saveError = upsertResource.error?.message ?? deleteResource.error?.message ?? null;
 	const [editing, setEditing] = useState<{
-		previousName?: string;
+		previousId?: string;
+		endpoint?: string;
 		target: McpTarget;
 	} | null>(null);
 	const [deletingServer, setDeletingServer] = useState<string | null>(null);
 	const [serverDrawer, setServerDrawer] = useStickyQueryParam('server');
 	const linkedTarget =
 		serverDrawer && serverDrawer !== 'new' && serverDrawer !== 'settings'
-			? targets.find(target => target.name === serverDrawer)
+			? targets.find(target => target.id === serverDrawer)
 			: null;
 	const activeEditing =
 		editing ??
@@ -82,20 +106,25 @@ export function McpServersPage() {
 			? { target: makeEmptyMcpTarget() }
 			: linkedTarget
 				? {
-						previousName: linkedTarget.name,
-						target: structuredClone(linkedTarget)
+						previousId: linkedTarget.id,
+						endpoint: linkedTarget.endpoint,
+						target: structuredClone(linkedTarget.target)
 					}
 				: null);
 	const settingsOpen = serverDrawer === 'settings';
+	const showEndpointHeaders = endpoints.some(endpoint => endpoint.endpoint);
 
-	function openNewServer() {
-		setEditing(null);
+	const canDelete = (id: string) =>
+		!hybrid || isDatabaseConfigResource(resources, 'mcp.target', id);
+
+	function openNewServer(endpoint?: string) {
+		setEditing({ target: makeEmptyMcpTarget(), endpoint });
 		setServerDrawer('new');
 	}
 
-	function openEditServer(target: McpTarget) {
+	function openEditServer(id: string) {
 		setEditing(null);
-		setServerDrawer(target.name);
+		setServerDrawer(id);
 	}
 
 	function closeServerDrawer() {
@@ -116,7 +145,7 @@ export function McpServersPage() {
 						>
 							Settings
 						</Button>
-						<Button type="primary" icon={<Plus size={16} />} onClick={openNewServer}>
+						<Button type="primary" icon={<Plus size={16} />} onClick={() => openNewServer()}>
 							Add server
 						</Button>
 					</div>
@@ -132,113 +161,112 @@ export function McpServersPage() {
 				<StatusBanner state="ok" title="Configuration saved" />
 			) : null}
 
-			<Panel>
-				{mcpData.isLoading ? (
-					<StatusBanner state="loading" title="Loading MCP servers" />
-				) : mcpData.error ? (
-					<StatusBanner state="bad" title="Configuration API unavailable">
-						{mcpData.error.message}
-					</StatusBanner>
-				) : targets.length === 0 ? (
-					<EmptyState
-						title="No MCP servers configured"
-						description="Add a target so the gateway can expose MCP traffic."
-						action={
-							<Button type="primary" icon={<Server size={16} />} onClick={openNewServer}>
-								Add server
-							</Button>
-						}
-					/>
-				) : (
-					<Table<McpTarget>
-						rowKey="name"
-						dataSource={targets}
-						pagination={false}
-						columns={[
-							{ title: 'Name', dataIndex: 'name', className: 'strong' },
-							{
-								title: 'Type',
-								key: 'type',
-								render: (_, target) => <Tag>{transportLabel(targetKind(target))}</Tag>
-							},
-							{
-								title: 'Endpoint',
-								key: 'endpoint',
-								render: (_, target) => <code>{targetEndpoint(target)}</code>
-							},
-							{
-								title: 'State',
-								key: 'state',
-								render: (_, target) => {
-									const warnings = targetWarnings(target);
-									return warnings.length ? (
-										<Tag color="warning">{warnings.length} warnings</Tag>
-									) : (
-										<Tag color="success">ready</Tag>
-									);
-								}
-							},
-							{
-								key: 'actions',
-								align: 'right',
-								onHeaderCell: () => ({ 'aria-label': 'Actions' }),
-								render: (_, target) => {
-									const databaseBacked = isDatabaseConfigResource(
-										resources,
-										'mcp.target',
-										target.name
-									);
-									return (
-										<div className="row-actions">
-											<Tooltip content="Edit server">
-												<Button
-													aria-label="Edit server"
-													icon={<Pencil size={16} />}
-													onClick={() => openEditServer(target)}
-												/>
-											</Tooltip>
-											<Tooltip
-												content={
-													hybrid && !databaseBacked
-														? 'File-owned servers cannot be deleted here'
-														: 'Delete server'
-												}
-											>
-												<Button
-													danger
-													aria-label="Delete server"
-													icon={<Trash2 size={16} />}
-													disabled={saving || (hybrid && !databaseBacked)}
-													onClick={() => setDeletingServer(target.name)}
-												/>
-											</Tooltip>
-										</div>
-									);
-								}
+			{mcpData.isLoading || mcpData.error || targets.length === 0 || !showEndpointHeaders ? (
+				<Panel>
+					{mcpData.isLoading ? (
+						<StatusBanner state="loading" title="Loading MCP servers" />
+					) : mcpData.error ? (
+						<StatusBanner state="bad" title="Configuration API unavailable">
+							{mcpData.error.message}
+						</StatusBanner>
+					) : targets.length === 0 ? (
+						<EmptyState
+							title="No MCP servers configured"
+							description="Add a target so the gateway can expose MCP traffic."
+							action={
+								<Button type="primary" icon={<Server size={16} />} onClick={() => openNewServer()}>
+									Add server
+								</Button>
 							}
-						]}
-					/>
-				)}
-			</Panel>
+						/>
+					) : (
+						<McpServerTable
+							endpoint={endpoints[0]}
+							canDelete={canDelete}
+							saving={saving}
+							onEdit={openEditServer}
+							onDelete={setDeletingServer}
+						/>
+					)}
+				</Panel>
+			) : (
+				endpoints.map(endpoint => {
+					const overrides = endpoint.endpoint
+						? Object.keys(mcpPolicies(mcp, endpoint.endpoint) ?? {}).length
+						: 0;
+					return (
+						<Panel key={endpoint.path} className="mcp-endpoint-panel">
+							<div className="mcp-endpoint-header">
+								<div>
+									<h3>{endpoint.path}</h3>
+									<p>
+										{endpoint.targets.length} {endpoint.targets.length === 1 ? 'server' : 'servers'}
+									</p>
+								</div>
+								<div className="page-actions">
+									<Link
+										to="/mcp/policies"
+										search={endpoint.endpoint ? { endpoint: endpoint.endpoint } : {}}
+									>
+										<Button size="small" icon={<ShieldCheck size={14} />}>
+											Policies
+											{overrides ? (
+												<Tag color="purple">
+													{overrides} {overrides === 1 ? 'override' : 'overrides'}
+												</Tag>
+											) : null}
+										</Button>
+									</Link>
+									<Button
+										size="small"
+										icon={<Plus size={14} />}
+										onClick={() =>
+											openNewServer(endpoint.path === '/mcp' ? undefined : endpoint.endpoint)
+										}
+									>
+										Add server
+									</Button>
+								</div>
+							</div>
+							{endpoint.targets.length ? (
+								<McpServerTable
+									endpoint={endpoint}
+									canDelete={canDelete}
+									saving={saving}
+									onEdit={openEditServer}
+									onDelete={setDeletingServer}
+								/>
+							) : null}
+						</Panel>
+					);
+				})
+			)}
 
 			{activeEditing ? (
 				<McpServerEditor
-					key={activeEditing.previousName ?? 'new'}
+					key={activeEditing.previousId ?? 'new'}
 					initial={activeEditing.target}
+					initialEndpoint={activeEditing.endpoint}
+					endpointOptions={endpointPaths}
+					mcpEndpointHasTargets={mcpEndpointHasTargets}
 					config={effectiveConfig}
-					previousName={activeEditing.previousName}
+					previousId={activeEditing.previousId}
 					databaseBacked={
 						hybrid &&
-						(!activeEditing.previousName ||
-							isDatabaseConfigResource(resources, 'mcp.target', activeEditing.previousName))
+						(!activeEditing.previousId ||
+							isDatabaseConfigResource(resources, 'mcp.target', activeEditing.previousId))
 					}
 					help={help}
 					saving={saving}
 					saveError={saveError}
 					onCancel={closeServerDrawer}
-					onSave={(target, previousName) => {
+					onSave={(target, endpoint, previousId) => {
 						upsertResource.mutate(
-							{ kind: 'mcp.target', value: target, previousId: previousName },
+							{
+								kind: 'mcp.target',
+								value: endpoint ? { ...target, endpoint } : target,
+								previousId
+							},
 							{
 								onSuccess: closeServerDrawer
 							}
@@ -283,11 +311,105 @@ export function McpServersPage() {
 					}}
 				>
 					<p>
-						Delete <strong>{deletingServer}</strong>? Traffic can no longer be sent to this target.
+						Delete <strong>{splitMcpResourceId(deletingServer).name}</strong>
+						{splitMcpResourceId(deletingServer).endpoint
+							? ` from ${splitMcpResourceId(deletingServer).endpoint}`
+							: ''}
+						? Traffic can no longer be sent to this target.
 					</p>
 				</ConfirmDialog>
 			) : null}
 		</div>
+	);
+}
+
+function McpServerTable(props: {
+	endpoint: McpServerEndpoint;
+	canDelete: (id: string) => boolean;
+	saving: boolean;
+	onEdit: (id: string) => void;
+	onDelete: (id: string) => void;
+}) {
+	const rows = props.endpoint.targets.map((target, index) => ({
+		target,
+		id: props.endpoint.ids[index]
+	}));
+	return (
+		<Table<(typeof rows)[number]>
+			className="mcp-server-table"
+			rowKey="id"
+			dataSource={rows}
+			pagination={false}
+			tableLayout="fixed"
+			columns={[
+				{
+					title: 'Name',
+					key: 'name',
+					width: '24%',
+					className: 'strong',
+					render: (_, { target }) => {
+						const warnings = targetWarnings(target);
+						return (
+							<>
+								{target.name}
+								{warnings.length ? (
+									<Tooltip content={warnings.join(' ')}>
+										<Tag color="warning">
+											{warnings.length} {warnings.length === 1 ? 'warning' : 'warnings'}
+										</Tag>
+									</Tooltip>
+								) : null}
+							</>
+						);
+					}
+				},
+				{
+					title: 'Transport',
+					key: 'transport',
+					width: 160,
+					render: (_, { target }) => <Tag>{transportLabel(targetKind(target))}</Tag>
+				},
+				{
+					title: 'Target',
+					key: 'target',
+					ellipsis: true,
+					render: (_, { target }) => <code>{targetEndpoint(target)}</code>
+				},
+				{
+					key: 'actions',
+					align: 'right',
+					width: 104,
+					onHeaderCell: () => ({ 'aria-label': 'Actions' }),
+					render: (_, { id }) => {
+						const canDelete = props.canDelete(id);
+						return (
+							<div className="row-actions">
+								<Tooltip content="Edit server">
+									<Button
+										aria-label="Edit server"
+										icon={<Pencil size={16} />}
+										onClick={() => props.onEdit(id)}
+									/>
+								</Tooltip>
+								<Tooltip
+									content={
+										canDelete ? 'Delete server' : 'File-owned servers cannot be deleted here'
+									}
+								>
+									<Button
+										danger
+										aria-label="Delete server"
+										icon={<Trash2 size={16} />}
+										disabled={props.saving || !canDelete}
+										onClick={() => props.onDelete(id)}
+									/>
+								</Tooltip>
+							</div>
+						);
+					}
+				}
+			]}
+		/>
 	);
 }
 
@@ -611,17 +733,29 @@ function formFrom(target: McpTarget) {
 
 function McpServerEditor(props: {
 	initial: McpTarget;
+	initialEndpoint?: string;
+	endpointOptions: string[];
+	mcpEndpointHasTargets: boolean;
 	config?: GatewayConfig | null;
-	previousName?: string;
+	previousId?: string;
 	databaseBacked?: boolean;
 	help: SchemaHelp;
 	saving: boolean;
 	saveError?: string | null;
 	onCancel: () => void;
-	onSave: (target: McpTarget, previousName?: string) => void;
+	onSave: (target: McpTarget, endpoint: string | undefined, previousId?: string) => void;
 }) {
 	const [form, setForm] = useState(() => formFrom(props.initial));
 	const [initialForm] = useState(form);
+	const [endpointText, setEndpointText] = useState(props.initialEndpoint ?? '');
+	// Servers for /mcp go in the top-level list, unless an explicit /mcp endpoint already lists them.
+	const typedEndpoint = trimTrailingSlash(endpointText.trim());
+	const endpoint =
+		typedEndpoint && typedEndpoint !== '/mcp'
+			? typedEndpoint
+			: props.mcpEndpointHasTargets
+				? '/mcp'
+				: undefined;
 	const {
 		source,
 		name,
@@ -644,11 +778,10 @@ function McpServerEditor(props: {
 			? String(network.backend)
 			: null;
 
-	const merged = useMergedEdits(
-		props.previousName ? props.initial : undefined,
-		safeTargetPreview(),
-		['$defs', 'LocalMcpTarget']
-	);
+	const merged = useMergedEdits(props.previousId ? props.initial : undefined, safeTargetPreview(), [
+		'$defs',
+		'LocalMcpTarget'
+	]);
 
 	function targetPreview() {
 		const base = {
@@ -700,6 +833,8 @@ function McpServerEditor(props: {
 	function validTargetPreview() {
 		try {
 			setError(null);
+			if (endpoint && !endpoint.startsWith('/'))
+				throw new Error('Endpoint path must start with /.');
 			return targetPreview();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Invalid server configuration');
@@ -709,12 +844,12 @@ function McpServerEditor(props: {
 
 	function save() {
 		if (!validTargetPreview()) return;
-		props.onSave(merged.value as McpTarget, props.previousName);
+		props.onSave(merged.value as McpTarget, endpoint, props.previousId);
 	}
 
 	return (
 		<Drawer
-			title={props.previousName ? 'Edit MCP server' : 'Add MCP server'}
+			title={props.previousId ? 'Edit MCP server' : 'Add MCP server'}
 			onClose={props.onCancel}
 			error={props.saveError}
 			raw={{
@@ -726,7 +861,10 @@ function McpServerEditor(props: {
 				},
 				empty: makeEmptyMcpTarget()
 			}}
-			dirty={JSON.stringify(form) !== JSON.stringify(initialForm)}
+			dirty={
+				JSON.stringify(form) !== JSON.stringify(initialForm) ||
+				endpointText !== (props.initialEndpoint ?? '')
+			}
 			saving={props.saving}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
@@ -740,12 +878,16 @@ function McpServerEditor(props: {
 					resourceDiff={
 						props.databaseBacked
 							? () => ({
-									original: props.previousName ? props.initial : {},
-									modified: merged.value
+									original: props.previousId
+										? { ...props.initial, endpoint: props.initialEndpoint }
+										: {},
+									modified: { ...(merged.value as McpTarget), endpoint }
 								})
 							: undefined
 					}
-					applyDiff={next => upsertMcpTarget(next, merged.value as McpTarget, props.previousName)}
+					applyDiff={next =>
+						upsertMcpTarget(next, merged.value as McpTarget, endpoint, props.previousId)
+					}
 				/>
 			)}
 		>
@@ -764,6 +906,23 @@ function McpServerEditor(props: {
 						value={name}
 						onChange={event => update({ name: event.target.value })}
 						placeholder="weather"
+					/>
+				</Field>
+				<Field
+					label="Endpoint"
+					path="endpoint"
+					tooltip={props.help.field<McpEndpoint>(
+						'LocalMcpEndpoint',
+						'path',
+						'Path of the MCP endpoint serving this target. Leave empty to serve it at /mcp.'
+					)}
+				>
+					<FreeformCombobox
+						ariaLabel="Endpoint"
+						value={endpointText}
+						options={props.endpointOptions}
+						onChange={setEndpointText}
+						placeholder="Default (/mcp)"
 					/>
 				</Field>
 			</div>
@@ -989,6 +1148,7 @@ function shellDisplayArg(value: string) {
 function targetWarnings(target: McpTarget) {
 	const warnings: string[] = [];
 	if (!target.name.trim()) warnings.push('Server name is required.');
+	if (target.name.includes(':')) warnings.push('Server name must not contain ":".');
 	if ('stdio' in target && !target.stdio.cmd.trim()) warnings.push('Command is required.');
 	if (!('stdio' in target)) {
 		const network = networkTarget(target);

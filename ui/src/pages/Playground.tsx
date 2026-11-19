@@ -39,7 +39,13 @@ import {
 	useStoredStringState,
 	useUpsertPolicyResource
 } from '@/hooks';
-import { extractMcpTools, initializeMcpSession, type McpTool, nextRpcId } from '@/mcp';
+import {
+	extractMcpTools,
+	initializeMcpSession,
+	type McpTool,
+	mcpServerEndpoints,
+	nextRpcId
+} from '@/mcp';
 import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	catalogProviderName,
@@ -167,12 +173,14 @@ export function PlaygroundPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [runSteps, setRunSteps] = useState<RunStep[]>([]);
-	const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data);
+	// Tools come from the first MCP endpoint: the top-level targets when there are any.
+	const firstMcpEndpoint = mcpServerEndpoints(mcpData.data?.mcp)[0];
+	const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data, firstMcpEndpoint?.path);
 	const derivedMcpBaseUrl = mcpEndpoint.baseUrl;
 	const [mcpEnabled, setMcpEnabled] = useState(false);
 	const [mcpSessionId, setMcpSessionId] = useState('');
 	const [mcpTools, setMcpTools] = useState<PlaygroundTool[]>([]);
-	const mcpServerCount = mcpData.data?.mcp?.targets?.length ?? 0;
+	const mcpServerCount = firstMcpEndpoint?.targets.length ?? 0;
 
 	useEffect(() => {
 		for (const key of legacySecretStorageKeys) localStorage.removeItem(key);

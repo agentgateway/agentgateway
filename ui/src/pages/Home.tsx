@@ -15,6 +15,7 @@ import {
 	useUpdateConfig,
 	useUpsertConfigResource
 } from '@/hooks';
+import { mcpServerEndpoints } from '@/mcp';
 import { McpSettingsDrawer } from '@/pages/McpServers';
 import { applyLlmSettings, LlmSettingsDrawer } from '@/pages/models/LlmSettingsDrawer';
 import { ReadonlyModeBanner, TrafficDumpOverview } from '@/pages/traffic/TrafficConfigDumpPanel';
@@ -63,7 +64,7 @@ export function HomePage() {
 				'tcpRoutes' in trafficData.data)
 	);
 	const hasBinds = Boolean(config.data?.binds?.length);
-	const mcpServers = mcpData.data?.mcp?.targets ?? [];
+	const mcpServers = mcpServerEndpoints(mcpData.data?.mcp).flatMap(endpoint => endpoint.targets);
 	const fileOwnedLlmSettings = fileOwnedLlmSettingFields(rawConfig.data, hybrid);
 	const fileOwnedMcpSettings = fileOwnedMcpSettingFields(rawConfig.data, hybrid);
 	const pageDataLoading = configDataLoading || mcpData.isLoading || trafficData.isLoading;

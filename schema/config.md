@@ -6744,6 +6744,529 @@
 |`mcp.policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`mcp.policies.delay`|object|Inject artificial latency before forwarding requests.|
 |`mcp.policies.delay.duration`|string|Artificial latency injected before the request is forwarded to the backend. Either a duration<br>string such as `2s`, or a CEL expression evaluated against the request that returns a duration<br>(e.g. `duration("500ms")`) or a number interpreted as milliseconds (e.g.<br>`random() < 0.1 ? 500 : 0` for probabilistic delay, or `int(random() * 500)` for jitter). A<br>non-positive result injects no delay.|
+|`mcp.endpoints`|[]object|endpoints serves MCP servers under their own paths. Endpoints inherit the top-level settings and<br>`policies`; a policy set on an endpoint replaces the top-level policy of the same type, except<br>`authorization` and `mcpAuthorization`, whose rules from both apply. The top-level<br>`targets` are the targets of the `/mcp` endpoint, which also serves `/sse`; list an endpoint with<br>path `/mcp` to give it its own settings or policies. Requires `gateways`.|
+|`mcp.endpoints[].path`|string|path the endpoint is served under, for example `/eng/mcp`. Clients connect with Streamable HTTP.|
+|`mcp.endpoints[].targets`|[]object|MCP server targets to multiplex together.|
+|`mcp.endpoints[].targets[].sse`|object|Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.|
+|`mcp.endpoints[].targets[].sse.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
+|`mcp.endpoints[].targets[].sse.host`|string|Hostname or IP address of the MCP server.|
+|`mcp.endpoints[].targets[].sse.port`|integer|Port on the MCP server to connect to.|
+|`mcp.endpoints[].targets[].sse.path`|string|Request path on the MCP server.|
+|`mcp.endpoints[].targets[].sse.backend`|string||
+|`mcp.endpoints[].targets[].sse.path`|string||
+|`mcp.endpoints[].targets[].mcp`|object||
+|`mcp.endpoints[].targets[].mcp.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
+|`mcp.endpoints[].targets[].mcp.host`|string|Hostname or IP address of the MCP server.|
+|`mcp.endpoints[].targets[].mcp.port`|integer|Port on the MCP server to connect to.|
+|`mcp.endpoints[].targets[].mcp.path`|string|Request path on the MCP server.|
+|`mcp.endpoints[].targets[].mcp.backend`|string||
+|`mcp.endpoints[].targets[].mcp.path`|string||
+|`mcp.endpoints[].targets[].stdio`|object||
+|`mcp.endpoints[].targets[].stdio.cmd`|string||
+|`mcp.endpoints[].targets[].stdio.args`|[]string||
+|`mcp.endpoints[].targets[].stdio.env`|object||
+|`mcp.endpoints[].targets[].stdio.clear_env`|boolean||
+|`mcp.endpoints[].targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
+|`mcp.endpoints[].targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
+|`mcp.endpoints[].targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
+|`mcp.endpoints[].targets[].openapi.port`|integer|Port on the MCP server to connect to.|
+|`mcp.endpoints[].targets[].openapi.path`|string|Request path on the MCP server.|
+|`mcp.endpoints[].targets[].openapi.backend`|string||
+|`mcp.endpoints[].targets[].openapi.path`|string||
+|`mcp.endpoints[].targets[].openapi.schema`|object||
+|`mcp.endpoints[].targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
+|`mcp.endpoints[].targets[].openapi.schema.url`|string||
+|`mcp.endpoints[].targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
+|`mcp.endpoints[].targets[].condition`|string||
+|`mcp.endpoints[].targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
+|`mcp.endpoints[].statefulMode`|enum|Possible values: `stateless`, `stateful`.|
+|`mcp.endpoints[].prefixMode`|enum|Possible values: `conditional`, `always`, `never`.|
+|`mcp.endpoints[].failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
+|`mcp.endpoints[].sseKeepAlive`|string||
+|`mcp.endpoints[].dnsRebindingProtection`|boolean||
+|`mcp.endpoints[].server`|object||
+|`mcp.endpoints[].server.name`|string|Overrides `serverInfo.name`. Must be set together with `version` — setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
+|`mcp.endpoints[].server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
+|`mcp.endpoints[].server.title`|string|Overrides `serverInfo.title`. Unset by default.|
+|`mcp.endpoints[].server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`mcp.endpoints[].policies`|object|Policies applied to MCP requests for this endpoint, on top of the top-level `policies`.|
+|`mcp.endpoints[].policies.requestHeaderModifier`|object|Modify request headers before forwarding.|
+|`mcp.endpoints[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`mcp.endpoints[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`mcp.endpoints[].policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`mcp.endpoints[].policies.responseHeaderModifier`|object|Modify response headers before returning to the client.|
+|`mcp.endpoints[].policies.responseHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`mcp.endpoints[].policies.responseHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`mcp.endpoints[].policies.responseHeaderModifier.remove`|[]string|Header names to remove.|
+|`mcp.endpoints[].policies.requestRedirect`|object|Return a redirect response instead of forwarding the request.|
+|`mcp.endpoints[].policies.requestRedirect.scheme`|string|Scheme to use in the redirect URL, such as `http` or `https`.|
+|`mcp.endpoints[].policies.requestRedirect.authority`|object|Host or port rewrite to apply to the redirect URL.|
+|`mcp.endpoints[].policies.requestRedirect.authority.full`|string|Replace the full authority, including host and optional port.|
+|`mcp.endpoints[].policies.requestRedirect.authority.host`|string|Replace only the host and preserve the effective port.|
+|`mcp.endpoints[].policies.requestRedirect.authority.port`|integer|Replace only the port.|
+|`mcp.endpoints[].policies.requestRedirect.path`|object|Path rewrite to apply to the redirect URL.|
+|`mcp.endpoints[].policies.requestRedirect.path.full`|string|Replace the full request path.|
+|`mcp.endpoints[].policies.requestRedirect.path.prefix`|string|Replace only the matched path prefix.|
+|`mcp.endpoints[].policies.requestRedirect.status`|integer|HTTP status code to return for the redirect.|
+|`mcp.endpoints[].policies.urlRewrite`|object|Rewrite the request path or authority before forwarding.|
+|`mcp.endpoints[].policies.urlRewrite.authority`|object|Host or port rewrite to apply before forwarding the request.|
+|`mcp.endpoints[].policies.urlRewrite.authority.full`|string|Replace the full authority, including host and optional port.|
+|`mcp.endpoints[].policies.urlRewrite.authority.host`|string|Replace only the host and preserve the effective port.|
+|`mcp.endpoints[].policies.urlRewrite.authority.port`|integer|Replace only the port.|
+|`mcp.endpoints[].policies.urlRewrite.path`|object|Path rewrite to apply before forwarding the request.|
+|`mcp.endpoints[].policies.urlRewrite.path.full`|string|Replace the full request path.|
+|`mcp.endpoints[].policies.urlRewrite.path.prefix`|string|Replace only the matched path prefix.|
+|`mcp.endpoints[].policies.requestMirror`|object|Send a copy of matching requests to another backend.|
+|`mcp.endpoints[].policies.requestMirror.backend`|object|Backend that receives mirrored request copies.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.endpoints[].policies.requestMirror.backend.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.requestMirror.backend.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.requestMirror.backend.service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.requestMirror.backend.host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.requestMirror.backend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.requestMirror.percentage`|number|Fraction of matching requests to mirror, from 0.0 to 1.0.|
+|`mcp.endpoints[].policies.directResponse`|object|Return a configured response instead of forwarding the request.|
+|`mcp.endpoints[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.endpoints[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.endpoints[].policies.directResponse.conditional[].body`|array|Static response body, encoded as bytes.|
+|`mcp.endpoints[].policies.directResponse.conditional[].bodyExpression`|string|CEL expression that computes the response body.|
+|`mcp.endpoints[].policies.directResponse.conditional[].headers`|object|Response headers computed from CEL expressions.|
+|`mcp.endpoints[].policies.directResponse.conditional[].status`|integer|HTTP status code to return.|
+|`mcp.endpoints[].policies.directResponse.body`|array|Static response body, encoded as bytes.|
+|`mcp.endpoints[].policies.directResponse.bodyExpression`|string|CEL expression that computes the response body.|
+|`mcp.endpoints[].policies.directResponse.headers`|object|Response headers computed from CEL expressions.|
+|`mcp.endpoints[].policies.directResponse.status`|integer|HTTP status code to return.|
+|`mcp.endpoints[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
+|`mcp.endpoints[].policies.cors.allowCredentials`|boolean|Add `Access-Control-Allow-Credentials: true` on allowed CORS responses.|
+|`mcp.endpoints[].policies.cors.allowHeaders`|[]string|Values to return in `Access-Control-Allow-Headers` for allowed preflight requests.|
+|`mcp.endpoints[].policies.cors.allowMethods`|[]string|Values to return in `Access-Control-Allow-Methods` for allowed preflight requests.|
+|`mcp.endpoints[].policies.cors.allowOrigins`|[]string|Request origins that receive CORS response headers. Use `*` to match any origin.|
+|`mcp.endpoints[].policies.cors.exposeHeaders`|[]string|Values to return in `Access-Control-Expose-Headers` for allowed CORS responses.|
+|`mcp.endpoints[].policies.cors.maxAge`|string|Value to return in `Access-Control-Max-Age` for allowed preflight requests.|
+|`mcp.endpoints[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
+|`mcp.endpoints[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`mcp.endpoints[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`mcp.endpoints[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
+|`mcp.endpoints[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`mcp.endpoints[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
+|`mcp.endpoints[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
+|`mcp.endpoints[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`mcp.endpoints[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`mcp.endpoints[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
+|`mcp.endpoints[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
+|`mcp.endpoints[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
+|`mcp.endpoints[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
+|`mcp.endpoints[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br>If unset, audience validation is disabled.|
+|`mcp.endpoints[].policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
+|`mcp.endpoints[].policies.mcpAuthentication.provider.auth0`|object||
+|`mcp.endpoints[].policies.mcpAuthentication.provider.keycloak`|object||
+|`mcp.endpoints[].policies.mcpAuthentication.provider.okta`|object||
+|`mcp.endpoints[].policies.mcpAuthentication.provider.descope`|object||
+|`mcp.endpoints[].policies.mcpAuthentication.provider.authentik`|object||
+|`mcp.endpoints[].policies.mcpAuthentication.provider.entra`|object||
+|`mcp.endpoints[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
+|`mcp.endpoints[].policies.mcpAuthentication.resourceMetadata.*`|any||
+|`mcp.endpoints[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
+|`mcp.endpoints[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
+|`mcp.endpoints[].policies.mcpAuthentication.jwks.url`|string||
+|`mcp.endpoints[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.endpoints[].policies.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.endpoints[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
+|`mcp.endpoints[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.endpoints[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
+|`mcp.endpoints[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`mcp.endpoints[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.endpoints[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
+|`mcp.endpoints[].policies.ai.promptGuard`|[`<Guardrails>`](#guardrails)|Prompt and response guardrails to apply to LLM traffic.|
+|`mcp.endpoints[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`mcp.endpoints[].policies.ai.defaults.*`|any||
+|`mcp.endpoints[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`mcp.endpoints[].policies.ai.overrides.*`|any||
+|`mcp.endpoints[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`mcp.endpoints[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
+|`mcp.endpoints[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
+|`mcp.endpoints[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
+|`mcp.endpoints[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
+|`mcp.endpoints[].policies.ai.prompts.append[].content`|string|Message text content.|
+|`mcp.endpoints[].policies.ai.prompts.prepend`|[]object|Messages prepended to the beginning of each chat request.|
+|`mcp.endpoints[].policies.ai.prompts.prepend[].role`|string|Message role, such as "system", "user", or "assistant".|
+|`mcp.endpoints[].policies.ai.prompts.prepend[].content`|string|Message text content.|
+|`mcp.endpoints[].policies.ai.modelAliases`|object|Model name aliases that rewrite requested model names.|
+|`mcp.endpoints[].policies.ai.promptCaching`|object|Prompt caching settings for providers that support cache markers.|
+|`mcp.endpoints[].policies.ai.promptCaching.cacheSystem`|boolean|Add cache markers to system prompts when supported by the provider.|
+|`mcp.endpoints[].policies.ai.promptCaching.cacheMessages`|boolean|Add cache markers to chat messages when supported by the provider.|
+|`mcp.endpoints[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
+|`mcp.endpoints[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
+|`mcp.endpoints[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`mcp.endpoints[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`mcp.endpoints[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
+|`mcp.endpoints[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`mcp.endpoints[].policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`mcp.endpoints[].policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`mcp.endpoints[].policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`mcp.endpoints[].policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`mcp.endpoints[].policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`mcp.endpoints[].policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`mcp.endpoints[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`mcp.endpoints[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`mcp.endpoints[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`mcp.endpoints[].policies.backendTunnel`|object|Tunnel settings used when connecting to the backend.|
+|`mcp.endpoints[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.endpoints[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`mcp.endpoints[].policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
+|`mcp.endpoints[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
+|`mcp.endpoints[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`mcp.endpoints[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.endpoints[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.endpoints[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
+|`mcp.endpoints[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
+|`mcp.endpoints[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
+|`mcp.endpoints[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.endpoints[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
+|`mcp.endpoints[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
+|`mcp.endpoints[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
+|`mcp.endpoints[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
+|`mcp.endpoints[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.endpoints[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
+|`mcp.endpoints[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].domain`|string|Rate limit domain sent to the remote rate limit service.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors[].entries[].value`|string|CEL expression used to compute the descriptor entry value.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors[].type`|enum|Whether this descriptor limits requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `FailClosed`, `failOpen`, `FailOpen`.|
+|`mcp.endpoints[].policies.remoteRateLimit.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.remoteRateLimit.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.remoteRateLimit.service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.remoteRateLimit.host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.remoteRateLimit.domain`|string|Rate limit domain sent to the remote rate limit service.|
+|`mcp.endpoints[].policies.remoteRateLimit.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
+|`mcp.endpoints[].policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
+|`mcp.endpoints[].policies.remoteRateLimit.descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
+|`mcp.endpoints[].policies.remoteRateLimit.descriptors[].entries[].value`|string|CEL expression used to compute the descriptor entry value.|
+|`mcp.endpoints[].policies.remoteRateLimit.descriptors[].type`|enum|Whether this descriptor limits requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.endpoints[].policies.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`mcp.endpoints[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`mcp.endpoints[].policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `FailClosed`, `failOpen`, `FailOpen`.|
+|`mcp.endpoints[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
+|`mcp.endpoints[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`mcp.endpoints[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.endpoints[].policies.jwtAuth.location.header`|object|Read the credential from an HTTP header.|
+|`mcp.endpoints[].policies.jwtAuth.location.header.name`|string|Header name containing the credential.|
+|`mcp.endpoints[].policies.jwtAuth.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.endpoints[].policies.jwtAuth.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.endpoints[].policies.jwtAuth.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.endpoints[].policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
+|`mcp.endpoints[].policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.endpoints[].policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.endpoints[].policies.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
+|`mcp.endpoints[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
+|`mcp.endpoints[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
+|`mcp.endpoints[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
+|`mcp.endpoints[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`mcp.endpoints[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
+|`mcp.endpoints[].policies.jwtAuth.providers[].jwks.url`|string||
+|`mcp.endpoints[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
+|`mcp.endpoints[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.endpoints[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
+|`mcp.endpoints[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
+|`mcp.endpoints[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`mcp.endpoints[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
+|`mcp.endpoints[].policies.jwtAuth.jwks.url`|string||
+|`mcp.endpoints[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
+|`mcp.endpoints[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.endpoints[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
+|`mcp.endpoints[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`mcp.endpoints[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`mcp.endpoints[].policies.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
+|`mcp.endpoints[].policies.oidc.discovery.url`|string||
+|`mcp.endpoints[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`mcp.endpoints[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`mcp.endpoints[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`.|
+|`mcp.endpoints[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`mcp.endpoints[].policies.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
+|`mcp.endpoints[].policies.oidc.jwks.url`|string||
+|`mcp.endpoints[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`mcp.endpoints[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`mcp.endpoints[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`mcp.endpoints[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
+|`mcp.endpoints[].policies.oidc.sessionTtl`|string|Lifetime of the browser session cookie. Defaults to 7 days.<br>The effective expiry is capped at the ID token's `exp`.|
+|`mcp.endpoints[].policies.oidc.login`|object|Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.|
+|`mcp.endpoints[].policies.oidc.login.path`|string|Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in<br>link here, optionally with `?returnTo=/app` to choose the destination after login.<br>`returnTo` must be a safe local path and defaults to `/`.<br>This endpoint is handled by the policy, not forwarded to your application.|
+|`mcp.endpoints[].policies.oidc.login.redirect`|string|Local page to redirect unauthenticated browser navigations to, for example<br>`/login`. This happens BEFORE authentication; it is not the OAuth callback or<br>the destination after successful login. The gateway appends `returnTo` so your<br>page can preserve it in its sign-in link to `login.path`.<br>Serve this page and its assets on routes that bypass authentication, using a<br>conditional policy or separate routes. This setting does not make them public.<br>Fetch requests receive 401 with this destination in the Location header.<br>If omitted, unauthenticated navigations start OAuth directly.|
+|`mcp.endpoints[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
+|`mcp.endpoints[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
+|`mcp.endpoints[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`mcp.endpoints[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
+|`mcp.endpoints[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
+|`mcp.endpoints[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
+|`mcp.endpoints[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
+|`mcp.endpoints[].policies.basicAuth.realm`|string|Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.|
+|`mcp.endpoints[].policies.basicAuth.mode`|enum|Controls whether requests must include valid Basic Auth credentials.<br>Possible values: `strict`, `optional`.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation`|object|Where to read the Basic Auth credentials from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.endpoints[].policies.basicAuth.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.endpoints[].policies.apiKey`|object|Authenticate incoming requests with API keys.|
+|`mcp.endpoints[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
+|`mcp.endpoints[].policies.apiKey.keys[].key`|string|API key value to accept.|
+|`mcp.endpoints[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`mcp.endpoints[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
+|`mcp.endpoints[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`mcp.endpoints[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`mcp.endpoints[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`mcp.endpoints[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`mcp.endpoints[].policies.apiKey.keys[].budgets[].limit.amount`|number||
+|`mcp.endpoints[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
+|`mcp.endpoints[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`mcp.endpoints[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
+|`mcp.endpoints[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
+|`mcp.endpoints[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`mcp.endpoints[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.endpoints[].policies.apiKey.location.header`|object|Read the credential from an HTTP header.|
+|`mcp.endpoints[].policies.apiKey.location.header.name`|string|Header name containing the credential.|
+|`mcp.endpoints[].policies.apiKey.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.endpoints[].policies.apiKey.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.endpoints[].policies.apiKey.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.endpoints[].policies.apiKey.location.cookie`|object|Read the credential from a request cookie.|
+|`mcp.endpoints[].policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.endpoints[].policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.endpoints[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
+|`mcp.endpoints[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Metadata values to send to the authorization service, computed from CEL expressions.<br>Maps to the `metadata_context.filter_metadata` field in the request.<br>If unset, `envoy.filters.http.jwt_authn` is set when JWT auth is also used, for compatibility.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.http`|object|Call the authorization service using HTTP.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.http.path`|string|CEL expression that computes the authorization request path.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.http.redirect`|string|CEL expression that computes a redirect URL when authorization fails.<br>When the authorization service returns unauthorized, this redirects instead of returning the error directly.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.http.body`|string|CEL expression that computes the authorization request body.<br>Strings and bytes are used directly; other values are JSON-encoded.<br>If set, this replaces forwarding the incoming request body.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Authorization response headers to copy into the backend request.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Headers to add to the authorization request using CEL expressions. Empty means all headers.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata values to expose under the `extauthz` variable after authorization.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer|Deny the request with the configured HTTP status code.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Request headers to send to the authorization service.<br>If unset, gRPC sends all request headers and HTTP sends only `Authorization`.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].includeRequestBody`|object|Options for sending the request body to the authorization service.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`mcp.endpoints[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.extAuthz.host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
+|`mcp.endpoints[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
+|`mcp.endpoints[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
+|`mcp.endpoints[].policies.extAuthz.protocol.grpc.metadata`|object|Metadata values to send to the authorization service, computed from CEL expressions.<br>Maps to the `metadata_context.filter_metadata` field in the request.<br>If unset, `envoy.filters.http.jwt_authn` is set when JWT auth is also used, for compatibility.|
+|`mcp.endpoints[].policies.extAuthz.protocol.http`|object|Call the authorization service using HTTP.|
+|`mcp.endpoints[].policies.extAuthz.protocol.http.path`|string|CEL expression that computes the authorization request path.|
+|`mcp.endpoints[].policies.extAuthz.protocol.http.redirect`|string|CEL expression that computes a redirect URL when authorization fails.<br>When the authorization service returns unauthorized, this redirects instead of returning the error directly.|
+|`mcp.endpoints[].policies.extAuthz.protocol.http.body`|string|CEL expression that computes the authorization request body.<br>Strings and bytes are used directly; other values are JSON-encoded.<br>If set, this replaces forwarding the incoming request body.|
+|`mcp.endpoints[].policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Authorization response headers to copy into the backend request.|
+|`mcp.endpoints[].policies.extAuthz.protocol.http.addRequestHeaders`|object|Headers to add to the authorization request using CEL expressions. Empty means all headers.|
+|`mcp.endpoints[].policies.extAuthz.protocol.http.metadata`|object|Metadata values to expose under the `extauthz` variable after authorization.|
+|`mcp.endpoints[].policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error.|
+|`mcp.endpoints[].policies.extAuthz.failureMode.denyWithStatus`|integer|Deny the request with the configured HTTP status code.|
+|`mcp.endpoints[].policies.extAuthz.includeRequestHeaders`|[]string|Request headers to send to the authorization service.<br>If unset, gRPC sends all request headers and HTTP sends only `Authorization`.|
+|`mcp.endpoints[].policies.extAuthz.includeRequestBody`|object|Options for sending the request body to the authorization service.|
+|`mcp.endpoints[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
+|`mcp.endpoints[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
+|`mcp.endpoints[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
+|`mcp.endpoints[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
+|`mcp.endpoints[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
+|`mcp.endpoints[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`mcp.endpoints[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`mcp.endpoints[].policies.extProc`|object|Send request and response data to an external processing service.|
+|`mcp.endpoints[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.endpoints[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.extProc.conditional[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.extProc.conditional[].service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.extProc.conditional[].host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.endpoints[].policies.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.endpoints[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.endpoints[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.endpoints[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.endpoints[].policies.extProc.conditional[].processingOptions`|object|Controls which request and response parts are sent to the external processing service.|
+|`mcp.endpoints[].policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|How request bodies are sent to the external processing service.<br>Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.endpoints[].policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|How response bodies are sent to the external processing service.<br>Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.endpoints[].policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Whether request headers are sent to the external processing service.<br>Possible values: `send`, `skip`.|
+|`mcp.endpoints[].policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Whether response headers are sent to the external processing service.<br>Possible values: `send`, `skip`.|
+|`mcp.endpoints[].policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Whether request trailers are sent to the external processing service.<br>Possible values: `send`, `skip`.|
+|`mcp.endpoints[].policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Whether response trailers are sent to the external processing service.<br>Possible values: `send`, `skip`.|
+|`mcp.endpoints[].policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Whether the external processing service can change processing modes during a request.|
+|`mcp.endpoints[].policies.extProc.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.extProc.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.extProc.service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.extProc.host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.endpoints[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.endpoints[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.endpoints[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.endpoints[].policies.extProc.processingOptions`|object|Controls which request and response parts are sent to the external processing service.|
+|`mcp.endpoints[].policies.extProc.processingOptions.requestBodyMode`|enum|How request bodies are sent to the external processing service.<br>Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.endpoints[].policies.extProc.processingOptions.responseBodyMode`|enum|How response bodies are sent to the external processing service.<br>Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.endpoints[].policies.extProc.processingOptions.requestHeaderMode`|enum|Whether request headers are sent to the external processing service.<br>Possible values: `send`, `skip`.|
+|`mcp.endpoints[].policies.extProc.processingOptions.responseHeaderMode`|enum|Whether response headers are sent to the external processing service.<br>Possible values: `send`, `skip`.|
+|`mcp.endpoints[].policies.extProc.processingOptions.requestTrailerMode`|enum|Whether request trailers are sent to the external processing service.<br>Possible values: `send`, `skip`.|
+|`mcp.endpoints[].policies.extProc.processingOptions.responseTrailerMode`|enum|Whether response trailers are sent to the external processing service.<br>Possible values: `send`, `skip`.|
+|`mcp.endpoints[].policies.extProc.processingOptions.allowModeOverride`|boolean|Whether the external processing service can change processing modes during a request.|
+|`mcp.endpoints[].policies.substrateIngress`|object|Resolve Substrate actor hostnames for dynamic route backends on ingress.|
+|`mcp.endpoints[].policies.substrateIngress.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.substrateIngress.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.substrateIngress.service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.substrateIngress.host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.substrateIngress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.substrateIngress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
+|`mcp.endpoints[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
+|`mcp.endpoints[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
+|`mcp.endpoints[].policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
+|`mcp.endpoints[].policies.substrateIngress.requestParking.max`|integer|Maximum concurrent requests that may wait for actor resumption. Set to 0 to disable parking.|
+|`mcp.endpoints[].policies.substrateIngress.requestParking.retryInterval`|string|Initial delay between ResumeActor retries while parked.|
+|`mcp.endpoints[].policies.substrateIngress.requestParking.retryFactor`|number|Multiplier applied to the delay after each parked retry.|
+|`mcp.endpoints[].policies.substrateEgress`|object|Enforce the CONNECT-pinned effective Substrate egress policy.|
+|`mcp.endpoints[].policies.substrateEgress.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.substrateEgress.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.substrateEgress.service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.substrateEgress.host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.substrateEgress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.substrateEgress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.service.port`|integer|Port on the target Service to route to.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
+|`mcp.endpoints[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
+|`mcp.endpoints[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.endpoints[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.endpoints[].policies.transformations.conditional[].request`|object|Transform the request before it is forwarded.|
+|`mcp.endpoints[].policies.transformations.conditional[].request.add`|object|Headers to append using CEL expressions for values.|
+|`mcp.endpoints[].policies.transformations.conditional[].request.set`|object|Headers to set using CEL expressions for values.|
+|`mcp.endpoints[].policies.transformations.conditional[].request.remove`|[]string|Header names to remove.|
+|`mcp.endpoints[].policies.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`mcp.endpoints[].policies.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.endpoints[].policies.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
+|`mcp.endpoints[].policies.transformations.conditional[].response`|object|Transform the response before it is returned.|
+|`mcp.endpoints[].policies.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
+|`mcp.endpoints[].policies.transformations.conditional[].response.set`|object|Headers to set using CEL expressions for values.|
+|`mcp.endpoints[].policies.transformations.conditional[].response.remove`|[]string|Header names to remove.|
+|`mcp.endpoints[].policies.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`mcp.endpoints[].policies.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.endpoints[].policies.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
+|`mcp.endpoints[].policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`mcp.endpoints[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`mcp.endpoints[].policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`mcp.endpoints[].policies.transformations.request.remove`|[]string|Header names to remove.|
+|`mcp.endpoints[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`mcp.endpoints[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.endpoints[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`mcp.endpoints[].policies.transformations.response`|object|Transform the response before it is returned.|
+|`mcp.endpoints[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`mcp.endpoints[].policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`mcp.endpoints[].policies.transformations.response.remove`|[]string|Header names to remove.|
+|`mcp.endpoints[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`mcp.endpoints[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.endpoints[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`mcp.endpoints[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
+|`mcp.endpoints[].policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`mcp.endpoints[].policies.buffer`|object|Buffer request and response bodies.|
+|`mcp.endpoints[].policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
+|`mcp.endpoints[].policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`mcp.endpoints[].policies.buffer.request.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.endpoints[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
+|`mcp.endpoints[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`mcp.endpoints[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.endpoints[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`mcp.endpoints[].policies.compression.response`|object|Compression applied to responses sent to the client.|
+|`mcp.endpoints[].policies.compression.response.compress`|object|Compress response bodies sent to the client. Only textual content types with a known<br>length of at least 32 bytes are compressed, so streamed responses are sent as-is.<br>Responses that are already encoded, partial (`Content-Range`), or marked `no-transform`<br>are never compressed.|
+|`mcp.endpoints[].policies.compression.response.compress.algorithms`|[]enum|Algorithms that may be negotiated with the client's Accept-Encoding header. When the client<br>accepts several equally, the first listed wins. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`mcp.endpoints[].policies.compression.request`|object|Compression applied to requests received from the client.|
+|`mcp.endpoints[].policies.compression.request.decompress`|object|Decompress request bodies after authorization, before route-level body-aware policies run<br>and before forwarding. Gateway-phase policies observe the encoded body.|
+|`mcp.endpoints[].policies.compression.request.decompress.algorithms`|[]enum|Algorithms decoded from request bodies. Bodies using any other (or more than one)<br>encoding are forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`mcp.endpoints[].policies.timeout`|object|Set request timeout limits.|
+|`mcp.endpoints[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
+|`mcp.endpoints[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`mcp.endpoints[].policies.timeout.responseIdleTimeout`|string|Maximum time to wait for a frame from the upstream response body.<br><br>Limits how long the gateway waits for more response data from the backend.<br>Time spent processing the response or waiting for the client to receive it does not count.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
+|`mcp.endpoints[].policies.retry`|object|Retry matching failed upstream requests.|
+|`mcp.endpoints[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
+|`mcp.endpoints[].policies.retry.backoff`|string|Delay between retry attempts.|
+|`mcp.endpoints[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`mcp.endpoints[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
+|`mcp.endpoints[].policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
+|`mcp.endpoints[].policies.delay`|object|Inject artificial latency before forwarding requests.|
+|`mcp.endpoints[].policies.delay.duration`|string|Artificial latency injected before the request is forwarded to the backend. Either a duration<br>string such as `2s`, or a CEL expression evaluated against the request that returns a duration<br>(e.g. `duration("500ms")`) or a number interpreted as milliseconds (e.g.<br>`random() < 0.1 ? 500 : 0` for probabilistic delay, or `int(random() * 500)` for jitter). A<br>non-positive result injects no delay.|
 |`ui`|object|ui defines settings for how the UI and UI backend is exposed. By default, the UI is exposed only<br>on the admin interface (typically localhost:15000). This setting allows attaching to `gateways`<br>to serve externally, as well as attaching policies to UI traffic.<br>It is strongly recommended to utilize authentication (typically OIDC) when exposing the UI externally.|
 |`ui.gateways`|string|gateways attaches the UI and UI backend routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>When omitted and a gateway named `default` exists, the UI routes attach to it.|
 |`ui.policies`|object|policies defines route-level policies for the UI and required UI API routes.|
