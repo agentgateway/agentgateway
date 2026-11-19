@@ -65,6 +65,7 @@ export type ConfigResourceValue<K extends ConfigResourceKind> = K extends 'model
 export interface ConfigResource<K extends ConfigResourceKind = ConfigResourceKind> {
 	kind: K;
 	id: string;
+	uid?: string;
 	value: ConfigResourceValue<K>;
 	source: 'file' | 'database';
 	revision?: number;

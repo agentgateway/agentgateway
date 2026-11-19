@@ -25,6 +25,8 @@ pub struct ConfigResourceStore {
 pub struct ConfigResource {
 	pub kind: ConfigResourceKind,
 	pub id: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub uid: Option<String>,
 	pub value: Value,
 	pub revision: i64,
 	pub created_at: DateTime<Utc>,
@@ -1111,6 +1113,7 @@ pub(crate) fn apply_prepared_upsert(
 		resources.push(ConfigResource {
 			kind: prepared.kind,
 			id: prepared.id.clone(),
+			uid: None,
 			value: prepared.value.clone(),
 			revision: 1,
 			created_at: Utc::now(),
@@ -1808,7 +1811,7 @@ async fn list_sqlite(
 		.await?;
 	let rows = if let Some(kind) = kind {
 		sqlx::query(
-			"SELECT kind, id, value_json, revision, created_at, updated_at \
+			"SELECT kind, id, uid, value_json, revision, created_at, updated_at \
 			 FROM agw_config_resources \
 			 WHERE deleted_at IS NULL AND kind = ? \
 			 ORDER BY id",
@@ -1818,7 +1821,7 @@ async fn list_sqlite(
 		.await?
 	} else {
 		sqlx::query(
-			"SELECT kind, id, value_json, revision, created_at, updated_at \
+			"SELECT kind, id, uid, value_json, revision, created_at, updated_at \
 			 FROM agw_config_resources \
 			 WHERE deleted_at IS NULL AND kind <> 'session.key' \
 			 ORDER BY kind, id",
@@ -1849,7 +1852,7 @@ async fn list_postgres(
 		.await?;
 	let rows = if let Some(kind) = kind {
 		sqlx::query(
-			"SELECT kind, id, value_json, revision, created_at, updated_at \
+			"SELECT kind, id, uid, value_json, revision, created_at, updated_at \
 			 FROM agw_config_resources \
 			 WHERE deleted_at IS NULL AND kind = $1 \
 			 ORDER BY id",
@@ -1859,7 +1862,7 @@ async fn list_postgres(
 		.await?
 	} else {
 		sqlx::query(
-			"SELECT kind, id, value_json, revision, created_at, updated_at \
+			"SELECT kind, id, uid, value_json, revision, created_at, updated_at \
 			 FROM agw_config_resources \
 			 WHERE deleted_at IS NULL AND kind <> 'session.key' \
 			 ORDER BY kind, id",
@@ -2286,7 +2289,7 @@ async fn fetch_sqlite_resource(
 	id: &str,
 ) -> anyhow::Result<Option<ConfigResource>> {
 	sqlx::query(
-		"SELECT kind, id, value_json, revision, created_at, updated_at \
+		"SELECT kind, id, uid, value_json, revision, created_at, updated_at \
 		 FROM agw_config_resources \
 		 WHERE kind = ? AND id = ? AND deleted_at IS NULL",
 	)
@@ -2304,7 +2307,7 @@ async fn fetch_postgres_resource(
 	id: &str,
 ) -> anyhow::Result<Option<ConfigResource>> {
 	sqlx::query(
-		"SELECT kind, id, value_json, revision, created_at, updated_at \
+		"SELECT kind, id, uid, value_json, revision, created_at, updated_at \
 		 FROM agw_config_resources \
 		 WHERE kind = $1 AND id = $2 AND deleted_at IS NULL",
 	)
@@ -2324,6 +2327,7 @@ fn sqlite_row_to_resource(row: sqlx::sqlite::SqliteRow) -> anyhow::Result<Config
 	Ok(ConfigResource {
 		kind: kind.parse()?,
 		id: row.try_get("id")?,
+		uid: Some(row.try_get("uid")?),
 		value: serde_json::from_str(&value_json)?,
 		revision: row.try_get("revision")?,
 		created_at: created_at.parse()?,
@@ -2338,6 +2342,7 @@ fn postgres_row_to_resource(row: sqlx::postgres::PgRow) -> anyhow::Result<Config
 	Ok(ConfigResource {
 		kind: kind.parse()?,
 		id: row.try_get("id")?,
+		uid: Some(row.try_get::<uuid::Uuid, _>("uid")?.to_string()),
 		value,
 		revision: row.try_get("revision")?,
 		created_at: row.try_get("created_at")?,
@@ -2392,6 +2397,7 @@ mod tests {
 		ConfigResource {
 			kind,
 			id: id.to_string(),
+			uid: None,
 			value,
 			revision: 1,
 			created_at: Utc::now(),
@@ -2846,6 +2852,10 @@ mod tests {
 			.await
 			.expect("rename resource");
 		assert_eq!(response.resources[0].id, "new");
+		assert_eq!(
+			response.resources[0].uid.as_deref(),
+			Some(original_uid.as_str())
+		);
 		assert_eq!(uid("new").await, original_uid);
 		assert_ne!(uid("old").await, original_uid);
 		assert_eq!(
