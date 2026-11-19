@@ -300,7 +300,9 @@ fn rewrite_authorization_server_issuer(
 		));
 	};
 	metadata.insert("issuer".to_string(), serde_json::Value::String(issuer));
-	// An upstream signature covers the IdP's values, which no longer match this document.
+	// RFC 8414 section 2.1: a client that reads signed_metadata must prefer its values over the
+	// plain ones. The IdP signed its own issuer and endpoints, so keeping the JWT would override
+	// the issuer set above and send the client back to the IdP. The gateway cannot re-sign it.
 	metadata.remove("signed_metadata");
 	Ok(())
 }
