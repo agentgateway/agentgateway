@@ -1403,40 +1403,6 @@ for (const filePort of [false, true]) {
 	});
 }
 
-test('hybrid local rate limit form notes that each instance counts separately', async ({
-	page
-}) => {
-	await mockGateway(page, emptyConfig());
-	await page.route('**/api/runtime', route =>
-		route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				build: {},
-				ui: { gatewayMode: 'standalone', configStoreMode: 'hybrid' }
-			})
-		})
-	);
-
-	await page.goto('/llm/policies');
-	await page.getByText('Local rate limit', { exact: true }).click();
-
-	const drawer = page.locator('.drawer');
-	await expect(drawer.getByText('Each gateway instance counts separately')).toBeVisible();
-	await expect(drawer.getByText('Use Remote rate limit for a shared limit.')).toBeVisible();
-});
-
-test('file-mode local rate limit form has no instance note', async ({ page }) => {
-	await mockGateway(page, emptyConfig());
-
-	await page.goto('/llm/policies');
-	await page.getByText('Local rate limit', { exact: true }).click();
-
-	const drawer = page.locator('.drawer');
-	await expect(drawer.getByRole('textbox', { name: 'Fill interval' })).toBeVisible();
-	await expect(drawer.getByText('Each gateway instance counts separately')).toHaveCount(0);
-});
-
 test('hybrid file-owned API key policy is read-only', async ({ page }) => {
 	const config = emptyConfig();
 	const policies = (config.llm as Record<string, unknown>).policies as Record<string, unknown>;

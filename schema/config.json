@@ -2322,7 +2322,7 @@
           ]
         },
         "localRateLimit": {
-          "description": "Local rate limits for incoming requests.",
+          "description": "Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalRateLimitPolicy"
@@ -13806,7 +13806,7 @@
           ]
         },
         "localRateLimit": {
-          "description": "Local rate limits for incoming requests.",
+          "description": "Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/RateLimitSpec"
