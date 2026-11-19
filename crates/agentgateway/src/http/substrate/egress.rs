@@ -2,14 +2,16 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ::http::{HeaderName, HeaderValue, StatusCode, header};
+use ::http::{HeaderName, HeaderValue};
 use quick_cache::sync::Cache;
+use secrecy::{ExposeSecret, SecretString};
 use tonic::Code;
 use url::Url;
 
 use super::{ActorIdentity, EgressActorResolution, TRACE_POLICY_KIND};
-use crate::http::filters::BackendRequestTimeout;
-use crate::http::{Body, PolicyResponse, Request};
+use crate::http::auth::BackendAuthError;
+use crate::http::auth::oauth::{DynamicTokenExchange, FetchError};
+use crate::http::{PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::{DynamicBackendOverride, PolicyClient};
 use crate::store::RequestPolicyTrait;
@@ -46,6 +48,9 @@ pub struct SubstrateEgress {
 	#[serde(skip, default = "default_credential_cache")]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	credential_cache: CredentialCache,
+	#[serde(skip, default = "default_token_exchange")]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	token_exchange: DynamicTokenExchange,
 }
 
 /// An inline credential-provider backend selected by credential URI authority.
@@ -84,7 +89,6 @@ struct CredentialCacheKey {
 struct CachedCredential {
 	secret: Vec<u8>,
 	fetched_at: Instant,
-	valid_for: Duration,
 }
 
 impl CredentialCache {
@@ -94,25 +98,24 @@ impl CredentialCache {
 		}
 	}
 
-	fn get(&self, key: &CredentialCacheKey, now: Instant) -> Option<Vec<u8>> {
+	fn get(&self, key: &CredentialCacheKey, now: Instant, ttl: Duration) -> Option<Vec<u8>> {
 		if let Some(entry) = self.entries.get(key) {
-			if now.duration_since(entry.fetched_at) <= entry.valid_for {
+			if now.duration_since(entry.fetched_at) <= ttl {
 				return Some(entry.secret);
 			}
-			self.entries.remove_if(key, |entry| {
-				now.duration_since(entry.fetched_at) > entry.valid_for
-			});
+			self
+				.entries
+				.remove_if(key, |entry| now.duration_since(entry.fetched_at) > ttl);
 		}
 		None
 	}
 
-	fn insert(&self, key: CredentialCacheKey, secret: Vec<u8>, now: Instant, valid_for: Duration) {
+	fn insert(&self, key: CredentialCacheKey, secret: Vec<u8>, now: Instant) {
 		self.entries.insert(
 			key,
 			CachedCredential {
 				secret,
 				fetched_at: now,
-				valid_for,
 			},
 		);
 	}
@@ -120,6 +123,14 @@ impl CredentialCache {
 
 fn default_credential_cache() -> CredentialCache {
 	CredentialCache::new(DEFAULT_CREDENTIAL_CACHE_CAPACITY)
+}
+
+fn default_token_exchange() -> DynamicTokenExchange {
+	DynamicTokenExchange::new(
+		TOKEN_EXCHANGE_UNKNOWN_EXPIRY_REUSE,
+		CREDENTIAL_FETCH_TIMEOUT,
+		TOKEN_EXCHANGE_RESPONSE_LIMIT,
+	)
 }
 
 impl RequestPolicyTrait for SubstrateEgress {
@@ -267,7 +278,7 @@ impl SubstrateEgress {
 				.saturating_mul(2)
 				/ 3,
 		);
-		if let Some(jwt) = self.credential_cache.get(&key, Instant::now()) {
+		if let Some(jwt) = self.credential_cache.get(&key, Instant::now(), ttl) {
 			return Ok(jwt);
 		}
 
@@ -296,9 +307,7 @@ impl SubstrateEgress {
 		drop(span);
 		let response = response.map_err(actor_jwt_error)?.into_inner();
 		let jwt = credential_secret(response.actor_jwt.into_bytes())?;
-		self
-			.credential_cache
-			.insert(key, jwt.clone(), requested_at, ttl);
+		self.credential_cache.insert(key, jwt.clone(), requested_at);
 		Ok(jwt)
 	}
 
@@ -310,21 +319,6 @@ impl SubstrateEgress {
 		source: &protos::ateapi::TokenExchangeSource,
 	) -> Result<Vec<u8>, ProxyError> {
 		let token_url = token_exchange_url(policy, source)?;
-		let mut scopes = source.scopes.clone();
-		scopes.sort_unstable();
-		let key = CredentialCacheKey {
-			actor_identity: actor_spiffe_uri(&identity.atespace, &identity.actor_name),
-			actor_uid: identity.actor_uid.clone(),
-			uri: format!(
-				"token-exchange:{}:{}:{}",
-				token_url,
-				source.audience,
-				scopes.join(" ")
-			),
-		};
-		if let Some(token) = self.credential_cache.get(&key, Instant::now()) {
-			return Ok(token);
-		}
 		let subject = self
 			.actor_jwt(
 				client,
@@ -338,57 +332,20 @@ impl SubstrateEgress {
 		let subject = std::str::from_utf8(&subject).map_err(|error| {
 			ProxyError::SubstrateEgressUnavailable(format!("actor JWT is invalid: {error}"))
 		})?;
-		let scope = scopes.join(" ");
-		let mut fields = vec![
-			(
-				"grant_type",
-				"urn:ietf:params:oauth:grant-type:token-exchange",
-			),
-			("subject_token", subject),
-			("subject_token_type", "urn:ietf:params:oauth:token-type:jwt"),
-			("audience", source.audience.as_str()),
-			(
-				"requested_token_type",
-				"urn:ietf:params:oauth:token-type:access_token",
-			),
-		];
-		if !scope.is_empty() {
-			fields.push(("scope", scope.as_str()));
-		}
-		let form = serde_urlencoded::to_string(fields).map_err(|error| {
-			ProxyError::SubstrateEgressMisconfigured(format!("invalid token exchange request: {error}"))
-		})?;
-		let mut request = ::http::Request::post(token_url.as_str())
-			.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-			.body(Body::from(form))?;
-		request
-			.extensions_mut()
-			.insert(BackendRequestTimeout(CREDENTIAL_FETCH_TIMEOUT));
-		let response = client
-			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate)
-			.simple_call(request)
+		let policy_client =
+			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
+		let token = self
+			.token_exchange
+			.exchange(
+				&policy_client,
+				token_url.as_str(),
+				SecretString::from(subject.to_owned()),
+				&source.audience,
+				&source.scopes,
+			)
 			.await
-			.map_err(|error| {
-				ProxyError::SubstrateEgressUnavailable(format!(
-					"token exchange endpoint unavailable: {error}"
-				))
-			})?;
-		let status = response.status();
-		let body =
-			crate::http::read_body_with_limit(response.into_body(), TOKEN_EXCHANGE_RESPONSE_LIMIT)
-				.await
-				.map_err(|error| {
-					ProxyError::SubstrateEgressUnavailable(format!(
-						"invalid token exchange response: {error}"
-					))
-				})?;
-		let (token, valid_for) = token_exchange_response(status, &body)?;
-		if !valid_for.is_zero() {
-			self
-				.credential_cache
-				.insert(key, token.clone(), Instant::now(), valid_for);
-		}
-		Ok(token)
+			.map_err(token_exchange_error)?;
+		Ok(token.expose_secret().as_bytes().to_vec())
 	}
 
 	async fn credential(
@@ -405,7 +362,7 @@ impl SubstrateEgress {
 			uri: uri.to_owned(),
 		};
 		let ttl = provider.cache_ttl.unwrap_or(DEFAULT_CREDENTIAL_CACHE_TTL);
-		if let Some(secret) = self.credential_cache.get(&key, Instant::now()) {
+		if let Some(secret) = self.credential_cache.get(&key, Instant::now(), ttl) {
 			return Ok(secret);
 		}
 
@@ -437,7 +394,7 @@ impl SubstrateEgress {
 		if !ttl.is_zero() {
 			self
 				.credential_cache
-				.insert(key, secret.clone(), Instant::now(), ttl);
+				.insert(key, secret.clone(), Instant::now());
 		}
 		Ok(secret)
 	}
@@ -569,69 +526,46 @@ fn token_exchange_url(
 	Ok(url)
 }
 
-fn token_exchange_response(
-	status: StatusCode,
-	body: &[u8],
-) -> Result<(Vec<u8>, Duration), ProxyError> {
-	#[derive(serde::Deserialize)]
-	struct TokenResponse {
-		access_token: String,
-		#[serde(default)]
-		issued_token_type: String,
-		expires_in: Option<u64>,
-	}
-	#[derive(serde::Deserialize)]
-	struct OAuthError {
-		#[serde(default)]
-		error: String,
-	}
-	if status == StatusCode::OK {
-		let response: TokenResponse = serde_json::from_slice(body).map_err(|error| {
-			ProxyError::SubstrateEgressUnavailable(format!("invalid token exchange response: {error}"))
-		})?;
-		if !response.issued_token_type.is_empty()
-			&& response.issued_token_type != "urn:ietf:params:oauth:token-type:access_token"
-		{
-			return Err(ProxyError::SubstrateEgressUnavailable(
-				"token exchange endpoint returned an unsupported token type".to_owned(),
+fn token_exchange_error(error: FetchError) -> ProxyError {
+	let detail = error.to_string();
+	if let Some((status, oauth_error)) = error.endpoint_response() {
+		if matches!(
+			status,
+			::http::StatusCode::BAD_REQUEST | ::http::StatusCode::UNAUTHORIZED
+		) && matches!(
+			oauth_error,
+			Some(
+				"invalid_grant"
+					| "invalid_target"
+					| "unauthorized_client"
+					| "invalid_scope"
+					| "access_denied"
+			)
+		) {
+			return ProxyError::SubstrateEgressDenied(
+				"token exchange endpoint denied the actor".to_owned(),
+			);
+		}
+		if status == ::http::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+			return ProxyError::SubstrateEgressUnavailable(format!(
+				"token exchange endpoint returned {status}"
 			));
 		}
-		let token = credential_secret(response.access_token.into_bytes())?;
-		let lifetime = response
-			.expires_in
-			.map(Duration::from_secs)
-			.unwrap_or(TOKEN_EXCHANGE_UNKNOWN_EXPIRY_REUSE);
-		let valid_for = if response.expires_in.is_some() {
-			lifetime.saturating_sub(std::cmp::max(lifetime / 3, Duration::from_secs(30)))
-		} else {
-			lifetime
-		};
-		return Ok((token, valid_for));
-	}
-	let oauth_error = serde_json::from_slice::<OAuthError>(body).unwrap_or(OAuthError {
-		error: String::new(),
-	});
-	if matches!(status, StatusCode::BAD_REQUEST | StatusCode::UNAUTHORIZED)
-		&& matches!(
-			oauth_error.error.as_str(),
-			"invalid_grant"
-				| "invalid_target"
-				| "unauthorized_client"
-				| "invalid_scope"
-				| "access_denied"
-		) {
-		return Err(ProxyError::SubstrateEgressDenied(
-			"token exchange endpoint denied the actor".to_owned(),
+		return ProxyError::SubstrateEgressMisconfigured(format!(
+			"token exchange endpoint returned {status}"
 		));
 	}
-	if status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
-		return Err(ProxyError::SubstrateEgressUnavailable(format!(
-			"token exchange endpoint returned {status}"
-		)));
+	match error {
+		FetchError::Backend(BackendAuthError::Local(_)) => {
+			ProxyError::SubstrateEgressMisconfigured(format!("invalid token exchange request: {detail}"))
+		},
+		FetchError::Backend(BackendAuthError::CredentialProvider(_)) => {
+			ProxyError::SubstrateEgressUnavailable(format!(
+				"token exchange endpoint unavailable: {detail}"
+			))
+		},
+		FetchError::Client { .. } => unreachable!(),
 	}
-	Err(ProxyError::SubstrateEgressMisconfigured(format!(
-		"token exchange endpoint returned {status}"
-	)))
 }
 
 fn actor_spiffe_uri(atespace: &str, actor_name: &str) -> String {
@@ -1427,22 +1361,15 @@ mod tests {
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		let now = Instant::now();
-		cache.insert(
-			key.clone(),
-			b"token".to_vec(),
-			now,
-			DEFAULT_CREDENTIAL_CACHE_TTL,
+		cache.insert(key.clone(), b"token".to_vec(), now);
+		assert_eq!(
+			cache.get(&key, now, DEFAULT_CREDENTIAL_CACHE_TTL),
+			Some(b"token".to_vec())
 		);
-		assert_eq!(cache.get(&key, now), Some(b"token".to_vec()));
 
 		let stale_at = now - DEFAULT_CREDENTIAL_CACHE_TTL - Duration::from_secs(1);
-		cache.insert(
-			key.clone(),
-			b"stale".to_vec(),
-			stale_at,
-			DEFAULT_CREDENTIAL_CACHE_TTL,
-		);
-		assert_eq!(cache.get(&key, now), None);
+		cache.insert(key.clone(), b"stale".to_vec(), stale_at);
+		assert_eq!(cache.get(&key, now, DEFAULT_CREDENTIAL_CACHE_TTL), None);
 	}
 
 	#[test]
@@ -1454,12 +1381,7 @@ mod tests {
 			actor_uid: Some("uid-1".to_owned()),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
-		cache.insert(
-			key.clone(),
-			b"one".to_vec(),
-			now,
-			DEFAULT_CREDENTIAL_CACHE_TTL,
-		);
+		cache.insert(key.clone(), b"one".to_vec(), now);
 
 		let another_actor = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/actor/default/two".to_owned(),
@@ -1473,13 +1395,22 @@ mod tests {
 			actor_uid: Some("uid-2".to_owned()),
 			..key
 		};
-		assert_eq!(cache.get(&another_actor, now), None);
-		assert_eq!(cache.get(&another_uri, now), None);
-		assert_eq!(cache.get(&another_uid, now), None);
+		assert_eq!(
+			cache.get(&another_actor, now, DEFAULT_CREDENTIAL_CACHE_TTL),
+			None
+		);
+		assert_eq!(
+			cache.get(&another_uri, now, DEFAULT_CREDENTIAL_CACHE_TTL),
+			None
+		);
+		assert_eq!(
+			cache.get(&another_uid, now, DEFAULT_CREDENTIAL_CACHE_TTL),
+			None
+		);
 	}
 
 	#[test]
-	fn token_exchange_validates_endpoints_and_responses() {
+	fn token_exchange_validates_endpoints() {
 		let policy = protos::ateapi::EgressPolicy {
 			rules: vec![rule(
 				EgressRequestProtocol::Https,
@@ -1502,36 +1433,6 @@ mod tests {
 			let mut source = source.clone();
 			source.token_url = token_url.to_owned();
 			assert!(token_exchange_url(&policy, &source).is_err());
-		}
-
-		let (token, valid_for) = token_exchange_response(
-			StatusCode::OK,
-			br#"{"access_token":"secret","expires_in":90}"#,
-		)
-		.unwrap();
-		assert_eq!(token, b"secret");
-		assert_eq!(valid_for, Duration::from_secs(60));
-		for (status, body, expected) in [
-			(
-				StatusCode::BAD_REQUEST,
-				br#"{"error":"invalid_grant"}"#.as_slice(),
-				StatusCode::FORBIDDEN,
-			),
-			(
-				StatusCode::SERVICE_UNAVAILABLE,
-				b"{}".as_slice(),
-				StatusCode::SERVICE_UNAVAILABLE,
-			),
-			(
-				StatusCode::FOUND,
-				b"{}".as_slice(),
-				StatusCode::INTERNAL_SERVER_ERROR,
-			),
-		] {
-			let response = token_exchange_response(status, body)
-				.unwrap_err()
-				.into_response_with_grpc(false);
-			assert_eq!(response.status(), expected);
 		}
 	}
 
