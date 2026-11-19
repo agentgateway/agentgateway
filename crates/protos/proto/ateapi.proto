@@ -112,6 +112,13 @@ message CredentialHeader {
   string prefix = 2;
   string credential_uri = 3;
   ActorJwtSource actor_jwt = 4;
+  TokenExchangeSource token_exchange = 5;
+}
+
+message TokenExchangeSource {
+  string token_url = 1;
+  string audience = 2;
+  repeated string scopes = 3;
 }
 
 message ActorJwtSource {
