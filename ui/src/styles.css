@@ -2668,6 +2668,20 @@ details summary {
 	flex: 0 0 auto;
 }
 
+.model-discovery-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+
+.model-discovery-icon svg {
+	width: 66%;
+	height: 66%;
+}
+
 .log-detail-title-text {
 	display: flex;
 	min-width: 0;

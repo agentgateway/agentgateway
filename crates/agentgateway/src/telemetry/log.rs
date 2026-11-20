@@ -1165,6 +1165,7 @@ impl RequestLog {
 			mcp_status: Default::default(),
 			incoming_span: None,
 			outgoing_span: None,
+			model_discovery: false,
 			llm_request: None,
 			llm_response: Default::default(),
 			original_model: None,
@@ -1356,6 +1357,7 @@ pub struct RequestLog {
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,
 
+	pub model_discovery: bool,
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 	pub original_model: Option<String>,
@@ -1672,7 +1674,8 @@ impl Drop for DropOnLog {
 			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
 			let log_store_enabled = log_store::enabled()
-				&& (log.llm_request.is_some()
+				&& (log.model_discovery
+					|| log.llm_request.is_some()
 					|| llm_response.is_some()
 					|| log
 						.listener_name
@@ -1748,6 +1751,14 @@ impl Drop for DropOnLog {
 				.map(|id| id.trace_id());
 			let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
 			let fields = cel_exec.fields;
+			let operation_name = if log.model_discovery {
+				Some("model_discovery")
+			} else {
+				log
+					.llm_request
+					.as_ref()
+					.map(|request| gen_ai_operation_name(request.input_format))
+			};
 			let reason = log.reason.and_then(|r| match r {
 				ProxyResponseReason::Upstream => None,
 				_ => Some(r),
@@ -1923,13 +1934,7 @@ impl Drop for DropOnLog {
 					route_duration.map(Into::into),
 				),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
-				(
-					"gen_ai.operation.name",
-					log
-						.llm_request
-						.as_ref()
-						.map(|r| gen_ai_operation_name(r.input_format).into()),
-				),
+				("gen_ai.operation.name", operation_name.map(Into::into)),
 				(
 					"gen_ai.provider.name",
 					log.llm_request.as_ref().map(|l| display(&l.provider)),
@@ -2321,10 +2326,7 @@ impl Drop for DropOnLog {
 						span_id: span_id.map(|id| id.to_string()),
 						http_status: log.status.as_ref().map(|s| i64::from(s.as_u16())),
 						error: log.error.clone(),
-						gen_ai_operation_name: log
-							.llm_request
-							.as_ref()
-							.map(|request| gen_ai_operation_name(request.input_format).to_string()),
+						gen_ai_operation_name: operation_name.map(str::to_owned),
 						gen_ai_provider_name: log
 							.llm_request
 							.as_ref()

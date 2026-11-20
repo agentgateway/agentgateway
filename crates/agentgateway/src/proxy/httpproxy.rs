@@ -2595,7 +2595,8 @@ async fn make_backend_call(
 			log.add(|log| log.original_model = Some(original_model.0.clone()));
 		}
 		let resolved = match resolved {
-			model_router::ResolveResult::DirectResponse(resp) => {
+			model_router::ResolveResult::ModelDiscovery(resp) => {
+				log.add(|log| log.model_discovery = true);
 				return Err(ProxyError::direct_response(resp));
 			},
 			model_router::ResolveResult::Rejected(reason, resp) => {
