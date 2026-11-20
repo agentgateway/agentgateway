@@ -1,5 +1,192 @@
 use super::parse_data_url;
 
+mod missing_finish_reason {
+	use std::sync::{Arc, Mutex};
+
+	use agent_core::strng;
+	use agent_http::Body;
+	use bytes::Bytes;
+	use http_body_util::BodyExt;
+	use serde_json::{Value, json};
+
+	use super::super::from_messages;
+	use crate::{
+		AIError, CacheTokenConvention, InputFormat, LLMInfo, LLMRequest, LLMResponse, LogContentFields,
+		MISSING_FINISH_REASON_MESSAGE, ReportedUsage, StreamingUsageGuard, StreamingUsageReporter,
+	};
+
+	fn completion(finish_reason: Option<&str>, content: Option<&str>) -> Vec<u8> {
+		serde_json::to_vec(&json!({
+			"id": "chatcmpl-1",
+			"object": "chat.completion",
+			"created": 1,
+			"model": "gemini",
+			"choices": [{
+				"index": 0,
+				"finish_reason": finish_reason,
+				"message": {"role": "assistant", "content": content}
+			}],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 4,
+				"total_tokens": 14,
+				"prompt_tokens_details": {"cached_tokens": 3},
+				"completion_tokens_details": {"reasoning_tokens": 6}
+			}
+		}))
+		.unwrap()
+	}
+
+	fn reported(err: AIError) -> ReportedUsage {
+		match err {
+			AIError::MissingFinishReason(Some(usage)) => usage,
+			other => panic!("expected missing finish_reason, got {other}"),
+		}
+	}
+
+	#[test]
+	fn buffered_null_finish_reason_is_not_end_turn() {
+		for content in [None, Some("partial")] {
+			let err = match from_messages::translate_response(
+				&Bytes::from(completion(None, content)),
+				"gemini",
+			) {
+				Err(err) => err,
+				Ok(_) => panic!("a missing finish_reason is not a completed turn"),
+			};
+			let usage = reported(err);
+			assert_eq!(usage.input_tokens, 10);
+			assert_eq!(usage.output_tokens, 4);
+			assert_eq!(usage.total_tokens, 14);
+			assert_eq!(usage.cached_input_tokens, Some(3));
+			assert_eq!(usage.reasoning_tokens, Some(6));
+			assert_eq!(
+				AIError::MissingFinishReason(None).to_string(),
+				MISSING_FINISH_REASON_MESSAGE
+			);
+		}
+	}
+
+	#[test]
+	fn buffered_explicit_stop_stays_end_turn_even_when_empty() {
+		let response =
+			from_messages::translate_response(&Bytes::from(completion(Some("stop"), None)), "gemini")
+				.unwrap();
+		let response: Value = serde_json::from_slice(&response.serialize().unwrap()).unwrap();
+		assert_eq!(response["stop_reason"], "end_turn");
+		assert_eq!(response["usage"]["input_tokens"], 7);
+		assert_eq!(response["usage"]["output_tokens"], 4);
+		assert_eq!(response["usage"]["cache_read_input_tokens"], 3);
+	}
+
+	struct Capture {
+		info: Arc<Mutex<LLMInfo>>,
+	}
+
+	impl StreamingUsageReporter for Capture {
+		fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
+			f(&mut self.info.lock().unwrap());
+		}
+
+		fn report_usage(&mut self) {}
+	}
+
+	fn capture() -> (StreamingUsageGuard, Arc<Mutex<LLMInfo>>) {
+		let info = Arc::new(Mutex::new(LLMInfo::new(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Messages,
+				cache_convention: CacheTokenConvention::pending(),
+				request_model: strng::literal!("gemini"),
+				original_model: None,
+				provider: Default::default(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponse::default(),
+		)));
+		let guard = StreamingUsageGuard::new(Box::new(Capture { info: info.clone() }));
+		(guard, info)
+	}
+
+	async fn sse(body: String) -> (String, LLMResponse) {
+		let (guard, info) = capture();
+		let bytes = from_messages::translate_stream(
+			Body::from(body),
+			1024 * 1024,
+			guard,
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		(
+			String::from_utf8(bytes.to_vec()).unwrap(),
+			info.lock().unwrap().response.clone(),
+		)
+	}
+
+	const USAGE: &str = r#""usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,"prompt_tokens_details":{"cached_tokens":3},"completion_tokens_details":{"reasoning_tokens":6}}"#;
+
+	#[tokio::test]
+	async fn stream_ending_without_finish_reason_is_an_api_error() {
+		for delta in [
+			r#""role":"assistant","content":null"#,
+			r#""content":"partial""#,
+		] {
+			let input = format!(
+				"data: {{\"id\":\"chunk-empty\",\"choices\":[{{\"index\":0,\"delta\":{{{delta}}}}}],\"model\":\"gemini\",{USAGE}}}\n\ndata: [DONE]\n\n"
+			);
+			let (events, logged) = sse(input).await;
+			assert!(events.contains("event: error"), "{events}");
+			assert!(events.contains("\"type\":\"api_error\""), "{events}");
+			assert!(events.contains(MISSING_FINISH_REASON_MESSAGE), "{events}");
+			assert!(!events.contains("message_stop"), "{events}");
+			assert!(!events.contains("end_turn"), "{events}");
+			assert_eq!(logged.input_tokens, Some(10));
+			assert_eq!(logged.output_tokens, Some(4));
+			assert_eq!(logged.total_tokens, Some(14));
+			assert_eq!(logged.cached_input_tokens, Some(3));
+			assert_eq!(logged.reasoning_tokens, Some(6));
+		}
+	}
+
+	#[tokio::test]
+	async fn null_finish_reason_before_a_real_stop_still_ends_the_turn() {
+		let input = format!(
+			"data: {{\"id\":\"c\",\"model\":\"m\",\"choices\":[{{\"index\":0,\"delta\":{{\"content\":\"Hi\"}},\"finish_reason\":null}}]}}\n\ndata: {{\"id\":\"c\",\"model\":\"m\",\"choices\":[{{\"index\":0,\"delta\":{{}},\"finish_reason\":\"stop\"}}],{USAGE}}}\n\ndata: [DONE]\n\n"
+		);
+		let (events, _) = sse(input).await;
+		assert!(events.contains("end_turn"), "{events}");
+		assert!(events.contains("message_stop"), "{events}");
+		assert!(!events.contains("event: error"), "{events}");
+	}
+
+	#[tokio::test]
+	async fn passthrough_keeps_a_null_finish_reason() {
+		let input = format!(
+			"data: {{\"id\":\"chunk-empty\",\"object\":\"chat.completion.chunk\",\"choices\":[{{\"index\":0,\"delta\":{{\"role\":\"assistant\",\"content\":null}},\"finish_reason\":null}}],\"model\":\"gemini\",{USAGE}}}\n\ndata: [DONE]\n\n"
+		);
+		let (guard, info) = capture();
+		let response = crate::conversion::completions::passthrough_stream(
+			guard,
+			LogContentFields::default(),
+			http::Response::new(Body::from(input.clone())),
+		);
+		let bytes = response.into_body().collect().await.unwrap().to_bytes();
+		let text = String::from_utf8(bytes.to_vec()).unwrap();
+		assert!(text.contains("\"finish_reason\":null"), "{text}");
+		assert!(text.contains("[DONE]"), "{text}");
+		assert!(!text.contains("end_turn"), "{text}");
+		let logged = info.lock().unwrap().response.clone();
+		assert_eq!(logged.input_tokens, Some(10));
+		assert_eq!(logged.reasoning_tokens, Some(6));
+	}
+}
+
 mod context_overflow {
 	use bytes::Bytes;
 	use http::StatusCode;
