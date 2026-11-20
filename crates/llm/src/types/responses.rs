@@ -1240,27 +1240,29 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 	})
 }
 
-pub fn finish_reason(status: &str, incomplete_reason: Option<&str>) -> Strng {
+pub fn finish_reason(status: &str, incomplete_reason: Option<&str>) -> Option<Strng> {
 	match status {
-		"completed" => strng::literal!("stop"),
-		"incomplete" => incomplete_reason
-			.map(strng::new)
-			.unwrap_or_else(|| strng::literal!("incomplete")),
-		"failed" => strng::literal!("error"),
-		status => strng::new(status),
+		"queued" | "in_progress" => None,
+		"completed" => Some(strng::literal!("stop")),
+		"incomplete" => Some(
+			incomplete_reason
+				.map(strng::new)
+				.unwrap_or_else(|| strng::literal!("incomplete")),
+		),
+		"failed" => Some(strng::literal!("error")),
+		status => Some(strng::new(status)),
 	}
 }
 
 pub fn typed_finish_reason(resp: &typed::Response) -> Option<Strng> {
-	let status = serialize_str(&resp.status)?;
-	Some(finish_reason(
-		&status,
+	finish_reason(
+		&serialize_str(&resp.status)?,
 		resp.incomplete_details.as_ref().map(|d| d.reason.as_str()),
-	))
+	)
 }
 
 impl Response {
-	pub fn finish_reason(&self) -> Strng {
+	pub fn finish_reason(&self) -> Option<Strng> {
 		finish_reason(
 			&self.status,
 			self
@@ -1325,7 +1327,7 @@ impl ResponseType for Response {
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
 			response_id: Some(strng::new(&self.id)),
-			finish_reasons: Some(vec![self.finish_reason()]),
+			finish_reasons: self.finish_reason().map(|r| vec![r]),
 			completion: if log_content.completion {
 				Some(
 					self

@@ -822,4 +822,23 @@ mod finish_reason_tests {
 		response.set_finish_reason(MAX_FINISH_REASONS, strng::new("stop"));
 		assert_eq!(response.finish_reasons, None);
 	}
+
+	#[test]
+	fn buffered_missing_positions_are_error() {
+		assert_eq!(
+			types::finish_reasons([None, Some("length")]),
+			Some(vec![strng::new("error"), strng::new("length")])
+		);
+		assert_eq!(types::finish_reasons([None::<&str>, None]), None);
+	}
+
+	#[test]
+	fn responses_nonterminal_status_has_no_finish_reason() {
+		assert_eq!(types::responses::finish_reason("queued", None), None);
+		assert_eq!(types::responses::finish_reason("in_progress", None), None);
+		assert_eq!(
+			types::responses::finish_reason("incomplete", Some("max_output_tokens")),
+			Some(strng::new("max_output_tokens"))
+		);
+	}
 }
