@@ -398,9 +398,8 @@ impl EndpointSet<Endpoint> {
 			.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
 	}
 
-	/// Slow fallback when P2C finds nothing viable: scan buckets in locality order
-	/// and take the best-scored match in the first bucket that yields any.
-	/// Per-bucket: prefer active, fall back to rejected when active is empty.
+	/// Slow fallback when P2C finds nothing viable: take the best-scored viable active endpoint
+	/// in the first bucket that has one, then likewise for rejected endpoints.
 	/// Fully-drained buckets (`sampler.is_drained()` — every active endpoint at
 	/// capacity=0) are skipped entirely: the operator's drain signal supersedes
 	/// the rejected-set fallback. Partially-drained buckets are scanned, but
@@ -411,27 +410,29 @@ impl EndpointSet<Endpoint> {
 		svc_port: u16,
 		target_port: u16,
 	) -> Option<Candidate> {
-		self.buckets.iter().find_map(|bucket| {
-			let group = bucket.load_full();
-			if group.sampler.is_drained() {
-				return None;
-			}
-			let map = if !group.active.is_empty() {
-				&group.active
-			} else {
-				&group.rejected
-			};
-			map
-				.iter()
-				.filter_map(|(_, ewi)| {
-					let wl = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
-					Some(Candidate {
-						endpoint: ewi.endpoint.clone(),
-						info: ewi.info.clone(),
-						workload: wl.clone(),
+		[true, false].into_iter().find_map(|active_phase| {
+			self.buckets.iter().find_map(|bucket| {
+				let group = bucket.load_full();
+				if group.sampler.is_drained() {
+					return None;
+				}
+				let map = if active_phase {
+					&group.active
+				} else {
+					&group.rejected
+				};
+				map
+					.iter()
+					.filter_map(|(_, ewi)| {
+						let wl = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+						Some(Candidate {
+							endpoint: ewi.endpoint.clone(),
+							info: ewi.info.clone(),
+							workload: wl.clone(),
+						})
 					})
-				})
-				.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
+					.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
+			})
 		})
 	}
 }
