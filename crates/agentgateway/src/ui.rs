@@ -1003,8 +1003,10 @@ async fn validate_materialized_config(
 
 async fn validate_config_in_task(app: &App, config: String) -> anyhow::Result<()> {
 	let state = app.state.clone();
-	let resources =
-		crate::resource_manager::ResourceFetcher::cached_or_direct(app.resource_manager.clone());
+	let resources = crate::resource_manager::ResourceFetcher::cached_or_direct(
+		app.resource_manager.clone(),
+		state.file_access.clone(),
+	);
 	let gateway = state.gateway();
 
 	// Boxing these futures keeps their state on the heap, but each nested `poll` still adds its

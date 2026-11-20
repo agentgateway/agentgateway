@@ -652,6 +652,7 @@ pub fn parse_config(
 		},
 		database,
 		storage,
+		file_access: raw.file_access.clone().unwrap_or_default(),
 		sensitive_headers,
 		session_encoder,
 		session_key_unset,

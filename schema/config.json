@@ -182,6 +182,17 @@
             }
           ]
         },
+        "fileAccess": {
+          "description": "Restricts which resource files configuration API validation may use.\nThe longest matching prefix wins. A tie goes to `deny`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileAccess"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caAddress": {
           "description": "Address of the Certificate Authority used to issue SPIFFE certificates.",
           "type": [
@@ -1037,6 +1048,29 @@
           "const": "readOnly"
         }
       ]
+    },
+    "FileAccess": {
+      "description": "Restricts which resource files configuration API validation may use.\n\nThe longest matching prefix wins. A tie goes to `deny`.",
+      "type": "object",
+      "properties": {
+        "allow": {
+          "description": "Absolute path prefixes to allow. An empty list allows any path that passes the deny rules.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "deny": {
+          "description": "Absolute path prefixes to deny alongside the default prefixes `/dev`, `/proc`, and `/sys`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
     },
     "RawSpiffeConfig": {
       "type": "object",
