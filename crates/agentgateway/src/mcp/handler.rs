@@ -757,12 +757,7 @@ impl Relay {
 		ctx: &mut IncomingRequestContext,
 	) -> Result<(), UpstreamError>
 	where
-		P: serde::Serialize
-			+ serde::de::DeserializeOwned
-			+ std::fmt::Debug
-			+ Send
-			+ Sync
-			+ rmcp::model::RequestParamsMeta,
+		P: mcp::guardrails::GuardrailParams,
 	{
 		let Some(ext) = self.mcp_guardrails.as_ref() else {
 			return Ok(());

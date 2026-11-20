@@ -8878,6 +8878,67 @@ async fn mcp_guardrails_denies_tool_by_name() {
 	assert!(!result.content.is_empty(), "echo should return content");
 }
 
+// A guardrail screening the input a client supplies to a running task.
+#[tokio::test]
+async fn mcp_guardrails_task_update_request() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, pass_request, pass_response, reject_request,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			let body = String::from_utf8_lossy(req.mcp_request.as_deref().unwrap_or_default());
+			if req.method == "tasks/update" && body.contains("hunter2") {
+				reject_request(
+					Code::PermissionDenied,
+					"input contains a secret".to_string(),
+				)
+			} else {
+				pass_request()
+			}
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_task_streamable_http_server().await;
+	let policy = guardrails_test_support::policy_with(
+		extmcp_mock.address,
+		crate::mcp::guardrails::FailureMode::FailClosed,
+		std::collections::HashMap::from([(
+			"tasks/*".to_string(),
+			crate::mcp::guardrails::Phase::Request,
+		)]),
+		std::collections::HashMap::new(),
+	);
+	let (_bind, io) = setup_proxy_policies(&mock, false, false, vec![policy]).await;
+
+	let update = |id, answer: &'static str| {
+		modern_request(
+			io,
+			id,
+			"tasks/update",
+			"task-abc",
+			serde_json::json!({
+				"taskId": "task-abc",
+				"inputResponses": {"q1": {"action": "accept", "content": {"answer": answer}}}
+			}),
+		)
+	};
+	let denied = update(1, "hunter2").await;
+	assert!(
+		denied["error"]["message"]
+			.as_str()
+			.is_some_and(|m| m.contains("input contains a secret")),
+		"{denied}"
+	);
+	let allowed = update(2, "blue").await;
+	assert_eq!(allowed["result"]["resultType"], "complete", "{allowed}");
+}
+
 #[tokio::test]
 async fn mcp_guardrails_mutated_request_reaches_upstream() {
 	use crate::test_helpers::extmcpmock::{
