@@ -30,6 +30,7 @@ import {
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { WildcardModelSelector } from '@/components/WildcardModelSelector';
 import { mcpPolicies, providerLabel } from '@/config';
+import { contentKeys } from '@/contentKeys';
 import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy, waitForLlmCors } from '@/cors';
 import { hasKeyValue, keyLabel } from '@/credentialDisplay';
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from '@/gatewayUrls';
@@ -510,6 +511,7 @@ export function PlaygroundPage() {
 		}
 	}
 
+	const messageKeys = contentKeys(messages.map(message => message.role));
 	return (
 		<div className="page-stack">
 			<PageHeader title="LLM Playground" description="Send test requests through the gateway." />
@@ -723,13 +725,7 @@ export function PlaygroundPage() {
 							<div className="chat-empty">No messages yet.</div>
 						) : (
 							messages.map((message, index) => (
-								<ChatMessageView
-									message={message}
-									key={`${message.role}-${
-										// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-										index
-									}`}
-								/>
+								<ChatMessageView message={message} key={messageKeys[index]} />
 							))
 						)}
 						{loading ? (
@@ -910,16 +906,11 @@ function MessageMetaChips(props: { meta: MessageMeta }) {
 }
 
 function RunTimeline(props: { steps: RunStep[] }) {
+	const keys = contentKeys(props.steps.map(step => step.label));
 	return (
 		<div className="playground-run-timeline">
 			{props.steps.map((step, index) => (
-				<div
-					className={`run-step ${step.state}`}
-					key={`${
-						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						index
-					}-${step.label}`}
-				>
+				<div className={`run-step ${step.state}`} key={keys[index]}>
 					<span className="run-step-dot">
 						{step.state === 'active' ? <Loader2 className="spin" size={12} /> : null}
 					</span>

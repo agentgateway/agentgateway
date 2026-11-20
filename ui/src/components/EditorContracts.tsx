@@ -76,6 +76,18 @@ export function useChangedFields<T extends Record<string, unknown>>(original: T,
 	) as T;
 }
 
+// React keys for the rows of an editable list whose items have no identity of
+// their own, so a removed row's inputs and state do not pass to the row after
+// it. The keys live beside the list, never in the saved value. A row added at
+// the end gets a new key as it renders. Call `remove` with the change that
+// removes a row, outside any state updater (StrictMode runs those twice).
+export function useRowKeys(length: number) {
+	const [rows] = useState(() => ({ keys: [] as string[], next: 0 }));
+	while (rows.keys.length < length) rows.keys.push(String(rows.next++));
+	rows.keys.length = length;
+	return { keys: rows.keys, remove: (index: number) => void rows.keys.splice(index, 1) };
+}
+
 export function LostFieldsWarning(props: { lost: string[] }) {
 	if (!props.lost.length) return null;
 	const paths = props.lost.filter(path => path !== '.');

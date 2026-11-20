@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react';
 
 import type { BudgetStatus, BudgetStatusResponse } from '@/api/budgetsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
-import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
+import { LostFieldsWarning, useMergedEdits, useRowKeys } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import {
 	ConfirmDialog,
@@ -37,6 +37,7 @@ import {
 	Tooltip
 } from '@/components/Primitives';
 import { getApiKeyPolicy, isDatabaseConfigResource, upsertVirtualKey } from '@/config';
+import { contentKeys } from '@/contentKeys';
 import { hasKeyValue, keyDisplay, keyHintMetadata, keyValue } from '@/credentialDisplay';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import {
@@ -1032,6 +1033,7 @@ function BudgetEditor(props: {
 }) {
 	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 	const status = useBudgetStatus({ enabled: props.budgets.length > 0 });
+	const rows = useRowKeys(props.budgets.length);
 
 	function addBudget() {
 		props.onChange([
@@ -1053,6 +1055,7 @@ function BudgetEditor(props: {
 	}
 
 	function removeBudget(index: number) {
+		rows.remove(index);
 		props.onChange(props.budgets.filter((_, budgetIndex) => budgetIndex !== index));
 		setEditingIndex(current =>
 			current === null || current === index ? null : current > index ? current - 1 : current
@@ -1071,8 +1074,7 @@ function BudgetEditor(props: {
 							item => item.apiKeyName === props.apiKeyName && item.name === budget.name.trim()
 						);
 						return (
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							<article className="api-key-budget-card" key={index}>
+							<article className="api-key-budget-card" key={rows.keys[index]}>
 								<header className="api-key-budget-card-header">
 									<div className="api-key-budget-card-title">
 										<strong>{budget.name.trim() || 'Untitled budget'}</strong>
@@ -1429,6 +1431,7 @@ function BudgetSummary(props: {
 }) {
 	const budgets = props.value ?? [];
 	if (!budgets.length) return <span className="muted">—</span>;
+	const keys = contentKeys(budgets.map(budget => budget.name));
 	return (
 		<div className="key-budget-summary">
 			{budgets.map((budget, index) => {
@@ -1438,10 +1441,7 @@ function BudgetSummary(props: {
 				const { used, fraction, level } = budgetProgress(budget, live);
 				return (
 					<Tooltip
-						key={`${budget.name}:${
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							index
-						}`}
+						key={keys[index]}
 						content={`${budgetAmountLabel(used, budget.limit.unit)} of ${budgetAmountLabel(
 							budget.limit.amount,
 							budget.limit.unit
