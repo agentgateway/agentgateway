@@ -130,7 +130,11 @@ pub fn watch_files_with_options(
 	let watched_paths = paths.clone();
 	let mut targets = resolve_targets(&paths);
 	tokio::task::spawn(async move {
-		while let Some(events) = raw_rx.recv().await {
+		// Also stop when the `WatchedFiles` is dropped, rather than waiting for the next event.
+		while let Some(events) = tokio::select! {
+			events = raw_rx.recv() => events,
+			_ = change_tx.closed() => None,
+		} {
 			match events {
 				Ok(events) => {
 					let current = resolve_targets(&paths);
@@ -353,6 +357,28 @@ mod tests {
 	use notify::event::{AccessKind, AccessMode, CreateKind, DataChange, ModifyKind, RenameMode};
 
 	use super::*;
+
+	#[tokio::test]
+	async fn dropping_watched_files_stops_the_watch_task() {
+		let dir = tempfile::tempdir().unwrap();
+		let file = dir.path().join("watched");
+		std::fs::write(&file, b"x").unwrap();
+		let metrics = tokio::runtime::Handle::current().metrics();
+		let before = metrics.num_alive_tasks();
+
+		let watched = watch_files(vec![file]).unwrap();
+		assert!(metrics.num_alive_tasks() > before);
+		drop(watched);
+
+		// No file event arrives, so the task must notice the drop on its own.
+		for _ in 0..50 {
+			if metrics.num_alive_tasks() == before {
+				return;
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+		panic!("watch task was not stopped after WatchedFiles was dropped");
+	}
 
 	fn modify(path: &str) -> notify::Event {
 		notify::Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Any)))

@@ -49,7 +49,7 @@ pub enum ResourceRef {
 	Http { url: http::Uri, kind: ResourceKind },
 }
 
-/// Restricts which resource files configuration API validation may use.
+/// Restricts which resource files configuration API validation and xDS backend TLS may use.
 ///
 /// The longest matching prefix wins. A tie goes to `deny`.
 #[apply(schema!)]

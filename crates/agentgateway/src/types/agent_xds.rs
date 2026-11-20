@@ -2669,6 +2669,9 @@ fn backend_policy_from_proto(
 					&btls.key_exchange_groups,
 					diagnostics,
 				),
+				cert_path: btls.cert_path.as_ref().map(Into::into),
+				key_path: btls.key_path.as_ref().map(Into::into),
+				root_path: btls.root_path.as_ref().map(Into::into),
 				spiffe: bps::backend_tls::CertificateSource::try_from(btls.certificate_source)
 					.unwrap_or_default()
 					== bps::backend_tls::CertificateSource::Spiffe,

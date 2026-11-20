@@ -183,7 +183,7 @@
           ]
         },
         "fileAccess": {
-          "description": "Restricts which resource files configuration API validation may use.\nThe longest matching prefix wins. A tie goes to `deny`.",
+          "description": "Restricts which resource files configuration API validation and xDS backend TLS may use.\nThe longest matching prefix wins. A tie goes to `deny`.",
           "anyOf": [
             {
               "$ref": "#/$defs/FileAccess"
@@ -1050,7 +1050,7 @@
       ]
     },
     "FileAccess": {
-      "description": "Restricts which resource files configuration API validation may use.\n\nThe longest matching prefix wins. A tie goes to `deny`.",
+      "description": "Restricts which resource files configuration API validation and xDS backend TLS may use.\n\nThe longest matching prefix wins. A tie goes to `deny`.",
       "type": "object",
       "properties": {
         "allow": {
