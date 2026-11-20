@@ -430,10 +430,8 @@ pub struct LocalConfig {
 	/// All MCP servers listed will be served as a single virtual MCP server.
 	#[serde(default)]
 	mcp: Option<LocalSimpleMcpConfig>,
-	/// ui defines settings for how the UI and UI backend is exposed. By default, the UI is exposed only
-	/// on the admin interface (typically localhost:15000). This setting allows attaching to `gateways`
-	/// to serve externally, as well as attaching policies to UI traffic.
-	/// It is strongly recommended to utilize authentication (typically OIDC) when exposing the UI externally.
+	/// ui serves the UI and its API on a gateway: the `default` gateway unless `gateways` is set.
+	/// Use authentication, such as OIDC, when the UI is reachable from outside.
 	#[serde(default)]
 	ui: Option<LocalUIConfig>,
 }
