@@ -672,12 +672,15 @@ impl UpstreamGroup {
 		fresh: &HashMap<Strng, ExtensionCapabilities>,
 	) -> Option<ExtensionCapabilities> {
 		let store = self.extensions.read().expect("read lock");
-		merge_extension_capabilities(self.by_name.keys().filter_map(|name| {
+		let mut merged = merge_extension_capabilities(self.by_name.keys().filter_map(|name| {
 			fresh
 				.get(name)
 				.or_else(|| store.get(name))
 				.map(|ext| (name.as_str(), ext))
-		}))
+		}))?;
+		// Skills requests can only be routed to a single target.
+		merged.remove(rmcp::model::SKILLS_EXTENSION_ID);
+		(!merged.is_empty()).then_some(merged)
 	}
 
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {

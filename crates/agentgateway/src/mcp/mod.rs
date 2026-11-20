@@ -24,10 +24,11 @@ use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::{
 	CallToolRequestMethod, CallToolResult, CancelTaskMethod, CompleteRequestMethod, ConstString,
-	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
-	InitializeResultMethod, JsonRpcError, ListPromptsRequestMethod,
-	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListToolsRequestMethod,
-	PingRequestMethod, ProtocolVersion, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
+	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod,
+	GetSkillRequestMethod, GetTaskMethod, InitializeResultMethod, JsonRpcError,
+	ListPromptsRequestMethod, ListResourceTemplatesRequestMethod, ListResourcesRequestMethod,
+	ListSkillsRequestMethod, ListToolsRequestMethod, PingRequestMethod, ProtocolVersion,
+	ReadResourceDirectoryRequestMethod, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
 	SubscribeRequestMethod, SubscriptionsListenRequestMethod, UnsubscribeRequestMethod,
 	UpdateTaskMethod,
 };
@@ -69,7 +70,10 @@ pub(crate) const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
 pub(crate) fn is_known_client_request_method(method: &str) -> bool {
 	matches!(
 		method,
-		DiscoverRequestMethod::VALUE
+		ListSkillsRequestMethod::VALUE
+			| GetSkillRequestMethod::VALUE
+			| ReadResourceDirectoryRequestMethod::VALUE
+			| DiscoverRequestMethod::VALUE
 			| PingRequestMethod::VALUE
 			| InitializeResultMethod::VALUE
 			| CompleteRequestMethod::VALUE
