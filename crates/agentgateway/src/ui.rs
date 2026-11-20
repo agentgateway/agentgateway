@@ -924,20 +924,24 @@ fn remove_file_owned_settings(
 	file_config: &Value,
 	value: &mut Value,
 ) -> Result<(), ErrorResponse> {
-	let (section, fields) = kind.settings_fields().expect("settings resource");
 	let value = value.as_object_mut().ok_or_else(|| {
 		resource_api_error(ConfigResourceError::InvalidRequest(format!(
-			"{kind}/default must be an object"
+			"{kind} resources must be objects"
 		)))
 	})?;
-	let file_settings = file_config.get(section).and_then(Value::as_object);
+	let id = match value.get("endpoint").and_then(Value::as_str) {
+		Some(endpoint) if kind == ConfigResourceKind::McpSettings => endpoint.to_string(),
+		_ => "default".to_string(),
+	};
+	let (_, fields) = crate::config_store::settings_scope(kind, &id);
+	let file_settings = crate::config_store::file_settings(file_config, kind, &id);
 	for &field in fields {
 		let Some(file_value) = file_settings.and_then(|settings| settings.get(field)) else {
 			continue;
 		};
 		if value.get(field).is_some_and(|value| value != file_value) {
 			return Err(resource_api_error(ConfigResourceError::Conflict(format!(
-				"file-owned {kind}/default field cannot be updated in hybrid mode: {field}"
+				"file-owned {kind}/{id} field cannot be updated in hybrid mode: {field}"
 			))));
 		}
 		value.remove(field);

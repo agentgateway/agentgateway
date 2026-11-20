@@ -33,7 +33,10 @@ export type PolicyResourceKind = Extract<ConfigResourceKind, `${string}.policy`>
 export type LlmSettingsResource = Pick<LlmConfig, 'gateways' | 'port' | 'tls'>;
 /** An MCP target; `endpoint` is the path of the endpoint it is served in. */
 export type McpTargetResource = McpTarget & { endpoint?: string };
-export type McpSettingsResource = Partial<Omit<McpConfig, 'targets' | 'policies' | 'endpoints'>>;
+export type McpSettingsResource = Partial<Omit<McpConfig, 'targets' | 'policies' | 'endpoints'>> & {
+	/** Endpoint path the settings apply to; the shared settings when unset. */
+	endpoint?: string;
+};
 export type TrafficGatewayResource = TrafficGateway & { name: string };
 export type TrafficRouteResource = LocalAttachedRoute & { name: string };
 export type TrafficTcpRouteResource = LocalAttachedTCPRoute & { name: string };
