@@ -1,6 +1,6 @@
 import type { ConfigResource, ConfigResourceKind } from '@/api/configResourcesApi';
 import { keyValue } from '@/credentialDisplay';
-import { mcpResourceId, mcpServerEndpoints, splitMcpResourceId, trimTrailingSlash } from '@/mcp';
+import { mcpResourceId, mcpServerEndpoints, trimTrailingSlash } from '@/mcp';
 import type {
 	GatewayConfig,
 	LlmApiKeyPolicy,
@@ -257,41 +257,6 @@ export function setLlmGuardrails(config: GatewayConfig, guardrails: LlmGuardrail
 	const policies = ensureLlmPolicies(config);
 	if (guardrails) policies.guardrails = guardrails;
 	else delete policies.guardrails;
-}
-
-export function upsertMcpTarget(
-	config: GatewayConfig,
-	target: McpTarget,
-	endpoint?: string,
-	previousId?: string
-) {
-	const mcp = ensureMcp(config);
-	const previous = splitMcpResourceId(previousId ?? mcpResourceId(target.name, endpoint));
-	const source = mcpTargetList(mcp, previous.endpoint, false);
-	const index = source?.findIndex(item => item.name === previous.name) ?? -1;
-	const destination = mcpTargetList(mcp, endpoint, true) ?? [];
-	if (index >= 0 && source === destination) {
-		destination[index] = target;
-		return;
-	}
-	if (index >= 0) source?.splice(index, 1);
-	destination.push(target);
-}
-
-function mcpTargetList(mcp: McpConfig, endpoint: string | undefined, create: boolean) {
-	if (!endpoint) {
-		mcp.targets ??= [];
-		return mcp.targets;
-	}
-	mcp.endpoints ??= [];
-	let entry = mcp.endpoints.find(item => trimTrailingSlash(item.path) === endpoint);
-	if (!entry) {
-		if (!create) return undefined;
-		entry = { path: endpoint };
-		mcp.endpoints.push(entry);
-	}
-	entry.targets ??= [];
-	return entry.targets;
 }
 
 /** Returns the policies of the top-level MCP config, or of the endpoint at `endpoint`. */

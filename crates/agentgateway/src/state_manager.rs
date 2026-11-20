@@ -288,7 +288,10 @@ impl LocalClient {
 			.config
 			.budget_policy
 			.apply_registration(config.budget_registration)?;
-		self.config.config_reload_status.record_success();
+		self
+			.config
+			.config_reload_status
+			.record_success(config.sections);
 
 		Ok(PreviousState {
 			binds: next_binds,

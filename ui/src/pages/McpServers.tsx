@@ -1,9 +1,13 @@
 import { Link } from '@tanstack/react-router';
 import { Button, Checkbox, Input, Table, Tag } from 'antd';
 import { Info, Pencil, Plus, Server, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
-import type { McpSettingsResource } from '@/api/configResourcesApi';
+import type {
+	ConfigResource,
+	McpSettingsResource,
+	McpTargetResource
+} from '@/api/configResourcesApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { LostFieldsWarning, useChangedFields, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
@@ -22,23 +26,15 @@ import {
 	StatusBanner,
 	Tooltip
 } from '@/components/Primitives';
-import {
-	ensureMcp,
-	fileOwnedMcpSettingFields,
-	isDatabaseConfigResource,
-	makeEmptyMcpTarget,
-	mcpPolicies,
-	mcpSettingsFields,
-	upsertMcpTarget
-} from '@/config';
+import { makeEmptyMcpTarget, mcpSettingsFields } from '@/config';
 import { useStickyQueryParam } from '@/drawerRouteState';
-import { useDeleteConfigResource, useMcpConfigData, useUpsertConfigResource } from '@/hooks';
 import {
-	type McpServerEndpoint,
-	mcpServerEndpoints,
-	splitMcpResourceId,
-	trimTrailingSlash
-} from '@/mcp';
+	useConfigResourcesByKind,
+	useDeleteConfigResource,
+	useRuntimeInfo,
+	useUpsertConfigResource
+} from '@/hooks';
+import { splitMcpResourceId, trimTrailingSlash } from '@/mcp';
 import { BackendPoliciesField } from '@/policies/PolicyFormControls';
 import { CollapsiblePolicySection, PolicySection } from '@/policies/PolicyLayout';
 import { parseYamlText, toYamlMappingText } from '@/policies/policyUtils';
@@ -65,74 +61,106 @@ type McpSettingsPatch = Partial<
 	dnsRebindingProtection?: boolean | null;
 };
 
+type McpServerRow = Pick<ConfigResource<'mcp.target'>, 'id' | 'source'> & {
+	target: McpTarget;
+	endpoint?: string;
+};
+
 export function McpServersPage() {
-	const mcpData = useMcpConfigData();
-	const rawConfig = mcpData.rawConfig;
-	const hybrid = mcpData.hybrid;
+	const [serverDrawer, setServerDrawer] = useStickyQueryParam('server');
+	const settingsOpen = serverDrawer === 'settings';
+	const [settingsEndpoint, setSettingsEndpoint] = useState<string | null>(null);
+	const settingsDrawerOpen = settingsOpen || settingsEndpoint !== null;
+	const runtime = useRuntimeInfo();
+	const hybrid = runtime.data?.ui.configStoreMode === 'hybrid';
+	const targetQuery = useConfigResourcesByKind('mcp.target');
+	const policyQuery = useConfigResourcesByKind('mcp.policy');
+	const settingsQuery = useConfigResourcesByKind('mcp.settings');
+	const gatewayQuery = useConfigResourcesByKind('traffic.gateway', {
+		enabled: settingsOpen && settingsEndpoint === null
+	});
 	const upsertResource = useUpsertConfigResource();
 	const deleteResource = useDeleteConfigResource();
 	const help = useSchemaHelp();
-	const resources = mcpData.resources;
-	const effectiveConfig = mcpData.data;
-	const mcp = effectiveConfig?.mcp;
-	const endpoints = useMemo(() => mcpServerEndpoints(mcp), [mcp]);
-	const endpointPaths = endpoints.flatMap(endpoint =>
-		endpoint.endpoint && endpoint.endpoint !== '/mcp' ? [endpoint.endpoint] : []
+	const targets: McpServerRow[] = (targetQuery.data?.resources ?? []).map(
+		({ id, source, value: { endpoint, ...target } }) => ({ id, source, target, endpoint })
 	);
-	const mcpEndpointHasTargets = Boolean(
-		mcp?.endpoints?.some(item => trimTrailingSlash(item.path) === '/mcp' && item.targets?.length)
-	);
-	const targets = endpoints.flatMap(endpoint =>
-		endpoint.targets.map((target, index) => ({
-			target,
-			endpoint: splitMcpResourceId(endpoint.ids[index]).endpoint,
-			id: endpoint.ids[index]
-		}))
-	);
-	const fileOwnedSettingFields = fileOwnedMcpSettingFields(rawConfig.data, hybrid);
+	const scopedPaths = new Set(targets.flatMap(({ endpoint }) => endpoint ?? []));
+	const overrideCounts = new Map<string, number>();
+	for (const { id } of policyQuery.data?.resources ?? []) {
+		const { endpoint } = splitMcpResourceId(id);
+		if (!endpoint) continue;
+		scopedPaths.add(endpoint);
+		overrideCounts.set(endpoint, (overrideCounts.get(endpoint) ?? 0) + 1);
+	}
+	const settings = settingsQuery.data?.resources ?? [];
+	const settingOverrideFields = new Map<string, Set<string>>();
+	for (const { id, value } of settings) {
+		if (id === 'default') continue;
+		scopedPaths.add(id);
+		const fields = settingOverrideFields.get(id) ?? new Set<string>();
+		for (const field of mcpSettingsFields) {
+			if (value[field] != null) fields.add(field);
+		}
+		settingOverrideFields.set(id, fields);
+	}
+	const endpointPaths = [...scopedPaths].filter(path => path !== '/mcp');
+	const rowsByEndpoint = new Map<string, McpServerRow[]>();
+	if (!scopedPaths.has('/mcp')) rowsByEndpoint.set('/mcp', []);
+	for (const path of scopedPaths) rowsByEndpoint.set(path, []);
+	for (const row of targets) rowsByEndpoint.get(row.endpoint ?? '/mcp')?.push(row);
+	const mcpEndpointHasTargets = targets.some(row => row.endpoint === '/mcp');
+	const isLoading =
+		runtime.isLoading || targetQuery.isLoading || policyQuery.isLoading || settingsQuery.isLoading;
+	const error = runtime.error ?? targetQuery.error ?? policyQuery.error ?? settingsQuery.error;
+	const settingsLoading = runtime.isLoading || settingsQuery.isLoading || gatewayQuery.isLoading;
+	const settingsError = runtime.error ?? settingsQuery.error ?? gatewayQuery.error;
+	const sharedSettings = {
+		...settings.find(resource => resource.id === 'default' && resource.source === 'database')
+			?.value,
+		...settings.find(resource => resource.id === 'default' && resource.source === 'file')?.value
+	};
+	const settingsId = settingsEndpoint ?? 'default';
+	const fileSettings = settings.find(
+		resource => resource.id === settingsId && resource.source === 'file'
+	)?.value;
+	const storedSettings = settings.find(
+		resource => resource.id === settingsId && resource.source === 'database'
+	)?.value;
+	const fileOwnedSettingFields = hybrid
+		? new Set(mcpSettingsFields.filter(field => Object.hasOwn(fileSettings ?? {}, field)))
+		: undefined;
 	const saving = upsertResource.isPending || deleteResource.isPending;
 	const saveError = upsertResource.error?.message ?? deleteResource.error?.message ?? null;
-	const [editing, setEditing] = useState<{
-		previousId?: string;
-		endpoint?: string;
-		target: McpTarget;
-	} | null>(null);
+	const [newEndpoint, setNewEndpoint] = useState<string>();
 	const [deletingServer, setDeletingServer] = useState<string | null>(null);
-	const [settingsEndpoint, setSettingsEndpoint] = useState<string | null>(null);
-	const [serverDrawer, setServerDrawer] = useStickyQueryParam('server');
 	const linkedTarget =
 		serverDrawer && serverDrawer !== 'new' && serverDrawer !== 'settings'
 			? targets.find(target => target.id === serverDrawer)
 			: null;
 	const activeEditing =
-		editing ??
-		(serverDrawer === 'new'
-			? { target: makeEmptyMcpTarget() }
+		serverDrawer === 'new'
+			? { target: makeEmptyMcpTarget(), endpoint: newEndpoint }
 			: linkedTarget
 				? {
 						previousId: linkedTarget.id,
 						endpoint: linkedTarget.endpoint,
 						target: structuredClone(linkedTarget.target)
 					}
-				: null);
-	const settingsOpen = serverDrawer === 'settings';
-	const showEndpointHeaders = endpoints.some(endpoint => endpoint.endpoint);
-
-	const canDelete = (id: string) =>
-		!hybrid || isDatabaseConfigResource(resources, 'mcp.target', id);
+				: null;
 
 	function openNewServer(endpoint?: string) {
-		setEditing({ target: makeEmptyMcpTarget(), endpoint });
+		setNewEndpoint(endpoint);
 		setServerDrawer('new');
 	}
 
-	function openEditServer(id: string) {
-		setEditing(null);
-		setServerDrawer(id);
+	function closeSettingsDrawer() {
+		if (settingsEndpoint !== null) setSettingsEndpoint(null);
+		else closeServerDrawer();
 	}
 
 	function closeServerDrawer() {
-		setEditing(null);
+		setNewEndpoint(undefined);
 		setServerDrawer(null, 'replace');
 	}
 
@@ -156,7 +184,7 @@ export function McpServersPage() {
 				}
 			/>
 
-			{saveError && !activeEditing && !settingsOpen && !settingsEndpoint ? (
+			{saveError && !activeEditing && !settingsDrawerOpen ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
@@ -165,13 +193,13 @@ export function McpServersPage() {
 				<StatusBanner state="ok" title="Configuration saved" />
 			) : null}
 
-			{mcpData.isLoading || mcpData.error || targets.length === 0 || !showEndpointHeaders ? (
+			{isLoading || error || scopedPaths.size === 0 ? (
 				<Panel>
-					{mcpData.isLoading ? (
+					{isLoading ? (
 						<StatusBanner state="loading" title="Loading MCP servers" />
-					) : mcpData.error ? (
+					) : error ? (
 						<StatusBanner state="bad" title="Configuration API unavailable">
-							{mcpData.error.message}
+							{error.message}
 						</StatusBanner>
 					) : targets.length === 0 ? (
 						<EmptyState
@@ -185,39 +213,29 @@ export function McpServersPage() {
 						/>
 					) : (
 						<McpServerTable
-							endpoint={endpoints[0]}
-							canDelete={canDelete}
+							rows={targets}
+							hybrid={hybrid}
 							saving={saving}
-							onEdit={openEditServer}
+							onEdit={setServerDrawer}
 							onDelete={setDeletingServer}
 						/>
 					)}
 				</Panel>
 			) : (
-				endpoints.map(endpoint => {
-					const overrides = endpoint.endpoint
-						? Object.keys(mcpPolicies(mcp, endpoint.endpoint) ?? {}).length
-						: 0;
-					const entry = mcp?.endpoints?.find(
-						item => trimTrailingSlash(item.path) === endpoint.path
-					);
-					const settingOverrides = mcpSettingsFields.filter(
-						field => (entry as McpSettingsResource | undefined)?.[field] != null
-					).length;
+				[...rowsByEndpoint].map(([path, rows]) => {
+					const overrides = overrideCounts.get(path) ?? 0;
+					const settingOverrides = settingOverrideFields.get(path)?.size ?? 0;
 					return (
-						<Panel key={endpoint.path} className="mcp-endpoint-panel">
+						<Panel key={path} className="mcp-endpoint-panel">
 							<div className="mcp-endpoint-header">
 								<div>
-									<h3>{endpoint.path}</h3>
+									<h3>{path}</h3>
 									<p>
-										{endpoint.targets.length} {endpoint.targets.length === 1 ? 'server' : 'servers'}
+										{rows.length} {rows.length === 1 ? 'server' : 'servers'}
 									</p>
 								</div>
 								<div className="page-actions">
-									<Link
-										to="/mcp/policies"
-										search={endpoint.endpoint ? { endpoint: endpoint.endpoint } : {}}
-									>
+									<Link to="/mcp/policies" search={{ endpoint: path }}>
 										<Button size="small" icon={<ShieldCheck size={14} />}>
 											Policies
 											{overrides ? (
@@ -230,7 +248,7 @@ export function McpServersPage() {
 									<Button
 										size="small"
 										icon={<SlidersHorizontal size={14} />}
-										onClick={() => setSettingsEndpoint(endpoint.path)}
+										onClick={() => setSettingsEndpoint(path)}
 									>
 										Settings
 										{settingOverrides ? (
@@ -242,20 +260,18 @@ export function McpServersPage() {
 									<Button
 										size="small"
 										icon={<Plus size={14} />}
-										onClick={() =>
-											openNewServer(endpoint.path === '/mcp' ? undefined : endpoint.endpoint)
-										}
+										onClick={() => openNewServer(path === '/mcp' ? undefined : path)}
 									>
 										Add server
 									</Button>
 								</div>
 							</div>
-							{endpoint.targets.length ? (
+							{rows.length ? (
 								<McpServerTable
-									endpoint={endpoint}
-									canDelete={canDelete}
+									rows={rows}
+									hybrid={hybrid}
 									saving={saving}
-									onEdit={openEditServer}
+									onEdit={setServerDrawer}
 									onDelete={setDeletingServer}
 								/>
 							) : null}
@@ -264,31 +280,22 @@ export function McpServersPage() {
 				})
 			)}
 
-			{activeEditing ? (
+			{activeEditing && !isLoading && !error ? (
 				<McpServerEditor
 					key={activeEditing.previousId ?? 'new'}
 					initial={activeEditing.target}
 					initialEndpoint={activeEditing.endpoint}
 					endpointOptions={endpointPaths}
 					mcpEndpointHasTargets={mcpEndpointHasTargets}
-					config={effectiveConfig}
 					previousId={activeEditing.previousId}
-					databaseBacked={
-						hybrid &&
-						(!activeEditing.previousId ||
-							isDatabaseConfigResource(resources, 'mcp.target', activeEditing.previousId))
-					}
+					allowHybridWrite={!activeEditing.previousId || linkedTarget?.source === 'database'}
 					help={help}
 					saving={saving}
 					saveError={saveError}
 					onCancel={closeServerDrawer}
-					onSave={(target, endpoint, previousId) => {
+					onSave={(value, previousId) => {
 						upsertResource.mutate(
-							{
-								kind: 'mcp.target',
-								value: endpoint ? { ...target, endpoint } : target,
-								previousId
-							},
+							{ kind: 'mcp.target', value, previousId },
 							{
 								onSuccess: closeServerDrawer
 							}
@@ -296,54 +303,51 @@ export function McpServersPage() {
 					}}
 				/>
 			) : null}
-			{settingsOpen && !mcpData.isLoading && !mcpData.error ? (
+			{settingsDrawerOpen && (settingsLoading || settingsError) ? (
+				<Drawer
+					title={settingsEndpoint ? `Settings for ${settingsEndpoint}` : 'Settings'}
+					onClose={closeSettingsDrawer}
+				>
+					{settingsLoading ? (
+						<StatusBanner state="loading" title="Loading MCP settings" />
+					) : (
+						<StatusBanner state="bad" title="Configuration API unavailable">
+							{settingsError?.message}
+						</StatusBanner>
+					)}
+				</Drawer>
+			) : settingsDrawerOpen ? (
 				<McpSettingsDrawer
-					config={effectiveConfig}
-					mcp={mcp}
-					databaseBacked={hybrid}
+					key={settingsId}
+					endpoint={settingsEndpoint ?? undefined}
+					sharedSettings={sharedSettings}
+					config={{
+						gateways: Object.fromEntries(
+							(gatewayQuery.data?.resources ?? []).map(({ id, value }) => [id, value])
+						)
+					}}
+					mcp={{ ...storedSettings, ...fileSettings }}
 					readOnlyFields={fileOwnedSettingFields}
 					help={help}
 					saving={saving}
 					saveError={saveError}
-					onClose={closeServerDrawer}
+					onClose={closeSettingsDrawer}
 					onSave={value => {
-						upsertResource.mutate(
-							{ kind: 'mcp.settings', value },
-							{
-								onSuccess: closeServerDrawer
-							}
-						);
-					}}
-				/>
-			) : null}
-			{settingsEndpoint ? (
-				<McpSettingsDrawer
-					endpoint={settingsEndpoint}
-					config={effectiveConfig}
-					mcp={
-						mcp?.endpoints?.find(item => trimTrailingSlash(item.path) === settingsEndpoint) as
-							| McpSettingsResource
-							| undefined
-					}
-					databaseBacked={hybrid}
-					readOnlyFields={fileOwnedMcpSettingFields(rawConfig.data, hybrid, settingsEndpoint)}
-					help={help}
-					saving={saving}
-					saveError={saveError}
-					onClose={() => setSettingsEndpoint(null)}
-					onSave={value => {
-						const done = { onSuccess: () => setSettingsEndpoint(null) };
+						const done = { onSuccess: closeSettingsDrawer };
 						// A stored resource without settings would keep an otherwise empty endpoint alive.
-						if (hybrid && Object.keys(value).length === 0) {
-							if (isDatabaseConfigResource(resources, 'mcp.settings', settingsEndpoint)) {
-								deleteResource.mutate({ kind: 'mcp.settings', id: settingsEndpoint }, done);
+						if (settingsEndpoint && hybrid && Object.keys(value).length === 0) {
+							if (storedSettings) {
+								deleteResource.mutate({ kind: 'mcp.settings', id: settingsId }, done);
 							} else {
-								setSettingsEndpoint(null);
+								closeSettingsDrawer();
 							}
 							return;
 						}
 						upsertResource.mutate(
-							{ kind: 'mcp.settings', value: { ...value, endpoint: settingsEndpoint } },
+							{
+								kind: 'mcp.settings',
+								value: settingsEndpoint ? { ...value, endpoint: settingsEndpoint } : value
+							},
 							done
 						);
 					}}
@@ -379,21 +383,17 @@ export function McpServersPage() {
 }
 
 function McpServerTable(props: {
-	endpoint: McpServerEndpoint;
-	canDelete: (id: string) => boolean;
+	rows: McpServerRow[];
+	hybrid: boolean;
 	saving: boolean;
 	onEdit: (id: string) => void;
 	onDelete: (id: string) => void;
 }) {
-	const rows = props.endpoint.targets.map((target, index) => ({
-		target,
-		id: props.endpoint.ids[index]
-	}));
 	return (
-		<Table<(typeof rows)[number]>
+		<Table<McpServerRow>
 			className="mcp-server-table"
 			rowKey="id"
-			dataSource={rows}
+			dataSource={props.rows}
 			pagination={false}
 			tableLayout="fixed"
 			columns={[
@@ -435,8 +435,8 @@ function McpServerTable(props: {
 					align: 'right',
 					width: 104,
 					onHeaderCell: () => ({ 'aria-label': 'Actions' }),
-					render: (_, { id }) => {
-						const canDelete = props.canDelete(id);
+					render: (_, { id, source }) => {
+						const canDelete = !props.hybrid || source === 'database';
 						return (
 							<div className="row-actions">
 								<Tooltip content="Edit server">
@@ -469,11 +469,10 @@ function McpServerTable(props: {
 }
 
 export function McpSettingsDrawer(props: {
-	config?: GatewayConfig | null;
-	/** Edits the overrides of this endpoint rather than the shared settings. */
+	config?: Pick<GatewayConfig, 'gateways'> | null;
 	endpoint?: string;
+	sharedSettings?: McpSettingsResource;
 	mcp?: McpSettingsResource | null;
-	databaseBacked?: boolean;
 	readOnlyFields?: ReadonlySet<string>;
 	help: SchemaHelp;
 	saving: boolean;
@@ -490,8 +489,8 @@ export function McpSettingsDrawer(props: {
 			<McpSettings
 				config={props.config}
 				endpoint={props.endpoint}
+				sharedSettings={props.sharedSettings}
 				mcp={props.mcp}
-				databaseBacked={props.databaseBacked}
 				readOnlyFields={props.readOnlyFields}
 				help={props.help}
 				saving={props.saving}
@@ -502,11 +501,10 @@ export function McpSettingsDrawer(props: {
 }
 
 function McpSettings(props: {
-	config?: GatewayConfig | null;
-	/** Edits the overrides of this endpoint rather than the shared settings. */
+	config?: Pick<GatewayConfig, 'gateways'> | null;
 	endpoint?: string;
+	sharedSettings?: McpSettingsResource;
 	mcp?: McpSettingsResource | null;
-	databaseBacked?: boolean;
 	readOnlyFields?: ReadonlySet<string>;
 	help: SchemaHelp;
 	saving: boolean;
@@ -517,7 +515,7 @@ function McpSettings(props: {
 		port: props.mcp?.port ?? null
 	});
 	// Settings an endpoint leaves unset come from the shared settings.
-	const shared = props.endpoint ? props.config?.mcp : undefined;
+	const shared = props.sharedSettings;
 	const inheritLabel = (value?: string | null) => (value ? `Inherit (${value})` : 'Inherit');
 	const inheritDescription = 'Use the shared MCP setting.';
 	const overrideHint = props.endpoint ? 'Overrides the shared MCP setting.' : undefined;
@@ -806,31 +804,14 @@ function McpSettings(props: {
 				</Field>
 			</CollapsiblePolicySection>
 			<ConfigDiffSaveActions
-				config={props.config}
-				diffTitle="MCP settings config diff"
+				diffTitle="MCP settings resource diff"
 				saveLabel="Save settings"
 				saving={props.saving}
-				saveDisabled={mcpSettingsFields.every(field => props.readOnlyFields?.has(field))}
+				saveDisabled={mcpSettingsFields
+					.filter(field => !props.endpoint || (field !== 'gateways' && field !== 'port'))
+					.every(field => props.readOnlyFields?.has(field))}
 				onSave={() => props.onSave(settings)}
-				resourceDiff={props.databaseBacked ? { original, modified: settings } : undefined}
-				applyDiff={next => {
-					const mcp = ensureMcp(next);
-					let target: Record<string, unknown> = mcp;
-					if (props.endpoint) {
-						mcp.endpoints ??= [];
-						let entry = mcp.endpoints.find(item => trimTrailingSlash(item.path) === props.endpoint);
-						if (!entry) {
-							entry = { path: props.endpoint };
-							mcp.endpoints.push(entry);
-						}
-						target = entry;
-					}
-					for (const field of mcpSettingsFields) {
-						if (props.readOnlyFields?.has(field)) continue;
-						if (field in settings) target[field] = settings[field];
-						else delete target[field];
-					}
-				}}
+				resourceDiff={{ original, modified: settings }}
 			/>
 		</form>
 	);
@@ -865,14 +846,13 @@ function McpServerEditor(props: {
 	initialEndpoint?: string;
 	endpointOptions: string[];
 	mcpEndpointHasTargets: boolean;
-	config?: GatewayConfig | null;
 	previousId?: string;
-	databaseBacked?: boolean;
+	allowHybridWrite: boolean;
 	help: SchemaHelp;
 	saving: boolean;
 	saveError?: string | null;
 	onCancel: () => void;
-	onSave: (target: McpTarget, endpoint: string | undefined, previousId?: string) => void;
+	onSave: (value: McpTargetResource, previousId?: string) => void;
 }) {
 	const [form, setForm] = useState(() => formFrom(props.initial));
 	const [initialForm] = useState(form);
@@ -914,6 +894,7 @@ function McpServerEditor(props: {
 		'$defs',
 		'LocalMcpTarget'
 	]);
+	const resource = { ...(merged.value as McpTarget), endpoint };
 
 	function targetPreview() {
 		const base = {
@@ -976,7 +957,7 @@ function McpServerEditor(props: {
 
 	function save() {
 		if (!validTargetPreview()) return;
-		props.onSave(merged.value as McpTarget, endpoint, props.previousId);
+		props.onSave(resource, props.previousId);
 	}
 
 	return (
@@ -1000,26 +981,17 @@ function McpServerEditor(props: {
 			saving={props.saving}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
-					config={props.config}
-					diffTitle="MCP server config diff"
+					allowHybridWrite={props.allowHybridWrite}
+					diffTitle="MCP server resource diff"
 					saveLabel="Save server"
 					saving={props.saving}
 					onCancel={requestClose}
 					onSave={save}
 					beforeDiff={() => Boolean(validTargetPreview())}
-					resourceDiff={
-						props.databaseBacked
-							? () => ({
-									original: props.previousId
-										? { ...props.initial, endpoint: props.initialEndpoint }
-										: {},
-									modified: { ...(merged.value as McpTarget), endpoint }
-								})
-							: undefined
-					}
-					applyDiff={next =>
-						upsertMcpTarget(next, merged.value as McpTarget, endpoint, props.previousId)
-					}
+					resourceDiff={{
+						original: props.previousId ? { ...props.initial, endpoint: props.initialEndpoint } : {},
+						modified: resource
+					}}
 				/>
 			)}
 		>
