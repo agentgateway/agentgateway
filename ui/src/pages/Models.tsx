@@ -62,9 +62,9 @@ import {
 } from '@/hooks';
 import { modelLabel, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
+	catalogProviderName,
 	concreteModelName,
 	isWildcardModelName,
-	resolvedProviderLabel,
 	selectedConfiguredModelName
 } from '@/modelResolution';
 import { DumpModelsView } from '@/pages/models/DumpModelsView';
@@ -858,9 +858,7 @@ function ModelEditor(props: {
 						explicitModel={explicitModel}
 						customModelExpression={customModelExpression}
 						gatewayModelName={model.name}
-						provider={
-							model.provider ? resolvedProviderLabel(model.provider, props.providers) : null
-						}
+						provider={model.provider ? catalogProviderName(model.provider, props.providers) : null}
 						help={props.help}
 						setMode={value => update({ upstreamMode: value })}
 						setExplicitModel={value => update({ explicitModel: value })}
@@ -1773,7 +1771,7 @@ function VirtualTargetSelector(props: {
 		? undefined
 		: props.baseModels.find(model => model.name === selectedModelName);
 	const provider = selectedModel
-		? resolvedProviderLabel(selectedModel.provider, props.providers)
+		? catalogProviderName(selectedModel.provider, props.providers)
 		: null;
 
 	return (

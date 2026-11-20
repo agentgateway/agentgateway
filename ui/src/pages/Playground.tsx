@@ -42,6 +42,7 @@ import {
 import { extractMcpTools, initializeMcpSession, type McpTool, nextRpcId } from '@/mcp';
 import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
+	catalogProviderName,
 	isWildcardModelName,
 	modelProviderLabel,
 	resolveModelName,
@@ -189,7 +190,7 @@ export function PlaygroundPage() {
 		providers
 	);
 	const selectedCatalogProvider = selectedModelConfig
-		? modelProviderLabel(selectedModelConfig, providers)
+		? catalogProviderName(selectedModelConfig.provider, providers)
 		: null;
 	const selectedKeyOptionRef = rawVirtualKeys.some(
 		(item, index) => virtualKeyStorageRef(item, index) === selectedKeyRef
