@@ -679,7 +679,7 @@ impl UpstreamGroup {
 				.map(|ext| (name.as_str(), ext))
 		}))?;
 		// Skills requests can only be routed to a single target.
-		merged.remove(mcp::skills::EXTENSION);
+		merged.remove(rmcp::model::SKILLS_EXTENSION_ID);
 		(!merged.is_empty()).then_some(merged)
 	}
 

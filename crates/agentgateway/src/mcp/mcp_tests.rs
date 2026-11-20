@@ -2716,7 +2716,10 @@ async fn modern_skills_methods_single_target_authorization() {
 		serde_json::json!({"uri": "skill://code-review/SKILL.md"}),
 	)
 	.await;
-	assert_eq!(get["result"], skills_result("skills/get"));
+	let mut expected = skills_result("skills/get");
+	expected["ttlMs"] = 0.into();
+	expected["cacheScope"] = "private".into();
+	assert_eq!(get["result"], expected);
 
 	let denied = send(
 		"skills/get",
@@ -7671,7 +7674,7 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 	modern_caps.extensions = Some(extension_caps(&[
 		("example.com/other", serde_json::json!({})),
 		(
-			crate::mcp::skills::EXTENSION,
+			rmcp::model::SKILLS_EXTENSION_ID,
 			serde_json::json!({"directoryRead": true}),
 		),
 	]));
@@ -7701,7 +7704,7 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 	);
 	assert!(extensions.contains_key("example.com/other"));
 	assert!(
-		!extensions.contains_key(crate::mcp::skills::EXTENSION),
+		!extensions.contains_key(rmcp::model::SKILLS_EXTENSION_ID),
 		"skills cannot be routed when multiplexing"
 	);
 }

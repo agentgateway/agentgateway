@@ -12,11 +12,12 @@ use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
 	CacheScope, CallToolRequestMethod, ClientJsonRpcMessage, ClientNotification, ClientRequest,
-	ConstString, CustomResult, DiscoverResult, ExtensionCapabilities, Extensions, GetMeta,
-	Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
-	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
-	ProtocolVersion, RequestId, RequestMetaObject, ResultType, ServerCapabilities, ServerConfig,
-	ServerJsonRpcMessage, ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
+	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, GetMeta, Implementation,
+	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
+	ListResourcesResult, ListSkillsRequestMethod, ListToolsResult, PaginatedRequestParams,
+	ProtocolVersion, ReadResourceDirectoryRequestMethod, RequestId, RequestMetaObject, ResultType,
+	SKILLS_EXTENSION_ID, ServerCapabilities, ServerConfig, ServerJsonRpcMessage, ServerNotification,
+	ServerRequest, ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
 
@@ -874,7 +875,7 @@ impl Relay {
 				};
 				upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
 				if !skills_routable && let Some(ext) = ir.capabilities.extensions.as_mut() {
-					ext.remove(mcp::skills::EXTENSION);
+					ext.remove(SKILLS_EXTENSION_ID);
 				}
 				if !stateful {
 					let caps = &mut ir.capabilities;
@@ -946,7 +947,7 @@ impl Relay {
 				};
 				// Skills requests are only routed when skill URIs pass through unprefixed.
 				if !skills_routable && let Some(ext) = dr.capabilities.extensions.as_mut() {
-					ext.remove(mcp::skills::EXTENSION);
+					ext.remove(SKILLS_EXTENSION_ID);
 				}
 				// Cache hints describe the gateway's presented server, not the upstream.
 				// Gateway routing/backend config can change without client invalidation.
@@ -1041,19 +1042,14 @@ impl Relay {
 		})
 	}
 
-	// Only reached with a single target (see `Session::send_internal`), so the upstream result is
-	// forwarded apart from removing skills the caller may not see. Like the other list merges, the
-	// result depends on gateway policy, so it is never cached or shared.
 	pub fn merge_skills(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		Box::new(move |streams, cel| {
-			let Some((server_name, ServerResult::CustomResult(CustomResult(result)))) =
+			let Some((server_name, ServerResult::ListSkillsResult(mut list))) =
 				streams.into_iter().next()
 			else {
-				return Err(incompatible_upstream_result(mcp::skills::LIST));
+				return Err(incompatible_upstream_result(ListSkillsRequestMethod::VALUE));
 			};
-			let mut list: mcp::skills::ListSkillsResult = serde_json::from_value(result)
-				.map_err(|_| incompatible_upstream_result(mcp::skills::LIST))?;
 			list.skills.retain(|skill| {
 				policies.validate(
 					&rbac::ResourceType::Resource(rbac::ResourceId::new(
@@ -1064,28 +1060,20 @@ impl Relay {
 					cel,
 				)
 			});
-			list.ttl_ms = Some(0);
-			list.cache_scope = Some(CacheScope::Private);
-			let result =
-				serde_json::to_value(list).map_err(|_| incompatible_upstream_result(mcp::skills::LIST))?;
-			Ok(CustomResult(result).into())
+			Ok(list.into())
 		})
 	}
 
-	// Only reached with a single target, after the directory URI itself is authorized. Children are
-	// filtered like `resources/list` so the listing can't reveal resources the caller can't read.
 	pub fn merge_resource_directory(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		Box::new(move |streams, cel| {
-			let incompatible = || incompatible_upstream_result(mcp::skills::RESOURCES_DIRECTORY_READ);
-			let Some((server_name, result)) = streams.into_iter().next() else {
-				return Err(incompatible());
+			let Some((server_name, ServerResult::ListResourcesResult(mut dir))) =
+				streams.into_iter().next()
+			else {
+				return Err(incompatible_upstream_result(
+					ReadResourceDirectoryRequestMethod::VALUE,
+				));
 			};
-			// Directory results have the same shape as `resources/list`, so rmcp may decode them as
-			// either `ListResourcesResult` or `CustomResult`.
-			let mut dir: mcp::skills::ReadResourceDirectoryResult = serde_json::to_value(result)
-				.and_then(serde_json::from_value)
-				.map_err(|_| incompatible())?;
 			dir.resources.retain(|r| {
 				policies.validate(
 					&rbac::ResourceType::Resource(rbac::ResourceId::new(
@@ -1096,10 +1084,7 @@ impl Relay {
 					cel,
 				)
 			});
-			dir.ttl_ms = Some(0);
-			dir.cache_scope = Some(CacheScope::Private);
-			let result = serde_json::to_value(dir).map_err(|_| incompatible())?;
-			Ok(CustomResult(result).into())
+			Ok(dir.into())
 		})
 	}
 
@@ -2184,6 +2169,14 @@ fn normalize_outbound_for_protocol(
 			normalize_result_type(&mut r.result_type, downstream_modern);
 			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
+		ServerResult::ListSkillsResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::GetSkillResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
 		ServerResult::CompleteResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
 		ServerResult::GetPromptResult(r) => {
 			normalize_result_type(&mut r.result_type, downstream_modern)
@@ -2244,6 +2237,14 @@ fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMess
 			r.cache_scope = Some(CacheScope::Private);
 		},
 		ServerResult::ListPromptsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListSkillsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::GetSkillResult(r) => {
 			r.ttl_ms = Some(0);
 			r.cache_scope = Some(CacheScope::Private);
 		},

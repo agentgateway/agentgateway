@@ -7,7 +7,6 @@ mod mergestream;
 mod rbac;
 mod router;
 mod session;
-mod skills;
 mod sse;
 mod streamablehttp;
 mod subscriptions;
@@ -25,10 +24,11 @@ use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::{
 	CallToolRequestMethod, CallToolResult, CancelTaskMethod, CompleteRequestMethod, ConstString,
-	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
-	InitializeResultMethod, JsonRpcError, ListPromptsRequestMethod,
-	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListToolsRequestMethod,
-	PingRequestMethod, ProtocolVersion, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
+	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod,
+	GetSkillRequestMethod, GetTaskMethod, InitializeResultMethod, JsonRpcError,
+	ListPromptsRequestMethod, ListResourceTemplatesRequestMethod, ListResourcesRequestMethod,
+	ListSkillsRequestMethod, ListToolsRequestMethod, PingRequestMethod, ProtocolVersion,
+	ReadResourceDirectoryRequestMethod, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
 	SubscribeRequestMethod, SubscriptionsListenRequestMethod, UnsubscribeRequestMethod,
 	UpdateTaskMethod,
 };
@@ -64,15 +64,15 @@ impl agent_http::BodyExtension for CachedRequest {}
 /// Application-defined "over quota" code (MCP defines none); shared with the guardrail mapping.
 pub(crate) const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
 
-/// Method names of rmcp's typed `ClientRequest` variants, plus the skills methods. Keep this list
+/// Method names of rmcp's typed `ClientRequest` variants. Keep this list
 /// in sync with rmcp rev bumps; only `CustomRequest` and failed typed parses consult it, so drift
 /// cannot 404 typed requests.
 pub(crate) fn is_known_client_request_method(method: &str) -> bool {
 	matches!(
 		method,
-		skills::LIST
-			| skills::GET
-			| skills::RESOURCES_DIRECTORY_READ
+		ListSkillsRequestMethod::VALUE
+			| GetSkillRequestMethod::VALUE
+			| ReadResourceDirectoryRequestMethod::VALUE
 			| DiscoverRequestMethod::VALUE
 			| PingRequestMethod::VALUE
 			| InitializeResultMethod::VALUE
