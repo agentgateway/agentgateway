@@ -266,6 +266,7 @@ export function McpPlaygroundPage() {
 							<Dropdown
 								ariaLabel="Endpoint"
 								value={selectedEndpoint?.endpoint ?? ''}
+								disabled={loading !== null}
 								options={endpoints.map(endpoint => ({
 									value: endpoint.endpoint ?? '',
 									label: mcpEndpointLabel(endpoint)

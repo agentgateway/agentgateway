@@ -48,6 +48,10 @@ listener_routes:
               pathPrefix: /.well-known/oauth-authorization-server/mcp
           - path:
               pathPrefix: /sse
+          - path:
+              pathPrefix: /.well-known/oauth-protected-resource/sse
+          - path:
+              pathPrefix: /.well-known/oauth-authorization-server/sse
         name: /mcp
         namespace: internal
       - backends:

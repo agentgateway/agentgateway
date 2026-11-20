@@ -29,7 +29,7 @@ import {
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { WildcardModelSelector } from '@/components/WildcardModelSelector';
-import { providerLabel } from '@/config';
+import { mcpPolicies, providerLabel } from '@/config';
 import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy, waitForLlmCors } from '@/cors';
 import { hasKeyValue, keyLabel } from '@/credentialDisplay';
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from '@/gatewayUrls';
@@ -43,6 +43,7 @@ import {
 	extractMcpTools,
 	initializeMcpSession,
 	type McpTool,
+	mcpResourceId,
 	mcpServerEndpoints,
 	nextRpcId
 } from '@/mcp';
@@ -225,9 +226,15 @@ export function PlaygroundPage() {
 		}
 	});
 	const fileCorsOwned = Object.hasOwn(filePolicies, 'cors');
+	// An endpoint's own CORS policy replaces the shared one.
+	const endpointMcpCors = firstMcpEndpoint?.endpoint
+		? (mcpPolicies(mcpData.data?.mcp, firstMcpEndpoint.endpoint)?.cors as CorsPolicy | undefined)
+		: undefined;
+	const mcpCorsEndpoint = endpointMcpCors ? firstMcpEndpoint?.endpoint : undefined;
+	const mcpCors = endpointMcpCors ?? mcpData.data?.mcp?.policies?.cors;
+	const fileMcpCorsPolicies = mcpPolicies(mcpData.rawConfig.data?.mcp, mcpCorsEndpoint);
 	const fileMcpCorsOwned = Boolean(
-		mcpData.rawConfig.data?.mcp?.policies &&
-			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
+		fileMcpCorsPolicies && Object.hasOwn(fileMcpCorsPolicies, 'cors')
 	);
 	const needsCors =
 		applyCors.isPending ||
@@ -236,9 +243,7 @@ export function PlaygroundPage() {
 			? corsNeedsUpdate(llmCors, 'llm')
 			: false);
 	const needsMcpCors =
-		mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin
-			? corsNeedsUpdate(mcpData.data.mcp?.policies?.cors, 'mcp')
-			: false;
+		mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin ? corsNeedsUpdate(mcpCors, 'mcp') : false;
 	const sendBlockers = sendReadinessBlockers({
 		loading,
 		displayRequestModel,
@@ -260,8 +265,8 @@ export function PlaygroundPage() {
 	function applyMcpCors() {
 		upsertPolicy.mutate({
 			kind: 'mcp.policy',
-			id: 'cors',
-			value: playgroundCorsPolicy(mcpData.data?.mcp?.policies?.cors, 'mcp')
+			id: mcpResourceId('cors', mcpCorsEndpoint),
+			value: playgroundCorsPolicy(mcpCors, 'mcp')
 		});
 	}
 
