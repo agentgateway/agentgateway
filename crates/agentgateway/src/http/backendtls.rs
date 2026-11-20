@@ -12,7 +12,7 @@ use rustls_pki_types::{CertificateDer, ServerName};
 use serde::Serializer;
 use tracing::{info, trace, warn};
 
-use crate::control::spiffe::normalize_trust_domains;
+use crate::control::spiffe::trust_domains_from_sans;
 use crate::resource_manager::FileAccess;
 use crate::serdes::{schema_de, schema_ser};
 use crate::transport::tls;
@@ -144,9 +144,8 @@ pub struct SpiffeBackendTLS {
 	pub alpn: Option<Vec<String>>,
 	/// Expected upstream SPIFFE IDs to pin; empty means accept any SVID chaining to the bundle.
 	pub verify_sans: Vec<String>,
-	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
-	/// local trust domain is always implicit. Combine with `verify_sans` to pin exact IDs.
-	pub additional_trust_domains: Vec<TrustDomain>,
+	/// Trust domains derived from `verify_sans` when configuration is built.
+	pub trust_domains: Vec<TrustDomain>,
 }
 
 impl BackendTLS {
@@ -331,7 +330,8 @@ pub struct LocalBackendTLS {
 	/// Get the gateway's client identity and trust roots from the SPIFFE Workload API.
 	/// Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.
 	/// Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);
-	/// If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted
+	/// The SPIFFE IDs select their trust domains' Workload API bundles. If `subjectAltNames` is
+	/// omitted, any SVID from the gateway's local trust domain is accepted.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub spiffe: Option<LocalSpiffeBackendTLS>,
 }
@@ -339,12 +339,7 @@ pub struct LocalBackendTLS {
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct LocalSpiffeBackendTLS {
-	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
-	/// local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.
-	#[serde(default)]
-	pub additional_trust_domains: Vec<String>,
-}
+pub struct LocalSpiffeBackendTLS {}
 
 #[derive(Default, Debug)]
 pub struct ResolvedBackendTLS {
@@ -363,8 +358,6 @@ pub struct ResolvedBackendTLS {
 	pub key_path: Option<PathBuf>,
 	pub root_path: Option<PathBuf>,
 	pub spiffe: bool,
-	/// Federated trust domains accepted for a SPIFFE-sourced backend, when configured.
-	pub spiffe_additional_trust_domains: Option<Vec<String>>,
 }
 
 /// Everything but the cert/key/root material, which file-sourced configs re-read on each reload.
@@ -585,15 +578,12 @@ impl ResolvedBackendTLS {
 					"backend TLS 'spiffe' is mutually exclusive with 'cert'/'key'/'root'/'insecure'/'insecureHost'/'keyExchangeGroups'"
 				);
 			}
+			let verify_sans = self.subject_alt_names.unwrap_or_default();
+			let trust_domains = trust_domains_from_sans(&verify_sans)?;
 			BackendTLSSource::Spiffe(SpiffeBackendTLS {
 				alpn: self.alpn,
-				verify_sans: self.subject_alt_names.unwrap_or_default(),
-				additional_trust_domains: normalize_trust_domains(
-					self
-						.spiffe_additional_trust_domains
-						.as_deref()
-						.unwrap_or_default(),
-				),
+				verify_sans,
+				trust_domains,
 			})
 		} else {
 			let files = FileSources {
@@ -679,11 +669,6 @@ impl LocalBackendTLS {
 			None => None,
 		};
 
-		let spiffe_additional_trust_domains = self
-			.spiffe
-			.as_ref()
-			.map(|s| s.additional_trust_domains.clone())
-			.filter(|domains| !domains.is_empty());
 		ResolvedBackendTLS {
 			cert,
 			key,
@@ -698,7 +683,6 @@ impl LocalBackendTLS {
 			key_path: None,
 			root_path: None,
 			spiffe: self.spiffe.is_some(),
-			spiffe_additional_trust_domains,
 		}
 		.try_into()
 	}
@@ -921,14 +905,17 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn spiffe_backend_normalizes_trust_domains_at_config_load() {
+	fn spiffe_backend_derives_trust_domains_at_config_load() {
+		let sans = [
+			"spiffe://Z.example/service",
+			"spiffe://a_example/service",
+			"spiffe://z.EXAMPLE/another",
+		]
+		.map(String::from)
+		.to_vec();
 		let config = ResolvedBackendTLS {
 			spiffe: true,
-			spiffe_additional_trust_domains: Some(
-				["Z.example", "bad domain", "", "a_example", "z.EXAMPLE"]
-					.map(String::from)
-					.to_vec(),
-			),
+			subject_alt_names: Some(sans.clone()),
 			..Default::default()
 		}
 		.try_into()
@@ -937,12 +924,56 @@ mod tests {
 			panic!("expected SPIFFE backend TLS");
 		};
 		assert_eq!(
-			config.additional_trust_domains,
+			config.trust_domains,
 			[
 				TrustDomain::new("a_example").unwrap(),
 				TrustDomain::new("z.example").unwrap(),
 			]
 		);
+		assert_eq!(config.verify_sans, sans);
+	}
+
+	#[test]
+	fn spiffe_backend_rejects_invalid_sans_at_config_load() {
+		for san in [
+			"example.org",
+			"https://example.org/service",
+			"spiffe://",
+			"spiffe://example.org:443/service",
+			"spiffe://example.org/service?query=1",
+		] {
+			let result = ResolvedBackendTLS {
+				spiffe: true,
+				subject_alt_names: Some(vec![
+					"spiffe://example.org/valid".to_string(),
+					san.to_string(),
+				]),
+				..Default::default()
+			}
+			.try_into();
+			assert!(
+				result
+					.unwrap_err()
+					.to_string()
+					.contains("invalid SPIFFE verification SAN"),
+				"invalid SAN {san:?} must reject the backend TLS configuration"
+			);
+		}
+	}
+
+	#[test]
+	fn spiffe_backend_without_sans_has_no_federated_domains() {
+		let config = ResolvedBackendTLS {
+			spiffe: true,
+			..Default::default()
+		}
+		.try_into()
+		.unwrap();
+		let BackendTLSSource::Spiffe(config) = config.source else {
+			panic!("expected SPIFFE backend TLS");
+		};
+		assert!(config.trust_domains.is_empty());
+		assert!(config.verify_sans.is_empty());
 	}
 
 	#[cfg(feature = "fips")]

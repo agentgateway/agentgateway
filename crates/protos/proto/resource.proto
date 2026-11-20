@@ -1716,8 +1716,9 @@ message BackendPolicySpec {
     VerificationMode verification = 4;
     // If set, override the SNI explicitly. Otherwise, it is auto-derived.
     optional string hostname = 5;
-    // If set, the request must come from one of these hostnames. Otherwise, the destination
-    // is used.
+    // If set, the backend certificate must match one of these names. Otherwise, the destination
+    // is used. With SPIFFE, these must be SPIFFE IDs: their trust domains select Workload API
+    // bundles, and an empty list accepts only the gateway's local trust domain.
     repeated string verify_subject_alt_names = 6;
     // Unset: use defaults (h2,http/1.1)
     // Set but empty: send none
@@ -1731,9 +1732,8 @@ message BackendPolicySpec {
     optional string cert_path = 10;
     optional string key_path = 11;
     optional string root_path = 12;
-    // Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted.
-    // The local trust domain is always implicit. Only applicable when certificate_source is SPIFFE.
-    repeated string spiffe_additional_trust_domains = 13;
+    reserved 13;
+    reserved "spiffe_additional_trust_domains";
   }
   message BackendHTTP {
     enum HttpVersion {

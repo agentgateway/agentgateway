@@ -14561,8 +14561,9 @@ type BackendPolicySpec_BackendTLS struct {
 	Verification BackendPolicySpec_BackendTLS_VerificationMode `protobuf:"varint,4,opt,name=verification,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_BackendTLS_VerificationMode" json:"verification,omitempty"`
 	// If set, override the SNI explicitly. Otherwise, it is auto-derived.
 	Hostname *string `protobuf:"bytes,5,opt,name=hostname,proto3,oneof" json:"hostname,omitempty"`
-	// If set, the request must come from one of these hostnames. Otherwise, the destination
-	// is used.
+	// If set, the backend certificate must match one of these names. Otherwise, the destination
+	// is used. With SPIFFE, these must be SPIFFE IDs: their trust domains select Workload API
+	// bundles, and an empty list accepts only the gateway's local trust domain.
 	VerifySubjectAltNames []string `protobuf:"bytes,6,rep,name=verify_subject_alt_names,json=verifySubjectAltNames,proto3" json:"verify_subject_alt_names,omitempty"`
 	// Unset: use defaults (h2,http/1.1)
 	// Set but empty: send none
@@ -14573,14 +14574,11 @@ type BackendPolicySpec_BackendTLS struct {
 	KeyExchangeGroups []TLSConfig_KeyExchangeGroup                   `protobuf:"varint,8,rep,packed,name=key_exchange_groups,json=keyExchangeGroups,proto3,enum=agentgateway.dev.resource.TLSConfig_KeyExchangeGroup" json:"key_exchange_groups,omitempty"`
 	CertificateSource BackendPolicySpec_BackendTLS_CertificateSource `protobuf:"varint,9,opt,name=certificate_source,json=certificateSource,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_BackendTLS_CertificateSource" json:"certificate_source,omitempty"`
 	// Local file paths to read the client cert, key and root from, watched and reloaded on change.
-	CertPath *string `protobuf:"bytes,10,opt,name=cert_path,json=certPath,proto3,oneof" json:"cert_path,omitempty"`
-	KeyPath  *string `protobuf:"bytes,11,opt,name=key_path,json=keyPath,proto3,oneof" json:"key_path,omitempty"`
-	RootPath *string `protobuf:"bytes,12,opt,name=root_path,json=rootPath,proto3,oneof" json:"root_path,omitempty"`
-	// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted.
-	// The local trust domain is always implicit. Only applicable when certificate_source is SPIFFE.
-	SpiffeAdditionalTrustDomains []string `protobuf:"bytes,13,rep,name=spiffe_additional_trust_domains,json=spiffeAdditionalTrustDomains,proto3" json:"spiffe_additional_trust_domains,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	CertPath      *string `protobuf:"bytes,10,opt,name=cert_path,json=certPath,proto3,oneof" json:"cert_path,omitempty"`
+	KeyPath       *string `protobuf:"bytes,11,opt,name=key_path,json=keyPath,proto3,oneof" json:"key_path,omitempty"`
+	RootPath      *string `protobuf:"bytes,12,opt,name=root_path,json=rootPath,proto3,oneof" json:"root_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_BackendTLS) Reset() {
@@ -14695,13 +14693,6 @@ func (x *BackendPolicySpec_BackendTLS) GetRootPath() string {
 		return *x.RootPath
 	}
 	return ""
-}
-
-func (x *BackendPolicySpec_BackendTLS) GetSpiffeAdditionalTrustDomains() []string {
-	if x != nil {
-		return x.SpiffeAdditionalTrustDomains
-	}
-	return nil
 }
 
 type BackendPolicySpec_BackendHTTP struct {
@@ -19914,7 +19905,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kindJ\x04\b\x19\x10\x1a\"\xa0q\n" +
+	"\x04kindJ\x04\b\x19\x10\x1a\"\x80q\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -20148,7 +20139,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11_health_thresholdJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05R\x11max_eviction_timeR\x14max_eviction_percent\x1a\x8c\x01\n" +
 	"\x06Health\x12/\n" +
 	"\x13unhealthy_condition\x18\x01 \x01(\tR\x12unhealthyCondition\x12Q\n" +
-	"\beviction\x18\x02 \x01(\v25.agentgateway.dev.resource.BackendPolicySpec.EvictionR\beviction\x1a\xa0\a\n" +
+	"\beviction\x18\x02 \x01(\v25.agentgateway.dev.resource.BackendPolicySpec.EvictionR\beviction\x1a\x80\a\n" +
 	"\n" +
 	"BackendTLS\x12\x17\n" +
 	"\x04cert\x18\x01 \x01(\fH\x00R\x04cert\x88\x01\x01\x12\x15\n" +
@@ -20163,8 +20154,7 @@ const file_resource_proto_rawDesc = "" +
 	"\tcert_path\x18\n" +
 	" \x01(\tH\x04R\bcertPath\x88\x01\x01\x12\x1e\n" +
 	"\bkey_path\x18\v \x01(\tH\x05R\akeyPath\x88\x01\x01\x12 \n" +
-	"\troot_path\x18\f \x01(\tH\x06R\brootPath\x88\x01\x01\x12E\n" +
-	"\x1fspiffe_additional_trust_domains\x18\r \x03(\tR\x1cspiffeAdditionalTrustDomains\"C\n" +
+	"\troot_path\x18\f \x01(\tH\x06R\brootPath\x88\x01\x01\"C\n" +
 	"\x10VerificationMode\x12\n" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\x11\n" +
@@ -20183,7 +20173,7 @@ const file_resource_proto_rawDesc = "" +
 	"_cert_pathB\v\n" +
 	"\t_key_pathB\f\n" +
 	"\n" +
-	"_root_path\x1a\xba\x02\n" +
+	"_root_pathJ\x04\b\r\x10\x0eR\x1fspiffe_additional_trust_domains\x1a\xba\x02\n" +
 	"\vBackendHTTP\x12^\n" +
 	"\aversion\x18\x01 \x01(\x0e2D.agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersionR\aversion\x12B\n" +
 	"\x0frequest_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0erequestTimeout\x12Q\n" +

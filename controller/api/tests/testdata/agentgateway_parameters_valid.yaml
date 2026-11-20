@@ -1,6 +1,14 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
 metadata:
+  name: spiffe-without-federation-switch
+spec:
+  spiffe:
+    enabled: true
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
   name: shutdown-min-gt-max
 spec:
   shutdown:

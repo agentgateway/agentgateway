@@ -80,7 +80,7 @@ pub async fn run_with_ui_assets(
 	crate::http::backendtls::set_file_access(config.file_access.clone());
 	let spiffe = if let Some(cfg) = &config.spiffe {
 		let client = Arc::new(
-			spiffe::SpiffeClient::new(cfg.endpoint.clone(), cfg.allow_additional_trust_domains)
+			spiffe::SpiffeClient::new(cfg.endpoint.clone())
 				.await
 				.context("connect to SPIFFE workload API")?,
 		);

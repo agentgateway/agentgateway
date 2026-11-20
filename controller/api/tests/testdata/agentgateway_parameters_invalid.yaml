@@ -1,3 +1,13 @@
+_err: "unknown fields"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: spiffe-removed-federation-switch
+spec:
+  spiffe:
+    enabled: true
+    allowAdditionalTrustDomains: true
+---
 _err: "min' value must be less than or equal to the 'max"
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters

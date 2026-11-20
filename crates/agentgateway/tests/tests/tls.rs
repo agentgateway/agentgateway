@@ -61,7 +61,6 @@ async fn serve_https_http1_connection(
 			key_path: None,
 			root_path: None,
 			spiffe: false,
-			..Default::default()
 		}
 		.try_into()
 		.unwrap();
@@ -545,7 +544,6 @@ fn spawn_client_hello(io: tokio::io::DuplexStream) -> tokio::task::JoinHandle<bo
 			key_path: None,
 			root_path: None,
 			spiffe: false,
-			..Default::default()
 		}
 		.try_into()
 		.unwrap();

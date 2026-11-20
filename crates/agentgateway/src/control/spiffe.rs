@@ -21,13 +21,6 @@ use crate::*;
 pub struct Config {
 	/// Endpoint of the SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`)
 	pub endpoint: String,
-	/// Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in
-	/// per-listener/backend `additionalTrustDomains` lists. This does NOT control which bundles are
-	/// delivered (SPIRE decides that via `federatesWith`); when false, only the local trust domain
-	/// may be accepted. Invalid domains and unavailable or unusable non-local bundles are skipped
-	/// with a warning.
-	#[serde(default)]
-	pub allow_additional_trust_domains: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -63,8 +56,7 @@ struct ServerConfigKey {
 struct ClientConfigCacheKey {
 	alpns: Vec<Vec<u8>>,
 	verify_sans: Vec<String>,
-	// Canonical (sorted, lowercased) additional (non-local) trust domains.
-	additional_trust_domains: Vec<TrustDomain>,
+	trust_domains: Vec<TrustDomain>,
 }
 
 /// A rotation-aware map with 2 methods, Get & Insert, both having a sequence number parameter.
@@ -116,8 +108,6 @@ pub struct SpiffeClient {
 	updates: X509SourceUpdates,
 	server_cache: Arc<Mutex<RotatingCache<ServerConfigKey, ServerConfig>>>,
 	client_cache: Arc<Mutex<RotatingCache<ClientConfigCacheKey, ClientConfig>>>,
-	/// Whether additional (non-local) trust domains may be accepted; see [`Config::allow_additional_trust_domains`].
-	allow_additional_trust_domains: bool,
 }
 
 impl std::fmt::Debug for SpiffeClient {
@@ -128,7 +118,7 @@ impl std::fmt::Debug for SpiffeClient {
 
 impl SpiffeClient {
 	/// Connects to the SPIFFE Workload API and performs the initial SVID/bundle sync.
-	pub async fn new(endpoint: String, allow_additional_trust_domains: bool) -> Result<Self, Error> {
+	pub async fn new(endpoint: String) -> Result<Self, Error> {
 		info!(endpoint = %endpoint, "connecting to SPIFFE workload API");
 		let source: X509Source = match X509Source::builder()
 			.endpoint(endpoint.clone())
@@ -147,7 +137,6 @@ impl SpiffeClient {
 			updates,
 			server_cache: Arc::new(Mutex::new(RotatingCache::default())),
 			client_cache: Arc::new(Mutex::new(RotatingCache::default())),
-			allow_additional_trust_domains,
 		};
 		match client.spiffe_id() {
 			Some(id) => {
@@ -199,12 +188,7 @@ impl SpiffeClient {
 		let ctx = self.source.x509_context()?;
 		let provider = transport::tls::provider();
 		// Verify inbound client SVIDs against the local + additional trust domains' bundles.
-		let verifier = build_client_verifier(
-			&ctx,
-			additional,
-			self.allow_additional_trust_domains,
-			provider.clone(),
-		)?;
+		let verifier = build_client_verifier(&ctx, additional, provider.clone())?;
 		let (chain, key, spiffe_id) = svid_identity(&ctx)?;
 
 		let mut config = ServerConfig::builder_with_provider(provider)
@@ -225,30 +209,29 @@ impl SpiffeClient {
 
 	/// Builds (or returns a cached) `rustls::ClientConfig` for outbound mTLS to a SPIFFE-backed
 	/// upstream. The gateway presents its current SVID as the client certificate. The upstream's
-	/// certificate is verified against the bundle for its own trust domain (local, always implicit,
-	/// plus any `additional_trust_domains`); when `verify_sans` is empty any SVID chaining to that
-	/// bundle is accepted (DNS hostname checks do not apply to SPIFFE SVIDs), otherwise the upstream's
-	/// SPIFFE ID must match one of the provided `spiffe://` URIs.
+	/// certificate is verified against its own trust domain's bundle. `trust_domains` is derived
+	/// from `verify_sans` when backend configuration is built. When `verify_sans` is empty, only the
+	/// local trust domain is accepted; otherwise the upstream's SPIFFE ID must match one of the
+	/// provided `spiffe://` URIs.
 	pub fn client_config(
 		&self,
 		alpns: Vec<Vec<u8>>,
 		verify_sans: Vec<String>,
-		additional_trust_domains: Vec<TrustDomain>,
+		trust_domains: Vec<TrustDomain>,
 	) -> Result<Arc<ClientConfig>, Error> {
 		// Sequence sampled before the SVID read; see server_config.
 		let seq = self.updates.last();
 		let key = ClientConfigCacheKey {
 			alpns: alpns.clone(),
 			verify_sans: verify_sans.clone(),
-			additional_trust_domains,
+			trust_domains,
 		};
 
 		if let Some(cfg) = self.client_cache.lock().unwrap().get(seq, &key) {
 			return Ok(cfg);
 		}
 
-		let cfg =
-			Arc::new(self.build_client_config(alpns, verify_sans, &key.additional_trust_domains)?);
+		let cfg = Arc::new(self.build_client_config(alpns, verify_sans, &key.trust_domains)?);
 		Ok(self.client_cache.lock().unwrap().insert(seq, key, cfg))
 	}
 
@@ -256,17 +239,12 @@ impl SpiffeClient {
 		&self,
 		alpns: Vec<Vec<u8>>,
 		verify_sans: Vec<String>,
-		additional: &[TrustDomain],
+		trust_domains: &[TrustDomain],
 	) -> Result<ClientConfig, Error> {
 		let ctx = self.source.x509_context()?;
 		let provider = transport::tls::provider();
 		let sans_count = verify_sans.len();
-		let verifier = build_server_verifier(
-			&ctx,
-			verify_sans,
-			additional,
-			self.allow_additional_trust_domains,
-		)?;
+		let verifier = build_server_verifier(&ctx, verify_sans, trust_domains)?;
 		let (chain, key, spiffe_id) = svid_identity(&ctx)?;
 		let mut config = ClientConfig::builder_with_provider(provider)
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
@@ -296,7 +274,7 @@ fn snapshot_svid(ctx: &X509Context) -> Result<&Arc<X509Svid>, Error> {
 
 /// Parse, validate, de-duplicate and canonically order trust domain names. `TrustDomain` lowercases
 /// names, so the result is a stable cache key regardless of input case or order. Called when
-/// listener/backend configuration is built, not per request. Invalid entries are skipped so they
+/// listener configuration is built, not per request. Invalid entries are skipped so they
 /// cannot disrupt traffic in other trust domains.
 pub(crate) fn normalize_trust_domains(names: &[String]) -> Vec<TrustDomain> {
 	let mut tds: Vec<TrustDomain> = Vec::with_capacity(names.len());
@@ -316,12 +294,23 @@ pub(crate) fn normalize_trust_domains(names: &[String]) -> Vec<TrustDomain> {
 	tds
 }
 
-/// Per-trust-domain root stores used to verify peer SVIDs. `additional` holds the non-local trust
-/// domains requested by the listener/backend; the gateway's own (local) trust domain is always
-/// prepended. When `allow_additional_trust_domains` is false the additional entries are logged and
-/// skipped (leaving local-only roots) so that traffic in the local trust domain is unaffected by an
-/// unrelated listener/backend still declaring an additional trust domain — a federated peer then
-/// fails cleanly at TLS chain validation instead of taking out local traffic.
+pub(crate) fn trust_domains_from_sans(sans: &[String]) -> Result<Vec<TrustDomain>, Error> {
+	let mut domains = sans
+		.iter()
+		.map(|san| {
+			::spiffe::SpiffeId::new(san)
+				.map(|id| id.trust_domain().clone())
+				.map_err(|error| Error::InvalidSan(format!("{san:?}: {error}")))
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+	domains.sort();
+	domains.dedup();
+	Ok(domains)
+}
+
+/// Per-trust-domain root stores used to verify peer SVIDs. `additional` holds the trust domains
+/// requested by the listener or derived from backend SANs; the gateway's local domain is always
+/// prepended. Unavailable or unusable non-local bundles are skipped with a warning.
 ///
 /// Bundles are kept per trust domain and never pooled: SPIFFE Federation spec §7.3 requires an SVID
 /// to be validated against only the bundle for the trust domain named in its own SPIFFE ID; pooling
@@ -329,7 +318,6 @@ pub(crate) fn normalize_trust_domains(names: &[String]) -> Vec<TrustDomain> {
 fn roots_by_trust_domain(
 	ctx: &X509Context,
 	additional: &[TrustDomain],
-	allow_additional_trust_domains: bool,
 	purpose: &str,
 ) -> Result<HashMap<TrustDomain, Arc<rustls::RootCertStore>>, Error> {
 	let svid = snapshot_svid(ctx)?;
@@ -339,17 +327,6 @@ fn roots_by_trust_domain(
 	let mut wanted: Vec<TrustDomain> = vec![local_td.clone()];
 	for td in additional {
 		if *td == local_td || wanted.contains(td) {
-			continue;
-		}
-		// A non-local trust domain is only added when the gateway enables federation. Otherwise
-		// skip it (warn); the local trust domain stays valid and federated peers will be refused at
-		// chain validation.
-		if !allow_additional_trust_domains {
-			warn!(
-				purpose,
-				trust_domain = %td,
-				"spiffe.allowAdditionalTrustDomains is not enabled; skipping additional trust domain"
-			);
 			continue;
 		}
 		wanted.push(td.clone());
@@ -408,15 +385,9 @@ fn bundle_roots(bundle: &::spiffe::X509Bundle) -> Result<rustls::RootCertStore, 
 fn build_client_verifier(
 	ctx: &X509Context,
 	additional: &[TrustDomain],
-	allow_additional_trust_domains: bool,
 	provider: Arc<rustls::crypto::CryptoProvider>,
 ) -> Result<Arc<dyn ClientCertVerifier>, Error> {
-	let roots = roots_by_trust_domain(
-		ctx,
-		additional,
-		allow_additional_trust_domains,
-		"client certificate verification",
-	)?;
+	let roots = roots_by_trust_domain(ctx, additional, "client certificate verification")?;
 	let mut by_td: HashMap<TrustDomain, Arc<dyn ClientCertVerifier>> =
 		HashMap::with_capacity(roots.len());
 	for (td, store) in roots {
@@ -435,14 +406,8 @@ fn build_server_verifier(
 	ctx: &X509Context,
 	verify_sans: Vec<String>,
 	additional: &[TrustDomain],
-	allow_additional_trust_domains: bool,
 ) -> Result<Arc<dyn ServerCertVerifier>, Error> {
-	let roots = roots_by_trust_domain(
-		ctx,
-		additional,
-		allow_additional_trust_domains,
-		"upstream server verification",
-	)?;
+	let roots = roots_by_trust_domain(ctx, additional, "upstream server verification")?;
 	let provider = transport::tls::provider();
 	let mut by_td: HashMap<TrustDomain, Arc<dyn ServerCertVerifier>> =
 		HashMap::with_capacity(roots.len());
@@ -950,13 +915,12 @@ mod tests {
 	}
 
 	/// Connect a `SpiffeClient` whose gateway SVID is issued by `local`, delivering the given
-	/// `federated_bundles` and enabling federation with `allow_federated`. Keep the returned
+	/// `federated_bundles`. Keep the returned
 	/// `TempDir`/handle alive for the socket's lifetime.
 	async fn connect_with_federated(
 		spiffe_id: &str,
 		local: &TestCa,
 		federated_bundles: std::collections::HashMap<String, Vec<u8>>,
-		allow_federated: bool,
 	) -> (
 		SpiffeClient,
 		tempfile::TempDir,
@@ -971,7 +935,7 @@ mod tests {
 			federated_bundles,
 		);
 		let (dir, endpoint, handle) = spawn_fake_workload_api(resp, None).await;
-		let client = SpiffeClient::new(endpoint, allow_federated)
+		let client = SpiffeClient::new(endpoint)
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 		(client, dir, handle)
@@ -989,7 +953,6 @@ mod tests {
 			"spiffe://example.org/ns/default/sa/gateway",
 			&local,
 			std::collections::HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
-			true,
 		)
 		.await;
 		let ctx = client.source.x509_context().unwrap();
@@ -1007,7 +970,7 @@ mod tests {
 				.leaf_der,
 		);
 
-		let v = build_client_verifier(&ctx, &additional, true, transport::tls::provider()).unwrap();
+		let v = build_client_verifier(&ctx, &additional, transport::tls::provider()).unwrap();
 		assert!(
 			v.verify_client_cert(&fed_peer, &[], now).is_ok(),
 			"an additional trust domain's SVID is accepted when declared and allowed"
@@ -1027,8 +990,8 @@ mod tests {
 			"a federated CA must not be able to impersonate the local trust domain"
 		);
 
-		// Federation enabled but this flow does not declare the domain ⇒ still rejected.
-		let local_only = build_client_verifier(&ctx, &[], true, transport::tls::provider()).unwrap();
+		// This flow does not declare the domain, so it is rejected.
+		let local_only = build_client_verifier(&ctx, &[], transport::tls::provider()).unwrap();
 		assert!(
 			local_only.verify_client_cert(&fed_peer, &[], now).is_err(),
 			"a federated SVID is rejected unless the trust domain is in the listener's additional list"
@@ -1036,54 +999,8 @@ mod tests {
 		handle.abort();
 	}
 
-	/// A per-flow additional trust domain is skipped when the gateway has not enabled
-	/// `allowAdditionalTrustDomains`, leaving the local trust domain valid and federated peers
-	/// refused at chain validation.
-	#[tokio::test]
-	async fn spiffe_federation_skipped_when_not_allowed() {
-		let local = TestCa::new();
-		let fed = TestCa::new();
-		let (client, _dir, handle) = connect_with_federated(
-			"spiffe://example.org/ns/default/sa/gateway",
-			&local,
-			std::collections::HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
-			false, // federation disabled
-		)
-		.await;
-		let ctx = client.source.x509_context().unwrap();
-		let now = UnixTime::now();
-		let accepted = normalize_trust_domains(&["federated.example".to_string()]);
-
-		let v = build_client_verifier(&ctx, &accepted, false, transport::tls::provider())
-			.expect("verifier must build with local-only roots when federation is disabled");
-
-		let local_peer = CertificateDer::from(
-			local
-				.issue("spiffe://example.org/ns/default/sa/peer")
-				.leaf_der,
-		);
-		assert!(
-			v.verify_client_cert(&local_peer, &[], now).is_ok(),
-			"local trust domain must remain accepted when federation is disabled"
-		);
-
-		let fed_peer = CertificateDer::from(
-			fed
-				.issue("spiffe://federated.example/ns/default/sa/peer")
-				.leaf_der,
-		);
-		assert!(
-			v.verify_client_cert(&fed_peer, &[], now).is_err(),
-			"federated SVID must be rejected when federation is disabled"
-		);
-		handle.abort();
-	}
-
-	/// The local trust domain is always allowed, independent of the gateway-wide
-	/// `allow_additional_trust_domains` switch and independent of whether the listener
-	/// additionally declares a federated trust domain. The federated peer is only allowed
-	/// when both the switch is on (in AgentgatewayParameters) and the listener declares its
-	/// trust domain.
+	/// The local trust domain is always allowed. A federated peer is allowed only when the
+	/// listener declares its trust domain and the Workload API supplies its bundle.
 	#[tokio::test]
 	async fn spiffe_local_trust_domain_is_always_allowed() {
 		let local = TestCa::new();
@@ -1100,20 +1017,11 @@ mod tests {
 				.leaf_der,
 		);
 
-		// (allow, listener declares "federated.example"?, expected local ok, expected fed ok)
-		let cases: &[(bool, bool, bool, bool)] = &[
-			(true, true, true, true),    // federation on + declared -> both work
-			(true, false, true, false),  // federation on + not declared -> only local works
-			(false, true, true, false),  // federation off + declared -> only local works
-			(false, false, true, false), // federation off + not declared -> only local works
-		];
-
-		for &(allow, declare, expect_local, expect_fed) in cases {
+		for declare in [true, false] {
 			let (client, _dir, handle) = connect_with_federated(
 				"spiffe://example.org/ns/default/sa/gateway",
 				&local,
 				std::collections::HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
-				allow,
 			)
 			.await;
 			let ctx = client.source.x509_context().unwrap();
@@ -1124,49 +1032,19 @@ mod tests {
 				vec![]
 			};
 
-			let v = build_client_verifier(&ctx, &additional, allow, transport::tls::provider()).expect(
-				"verifier must build regardless of switch/declaration so local traffic is unaffected",
-			);
+			let v = build_client_verifier(&ctx, &additional, transport::tls::provider()).unwrap();
 
-			assert_eq!(
+			assert!(
 				v.verify_client_cert(&local_peer, &[], now).is_ok(),
-				expect_local,
-				"local peer (allow={allow}, declare={declare}) must be {}",
-				if expect_local { "accepted" } else { "rejected" }
+				"local peer must be accepted (declare={declare})"
 			);
 			assert_eq!(
 				v.verify_client_cert(&fed_peer, &[], now).is_ok(),
-				expect_fed,
-				"federated peer (allow={allow}, declare={declare}) must be {}",
-				if expect_fed { "accepted" } else { "rejected" }
+				declare,
+				"federated peer is accepted only when declared (declare={declare})"
 			);
 			handle.abort();
 		}
-	}
-
-	/// When AllowAdditionalTrustDomains is false but the listener still declares an additional
-	/// trust domain, `Manager::server_config` must still return `Ok` so the listener stays live
-	/// for the local trust domain.
-	#[tokio::test]
-	async fn spiffe_server_config_ok_with_declared_additional_when_switch_off() {
-		let local = TestCa::new();
-		let fed = TestCa::new();
-		let (client, _dir, handle) = connect_with_federated(
-			"spiffe://example.org/ns/default/sa/gateway",
-			&local,
-			std::collections::HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
-			false, // switch OFF
-		)
-		.await;
-
-		let alpns = vec![b"h2".to_vec()];
-		let additional = normalize_trust_domains(&["federated.example".to_string()]);
-
-		client
-			.server_config(alpns, additional)
-			.expect("listener must remain usable for local traffic when the switch is off");
-
-		handle.abort();
 	}
 
 	#[test]
@@ -1198,7 +1076,6 @@ mod tests {
 			"spiffe://example.org/ns/default/sa/gateway",
 			&local,
 			HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
-			true,
 		)
 		.await;
 
@@ -1218,11 +1095,6 @@ mod tests {
 			assert!(Arc::ptr_eq(
 				&server,
 				&client.server_config(alpns.clone(), valid.clone()).unwrap()
-			));
-			let upstream = client.client_config(alpns.clone(), vec![], mixed).unwrap();
-			assert!(Arc::ptr_eq(
-				&upstream,
-				&client.client_config(alpns, vec![], valid).unwrap()
 			));
 		}
 		handle.abort();
@@ -1267,14 +1139,13 @@ mod tests {
 			]
 			.map(String::from),
 		);
-		let roots = roots_by_trust_domain(&ctx, &additional, true, "test").unwrap();
+		let roots = roots_by_trust_domain(&ctx, &additional, "test").unwrap();
 		assert_eq!(roots.len(), 2);
 		assert!(roots.contains_key(&local_td));
 		assert!(roots.contains_key(&fed_td));
 
-		let inbound =
-			build_client_verifier(&ctx, &additional, true, transport::tls::provider()).unwrap();
-		let outbound = build_server_verifier(&ctx, vec![], &additional, true).unwrap();
+		let inbound = build_client_verifier(&ctx, &additional, transport::tls::provider()).unwrap();
+		let outbound = build_server_verifier(&ctx, vec![], &additional).unwrap();
 		let sni = ServerName::try_from("unused.example").unwrap();
 		for (ca, domain, accepted) in [
 			(&local, "example.org", true),
@@ -1302,14 +1173,14 @@ mod tests {
 
 		let missing_local = X509Context::new([svid.clone()], ::spiffe::X509BundleSet::new());
 		assert!(matches!(
-			roots_by_trust_domain(&missing_local, &additional, true, "test"),
+			roots_by_trust_domain(&missing_local, &additional, "test"),
 			Err(Error::MissingLocalBundle(_))
 		));
 		let mut empty_local = ::spiffe::X509BundleSet::new();
 		empty_local.add_bundle(::spiffe::X509Bundle::new(local_td));
 		let empty_local = X509Context::new([svid.clone()], empty_local);
 		assert!(matches!(
-			roots_by_trust_domain(&empty_local, &additional, true, "test"),
+			roots_by_trust_domain(&empty_local, &additional, "test"),
 			Err(Error::EmptyBundle)
 		));
 		let mut invalid_local = ::spiffe::X509BundleSet::new();
@@ -1319,7 +1190,7 @@ mod tests {
 		);
 		let invalid_local = X509Context::new([svid], invalid_local);
 		assert!(matches!(
-			roots_by_trust_domain(&invalid_local, &additional, true, "test"),
+			roots_by_trust_domain(&invalid_local, &additional, "test"),
 			Err(Error::Rustls(_))
 		));
 	}
@@ -1333,12 +1204,11 @@ mod tests {
 			"spiffe://example.org/ns/default/sa/gateway",
 			&local,
 			std::collections::HashMap::new(), // nothing delivered
-			true,
 		)
 		.await;
 		let ctx = client.source.x509_context().unwrap();
 		let accepted = normalize_trust_domains(&["federated.example".to_string()]);
-		build_client_verifier(&ctx, &accepted, true, transport::tls::provider())
+		build_client_verifier(&ctx, &accepted, transport::tls::provider())
 			.expect("an accepted domain with no delivered bundle should be skipped");
 		handle.abort();
 	}
@@ -1354,19 +1224,33 @@ mod tests {
 			"spiffe://example.org/ns/default/sa/gateway",
 			&local,
 			std::collections::HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
-			true,
 		)
 		.await;
 		let ctx = client.source.x509_context().unwrap();
 		let now = UnixTime::now();
 		let sni = ServerName::try_from("federated.example").unwrap();
-		let accepted = normalize_trust_domains(&["federated.example".to_string()]);
-
 		let upstream_id = "spiffe://federated.example/ns/default/sa/upstream";
 		let upstream = CertificateDer::from(fed.issue(upstream_id).leaf_der);
 
-		// No pin: any SVID chaining to the federated bundle is accepted.
-		let v = build_server_verifier(&ctx, vec![], &accepted, true).unwrap();
+		let no_pin = build_server_verifier(&ctx, vec![], &[]).unwrap();
+		assert!(
+			no_pin
+				.verify_server_cert(&upstream, &[], &sni, &[], now)
+				.is_err()
+		);
+		let local_peer = CertificateDer::from(local.issue("spiffe://example.org/peer").leaf_der);
+		assert!(
+			no_pin
+				.verify_server_cert(&local_peer, &[], &sni, &[], now)
+				.is_ok()
+		);
+
+		let sans = vec![
+			upstream_id.to_string(),
+			"spiffe://example.org/ns/default/sa/upstream".to_string(),
+		];
+		let domains = trust_domains_from_sans(&sans).unwrap();
+		let v = build_server_verifier(&ctx, sans, &domains).unwrap();
 		assert!(v.verify_server_cert(&upstream, &[], &sni, &[], now).is_ok());
 		// §7.3: a federated CA claiming the local trust domain is rejected.
 		let imposter = CertificateDer::from(
@@ -1380,8 +1264,9 @@ mod tests {
 		);
 
 		// Pinning a federated SPIFFE ID accepts the match and rejects a different federated ID.
-		let pinned =
-			build_server_verifier(&ctx, vec![upstream_id.to_string()], &accepted, true).unwrap();
+		let sans = vec![upstream_id.to_string()];
+		let domains = trust_domains_from_sans(&sans).unwrap();
+		let pinned = build_server_verifier(&ctx, sans, &domains).unwrap();
 		assert!(
 			pinned
 				.verify_server_cert(&upstream, &[], &sni, &[], now)
@@ -1401,7 +1286,7 @@ mod tests {
 	}
 
 	/// The high-level `server_config`/`client_config` builders accept a delivered+accepted federated
-	/// trust domain when federation is enabled, and skip it when its bundle is not delivered.
+	/// trust domain, and skip it when its bundle is not delivered.
 	#[tokio::test]
 	async fn spiffe_federation_config_builders() {
 		let local = TestCa::new();
@@ -1410,7 +1295,6 @@ mod tests {
 			"spiffe://example.org/ns/default/sa/gateway",
 			&local,
 			std::collections::HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
-			true,
 		)
 		.await;
 		let alpns = vec![b"h2".to_vec()];
@@ -1423,8 +1307,9 @@ mod tests {
 		client
 			.client_config(
 				alpns.clone(),
-				vec![],
-				normalize_trust_domains(&["federated.example".to_string()]),
+				vec!["spiffe://federated.example/ns/default/sa/upstream".to_string()],
+				trust_domains_from_sans(&["spiffe://federated.example/ns/default/sa/upstream".to_string()])
+					.unwrap(),
 			)
 			.expect("client config should build for a delivered federated domain");
 
@@ -1433,7 +1318,6 @@ mod tests {
 			"spiffe://example.org/ns/default/sa/gateway",
 			&local,
 			std::collections::HashMap::new(),
-			true,
 		)
 		.await;
 		client2
@@ -1461,7 +1345,7 @@ mod tests {
 		)
 		.await;
 
-		let client = SpiffeClient::new(endpoint, false)
+		let client = SpiffeClient::new(endpoint)
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 
@@ -1490,14 +1374,14 @@ mod tests {
 			None,
 		)
 		.await;
-		let client = SpiffeClient::new(endpoint, false)
+		let client = SpiffeClient::new(endpoint)
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 
 		let provider = transport::tls::provider();
 		let ctx = client.source.x509_context().unwrap();
-		let client_verifier = build_client_verifier(&ctx, &[], false, provider).unwrap();
-		let server_verifier = build_server_verifier(&ctx, vec![], &[], false).unwrap();
+		let client_verifier = build_client_verifier(&ctx, &[], provider).unwrap();
+		let server_verifier = build_server_verifier(&ctx, vec![], &[]).unwrap();
 		let now = UnixTime::now();
 		let sni = ServerName::try_from("example.org").unwrap();
 
@@ -1534,7 +1418,6 @@ mod tests {
 			&ctx,
 			vec!["spiffe://example.org/ns/default/sa/peer".to_string()],
 			&[],
-			false,
 		)
 		.unwrap();
 		assert!(
@@ -1613,7 +1496,7 @@ mod tests {
 		)
 		.await;
 		let spiffe = Arc::new(
-			SpiffeClient::new(endpoint, false)
+			SpiffeClient::new(endpoint)
 				.await
 				.expect("SpiffeClient should connect to the fake Workload API"),
 		);
@@ -1686,7 +1569,7 @@ mod tests {
 		)
 		.await;
 		let spiffe = Arc::new(
-			SpiffeClient::new(endpoint, false)
+			SpiffeClient::new(endpoint)
 				.await
 				.expect("SpiffeClient should connect to the fake Workload API"),
 		);
@@ -1740,7 +1623,7 @@ mod tests {
 		)
 		.await;
 
-		let client = SpiffeClient::new(endpoint, false)
+		let client = SpiffeClient::new(endpoint)
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 

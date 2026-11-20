@@ -14,7 +14,7 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: backend-tls-spiffe-additional-domains
+  name: backend-tls-spiffe-federated-sans
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
@@ -23,14 +23,14 @@ spec:
   backend:
     tls:
       certificateSource: SPIFFE
-      additionalTrustDomains:
-        - prod.example.com
-        - Prod_1.example
+      verifySubjectAltNames:
+        - spiffe://prod.example.com/ns/backend/sa/app
+        - spiffe://Prod_1.example/ns/backend/sa/app
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: backend-tls-spiffe-domain-max-length
+  name: backend-tls-spiffe-local-only
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
@@ -39,8 +39,6 @@ spec:
   backend:
     tls:
       certificateSource: SPIFFE
-      additionalTrustDomains:
-        - aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

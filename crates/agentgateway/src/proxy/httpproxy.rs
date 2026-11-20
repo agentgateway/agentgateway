@@ -1919,7 +1919,7 @@ fn resolve_backend_tls(
 				.client_config(
 					alpns,
 					spiffe_tls.verify_sans.clone(),
-					spiffe_tls.additional_trust_domains.clone(),
+					spiffe_tls.trust_domains.clone(),
 				)
 				.map_err(|e| ProxyError::Processing(anyhow!("SPIFFE backend TLS: {e}")))?;
 			Ok(VersionedBackendTLS {
@@ -4007,7 +4007,7 @@ mod tests {
 		let spiffe_tls = SpiffeBackendTLS {
 			alpn: Some(vec!["h2".to_string()]),
 			verify_sans: vec![],
-			additional_trust_domains: vec![],
+			trust_domains: vec![],
 		};
 		assert_eq!(
 			spiffe_backend_alpns(&spiffe_tls, Some(::http::Version::HTTP_11)),
@@ -4025,7 +4025,7 @@ mod tests {
 		let spiffe_tls = SpiffeBackendTLS {
 			alpn: None,
 			verify_sans: vec![],
-			additional_trust_domains: vec![],
+			trust_domains: vec![],
 		};
 		assert_eq!(
 			spiffe_backend_alpns(&spiffe_tls, None),
@@ -4038,7 +4038,7 @@ mod tests {
 		let spiffe_tls = SpiffeBackendTLS {
 			alpn: None,
 			verify_sans: vec![],
-			additional_trust_domains: vec![],
+			trust_domains: vec![],
 		};
 		assert_eq!(
 			spiffe_backend_alpns(&spiffe_tls, Some(::http::Version::HTTP_11)),

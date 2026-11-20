@@ -284,10 +284,9 @@ pub fn parse_config(
 	};
 
 	let spiffe = raw.spiffe.and_then(|cfg| {
-		cfg.endpoint.map(|endpoint| crate::control::spiffe::Config {
-			endpoint,
-			allow_additional_trust_domains: cfg.allow_additional_trust_domains,
-		})
+		cfg
+			.endpoint
+			.map(|endpoint| crate::control::spiffe::Config { endpoint })
 	});
 
 	let network = parse("NETWORK")?.or(raw.network).unwrap_or_default();

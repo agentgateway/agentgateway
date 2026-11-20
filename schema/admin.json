@@ -1632,7 +1632,7 @@
           "default": null
         },
         "spiffe": {
-          "description": "Get the gateway's client identity and trust roots from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.\nPin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);\nIf `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted",
+          "description": "Get the gateway's client identity and trust roots from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.\nPin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);\nThe SPIFFE IDs select their trust domains' Workload API bundles. If `subjectAltNames` is\nomitted, any SVID from the gateway's local trust domain is accepted.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalSpiffeBackendTLS"
@@ -1667,20 +1667,7 @@
     },
     "LocalSpiffeBackendTLS": {
       "type": "object",
-      "properties": {
-        "additionalTrustDomains": {
-          "description": "Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the\nlocal trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": []
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "additionalTrustDomains"
-      ]
+      "additionalProperties": false
     },
     "BackendAuthCompat": {
       "anyOf": [
