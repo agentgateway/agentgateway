@@ -48,6 +48,9 @@ pub(crate) fn decisions_input_value(
 	}
 }
 
+// Client-facing terminal error for Messages and Responses streams with no output or finish_reason.
+const EMPTY_STREAM_ERROR: &str = "upstream response ended without content or a finish reason";
+
 /// Text for a JSON value: strings as-is, everything else as compact JSON.
 pub(crate) fn value_text(value: serde_json::Value) -> String {
 	match value {
