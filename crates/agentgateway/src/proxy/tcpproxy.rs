@@ -58,7 +58,11 @@ impl TCPProxy {
 		});
 		let ret = self.proxy_internal(connection, log.as_mut().unwrap()).await;
 		if let Err(e) = ret {
-			log.with(|l| l.error = Some(e.to_string()));
+			log.with(|l| {
+				// Once the backend connection is established, a later failure may come from either side.
+				l.backend_connect_failed = !matches!(e, ProxyError::UpstreamTCPProxy(_));
+				l.error = Some(e.to_string());
+			});
 		}
 	}
 
