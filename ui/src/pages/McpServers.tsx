@@ -748,14 +748,17 @@ function McpServerEditor(props: {
 	const [form, setForm] = useState(() => formFrom(props.initial));
 	const [initialForm] = useState(form);
 	const [endpointText, setEndpointText] = useState(props.initialEndpoint ?? '');
-	// Servers for /mcp go in the top-level list, unless an explicit /mcp endpoint already lists them.
+	// An existing server stays where it is until the endpoint is edited. Otherwise servers for /mcp
+	// go in the top-level list, unless an explicit /mcp endpoint already lists them.
 	const typedEndpoint = trimTrailingSlash(endpointText.trim());
 	const endpoint =
-		typedEndpoint && typedEndpoint !== '/mcp'
-			? typedEndpoint
-			: props.mcpEndpointHasTargets
-				? '/mcp'
-				: undefined;
+		props.previousId && endpointText === (props.initialEndpoint ?? '')
+			? props.initialEndpoint
+			: typedEndpoint && typedEndpoint !== '/mcp'
+				? typedEndpoint
+				: props.mcpEndpointHasTargets
+					? '/mcp'
+					: undefined;
 	const {
 		source,
 		name,

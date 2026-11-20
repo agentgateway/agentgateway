@@ -695,7 +695,8 @@ fn upsert_file_mcp_resource(
 ) -> anyhow::Result<()> {
 	let kind = prepared.kind;
 	let (endpoint, name) = split_mcp_endpoint_id(&prepared.id);
-	let (previous_endpoint, previous_name) = split_mcp_endpoint_id(previous_id.unwrap_or(&prepared.id));
+	let (previous_endpoint, previous_name) =
+		split_mcp_endpoint_id(previous_id.unwrap_or(&prepared.id));
 	let mut value = prepared.value.clone();
 	if let Some(object) = value.as_object_mut() {
 		object.remove("endpoint");
@@ -3596,7 +3597,10 @@ routes:
 		.expect("prepare moved target");
 		upsert_file_config_resource(&mut config, &moved, Some("/eng/mcp:tools")).expect("move");
 		assert_eq!(config.pointer("/mcp/endpoints/0/targets"), Some(&json!([])));
-		assert_eq!(config.pointer("/mcp/endpoints/1/targets/0/name"), Some(&json!("moved")));
+		assert_eq!(
+			config.pointer("/mcp/endpoints/1/targets/0/name"),
+			Some(&json!("moved"))
+		);
 		assert!(
 			delete_file_config_resource(&mut config, ConfigResourceKind::McpPolicy, "/eng/mcp:cors")
 				.expect("delete policy")
