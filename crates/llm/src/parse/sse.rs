@@ -4,10 +4,10 @@ use futures_util::StreamExt;
 use futures_util::stream::{self, BoxStream};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use tokio_sse_codec::{Event, Frame, SseDecodeError, SseDecoder};
 use tokio_util::codec::{BytesCodec, Decoder};
 
 use super::passthrough::parser as passthrough_parser;
+use super::sse_decoder::{SseDecoder, SseError, SseFrame};
 use super::transform::{TransformEvent, parser as transform_parser};
 
 /// Append an OpenAI `[DONE]` event after a body closes successfully.
@@ -33,49 +33,13 @@ pub fn append_done_on_success(body: Body) -> Body {
 	})
 }
 
-/// Some upstreams end the stream with a `data: [DONE]` lacking the blank line that terminates
-/// it. Dispatch it rather than failing with `UnexpectedEof`; any other unterminated event still fails.
-struct DoneTolerantSseDecoder(SseDecoder<Bytes>);
-
-impl Decoder for DoneTolerantSseDecoder {
-	type Item = Frame<Bytes>;
-	type Error = SseDecodeError;
-
-	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-		self.0.decode(src)
-	}
-
-	fn decode_eof(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-		match self.0.decode_eof(src) {
-			Err(SseDecodeError::UnexpectedEof) => {
-				src.extend_from_slice(b"\n\n");
-				match self.0.decode_eof(src)? {
-					Some(Frame::Event(e)) if e.data.as_ref() == b"[DONE]" => Ok(Some(Frame::Event(e))),
-					_ => Err(SseDecodeError::UnexpectedEof),
-				}
-			},
-			res => res,
-		}
-	}
-}
-
 pub fn json_passthrough<F: DeserializeOwned>(
 	b: Body,
 	buffer_limit: usize,
 	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
 ) -> Body {
-	let decoder = DoneTolerantSseDecoder(SseDecoder::with_max_size(buffer_limit));
-
-	passthrough_parser(b, decoder, move |o| {
-		let Some(data) = unwrap_sse_data(o) else {
-			return;
-		};
-		if data.as_ref() == b"[DONE]" {
-			f(None);
-			return;
-		}
-		let obj = serde_json::from_slice::<F>(&data);
-		f(Some(obj.map_err(anyhow::Error::from)))
+	passthrough_parser(b, SseDecoder::new(buffer_limit), move |frame| {
+		f(passthrough_json(frame));
 	})
 }
 
@@ -84,19 +48,11 @@ pub fn permissive_json_passthrough<F: DeserializeOwned>(
 	buffer_limit: usize,
 	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
 ) -> Body {
-	let decoder = DoneTolerantSseDecoder(SseDecoder::with_max_size(buffer_limit));
-
-	crate::parse::passthrough::full_passthrough_parser(b, decoder, move |o| {
-		let Some(data) = unwrap_sse_data(o) else {
-			return;
-		};
-		if data.as_ref() == b"[DONE]" {
-			f(None);
-			return;
-		}
-		let obj = serde_json::from_slice::<F>(&data);
-		f(Some(obj.map_err(anyhow::Error::from)))
-	})
+	crate::parse::passthrough::full_passthrough_parser(
+		b,
+		SseDecoder::new(buffer_limit),
+		move |frame| f(passthrough_json(frame)),
+	)
 }
 
 pub fn json_transform<I: DeserializeOwned, O: Serialize>(
@@ -104,12 +60,12 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	buffer_limit: usize,
 	mut f: impl FnMut(anyhow::Result<I>) -> Option<O> + Send + 'static,
 ) -> Body {
-	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
+	let decoder = WholeEvents(SseDecoder::new(buffer_limit));
 	let encoder = BytesCodec::new();
 
 	transform_parser(b, decoder, encoder, move |event| {
 		let data = match event {
-			TransformEvent::Item(frame) => unwrap_sse_data(frame)?,
+			TransformEvent::Item(data) => data,
 			TransformEvent::Eof => return None,
 			TransformEvent::Error => {
 				let transformed = f(Err(anyhow::anyhow!("upstream SSE stream failed")))?;
@@ -131,6 +87,7 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	})
 }
 
+#[derive(Debug)]
 pub enum SseJsonEvent<I> {
 	Data(anyhow::Result<I>),
 	Done,
@@ -147,17 +104,14 @@ where
 	It: IntoIterator<Item = (&'static str, O)>,
 	It::IntoIter: Send,
 {
-	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
+	let decoder = WholeEvents(SseDecoder::new(buffer_limit));
 	let encoder = BytesCodec::new();
 
 	transform_parser(b, decoder, encoder, move |event| {
 		let event = match event {
 			TransformEvent::Eof => SseJsonEvent::Eof,
 			TransformEvent::Error => SseJsonEvent::Error,
-			TransformEvent::Item(frame) => {
-				let Some(data) = unwrap_sse_data(frame) else {
-					return Vec::new();
-				};
+			TransformEvent::Item(data) => {
 				if data.as_ref() == b"[DONE]" {
 					SseJsonEvent::Done
 				} else {
@@ -175,22 +129,45 @@ where
 					Bytes::from(json_bytes),
 				))
 			})
-			.collect()
+			.collect::<Vec<_>>()
 	})
 }
 
-fn unwrap_sse_data(frame: Frame<Bytes>) -> Option<Bytes> {
-	let Frame::Event(Event::<Bytes> { data, .. }) = frame else {
-		return None;
+/// An oversized event becomes an observer error rather than failing the client's stream, whose
+/// bytes are forwarded either way.
+fn passthrough_json<F: DeserializeOwned>(frame: SseFrame) -> Option<anyhow::Result<F>> {
+	let data = match frame {
+		SseFrame::Event(data) => data,
+		SseFrame::TooLarge => return Some(Err(SseError::TooLarge.into())),
 	};
-	Some(data)
+	if data.as_ref() == b"[DONE]" {
+		return None;
+	}
+	Some(serde_json::from_slice(&data).map_err(anyhow::Error::from))
 }
 
-#[allow(dead_code)]
-pub(super) fn unwrap_json<T: DeserializeOwned>(frame: Frame<Bytes>) -> anyhow::Result<Option<T>> {
-	Ok(
-		unwrap_sse_data(frame)
-			.map(|b| serde_json::from_slice(&b))
-			.transpose()?,
-	)
+/// Fails on an oversized event, since a translated stream that skipped one would be wrong.
+struct WholeEvents(SseDecoder);
+
+impl Decoder for WholeEvents {
+	type Item = Bytes;
+	type Error = SseError;
+
+	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Bytes>, SseError> {
+		Self::whole(self.0.decode(src)?)
+	}
+
+	fn decode_eof(&mut self, src: &mut BytesMut) -> Result<Option<Bytes>, SseError> {
+		Self::whole(self.0.decode_eof(src)?)
+	}
+}
+
+impl WholeEvents {
+	fn whole(frame: Option<SseFrame>) -> Result<Option<Bytes>, SseError> {
+		match frame {
+			None => Ok(None),
+			Some(SseFrame::Event(data)) => Ok(Some(data)),
+			Some(SseFrame::TooLarge) => Err(SseError::TooLarge),
+		}
+	}
 }

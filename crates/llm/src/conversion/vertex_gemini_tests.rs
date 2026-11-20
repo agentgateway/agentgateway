@@ -2074,7 +2074,7 @@ mod passthrough {
 			.await
 			.expect_err("a body with no complete SSE event must not report success");
 			assert!(
-				err.to_string().contains("unexpected end of stream"),
+				err.to_string().contains("input ended inside an SSE event"),
 				"{err}"
 			);
 			assert_eq!(captured.lock().unwrap().response.total_tokens, None);
