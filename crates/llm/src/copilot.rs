@@ -26,6 +26,10 @@ impl Provider {
 			HeaderValue::from_static("application/json"),
 		);
 		headers.insert(
+			"copilot-integration-id",
+			HeaderValue::from_static("vscode-chat"),
+		);
+		headers.insert(
 			"editor-version",
 			HeaderValue::from_static(concat!("agentgateway/", env!("CARGO_PKG_VERSION"))),
 		);
