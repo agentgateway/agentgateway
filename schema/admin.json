@@ -2066,14 +2066,14 @@
     "AwsAuth": {
       "anyOf": [
         {
-          "description": "Use explicit AWS credentials",
+          "description": "Use explicit AWS credentials. Each credential is either a static value or\n`{expression: ...}`, a CEL expression evaluated against each request.",
           "type": "object",
           "properties": {
             "accessKeyId": {
-              "type": "string"
+              "$ref": "#/$defs/AwsCredentialValue"
             },
             "secretAccessKey": {
-              "type": "string"
+              "$ref": "#/$defs/AwsCredentialValue"
             },
             "region": {
               "type": [
@@ -2082,9 +2082,13 @@
               ]
             },
             "sessionToken": {
-              "type": [
-                "string",
-                "null"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AwsCredentialValue"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "serviceName": {
@@ -2133,6 +2137,28 @@
             }
           },
           "additionalProperties": false
+        }
+      ]
+    },
+    "AwsCredentialValue": {
+      "description": "A static credential, or `{expression: ...}` to compute it from each request.",
+      "anyOf": [
+        {
+          "description": "Static credential value.",
+          "type": "string"
+        },
+        {
+          "description": "CEL expression evaluated against each request to produce the credential,\nfor example a value returned by an external authorization service. If the\nexpression does not produce a non-empty string, the request is rejected;\nit never falls back to other credentials.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/Expression"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "expression"
+          ]
         }
       ]
     },

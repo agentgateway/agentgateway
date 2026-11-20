@@ -919,6 +919,31 @@ fn test_dynamic_metadata_extraction() {
 }
 
 #[test]
+fn test_dynamic_metadata_values_never_appear_in_request_debug_logs() {
+	let metadata: ExtAuthzDynamicMetadata = serde_json::from_value(serde_json::json!({
+		"aws": {"secret_access_key": "do-not-log-this-secret"},
+		"credentials": {"openai": "do-not-log-this-key"},
+		"deployment_id": "42",
+	}))
+	.unwrap();
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.extensions_mut().insert(metadata);
+
+	// What request debug and trace logs print for the request's extensions.
+	let logged = format!("{:?}", crate::http::DebugExtensions(&req));
+	assert!(
+		logged.contains("aws") && logged.contains("deployment_id"),
+		"keys should stay visible for debugging: {logged}"
+	);
+	for secret in ["do-not-log-this-secret", "do-not-log-this-key", "42"] {
+		assert!(
+			!logged.contains(secret),
+			"logged a metadata value: {logged}"
+		);
+	}
+}
+
+#[test]
 fn test_append_action_append_if_exists_or_add() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
