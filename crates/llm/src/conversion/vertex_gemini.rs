@@ -60,6 +60,7 @@ pub fn passthrough_stream(
 				}
 			});
 		}
+		record_provider_chunk(&log, &chunk);
 		if let Some(um) = &chunk.usage_metadata {
 			let (prompt, completion, total) = um.counts();
 			log.update(|r| {
@@ -103,6 +104,18 @@ pub fn passthrough_stream(
 			}
 		}
 	})
+}
+
+fn record_provider_chunk(log: &crate::StreamingUsageGuard, chunk: &vg::GenerateContentResponse) {
+	if let Some(id) = &chunk.response_id {
+		log.update(|r| r.response.response_id = Some(strng::new(id)));
+	}
+	for (i, candidate) in chunk.candidates.iter().enumerate() {
+		if let Some(reason) = &candidate.finish_reason {
+			let index = candidate.index.map_or(i, |index| index as usize);
+			log.update(|r| r.response.set_finish_reason(index, strng::new(reason)));
+		}
+	}
 }
 
 pub mod from_completions {
@@ -1196,7 +1209,12 @@ pub mod to_completions {
 		let typed = build_response(&resp);
 		let inner =
 			json::convert::<_, types::completions::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(inner))
+		Ok(Box::new(super::super::ProviderResponse {
+			response: inner,
+			usage: None,
+			id: resp.response_id.as_deref().map(strng::new),
+			finish_reasons: resp.finish_reasons(),
+		}))
 	}
 
 	#[derive(Default)]
@@ -1580,6 +1598,7 @@ pub mod to_completions {
 					}
 				});
 			}
+			record_provider_chunk(&log, &chunk);
 			if let Some(um) = &chunk.usage_metadata {
 				let (prompt, completion, total) = um.counts();
 				log.update(|r| {

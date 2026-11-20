@@ -40,6 +40,10 @@ data: {"type":"response.completed","sequence_number":10,"response":{"created_at"
   "total_tokens": 69,
   "reasoning_tokens": 20,
   "provider_model": "google/gemini-3.8-flash",
+  "response_id": "9W7VaabzK7KPjMcPnYGiuAU",
+  "finish_reasons": [
+    "stop"
+  ],
   "completion": [
     "Neptune was found by mathematics."
   ]

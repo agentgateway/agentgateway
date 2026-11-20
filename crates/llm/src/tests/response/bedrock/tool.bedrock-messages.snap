@@ -54,6 +54,9 @@ info:
     "output_tokens": 0,
     "total_tokens": 0,
     "provider_model": "input-model",
+    "finish_reasons": [
+      "tool_use"
+    ],
     "output_messages": [
       {
         "role": "assistant",

@@ -66,6 +66,10 @@ info:
   },
   "parsed": {
     "provider_model": "input-model",
+    "response_id": "chatcmpl-namespaces",
+    "finish_reasons": [
+      "tool_calls"
+    ],
     "output_messages": [
       {
         "role": "assistant",

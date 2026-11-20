@@ -527,13 +527,20 @@ pub mod to_responses {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let id = Some(strng::new(&resp.id));
+		let finish_reasons = resp.finish_reasons();
 		let mut typed = translate_response_internal(resp, model);
 		if let Some(namespaces) = namespaces {
 			namespaces.restore_response(&mut typed);
 		}
 		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(passthrough))
+		Ok(Box::new(super::super::ProviderResponse {
+			response: passthrough,
+			usage: None,
+			id,
+			finish_reasons,
+		}))
 	}
 
 	fn translate_response_internal(resp: completions::Response, model: &str) -> responses::Response {
@@ -780,6 +787,7 @@ pub mod to_responses {
 
 							log.update(|r| {
 								r.response.provider_model = Some(strng::new(&chunk.model));
+								r.response.response_id = Some(strng::new(&chunk.id));
 								if let Some(st) = &chunk.service_tier {
 									r.response.service_tier = Some(strng::new(st));
 								}
@@ -968,6 +976,12 @@ pub mod to_responses {
 
 							if let Some(reason) = &choice.finish_reason {
 								pending_stop_reason = Some(*reason);
+								if let Some(reason) = crate::types::serialize_str(reason) {
+									log.update(|r| {
+										r.response
+											.set_finish_reason(choice.index as usize, reason.clone())
+									});
+								}
 							}
 						}
 

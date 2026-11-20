@@ -22,6 +22,9 @@ data: [DONE]
   "input_tokens": 120,
   "output_tokens": 30,
   "total_tokens": 150,
+  "finish_reasons": [
+    "tool_use"
+  ],
   "completion": [
     ""
   ],

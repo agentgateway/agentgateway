@@ -30,6 +30,10 @@ data: [DONE]
   "total_tokens": 246,
   "cached_input_tokens": 0,
   "provider_model": "zai-glm-5-3",
+  "response_id": "80db9e9b223d4508bf239cb67b524ce4",
+  "finish_reasons": [
+    "stop"
+  ],
   "completion": [
     "Hi there! How can I help you?"
   ]

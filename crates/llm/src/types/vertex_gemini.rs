@@ -360,6 +360,12 @@ pub struct GenerateContentResponse {
 	pub rest: serde_json::Value,
 }
 
+impl GenerateContentResponse {
+	pub fn finish_reasons(&self) -> Option<Vec<agent_core::strng::Strng>> {
+		super::finish_reasons(self.candidates.iter().map(|c| c.finish_reason.as_deref()))
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Candidate {

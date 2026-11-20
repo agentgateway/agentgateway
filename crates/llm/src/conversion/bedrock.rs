@@ -1246,12 +1246,15 @@ pub mod from_completions {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let provider_usage = resp.usage.as_ref().map(super::super::ProviderUsage::from);
+		let finish_reasons = types::finish_reasons([types::serialize_str(&resp.stop_reason)]);
 		let openai = translate_response_internal(resp, model, tool_name_map)?;
 		let passthrough = json::convert::<_, types::completions::Response>(&openai)
 			.map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
+		Ok(Box::new(super::super::ProviderResponse {
 			response: passthrough,
-			provider_usage,
+			usage: provider_usage,
+			id: None,
+			finish_reasons,
 		}))
 	}
 
@@ -1466,6 +1469,9 @@ pub mod from_completions {
 					mk(vec![choice], None)
 				},
 				bedrock::ConverseStreamOutput::MessageStop(stop) => {
+					if let Some(reason) = crate::types::serialize_str(&stop.stop_reason) {
+						log.update(|r| r.response.set_finish_reason(0, reason.clone()));
+					}
 					let translated_finish_reason = translate_stop_reason(&stop.stop_reason);
 					finish_reason = crate::types::serialize_str(&translated_finish_reason);
 
@@ -2220,12 +2226,15 @@ pub mod from_messages {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let provider_usage = resp.usage.as_ref().map(super::super::ProviderUsage::from);
+		let finish_reasons = types::finish_reasons([types::serialize_str(&resp.stop_reason)]);
 		let openai = translate_response_internal(resp, model, tool_name_map)?;
 		let passthrough =
 			json::convert::<_, types::messages::Response>(&openai).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
+		Ok(Box::new(super::super::ProviderResponse {
 			response: passthrough,
-			provider_usage,
+			usage: provider_usage,
+			id: None,
+			finish_reasons,
 		}))
 	}
 
@@ -2489,6 +2498,9 @@ pub mod from_messages {
 					out
 				},
 				bedrock::ConverseStreamOutput::MessageStop(stop) => {
+					if let Some(reason) = crate::types::serialize_str(&stop.stop_reason) {
+						log.update(|r| r.response.set_finish_reason(0, reason.clone()));
+					}
 					pending_stop_reason = Some(stop.stop_reason);
 					vec![]
 				},
@@ -3384,6 +3396,7 @@ pub mod from_responses {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let provider_usage = resp.usage.as_ref().map(super::super::ProviderUsage::from);
+		let finish_reasons = types::finish_reasons([types::serialize_str(&resp.stop_reason)]);
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
 		let mut typed = adapter.to_responses_typed(tool_name_map);
 		if let Some(namespaces) = namespaces {
@@ -3391,9 +3404,11 @@ pub mod from_responses {
 		}
 		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
+		Ok(Box::new(super::super::ProviderResponse {
 			response: passthrough,
-			provider_usage,
+			usage: provider_usage,
+			id: None,
+			finish_reasons,
 		}))
 	}
 
@@ -3797,6 +3812,9 @@ pub mod from_responses {
 					events
 				},
 				bedrock::ConverseStreamOutput::MessageStop(stop) => {
+					if let Some(reason) = crate::types::serialize_str(&stop.stop_reason) {
+						log.update(|r| r.response.set_finish_reason(0, reason.clone()));
+					}
 					pending_stop_reason = Some(stop.stop_reason);
 					vec![]
 				},

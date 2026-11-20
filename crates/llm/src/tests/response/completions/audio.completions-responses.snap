@@ -76,6 +76,10 @@ info:
     "total_tokens": 500,
     "reasoning_tokens": 15,
     "cached_input_tokens": 12,
-    "provider_model": "input-model"
+    "provider_model": "input-model",
+    "response_id": "chatcmpl-audioTokens123",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

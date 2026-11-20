@@ -60,6 +60,9 @@ info:
     "reasoning_tokens": 0,
     "cache_creation_input_tokens": 2387,
     "cached_input_tokens": 0,
-    "provider_model": "input-model"
+    "provider_model": "input-model",
+    "finish_reasons": [
+      "end_turn"
+    ]
   }
 }

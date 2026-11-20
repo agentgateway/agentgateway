@@ -41,6 +41,10 @@ info:
     "input_tokens": 4,
     "output_tokens": 2,
     "total_tokens": 6,
-    "provider_model": "test-model"
+    "provider_model": "test-model",
+    "response_id": "chatcmpl-stop-sequence",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

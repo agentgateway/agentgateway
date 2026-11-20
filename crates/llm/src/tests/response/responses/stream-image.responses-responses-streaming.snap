@@ -60,6 +60,10 @@ data: {"type":"response.completed","response":{"id":"","object":"response","crea
   "cached_input_tokens": 0,
   "service_tier": "default",
   "provider_model": "gpt-5-2025-08-07",
+  "response_id": "resp_062bc30e2ee47b4c0069cbe41e31188190aff11955555346a5",
+  "finish_reasons": [
+    "stop"
+  ],
   "completion": [
     ""
   ]

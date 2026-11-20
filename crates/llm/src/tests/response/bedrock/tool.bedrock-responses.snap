@@ -46,6 +46,9 @@ info:
   },
   "parsed": {
     "provider_model": "input-model",
+    "finish_reasons": [
+      "tool_use"
+    ],
     "output_messages": [
       {
         "role": "assistant",

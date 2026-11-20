@@ -63,6 +63,10 @@ info:
     "cache_creation_1h_input_tokens": 50,
     "cached_input_tokens": 2,
     "service_tier": "standard",
-    "provider_model": "claude-opus-4-6"
+    "provider_model": "claude-opus-4-6",
+    "response_id": "msg_01BE9GBzjs95TqdG8FeUanUn",
+    "finish_reasons": [
+      "end_turn"
+    ]
   }
 }
