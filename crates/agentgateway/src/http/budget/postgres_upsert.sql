@@ -13,6 +13,8 @@ ON CONFLICT(budget_id) DO UPDATE SET
     END,
     updated_at = GREATEST(budget_usage.updated_at, excluded.updated_at)
 -- Ignore stale writes from an older window, but let a reconfigured window length replace the row
--- (for example, switching a lifetime budget to a rolling window).
+-- (for example, switching a lifetime budget to a rolling window). A window that ended before the
+-- stored one began is stale whatever its length.
 WHERE excluded.window_end >= budget_usage.window_end
-   OR excluded.window_end - excluded.window_start <> budget_usage.window_end - budget_usage.window_start;
+   OR (excluded.window_end > budget_usage.window_start
+       AND excluded.window_end - excluded.window_start <> budget_usage.window_end - budget_usage.window_start);

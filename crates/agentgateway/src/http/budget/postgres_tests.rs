@@ -350,3 +350,22 @@ async fn initialization_prunes_expired_rows_and_preloads_live_ones() {
 			.unwrap();
 	assert_eq!(remaining, vec!["preloaded".to_string()]);
 }
+
+#[tokio::test]
+async fn upsert_ignores_stale_windows_and_accepts_reconfigured_ones() {
+	let Some(postgres) = TestPostgres::from_env() else {
+		return;
+	};
+	let database = postgres.create_database("upsert").await;
+	let pool = postgres.pool(&database, 2).await;
+	Arc::new(BudgetPolicy::default())
+		.initialize(DatabasePool::Postgres(pool.clone()))
+		.await
+		.unwrap();
+
+	super::tests::assert_upsert_cases!(
+		&pool,
+		"postgres_upsert.sql",
+		"SELECT window_start, window_end, used_amount FROM budget_usage WHERE budget_id = $1"
+	);
+}
