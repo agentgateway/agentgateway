@@ -519,17 +519,13 @@ fn render_anthropic_messages(
 	}
 }
 
-fn render_vertex_gemini(
-	req: types::ChatRequest,
-	ctx: &ChatRequestContext<'_>,
-) -> Result<Vec<u8>, AIError> {
+fn render_vertex_gemini(req: types::ChatRequest) -> Result<Vec<u8>, AIError> {
 	match req {
 		// Native Gemini inbound is a passthrough, so unlike the completions conversion it does
 		// not depend on Vertex specifics; the Gemini API provider renders through here too.
 		types::ChatRequest::Gemini(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Completions(req) => {
-			let is_vertex = matches!(ctx.provider, AIProvider::Vertex(_));
-			conversion::vertex_gemini::from_completions::translate(&req, is_vertex)
+			conversion::vertex_gemini::from_completions::translate(&req)
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"vertex gemini only supports completions or native gemini input"
@@ -619,7 +615,7 @@ impl ChatTranslation {
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
-					body: render_vertex_gemini(req, ctx)?,
+					body: render_vertex_gemini(req)?,
 					provider_state: Some(ProviderState::VertexGemini),
 				});
 			},

@@ -7,12 +7,7 @@ fn req(v: Value) -> types::completions::Request {
 }
 
 fn to_gemini(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), true).expect("translate ok");
-	serde_json::from_slice(&bytes).expect("valid json")
-}
-
-fn to_gemini_api(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), false).expect("translate ok");
+	let bytes = from_completions::translate(&req(v)).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
@@ -68,15 +63,12 @@ fn empty_messages_get_synthetic_user_entry() {
 
 #[test]
 fn gs_url_without_extension_or_hint_is_rejected() {
-	let err = from_completions::translate(
-		&req(json!({
-			"model": "gemini-2.5-flash",
-			"messages": [{ "role": "user", "content": [
-				{ "type": "image_url", "image_url": { "url": "gs://bucket/object" } }
-			]}]
-		})),
-		true,
-	);
+	let err = from_completions::translate(&req(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": [
+			{ "type": "image_url", "image_url": { "url": "gs://bucket/object" } }
+		]}]
+	})));
 	assert!(
 		err.is_err(),
 		"extension-less gs:// with no MIME hint must be rejected before egress"
@@ -135,12 +127,9 @@ fn file_gs_uri_takes_mime_from_filename() {
 
 #[test]
 fn file_gs_uri_without_extension_or_hint_is_rejected() {
-	let err = from_completions::translate(
-		&req(file_content(json!({
-			"file_data": "gs://bucket/object"
-		}))),
-		true,
-	);
+	let err = from_completions::translate(&req(file_content(json!({
+		"file_data": "gs://bucket/object"
+	}))));
 	assert!(
 		err.is_err(),
 		"extension-less gs:// file with no MIME hint must be rejected before egress"
@@ -161,12 +150,9 @@ fn data_url_without_media_type_falls_back_to_filename() {
 
 #[test]
 fn data_url_without_media_type_or_filename_is_rejected() {
-	let err = from_completions::translate(
-		&req(file_content(
-			json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
-		)),
-		true,
-	);
+	let err = from_completions::translate(&req(file_content(
+		json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
+	)));
 	assert!(
 		err.is_err(),
 		"an empty mimeType is rejected by Vertex, so it must not be sent"
@@ -186,10 +172,7 @@ fn raw_base64_file_data_takes_mime_from_filename() {
 
 #[test]
 fn raw_base64_file_data_without_a_mime_source_is_rejected() {
-	let err = from_completions::translate(
-		&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))),
-		true,
-	);
+	let err = from_completions::translate(&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))));
 	assert!(
 		err.is_err(),
 		"raw base64 with no filename or hint cannot yield the mimeType Vertex requires"
@@ -210,10 +193,7 @@ fn file_id_holding_a_gs_uri_becomes_file_data() {
 fn file_id_is_rejected_rather_than_dropped() {
 	// Vertex has no OpenAI Files store, so an opaque file_id cannot be resolved. It must
 	// error rather than silently vanish from the request (#3117).
-	let err = from_completions::translate(
-		&req(file_content(json!({ "file_id": "file-abc123" }))),
-		true,
-	);
+	let err = from_completions::translate(&req(file_content(json!({ "file_id": "file-abc123" }))));
 	let err = err.expect_err("opaque file_id must be rejected");
 	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
 	assert!(
@@ -228,10 +208,7 @@ fn file_id_is_rejected_rather_than_dropped() {
 
 #[test]
 fn file_part_without_data_or_id_is_rejected() {
-	let err = from_completions::translate(
-		&req(file_content(json!({ "filename": "report.pdf" }))),
-		true,
-	);
+	let err = from_completions::translate(&req(file_content(json!({ "filename": "report.pdf" }))));
 	assert!(
 		err.is_err(),
 		"a file part carrying no payload must be rejected"
@@ -240,12 +217,9 @@ fn file_part_without_data_or_id_is_rejected() {
 
 #[test]
 fn rejected_signed_url_omits_query_from_error() {
-	let err = from_completions::translate(
-		&req(file_content(json!({
-			"file_id": "https://storage.googleapis.com/bucket/object?X-Goog-Signature=secret"
-		}))),
-		true,
-	)
+	let err = from_completions::translate(&req(file_content(json!({
+		"file_id": "https://storage.googleapis.com/bucket/object?X-Goog-Signature=secret"
+	}))))
 	.expect_err("extension-less URL without a MIME hint must be rejected");
 	let msg = err.to_string();
 	assert!(!msg.contains("secret"), "{msg}");
@@ -268,15 +242,12 @@ fn empty_string_user_content_is_preserved() {
 
 #[test]
 fn http_image_url_is_rejected() {
-	let err = from_completions::translate(
-		&req(json!({
-			"model": "gemini-2.5-flash",
-			"messages": [{ "role": "user", "content": [
-				{ "type": "image_url", "image_url": { "url": "https://example.com/cat.png" } }
-			]}]
-		})),
-		true,
-	);
+	let err = from_completions::translate(&req(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": [
+			{ "type": "image_url", "image_url": { "url": "https://example.com/cat.png" } }
+		]}]
+	})));
 	assert!(err.is_err(), "http(s) image_url must be rejected");
 }
 
@@ -532,25 +503,25 @@ fn out_of_order_tool_results_reorder_to_call_order() {
 // ---------- Request: generationConfig / structured outputs / thinking ----------
 
 #[test]
-fn response_format_json_schema_unwraps_to_response_schema() {
+fn response_format_json_schema_passes_through_to_response_json_schema() {
+	let schema = json!({ "type": "object", "properties": { "a": { "type": "string" } } });
 	let g = to_gemini(json!({
 		"model": "gemini-2.5-flash",
 		"messages": [{ "role": "user", "content": "x" }],
 		"response_format": { "type": "json_schema", "json_schema": {
 			"name": "out", "strict": true,
-			"schema": { "type": "object", "properties": { "a": { "type": "string" } } }
+			"schema": schema
 		}}
 	}));
 	assert_eq!(
 		g["generationConfig"]["responseMimeType"],
 		"application/json"
 	);
-	assert_eq!(g["generationConfig"]["responseSchema"]["type"], "object");
-	// The wrapper fields (name/strict) must be dropped.
+	// The raw schema passes through verbatim; the wrapper fields (name/strict) are dropped.
+	assert_eq!(g["generationConfig"]["responseJsonSchema"], schema);
 	assert!(
-		g["generationConfig"]["responseSchema"]
-			.get("strict")
-			.is_none()
+		g["generationConfig"].get("responseSchema").is_none(),
+		"the legacy responseSchema must not be set"
 	);
 }
 
@@ -565,146 +536,91 @@ fn response_format_json_object_sets_mime_only() {
 		g["generationConfig"]["responseMimeType"],
 		"application/json"
 	);
-	assert!(g["generationConfig"].get("responseSchema").is_none());
+	assert!(g["generationConfig"].get("responseJsonSchema").is_none());
 }
 
-/// Gemini's responseSchema subset rejects $defs/$ref, so the translator must inline the $ref and
-/// drop $defs before egress. additionalProperties is supported and must be preserved.
+/// `responseJsonSchema` natively supports $defs/$ref/additionalProperties, so a Pydantic-style
+/// schema passes through verbatim — no inlining, no key stripping.
 #[test]
-fn response_format_inlines_pydantic_defs_and_refs() {
-	let g = to_gemini(json!({
-		"model": "gemini-2.5-flash",
-		"messages": [{ "role": "user", "content": "list the events" }],
-		"response_format": {
-			"type": "json_schema",
-			"json_schema": {
-				"name": "EventsList",
-				"strict": true,
-				"schema": {
-					"$defs": {
-						"CalendarEvent": {
-							"additionalProperties": false,
-							"properties": {
-								"name": { "title": "Name", "type": "string" },
-								"date": { "title": "Date", "type": "string" },
-								"participants": { "items": { "type": "string" }, "title": "Participants", "type": "array" }
-							},
-							"required": ["name", "date", "participants"],
-							"title": "CalendarEvent",
-							"type": "object"
-						}
-					},
-					"additionalProperties": false,
-					"properties": {
-						"events": { "items": { "$ref": "#/$defs/CalendarEvent" }, "title": "Events", "type": "array" }
-					},
-					"required": ["events"],
-					"title": "EventsList",
-					"type": "object"
-				}
+fn response_format_passes_pydantic_defs_and_refs_through() {
+	let schema = json!({
+		"$defs": {
+			"CalendarEvent": {
+				"additionalProperties": false,
+				"properties": {
+					"name": { "title": "Name", "type": "string" },
+					"date": { "title": "Date", "type": "string" },
+					"participants": { "items": { "type": "string" }, "title": "Participants", "type": "array" }
+				},
+				"required": ["name", "date", "participants"],
+				"title": "CalendarEvent",
+				"type": "object"
 			}
-		}
-	}));
-	let schema = &g["generationConfig"]["responseSchema"];
-	let s = serde_json::to_string(schema).unwrap();
-	assert!(
-		!s.contains("$ref"),
-		"Vertex rejects $ref in responseSchema: {s}"
-	);
-	assert!(
-		!s.contains("$defs"),
-		"Vertex rejects $defs in responseSchema: {s}"
-	);
-	// The referenced CalendarEvent must be inlined where the $ref was.
-	assert_eq!(schema["properties"]["events"]["items"]["type"], "object");
-	assert!(
-		schema["properties"]["events"]["items"]["properties"]
-			.get("name")
-			.is_some(),
-		"inlined object lost its properties: {s}"
-	);
+		},
+		"additionalProperties": false,
+		"properties": {
+			"events": { "items": { "$ref": "#/$defs/CalendarEvent" }, "title": "Events", "type": "array" }
+		},
+		"required": ["events"],
+		"title": "EventsList",
+		"type": "object"
+	});
+	assert_eq!(response_json_schema(schema.clone()), schema);
 }
 
-/// Reproduces the exact Vertex 400 verbatim:
-///   Unknown name "$defs" at 'generation_config.response_schema'
-///   Unknown name "$ref" at 'generation_config.response_schema.properties[3].value.any_of[0].items'
-/// `properties[3]` is `options`, whose `anyOf[0].items.$ref` points at `#/$defs/SelectOption`. This
-/// one payload exercises every construct the normalizer must handle: top-level `$defs`, a `$ref`
-/// nested under `anyOf[0].items`, two `{type: null}` anyOf branches (`options`, `copy_value_from`),
-/// and `additionalProperties: false`.
+/// A real-world Pydantic payload exercising every construct the legacy `responseSchema` normalizer
+/// had to rewrite: top-level `$defs`, a `$ref` nested under `anyOf[0].items`, two `{type: null}`
+/// anyOf branches, `default`, and `additionalProperties: false`. All of it is valid JSON Schema,
+/// so `responseJsonSchema` carries it verbatim.
 #[test]
-fn response_format_inlines_real_dialog_question_schema() {
-	let g = to_gemini(json!({
-		"model": "gemini-2.5-flash",
-		"messages": [{ "role": "user", "content": "h" }],
-		"response_format": {
-			"type": "json_schema",
-			"json_schema": {
-				"name": "DialogQuestionDynamic",
-				"strict": true,
-				"schema": {
-					"$defs": {
-						"SelectOption": {
-							"description": "A single option for select/multi_select/boolean questions.",
-							"properties": {
-								"id": { "title": "Id", "type": "string" },
-								"label": { "title": "Label", "type": "string" }
-							},
-							"required": ["id", "label"],
-							"title": "SelectOption",
-							"type": "object",
-							"additionalProperties": false
-						}
-					},
-					"properties": {
-						"information_id": { "enum": ["2l8I2VKmjQ"], "title": "Information Id", "type": "string" },
-						"question_text": { "title": "Question Text", "type": "string" },
-						"question_type": {
-							"enum": ["select", "multi_select", "boolean", "number", "string", "address", "timespan"],
-							"title": "Question Type",
-							"type": "string"
-						},
-						"options": {
-							"anyOf": [
-								{ "items": { "$ref": "#/$defs/SelectOption" }, "type": "array" },
-								{ "type": "null" }
-							],
-							"default": null,
-							"title": "Options"
-						},
-						"copy_value_from": {
-							"anyOf": [{ "type": "string" }, { "type": "null" }],
-							"default": null,
-							"title": "Copy Value From"
-						}
-					},
-					"required": ["copy_value_from", "information_id", "options", "question_text", "question_type"],
-					"title": "DialogQuestionDynamic",
-					"type": "object",
-					"additionalProperties": false
-				}
+fn response_format_passes_real_dialog_question_schema_through() {
+	let schema = json!({
+		"$defs": {
+			"SelectOption": {
+				"description": "A single option for select/multi_select/boolean questions.",
+				"properties": {
+					"id": { "title": "Id", "type": "string" },
+					"label": { "title": "Label", "type": "string" }
+				},
+				"required": ["id", "label"],
+				"title": "SelectOption",
+				"type": "object",
+				"additionalProperties": false
 			}
-		}
-	}));
-	let s = serde_json::to_string(&g["generationConfig"]["responseSchema"]).unwrap();
-	assert!(
-		!s.contains("$ref"),
-		"Vertex rejects $ref (here under options.anyOf[0].items): {s}"
-	);
-	assert!(!s.contains("$defs"), "Vertex rejects $defs: {s}");
-	assert!(
-		!s.contains("\"type\":\"null\""),
-		"anyOf null branches must collapse to nullable; Gemini has no null type: {s}"
-	);
-	// SelectOption must be inlined (its fields survive even though $defs is gone).
-	assert!(
-		s.contains("\"label\""),
-		"inlined SelectOption fields must survive: {s}"
-	);
+		},
+		"properties": {
+			"information_id": { "enum": ["2l8I2VKmjQ"], "title": "Information Id", "type": "string" },
+			"question_text": { "title": "Question Text", "type": "string" },
+			"question_type": {
+				"enum": ["select", "multi_select", "boolean", "number", "string", "address", "timespan"],
+				"title": "Question Type",
+				"type": "string"
+			},
+			"options": {
+				"anyOf": [
+					{ "items": { "$ref": "#/$defs/SelectOption" }, "type": "array" },
+					{ "type": "null" }
+				],
+				"default": null,
+				"title": "Options"
+			},
+			"copy_value_from": {
+				"anyOf": [{ "type": "string" }, { "type": "null" }],
+				"default": null,
+				"title": "Copy Value From"
+			}
+		},
+		"required": ["copy_value_from", "information_id", "options", "question_text", "question_type"],
+		"title": "DialogQuestionDynamic",
+		"type": "object",
+		"additionalProperties": false
+	});
+	assert_eq!(response_json_schema(schema.clone()), schema);
 }
 
-/// Translate a request whose `response_format` wraps `schema`; return the egress `responseSchema`.
-fn response_schema(schema: Value) -> Value {
+/// Translate a request whose `response_format` wraps `schema`; return the egress
+/// `responseJsonSchema` (raw pass-through).
+fn response_json_schema(schema: Value) -> Value {
 	let g = to_gemini(json!({
 		"model": "gemini-2.5-flash",
 		"messages": [{ "role": "user", "content": "x" }],
@@ -713,13 +629,25 @@ fn response_schema(schema: Value) -> Value {
 			"json_schema": { "name": "T", "strict": true, "schema": schema }
 		}
 	}));
-	g["generationConfig"]["responseSchema"].clone()
+	g["generationConfig"]["responseJsonSchema"].clone()
 }
 
-// Case 1: additionalProperties: false must be preserved at every level (Gemini supports it).
+/// Translate a request carrying `schema` as a tool function's parameters; return the egress
+/// `functionDeclarations[0].parameters` (the `normalize_gemini_schema` path).
+fn tool_parameters(schema: Value) -> Value {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{ "type": "function", "function": { "name": "T", "parameters": schema } }]
+	}));
+	g["tools"][0]["functionDeclarations"][0]["parameters"].clone()
+}
+
+// Case 1: additionalProperties: false must be preserved at every level (responseJsonSchema
+// supports it natively).
 #[test]
-fn gemini_schema_preserves_additional_properties_false() {
-	let s = response_schema(json!({
+fn response_json_schema_preserves_additional_properties_false() {
+	let s = response_json_schema(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
@@ -740,7 +668,7 @@ fn gemini_schema_preserves_additional_properties_false() {
 	);
 }
 
-// Case 2: the same normalization must run on tool parameters (the ADK path), not just responseSchema.
+// Case 2: tool parameters go through normalize_gemini_schema ($defs/$ref inlined, subset enforced).
 #[test]
 fn tool_parameters_inline_defs_and_refs() {
 	let g = to_gemini(json!({
@@ -780,7 +708,7 @@ fn tool_parameters_inline_defs_and_refs() {
 		!txt.contains("$defs"),
 		"tool parameters must drop $defs: {txt}"
 	);
-	// Unlike responseSchema on Vertex, the tool path strips additionalProperties (preserve_ap=false).
+	// Gemini rejects additionalProperties in functionDeclarations parameters, so it is stripped.
 	assert!(
 		!txt.contains("additionalProperties"),
 		"tool parameters must drop additionalProperties: {txt}"
@@ -793,7 +721,7 @@ fn tool_parameters_inline_defs_and_refs() {
 // parent, not dropped (dropping would lose the type).
 #[test]
 fn gemini_schema_flattens_allof_single_ref() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"$defs": {
 			"Inner": {
 				"type": "object",
@@ -832,7 +760,7 @@ fn gemini_schema_flattens_allof_single_ref() {
 // disjoint property sets; first-wins insertion silently drops all but the first member.
 #[test]
 fn gemini_schema_merges_multi_member_allof() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"allOf": [
 			{ "properties": { "a": { "type": "string" } }, "required": ["a"] },
@@ -864,7 +792,7 @@ fn gemini_schema_merges_multi_member_allof() {
 // as a single-value string enum (litellm drops const, which silently loses it).
 #[test]
 fn gemini_schema_converts_const_to_enum() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": { "kind": { "const": "a", "title": "Kind" } }
@@ -887,7 +815,7 @@ fn gemini_schema_converts_const_to_enum() {
 // `oneOf` must be rewritten to `anyOf` with every member intact.
 #[test]
 fn gemini_schema_rewrites_oneof_to_anyof() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"required": ["events"],
 		"properties": {
@@ -1003,7 +931,7 @@ fn tool_parameters_rewrite_oneof_to_anyof() {
 // the unsupported `discriminator` dropped.
 #[test]
 fn gemini_schema_rewrites_oneof_of_refs() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"$defs": {
 			"Click": {
 				"type": "object",
@@ -1056,7 +984,7 @@ fn gemini_schema_rewrites_oneof_of_refs() {
 
 // Case 5: string formats pass through to Gemini.
 #[test]
-fn gemini_schema_keeps_formats() {
+fn response_json_schema_keeps_formats() {
 	let schema = json!({
 		"type": "object",
 		"additionalProperties": false,
@@ -1069,40 +997,12 @@ fn gemini_schema_keeps_formats() {
 			"big": { "type": "integer", "format": "int64" }
 		}
 	});
-	for is_vertex in [true, false] {
-		let g = from_completions::translate(
-			&req(json!({
-				"model": "gemini-2.5-flash",
-				"messages": [{ "role": "user", "content": "x" }],
-				"response_format": {
-					"type": "json_schema",
-					"json_schema": { "name": "T", "strict": true, "schema": schema }
-				}
-			})),
-			is_vertex,
-		)
-		.expect("translate ok");
-		let g: Value = serde_json::from_slice(&g).expect("valid json");
-		let props = &g["generationConfig"]["responseSchema"]["properties"];
-		for (field, format) in [
-			("when", "date-time"),
-			("day", "date"),
-			("at", "time"),
-			("id", "uuid"),
-			("mail", "email"),
-			("big", "int64"),
-		] {
-			assert_eq!(
-				props[field]["format"], format,
-				"is_vertex={is_vertex}: {props}"
-			);
-		}
-	}
+	assert_eq!(response_json_schema(schema.clone()), schema);
 }
 
 #[test]
 fn tool_parameters_keep_string_formats() {
-	let g = to_gemini_api(json!({
+	let g = to_gemini(json!({
 		"model": "gemini-2.5-flash",
 		"messages": [{ "role": "user", "content": "x" }],
 		"tools": [{
@@ -1128,7 +1028,7 @@ fn tool_parameters_keep_string_formats() {
 // union becomes `anyOf`.
 #[test]
 fn gemini_schema_normalizes_multitype_arrays() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
@@ -1157,7 +1057,7 @@ fn gemini_schema_normalizes_multitype_arrays() {
 // Case 7: Gemini requires `items` on arrays; a bare array (List[Any]) must get a default item schema.
 #[test]
 fn gemini_schema_array_without_items_gets_items() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": { "tags": { "type": "array" } }
@@ -1173,7 +1073,7 @@ fn gemini_schema_array_without_items_gets_items() {
 // were absent from ALLOWED_SCHEMA_FIELDS.
 #[test]
 fn gemini_schema_preserves_array_length_constraints() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"properties": {
 			"tags": {
@@ -1198,7 +1098,7 @@ fn gemini_schema_preserves_array_length_constraints() {
 // maxItems they were absent from ALLOWED_SCHEMA_FIELDS and were silently stripped.
 #[test]
 fn gemini_schema_preserves_object_property_count_constraints() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"minProperties": 1,
 		"maxProperties": 4,
@@ -1217,18 +1117,18 @@ fn gemini_schema_preserves_object_property_count_constraints() {
 // Case 10: example provides a sample value for a schema node and is passed through to Gemini.
 #[test]
 fn gemini_schema_preserves_example() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "string",
 		"example": "hello"
 	}));
 	assert_eq!(s["example"], "hello", "example must be preserved: {s}");
 }
 
-// Case 11: Dict[str, X] emits a typed `additionalProperties` schema. Gemini supports it, so both
-// the boolean false form and the Schema-object form must be preserved.
+// Case 11: Dict[str, X] emits a typed `additionalProperties` schema. responseJsonSchema supports
+// it natively, so both the boolean false form and the Schema-object form pass through.
 #[test]
-fn gemini_schema_preserves_open_dict_additional_properties() {
-	let s = response_schema(json!({
+fn response_json_schema_preserves_open_dict_additional_properties() {
+	let s = response_json_schema(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
@@ -1245,12 +1145,11 @@ fn gemini_schema_preserves_open_dict_additional_properties() {
 	);
 }
 
-// Case 11b: Dict[str, Model] puts a $ref under additionalProperties. Now that the key survives,
-// the subtree must be normalized too — $defs is stripped at the root, so an un-inlined $ref here
-// would egress dangling and Vertex 400s.
+// Case 11b: Dict[str, Model] puts a $ref under additionalProperties. responseJsonSchema resolves
+// $defs/$ref server-side, so both pass through untouched.
 #[test]
-fn gemini_schema_inlines_ref_under_additional_properties() {
-	let s = response_schema(json!({
+fn response_json_schema_keeps_ref_under_additional_properties() {
+	let schema = json!({
 		"$defs": {
 			"Person": {
 				"type": "object",
@@ -1262,23 +1161,15 @@ fn gemini_schema_inlines_ref_under_additional_properties() {
 		"properties": {
 			"people": { "type": "object", "additionalProperties": { "$ref": "#/$defs/Person" } }
 		}
-	}));
-	let txt = serde_json::to_string(&s).unwrap();
-	assert!(
-		!txt.contains("$ref"),
-		"$ref under additionalProperties must be inlined: {txt}"
-	);
-	assert_eq!(
-		s["properties"]["people"]["additionalProperties"]["properties"]["name"]["type"], "string",
-		"the inlined Person must keep its properties: {s}"
-	);
+	});
+	assert_eq!(response_json_schema(schema.clone()), schema);
 }
 
-// Case 11c: Dict[str, Optional[str]] puts an anyOf null branch under additionalProperties. It must
-// collapse to nullable like anywhere else; Gemini has no null type.
+// Case 11c: Dict[str, Optional[str]] puts an anyOf null branch under additionalProperties.
+// `{"type": "null"}` is valid JSON Schema, so responseJsonSchema carries it verbatim.
 #[test]
-fn gemini_schema_normalizes_nullable_under_additional_properties() {
-	let s = response_schema(json!({
+fn response_json_schema_keeps_native_null_unions() {
+	let schema = json!({
 		"type": "object",
 		"properties": {
 			"meta": {
@@ -1286,19 +1177,14 @@ fn gemini_schema_normalizes_nullable_under_additional_properties() {
 				"additionalProperties": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
 			}
 		}
-	}));
-	let txt = serde_json::to_string(&s).unwrap();
-	assert!(
-		!txt.contains("\"type\":\"null\""),
-		"null branch under additionalProperties must collapse to nullable: {txt}"
-	);
+	});
+	assert_eq!(response_json_schema(schema.clone()), schema);
 }
 
-// Case 11d: an empty-object additionalProperties means "anything goes" and must stay empty — the
-// typeless default must not rewrite it into {"type":"object"}.
+// Case 11d: an empty-object additionalProperties means "anything goes" and passes through as-is.
 #[test]
-fn gemini_schema_leaves_empty_additional_properties_alone() {
-	let s = response_schema(json!({
+fn response_json_schema_leaves_empty_additional_properties_alone() {
+	let s = response_json_schema(json!({
 		"type": "object",
 		"properties": { "meta": { "type": "object", "additionalProperties": {} } }
 	}));
@@ -1309,35 +1195,11 @@ fn gemini_schema_leaves_empty_additional_properties_alone() {
 	);
 }
 
-// Case 11e: the Gemini API (generativelanguage.googleapis.com) rejects additionalProperties in
-// responseSchema, unlike Vertex AI. With is_vertex=false the key must be stripped.
-#[test]
-fn gemini_api_response_schema_strips_additional_properties() {
-	let g = to_gemini_api(json!({
-		"model": "gemini-2.5-flash",
-		"messages": [{ "role": "user", "content": "x" }],
-		"response_format": {
-			"type": "json_schema",
-			"json_schema": { "name": "T", "strict": true, "schema": {
-				"type": "object",
-				"properties": { "answer": { "type": "string", "additionalProperties": false } },
-				"required": ["answer"],
-				"additionalProperties": false
-			}}
-		}
-	}));
-	let s = serde_json::to_string(&g["generationConfig"]["responseSchema"]).unwrap();
-	assert!(
-		!s.contains("additionalProperties"),
-		"Gemini API responseSchema must not contain additionalProperties: {s}"
-	);
-}
-
 // Case 9: a self-referential model must not make the inliner hang. Recursion cannot be represented
 // in Gemini's subset, so $defs is still dropped; the guarantee is termination and a bounded result.
 #[test]
 fn gemini_schema_recursive_model_terminates() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"$defs": {
 			"Node": {
 				"type": "object",
@@ -1363,7 +1225,7 @@ fn gemini_schema_recursive_model_terminates() {
 // Case 10: an object schema that omits `type` must get `type: object`.
 #[test]
 fn gemini_schema_adds_missing_object_type() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"additionalProperties": false,
 		"properties": { "a": { "type": "string" } }
 	}));
@@ -1376,7 +1238,7 @@ fn gemini_schema_adds_missing_object_type() {
 // Case 11: Gemini's enum applies to string types; an enum on a non-string field must be dropped.
 #[test]
 fn gemini_schema_drops_enum_on_non_string() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": { "n": { "type": "integer", "enum": [1, 2, 3] } }
@@ -1392,7 +1254,7 @@ fn gemini_schema_drops_enum_on_non_string() {
 // the whitelist and the field becomes an object. It must survive as a nullable string enum.
 #[test]
 fn gemini_schema_anyof_const_member_preserved_as_nullable_enum() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
@@ -1418,7 +1280,7 @@ fn gemini_schema_anyof_const_member_preserved_as_nullable_enum() {
 // before the collapse), shipping an illegal JSON-Schema type array to Gemini.
 #[test]
 fn gemini_schema_anyof_type_array_member_normalized() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
@@ -1440,7 +1302,7 @@ fn gemini_schema_anyof_type_array_member_normalized() {
 // the collapse), so the inlined inner schema is dropped by the whitelist and its fields are lost.
 #[test]
 fn gemini_schema_anyof_allof_member_flattened() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"$defs": {
 			"Inner": {
 				"type": "object",
@@ -1478,7 +1340,7 @@ fn gemini_schema_anyof_allof_member_flattened() {
 // (which treats an absent type as non-string) and then retyped as an object, losing the constraint.
 #[test]
 fn gemini_schema_typeless_enum_kept_as_string_enum() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
@@ -1500,7 +1362,7 @@ fn gemini_schema_typeless_enum_kept_as_string_enum() {
 // an invalid string-typed numeric/boolean enum). A string const stays a string enum.
 #[test]
 fn gemini_schema_non_string_const_typed_by_value_kind() {
-	let s = response_schema(json!({
+	let s = tool_parameters(json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
@@ -1935,6 +1797,71 @@ fn streaming_usage_suppressed_on_interim_content_chunks() {
 	.unwrap();
 	assert_eq!(c2["usage"]["total_tokens"], 7);
 	assert_eq!(c2["choices"][0]["finish_reason"], "stop");
+}
+
+// Issue #4227: Gemini's constrained decoding can loop on a single field until the token
+// budget is exhausted when a multi-property object schema lacks propertyOrdering. That only
+// affects structured output, which now egresses via responseJsonSchema untouched. Tool
+// parameters get no injection either — a caller-provided ordering is preserved as-is.
+#[test]
+fn property_ordering_not_injected_for_tool_parameters() {
+	let s = tool_parameters(json!({
+		"type": "object",
+		"properties": {
+			"title": { "type": "string" },
+			"meta": {
+				"type": "object",
+				"properties": {
+					"author": { "type": "string" },
+					"version": { "type": "integer" }
+				}
+			},
+			"tags": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"name": { "type": "string" },
+						"weight": { "type": "number" }
+					}
+				}
+			}
+		}
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(
+		!txt.contains("propertyOrdering"),
+		"no ordering may be injected at any level: {txt}"
+	);
+}
+
+#[test]
+fn existing_property_ordering_is_preserved() {
+	let s = tool_parameters(json!({
+		"type": "object",
+		"propertyOrdering": ["b", "a"],
+		"properties": { "a": { "type": "string" }, "b": { "type": "string" } }
+	}));
+	assert_eq!(
+		s["propertyOrdering"],
+		json!(["b", "a"]),
+		"caller-provided ordering wins: {s}"
+	);
+}
+
+#[test]
+fn response_json_schema_gets_no_property_ordering() {
+	// Issue #4227 is fixed by responseJsonSchema itself: the schema must egress byte-for-byte,
+	// with nothing injected.
+	let schema = json!({
+		"type": "object",
+		"properties": {
+			"name": { "type": "string" },
+			"when": { "type": "string" }
+		},
+		"required": ["name"]
+	});
+	assert_eq!(response_json_schema(schema.clone()), schema);
 }
 
 // ---------- Native Gemini inbound: SSE passthrough with usage extraction ----------
