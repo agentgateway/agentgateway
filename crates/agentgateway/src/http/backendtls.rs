@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use agent_core::strng;
@@ -11,10 +11,10 @@ use rustls_pki_types::{CertificateDer, ServerName};
 use serde::Serializer;
 use tracing::{info, trace, warn};
 
+use crate::resource_manager::FileAccess;
 use crate::serdes::{schema_de, schema_ser};
 use crate::transport::tls;
 use crate::types::agent::{parse_cert, parse_key};
-use crate::resource_manager::FileAccess;
 use crate::types::discovery::Identity;
 use crate::{apply, transport};
 
@@ -682,6 +682,7 @@ impl LocalBackendTLS {
 
 #[cfg(test)]
 mod hot_reload_tests {
+	use std::path::Path;
 	use std::time::Duration;
 
 	use rcgen::{CertificateParams, KeyPair};
