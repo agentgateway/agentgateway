@@ -142,6 +142,9 @@ pub struct SpiffeBackendTLS {
 	pub alpn: Option<Vec<String>>,
 	/// Expected upstream SPIFFE IDs to pin; empty means accept any SVID chaining to the bundle.
 	pub verify_sans: Vec<String>,
+	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
+	/// local trust domain is always implicit. Combine with `verify_sans` to pin exact IDs.
+	pub additional_trust_domains: Vec<String>,
 }
 
 impl BackendTLS {
@@ -334,7 +337,12 @@ pub struct LocalBackendTLS {
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct LocalSpiffeBackendTLS {} // Empty config for now, allows values to be added in the future.
+pub struct LocalSpiffeBackendTLS {
+	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
+	/// local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.
+	#[serde(default)]
+	pub additional_trust_domains: Vec<String>,
+}
 
 #[derive(Default, Debug)]
 pub struct ResolvedBackendTLS {
@@ -353,6 +361,8 @@ pub struct ResolvedBackendTLS {
 	pub key_path: Option<PathBuf>,
 	pub root_path: Option<PathBuf>,
 	pub spiffe: bool,
+	/// Federated trust domains accepted for a SPIFFE-sourced backend, when configured.
+	pub spiffe_additional_trust_domains: Option<Vec<String>>,
 }
 
 /// Everything but the cert/key/root material, which file-sourced configs re-read on each reload.
@@ -576,6 +586,7 @@ impl ResolvedBackendTLS {
 			BackendTLSSource::Spiffe(SpiffeBackendTLS {
 				alpn: self.alpn,
 				verify_sans: self.subject_alt_names.unwrap_or_default(),
+				additional_trust_domains: self.spiffe_additional_trust_domains.unwrap_or_default(),
 			})
 		} else {
 			let files = FileSources {
@@ -661,6 +672,11 @@ impl LocalBackendTLS {
 			None => None,
 		};
 
+		let spiffe_additional_trust_domains = self
+			.spiffe
+			.as_ref()
+			.map(|s| s.additional_trust_domains.clone())
+			.filter(|domains| !domains.is_empty());
 		ResolvedBackendTLS {
 			cert,
 			key,
@@ -675,6 +691,7 @@ impl LocalBackendTLS {
 			key_path: None,
 			root_path: None,
 			spiffe: self.spiffe.is_some(),
+			spiffe_additional_trust_domains,
 		}
 		.try_into()
 	}

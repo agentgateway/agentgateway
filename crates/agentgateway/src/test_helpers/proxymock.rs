@@ -1197,6 +1197,7 @@ impl TestBind {
 			key_path: None,
 			root_path: None,
 			spiffe: false,
+			spiffe_additional_trust_domains: None,
 		}
 		.try_into()
 		.unwrap();
@@ -1238,6 +1239,7 @@ impl TestBind {
 			key_path: None,
 			root_path: None,
 			spiffe: false,
+			spiffe_additional_trust_domains: None,
 		}
 		.try_into()
 		.unwrap();
