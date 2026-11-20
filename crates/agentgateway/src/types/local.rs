@@ -4332,13 +4332,17 @@ async fn convert_attached_mcp(
 		for (pol, endpoint_policy) in [(shared_policies.clone(), false), (policies, true)] {
 			let Some(pol) = pol else { continue };
 			let split = split_policies(resources, pol, config.as_policy_context(&route_key)).await?;
-			resolved_policies.route_policies.extend(split.route_policies);
+			resolved_policies
+				.route_policies
+				.extend(split.route_policies);
 			if endpoint_policy {
 				resolved_policies
 					.backend_policies
 					.splice(0..0, split.backend_policies);
 			} else {
-				resolved_policies.backend_policies.extend(split.backend_policies);
+				resolved_policies
+					.backend_policies
+					.extend(split.backend_policies);
 			}
 		}
 		let prefix = |p: String| RouteMatch {
