@@ -4,7 +4,12 @@ import { Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
-import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
+import {
+	LostFieldsWarning,
+	UnsupportedInForm,
+	useMergedEdits,
+	useRowKeys
+} from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import {
 	ButtonLink,
@@ -1173,6 +1178,7 @@ function HeaderConditionsEditor(props: {
 	headers: HeaderMatch[];
 	onChange: (headers: HeaderMatch[]) => void;
 }) {
+	const rows = useRowKeys(props.headers.length);
 	return (
 		<div className="traffic-match-editor">
 			<div className="traffic-match-editor-header">
@@ -1192,17 +1198,17 @@ function HeaderConditionsEditor(props: {
 				<div className="match-header-list">
 					{props.headers.map((header, index) => (
 						<HeaderConditionRow
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							key={index}
+							key={rows.keys[index]}
 							header={header}
 							onChange={next =>
 								props.onChange(
 									props.headers.map((item, itemIndex) => (itemIndex === index ? next : item))
 								)
 							}
-							onRemove={() =>
-								props.onChange(props.headers.filter((_, itemIndex) => itemIndex !== index))
-							}
+							onRemove={() => {
+								rows.remove(index);
+								props.onChange(props.headers.filter((_, itemIndex) => itemIndex !== index));
+							}}
 						/>
 					))}
 				</div>
@@ -1267,6 +1273,7 @@ function QueryConditionsEditor(props: {
 	query: QueryMatch[];
 	onChange: (query: QueryMatch[]) => void;
 }) {
+	const rows = useRowKeys(props.query.length);
 	return (
 		<div className="traffic-match-editor">
 			<div className="traffic-match-editor-header">
@@ -1286,17 +1293,17 @@ function QueryConditionsEditor(props: {
 				<div className="match-header-list">
 					{props.query.map((query, index) => (
 						<QueryConditionRow
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							key={index}
+							key={rows.keys[index]}
 							query={query}
 							onChange={next =>
 								props.onChange(
 									props.query.map((item, itemIndex) => (itemIndex === index ? next : item))
 								)
 							}
-							onRemove={() =>
-								props.onChange(props.query.filter((_, itemIndex) => itemIndex !== index))
-							}
+							onRemove={() => {
+								rows.remove(index);
+								props.onChange(props.query.filter((_, itemIndex) => itemIndex !== index));
+							}}
 						/>
 					))}
 				</div>
@@ -1372,6 +1379,7 @@ function RouteBackendsEditor(props: {
 	backends: TrafficBackend[];
 	onChange: (backends: TrafficBackend[]) => void;
 }) {
+	const rows = useRowKeys(props.backends.length);
 	return (
 		<div className="traffic-backend-editor">
 			<div className="traffic-match-editor-header">
@@ -1391,8 +1399,7 @@ function RouteBackendsEditor(props: {
 				<div className="route-backend-list">
 					{props.backends.map((backend, index) => (
 						<RouteBackendRow
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							key={index}
+							key={rows.keys[index]}
 							kind={props.kind}
 							path={`backends.${index}`}
 							help={props.help}
@@ -1402,9 +1409,10 @@ function RouteBackendsEditor(props: {
 									props.backends.map((item, itemIndex) => (itemIndex === index ? next : item))
 								)
 							}
-							onRemove={() =>
-								props.onChange(props.backends.filter((_, itemIndex) => itemIndex !== index))
-							}
+							onRemove={() => {
+								rows.remove(index);
+								props.onChange(props.backends.filter((_, itemIndex) => itemIndex !== index));
+							}}
 						/>
 					))}
 				</div>

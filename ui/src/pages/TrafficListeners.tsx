@@ -18,6 +18,7 @@ import {
 	StatusBanner,
 	Tooltip
 } from '@/components/Primitives';
+import { contentKeys } from '@/contentKeys';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import type { LocalTLSServerConfig } from '@/gateway-config';
 import { useConfigDumpMode, useRawGatewayConfig, useUpdateConfig } from '@/hooks';
@@ -68,6 +69,7 @@ function TrafficListenersEditorPage() {
 	const help = useSchemaHelp();
 	const listeners = useMemo(() => listenerContexts(config.data), [config.data]);
 	const stats = trafficStats(config.data);
+	const bindKeys = contentKeys((config.data?.binds ?? []).map(bind => String(bind.port)));
 	const [bindEditor, setBindEditor] = useState<TrafficBind | null>(null);
 	const [listenerEditor, setListenerEditor] = useState<{
 		bindIndex: number;
@@ -189,13 +191,7 @@ function TrafficListenersEditorPage() {
 								0
 							);
 							return (
-								<section
-									className="traffic-bind"
-									key={`${bind.port}-${
-										// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-										bindIndex
-									}`}
-								>
+								<section className="traffic-bind" key={bindKeys[bindIndex]}>
 									<div className="traffic-bind-header">
 										<div>
 											<h3>Port {bind.port}</h3>

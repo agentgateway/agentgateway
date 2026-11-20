@@ -2,7 +2,12 @@ import { Button, Input } from 'antd';
 import { Gauge, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
+import {
+	LostFieldsWarning,
+	UnsupportedInForm,
+	useMergedEdits,
+	useRowKeys
+} from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup } from '@/components/Primitives';
@@ -53,6 +58,7 @@ export function RemoteRateLimitPolicyEditor(props: {
 	);
 	const [attemptedSave, setAttemptedSave] = useState(false);
 	const errors = useMemo(() => validate(descriptors), [descriptors]);
+	const rows = useRowKeys(descriptors.length);
 
 	const merged = useMergedEdits(
 		props.remoteRateLimit,
@@ -149,8 +155,7 @@ export function RemoteRateLimitPolicyEditor(props: {
 				<div className="remote-descriptor-list">
 					{descriptors.map((descriptor, index) => (
 						<DescriptorEditor
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							key={index}
+							key={rows.keys[index]}
 							descriptor={descriptor}
 							help={props.help}
 							index={index}
@@ -163,9 +168,10 @@ export function RemoteRateLimitPolicyEditor(props: {
 									descriptors.map((item, itemIndex) => (itemIndex === index ? next : item))
 								)
 							}
-							onRemove={() =>
-								setDescriptors(descriptors.filter((_, itemIndex) => itemIndex !== index))
-							}
+							onRemove={() => {
+								rows.remove(index);
+								setDescriptors(descriptors.filter((_, itemIndex) => itemIndex !== index));
+							}}
 						/>
 					))}
 				</div>
@@ -188,6 +194,8 @@ function DescriptorEditor(props: {
 	onChange: (descriptor: DescriptorDraft) => void;
 	onRemove: () => void;
 }) {
+	const rows = useRowKeys(props.descriptor.entries.length);
+
 	function updateEntry(entryIndex: number, patch: Partial<{ key: string; value: string }>) {
 		props.onChange({
 			...props.descriptor,
@@ -234,8 +242,7 @@ function DescriptorEditor(props: {
 			>
 				<div className="remote-entry-list">
 					{props.descriptor.entries.map((entry, index) => (
-						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						<div className="remote-entry-row" key={index}>
+						<div className="remote-entry-row" key={rows.keys[index]}>
 							<Input
 								className="mono-input compact"
 								value={entry.key}
@@ -254,6 +261,7 @@ function DescriptorEditor(props: {
 								aria-label="Remove descriptor entry"
 								icon={<Trash2 size={16} />}
 								onClick={() => {
+									rows.remove(index);
 									const next = props.descriptor.entries.filter(
 										(_, entryIndex) => entryIndex !== index
 									);
