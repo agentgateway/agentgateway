@@ -566,7 +566,7 @@ fn file_resource_collection(kind: ConfigResourceKind) -> Option<FileResourceColl
 }
 
 /// Lists the resources defined in a file-backed config. API keys are listed as `llm.apiKey`
-/// resources rather than inside `llm.policy/apiKey`; singleton settings are not listed.
+/// resources rather than inside `llm.policy/apiKey`; settings list the fields set in the file.
 pub(crate) fn file_config_resources(
 	config: &Value,
 	kind: Option<ConfigResourceKind>,
@@ -596,7 +596,18 @@ pub(crate) fn file_config_resources(
 					.map(|(index, value)| (file_api_key_id(value, index), value.clone()))
 					.collect()
 			},
-			None => Vec::new(),
+			None => kind
+				.settings_fields()
+				.and_then(|(section, fields)| {
+					let section = config.get(section)?.as_object()?;
+					let settings: serde_json::Map<_, _> = fields
+						.iter()
+						.filter_map(|&field| Some((field.to_string(), section.get(field)?.clone())))
+						.collect();
+					(!settings.is_empty()).then(|| ("default".to_string(), Value::Object(settings)))
+				})
+				.into_iter()
+				.collect(),
 		};
 		for (id, mut value) in items {
 			if kind == ConfigResourceKind::LlmPolicy
