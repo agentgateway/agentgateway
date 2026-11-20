@@ -447,12 +447,19 @@ func TestStandaloneChartDatabaseModeAllowsReplicas(t *testing.T) {
 mode: database
 database:
   postgres:
-    url: postgres://agw:secret@postgres.default.svc:5432/agw
+    url: ${DATABASE_URL}
+secrets:
+  DATABASE_URL: postgres://agw:secret@postgres.default.svc:5432/agw
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.Contains(t, out, "replicas: 3")
 	require.Contains(t, out, "storage:\n        mode: hybrid")
-	require.Contains(t, out, "url: postgres://agw:secret@postgres.default.svc:5432/agw")
+	require.Contains(t, out, "url: ${DATABASE_URL}")
+	require.Contains(t, out, `stringData:
+  DATABASE_URL: postgres://agw:secret@postgres.default.svc:5432/agw`)
+	require.Contains(t, out, `        envFrom:
+        - secretRef:
+            name: test-release`)
 	require.NotContains(t, out, "kind: PersistentVolumeClaim")
 	require.NotContains(t, out, "- name: config-bootstrap")
 	require.Contains(t, out, "mountPath: /config\n          readOnly: true")

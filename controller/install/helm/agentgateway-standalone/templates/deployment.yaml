@@ -95,6 +95,11 @@ spec:
         {{- with .Values.extraEnv }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if .Values.secrets }}
+        envFrom:
+        - secretRef:
+            name: {{ include "agentgateway-standalone.fullname" . }}
+        {{- end }}
         volumeMounts:
         - name: config
           mountPath: /config

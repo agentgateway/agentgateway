@@ -178,6 +178,9 @@ rendered configuration, plus config.modelCatalog, are reloaded without restartin
 {{- $config := get $renderedConfig "config" | default dict | deepCopy -}}
 {{- $_ := unset $config "modelCatalog" -}}
 {{ toYaml $config }}
+{{- with .Values.secrets }}
+{{ toYaml . }}
+{{- end }}
 {{- end }}
 
 {{- define "agentgateway-standalone.validate" -}}
@@ -187,8 +190,8 @@ rendered configuration, plus config.modelCatalog, are reloaded without restartin
 {{- end -}}
 {{- $postgresUrl := .Values.database.postgres.url | default "" -}}
 {{- if eq $mode "database" -}}
-{{- if not (regexMatch "^postgres(ql)?://" $postgresUrl) -}}
-{{- fail (printf "mode=database requires database.postgres.url to start with postgres:// or postgresql:// (got %q)" $postgresUrl) -}}
+{{- if not (regexMatch "^(postgres(ql)?://|\\$)" $postgresUrl) -}}
+{{- fail "mode=database requires database.postgres.url to start with postgres:// or postgresql://, or to reference an environment variable" -}}
 {{- end -}}
 {{- else if $postgresUrl -}}
 {{- fail (printf "database.postgres.url is only supported when mode=database (got mode %q)" $mode) -}}
