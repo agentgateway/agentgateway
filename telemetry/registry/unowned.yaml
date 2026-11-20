@@ -1,0 +1,207 @@
+file_format: definition/2
+# Names agentgateway emits today that no semantic convention defines and that sit
+# outside its own namespace. Each one is exempt in policies/agentgateway.rego.
+attributes:
+  - key: gateway
+    brief: The gateway that accepted the request.
+    stability: development
+    type: string
+
+  - key: listener
+    brief: The listener that accepted the request.
+    stability: development
+    type: string
+
+  - key: route
+    brief: The route that matched the request.
+    stability: development
+    type: string
+
+  - key: route_rule
+    brief: The route rule that matched the request.
+    stability: development
+    type: string
+
+  - key: endpoint
+    brief: The backend endpoint the request was sent to.
+    stability: development
+    type: string
+
+  - key: protocol
+    brief: The protocol of the selected backend.
+    stability: development
+    type: string
+
+  - key: error
+    brief: The error that ended the request.
+    stability: development
+    type: string
+
+  - key: reason
+    brief: Why the proxy answered the request itself.
+    stability: development
+    type: string
+
+  - key: duration
+    brief: The request duration, as a human readable string.
+    stability: development
+    type: string
+    examples: ["12ms"]
+
+  - key: connection.id
+    brief: The downstream connection identifier.
+    stability: development
+    type: int
+
+  - key: request.id
+    brief: The request identifier.
+    stability: development
+    type: int
+
+  - key: src.identity
+    brief: The peer identity from the downstream mTLS certificate.
+    stability: development
+    type: string
+
+  - key: tls.sni
+    brief: The server name the client sent in its TLS handshake.
+    stability: development
+    type: string
+
+  - key: trace.id
+    brief: The trace identifier.
+    stability: development
+    type: string
+
+  - key: span.id
+    brief: The span identifier.
+    stability: development
+    type: string
+
+  - key: jwt.sub
+    brief: The subject of the validated JWT.
+    stability: development
+    type: string
+
+  - key: retry.attempt
+    brief: The retry attempt that produced the response.
+    stability: development
+    type: string
+
+  - key: http.status
+    brief: The HTTP status code of an outbound call.
+    stability: development
+    type: int
+
+  - key: grpc.status
+    brief: The gRPC status code.
+    stability: development
+    type: int
+
+  - key: inferencepool.selected_endpoint
+    brief: The endpoint an inference pool picked.
+    stability: development
+    type: string
+
+  - key: a2a.method
+    brief: The A2A JSON-RPC method.
+    stability: development
+    type: string
+
+  - key: a2a.response.outcome
+    brief: The outcome of an A2A response.
+    stability: development
+    type: string
+
+  - key: a2a.response.error_code
+    brief: The JSON-RPC error code of an A2A response.
+    stability: development
+    type: int
+
+  - key: a2a.result.kind
+    brief: The kind of result an A2A response carried.
+    stability: development
+    type: string
+
+  - key: a2a.context.id
+    brief: The A2A context identifier.
+    stability: development
+    type: string
+
+  - key: mcp.target
+    brief: The MCP target that served the request.
+    stability: development
+    type: string
+
+  - key: mcp.resource.type
+    brief: The kind of MCP resource the request addressed.
+    stability: development
+    type: string
+
+  - key: mcp.error.code
+    brief: The JSON-RPC error code of an MCP response.
+    stability: development
+    type: int
+
+  - key: mcp.error.message
+    brief: The JSON-RPC error message of an MCP response.
+    stability: development
+    type: string
+
+  - key: gen_ai.usage.reasoning_tokens
+    brief: The number of reasoning tokens.
+    stability: development
+    type: int
+
+  - key: gen_ai.usage.input_audio_tokens
+    brief: The number of audio input tokens.
+    stability: development
+    type: int
+
+  - key: gen_ai.usage.output_audio_tokens
+    brief: The number of audio output tokens.
+    stability: development
+    type: int
+
+  - key: gen_ai.usage.output_image_tokens
+    brief: The number of image output tokens.
+    stability: development
+    type: int
+
+  - key: gen_ai.usage.audio_seconds
+    brief: The seconds of audio processed.
+    stability: development
+    type: double
+
+  - key: ate.actor.name
+    brief: The Substrate actor name.
+    stability: development
+    type: string
+
+  - key: ate.actor.uid
+    brief: The Substrate actor UID.
+    stability: development
+    type: string
+
+  - key: ate.atespace
+    brief: The Substrate atespace.
+    stability: development
+    type: string
+
+  - key: ate.router.resume
+    brief: How the Substrate router resumed the actor.
+    stability: development
+    type: string
+
+  - key: ate.router.route.duration
+    brief: Seconds the Substrate router took to route the request.
+    stability: development
+    type: double
+
+  - key: gen_ai.usage.cache_creation.input_tokens
+    brief: The number of input tokens written to the provider cache.
+    stability: development
+    type: int
+    deprecated:
+      reason: uncategorized
+      note: Replaced by `gen_ai.usage.cache_write.input_tokens`.

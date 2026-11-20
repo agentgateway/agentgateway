@@ -1,0 +1,7 @@
+file_format: definition/2
+attributes:
+  - key: acme.widget.name
+    brief: An attribute outside the agentgateway namespaces.
+    stability: development
+    type: string
+    examples: ["w"]
