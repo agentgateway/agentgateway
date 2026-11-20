@@ -2,7 +2,7 @@ import { createContext, Fragment, useContext, useLayoutEffect, useState } from '
 
 import { PinRawContext, StatusBanner } from '@/components/Primitives';
 import { withoutSchemaDefaults } from '@/configValidation';
-import { mergeEdits } from '@/mergeEdits';
+import { deepEqual, mergeEdits } from '@/mergeEdits';
 
 // Rendered by a form that cannot represent its value: the drawer switches to
 // raw mode, with the form disabled and `supports` explaining why.
@@ -59,6 +59,21 @@ export function useMergedEdits<T>(original: unknown, edited: T, schemaPath?: str
 				);
 	useReportEditorValue(merged.value);
 	return { value: merged.value as T, lost: merged.lost, reset };
+}
+
+// For a flat settings form whose value is saved as a whole: each field keeps its `original`
+// value until the form's output for that field differs from its output when the form opened.
+export function useChangedFields<T extends Record<string, unknown>>(original: T, edited: T): T {
+	const [start] = useState({ original, baseline: edited });
+	const fields = new Set([...Object.keys(start.original), ...Object.keys(edited)]);
+	return Object.fromEntries(
+		[...fields].flatMap(field => {
+			const value = deepEqual(start.baseline[field], edited[field])
+				? start.original[field]
+				: edited[field];
+			return value === undefined ? [] : [[field, value]];
+		})
+	) as T;
 }
 
 export function LostFieldsWarning(props: { lost: string[] }) {

@@ -423,7 +423,7 @@ export function KeysPage() {
 					</p>
 				</ConfirmDialog>
 			) : null}
-			{advancedOpen ? (
+			{advancedOpen && !unavailable ? (
 				<AdvancedSettingsDrawer
 					config={config.data}
 					policy={policy}
