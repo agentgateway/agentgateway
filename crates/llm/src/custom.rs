@@ -70,6 +70,7 @@ pub enum ProviderPreset {
 	Typesafe,
 	Nebius,
 	Coreweave,
+	Llmtr,
 }
 
 impl ProviderPreset {
@@ -93,6 +94,7 @@ impl ProviderPreset {
 			Self::Typesafe => "https://api.typesafe.ai/v1",
 			Self::Nebius => "https://api.tokenfactory.nebius.com/v1",
 			Self::Coreweave => "https://api.inference.wandb.ai/v1",
+			Self::Llmtr => "https://llmtr.com/v1",
 		}
 	}
 
@@ -203,6 +205,7 @@ impl ProviderPreset {
 				vec![format(Completions, None), format(Embeddings, None)],
 			),
 			Self::Coreweave => ("coreweave", vec![format(Completions, None)]),
+			Self::Llmtr => ("llmtr", vec![format(Completions, None)]),
 		};
 		Provider {
 			model_override: model,
@@ -345,5 +348,15 @@ mod tests {
 				.provider(None)
 				.supports(ProviderFormat::Responses)
 		);
+
+		assert_eq!(
+			serde_json::to_string(&ProviderPreset::Llmtr).unwrap(),
+			"\"llmtr\""
+		);
+		assert_eq!(ProviderPreset::Llmtr.base_url(), "https://llmtr.com/v1");
+		let llmtr = ProviderPreset::Llmtr.provider(None);
+		assert_eq!(llmtr.provider_override.as_deref(), Some("llmtr"));
+		assert!(llmtr.supports(ProviderFormat::Completions));
+		assert!(!llmtr.supports(ProviderFormat::Responses));
 	}
 }

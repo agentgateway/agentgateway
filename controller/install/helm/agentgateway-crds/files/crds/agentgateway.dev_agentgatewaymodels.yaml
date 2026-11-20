@@ -7407,6 +7407,7 @@ spec:
                 - Gemini
                 - Groq
                 - Huggingface
+                - LLMTR
                 - Meta
                 - Mistral
                 - Nebius
