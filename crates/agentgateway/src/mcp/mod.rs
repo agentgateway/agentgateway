@@ -24,10 +24,11 @@ use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::{
 	CallToolRequestMethod, CallToolResult, CancelTaskMethod, CompleteRequestMethod, ConstString,
-	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
-	InitializeResultMethod, JsonRpcError, ListPromptsRequestMethod,
-	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListToolsRequestMethod,
-	PingRequestMethod, ProtocolVersion, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
+	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod,
+	GetSkillRequestMethod, GetTaskMethod, InitializeResultMethod, JsonRpcError,
+	ListPromptsRequestMethod, ListResourceTemplatesRequestMethod, ListResourcesRequestMethod,
+	ListSkillsRequestMethod, ListToolsRequestMethod, PingRequestMethod, ProtocolVersion,
+	ReadResourceDirectoryRequestMethod, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
 	SubscribeRequestMethod, SubscriptionsListenRequestMethod, UnsubscribeRequestMethod,
 	UpdateTaskMethod,
 };
@@ -79,6 +80,9 @@ pub(crate) fn is_known_client_request_method(method: &str) -> bool {
 			| ListResourcesRequestMethod::VALUE
 			| ListResourceTemplatesRequestMethod::VALUE
 			| ReadResourceRequestMethod::VALUE
+			| ReadResourceDirectoryRequestMethod::VALUE
+			| ListSkillsRequestMethod::VALUE
+			| GetSkillRequestMethod::VALUE
 			| SubscriptionsListenRequestMethod::VALUE
 			| SubscribeRequestMethod::VALUE
 			| UnsubscribeRequestMethod::VALUE
@@ -682,6 +686,16 @@ impl MCPInfo {
 				}
 			},
 			ClientRequest::ReadResourceRequest(request) => {
+				if let Some((target, uri)) = mcp_request_uri(backend, &request.params.uri) {
+					info.set_resource(target, uri);
+				}
+			},
+			ClientRequest::ReadResourceDirectoryRequest(request) => {
+				if let Some((target, uri)) = mcp_request_uri(backend, &request.params.uri) {
+					info.set_resource(target, uri);
+				}
+			},
+			ClientRequest::GetSkillRequest(request) => {
 				if let Some((target, uri)) = mcp_request_uri(backend, &request.params.uri) {
 					info.set_resource(target, uri);
 				}

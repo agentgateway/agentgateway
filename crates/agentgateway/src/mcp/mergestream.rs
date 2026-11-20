@@ -4,7 +4,7 @@ use futures_core::stream::BoxStream;
 use futures_util::StreamExt;
 use itertools::Itertools;
 use rmcp::model::{ErrorCode, RequestId, ServerJsonRpcMessage, ServerResult};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::mcp::rbac::CelExecWrapper;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
@@ -157,6 +157,9 @@ pub struct MergeStream {
 	failure_mode: FailureMode,
 	// Discovery rejection is a compatibility signal that FailOpen must not hide.
 	fail_on_discovery_rejection: bool,
+	// A target that rejects an optional extension method has nothing to contribute, so it is
+	// skipped in every failure mode.
+	skip_method_rejection: bool,
 	first_failure: Option<Result<ServerJsonRpcMessage, ClientError>>,
 }
 
@@ -206,8 +209,14 @@ impl MergeStream {
 			cel,
 			failure_mode,
 			fail_on_discovery_rejection,
+			skip_method_rejection: false,
 			first_failure: None,
 		}
+	}
+
+	pub fn with_skip_method_rejection(mut self, skip: bool) -> Self {
+		self.skip_method_rejection = skip;
+		self
 	}
 
 	fn merge_terminal_messages(
@@ -263,7 +272,15 @@ impl Stream for MergeStream {
 									e.error.code,
 									ErrorCode::METHOD_NOT_FOUND | ErrorCode::UNSUPPORTED_PROTOCOL_VERSION
 								);
-							if self.failure_mode == FailureMode::FailOpen && !discovery_rejection {
+							let unsupported =
+								self.skip_method_rejection && e.error.code == ErrorCode::METHOD_NOT_FOUND;
+							if unsupported {
+								debug!("upstream does not support the method, skipping: {:?}", e);
+								if self.first_failure.is_none() {
+									self.first_failure = Some(Ok(ServerJsonRpcMessage::Error(e)));
+								}
+								drop = true;
+							} else if self.failure_mode == FailureMode::FailOpen && !discovery_rejection {
 								warn!(
 									"upstream JSON-RPC error, skipping (failure_mode=FailOpen): {:?}",
 									e

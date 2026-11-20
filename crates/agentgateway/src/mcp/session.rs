@@ -724,6 +724,61 @@ impl Session {
 						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
+					ClientRequest::ListSkillsRequest(_) => {
+						Box::pin(
+							self
+								.relay
+								.send_list(r, ctx, self.relay.merge_skills(), self.encoder.clone()),
+						)
+						.await
+					},
+					// Skill and directory URIs are resource URIs, so both route like `resources/read`.
+					ClientRequest::GetSkillRequest(gsr) => {
+						let uri = gsr.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), original_uri.to_string());
+						});
+						gsr.params.uri = original_uri.clone();
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							&mcp::guardrails::methods::SKILLS_GET,
+							&mut gsr.params,
+							&mut gsr.extensions,
+							&mut ctx,
+							rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								original_uri,
+							)),
+							"resource",
+							&uri,
+						))
+						.await?;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+					},
+					ClientRequest::ReadResourceDirectoryRequest(rdr) => {
+						let uri = rdr.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), original_uri.to_string());
+						});
+						rdr.params.uri = original_uri.clone();
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							&mcp::guardrails::methods::RESOURCES_DIRECTORY_READ,
+							&mut rdr.params,
+							&mut rdr.extensions,
+							&mut ctx,
+							rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								original_uri,
+							)),
+							"resource",
+							&uri,
+						))
+						.await?;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+					},
 					ClientRequest::SubscribeRequest(sr) => {
 						let uri = sr.params.uri.clone();
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
