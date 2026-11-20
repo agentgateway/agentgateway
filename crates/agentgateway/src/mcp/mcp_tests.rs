@@ -2741,6 +2741,75 @@ async fn modern_skills_methods_single_target_authorization() {
 }
 
 #[tokio::test]
+async fn modern_skills_methods_multiple_targets() {
+	let alpha = mock_modern_streamable_http_server().await;
+	let beta = mock_modern_streamable_http_server().await;
+	let (other, _) = mock_mrtr_streamable_http_server().await;
+	let t = never_prefix_proxy(
+		vec![
+			("alpha", alpha.addr, false),
+			("beta", beta.addr, false),
+			("other", other.addr, false),
+		],
+		false,
+	);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let send = |method: &'static str, mut params: serde_json::Value| {
+		params["_meta"] = modern_meta();
+		let body = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
+		let mut req = mcp_json_post(&client, &url, &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", method);
+		if method == "resources/read" {
+			req = req.header("mcp-name", body["params"]["uri"].as_str().unwrap());
+		}
+		async move { read_response_message(req.send().await.unwrap()).await }
+	};
+
+	let list = send("skills/list", serde_json::json!({})).await;
+	let skills = list["result"]["skills"].as_array().unwrap();
+	assert_eq!(skills.len(), 4);
+	assert_eq!(list["result"]["ttlMs"], 0);
+	assert_eq!(list["result"]["cacheScope"], "private");
+	for target in ["alpha", "beta"] {
+		let uri = format!("skill://{target}/code-review/SKILL.md");
+		let skill = skills.iter().find(|skill| skill["uri"] == uri).unwrap();
+		assert_eq!(skill["frontmatter"]["name"], "code-review");
+		assert_eq!(skill["resources"][0]["uri"], uri);
+		assert_eq!(
+			skill["resources"][1]["uri"],
+			format!("skill://{target}/code-review/references/checklist.md")
+		);
+		assert_eq!(skill["resources"][1]["digest"], "sha256:dbab");
+
+		let params = serde_json::json!({"uri": uri});
+		let get = send("skills/get", params.clone()).await;
+		assert_eq!(&get["result"]["skill"], skill);
+		let read = send("resources/read", params).await;
+		assert_eq!(read["result"]["contents"][0]["uri"], uri);
+	}
+	let dir = send(
+		"resources/directory/read",
+		serde_json::json!({
+			"uri": "skill://beta/code-review/references"
+		}),
+	)
+	.await;
+	assert_eq!(
+		dir["result"]["resources"][0]["uri"],
+		"skill://beta/code-review/references/checklist.md"
+	);
+
+	let cursor = list["result"]["nextCursor"].as_str().unwrap();
+	assert_ne!(cursor, "page2");
+	let next = send("skills/list", serde_json::json!({"cursor": cursor})).await;
+	assert_eq!(next["result"]["skills"], serde_json::json!([]));
+	assert!(next["result"].get("nextCursor").is_none());
+}
+
+#[tokio::test]
 async fn modern_body_only_removed_method_is_invalid_protocol_not_404() {
 	// Removed-method rejection uses the header version only, while completeness checks use
 	// the header or body version. A removed method with modern `_meta` but no protocol
@@ -5523,7 +5592,23 @@ async fn mock_streamable_http_server_with_discover_versions(
 							}
 						}]
 					}),
-					m @ ("skills/list" | "skills/get" | "resources/directory/read") => skills_result(m),
+					"skills/list" if body["params"]["cursor"] == "page2" => serde_json::json!({
+						"skills": [], "resultType": "complete"
+					}),
+					"skills/get" if body["params"]["uri"] == "skill://code-review/SKILL.md" => {
+						skills_result(method)
+					},
+					"resources/directory/read"
+						if body["params"]["uri"] == "skill://code-review/references" =>
+					{
+						skills_result(method)
+					},
+					"resources/read" if body["params"]["uri"] == "skill://code-review/SKILL.md" => {
+						serde_json::json!({
+							"contents": [{"uri": "skill://code-review/SKILL.md", "text": "Skill instructions"}]
+						})
+					},
+					"skills/list" => skills_result(method),
 					_ => {
 						return Ok(axum::Json(serde_json::json!({
 								"jsonrpc": "2.0",
@@ -7702,9 +7787,9 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 		"discover must include extensions recorded from the legacy target's initialize"
 	);
 	assert!(extensions.contains_key("example.com/other"));
-	assert!(
-		!extensions.contains_key(rmcp::model::SKILLS_EXTENSION_ID),
-		"skills cannot be routed when multiplexing"
+	assert_eq!(
+		extensions[rmcp::model::SKILLS_EXTENSION_ID]["directoryRead"],
+		true
 	);
 }
 
