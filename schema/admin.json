@@ -2813,6 +2813,30 @@
             "alg",
             "assertionAudience"
           ]
+        },
+        {
+          "description": "Client assertion issued to the gateway (RFC 7523).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientAssertion": {
+              "description": "Where the gateway reads the assertion from.",
+              "$ref": "#/$defs/ClientAssertionSource"
+            },
+            "method": {
+              "type": "string",
+              "const": "clientAssertion"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "clientAssertion"
+          ]
         }
       ]
     },
@@ -2827,6 +2851,24 @@
           "description": "Send the leaf certificate's SHA-256 thumbprint in `x5t#S256`.",
           "type": "string",
           "const": "x5t#S256"
+        }
+      ]
+    },
+    "ClientAssertionSource": {
+      "oneOf": [
+        {
+          "description": "Azure Workload Identity token from `AZURE_FEDERATED_TOKEN_FILE`.",
+          "type": "object",
+          "properties": {
+            "workloadIdentity": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "workloadIdentity"
+          ],
+          "additionalProperties": false
         }
       ]
     },

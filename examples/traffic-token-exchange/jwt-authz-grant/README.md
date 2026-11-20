@@ -143,6 +143,17 @@ backendAuth:
       requested_token_use: '"on_behalf_of"'         # CEL expression -> literal string
 ```
 
+Instead of a client secret, the app registration can trust the gateway's
+ServiceAccount through a federated identity credential (Azure Workload Identity):
+
+```yaml
+    clientAuth:
+      clientId: <CLIENT_ID>
+      method: clientAssertion
+      clientAssertion:
+        workloadIdentity: {}
+```
+
 Field-by-field mapping:
 
 | Microsoft form field | Produced by |
@@ -151,6 +162,7 @@ Field-by-field mapping:
 | `assertion=<user token>` | the inbound bearer (jwt-bearer sends the subject as `assertion`) |
 | `scope=...` | `scopes:` (joined into one space-delimited `scope`) |
 | `client_id` + `client_secret` (in body) | `clientAuth.method: clientSecretPost` |
+| `client_id` + `client_assertion` (in body) | `clientAuth.method: clientAssertion` |
 | `requested_token_use=on_behalf_of` | `additionalParams` (CEL string literal) |
 
 Gotchas:
