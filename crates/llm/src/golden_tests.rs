@@ -168,6 +168,14 @@ mod requests {
 		("multi-turn-tools", &[VERTEX_GEMINI]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
 		("generation-config", &[VERTEX_GEMINI]),
+		(
+			"system-reminder-between-parallel-tool-results",
+			&[ANTHROPIC, VERTEX_GEMINI],
+		),
+		(
+			"system-reminder-mid-conversation",
+			&[ANTHROPIC, VERTEX_GEMINI],
+		),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		(
