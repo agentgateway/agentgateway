@@ -140,6 +140,79 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn from_completions_normalizes_tool_call_ids() {
+		let ids = [
+			"call_1__thought__AbC1/x+Yz==",
+			"call_1__thought__AbC1+x/Yz==",
+			"toolu_0",
+			"call_VALID-123",
+			"",
+			"call_雪",
+		];
+		let calls: Vec<_> = ids
+			.iter()
+			.enumerate()
+			.map(|(i, id)| {
+				if i % 2 == 0 {
+					serde_json::json!({"id": id, "type": "function", "function": {
+						"name": "get_weather", "arguments": "{\"city\":\"Paris\"}"
+					}})
+				} else {
+					serde_json::json!({"id": id, "type": "custom", "custom_tool": {
+						"name": "get_weather", "input": "{\"city\":\"Paris\"}"
+					}})
+				}
+			})
+			.collect();
+		let mut history = vec![
+			serde_json::json!({"role": "user", "content": "Weather in Paris?"}),
+			serde_json::json!({"role": "assistant", "content": null, "tool_calls": calls}),
+		];
+		for id in ids.iter().rev() {
+			history.push(serde_json::json!({"role": "tool", "tool_call_id": id, "content": "12"}));
+		}
+		history.push(history[1].clone());
+		let req: types::completions::Request = serde_json::from_value(serde_json::json!({
+			"model": "claude-sonnet-4", "max_completion_tokens": 200, "messages": history
+		}))
+		.unwrap();
+		let original = serde_json::to_value(&req).unwrap();
+		let bytes = from_completions::translate(&req, None, None).unwrap();
+		let out: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+		let mut seen = std::collections::HashSet::new();
+		for (i, original_id) in ids.iter().enumerate() {
+			let call = &out["messages"][1]["content"][i];
+			let id = call["id"].as_str().unwrap();
+			assert!(
+				!id.is_empty()
+					&& id
+						.bytes()
+						.all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'),
+				"Anthropic rejected tool_use.id: {id:?}"
+			);
+			assert!(seen.insert(id), "distinct input ids must stay distinct");
+			assert_eq!(
+				out["messages"][2 + ids.len() - 1 - i]["content"][0]["tool_use_id"],
+				id
+			);
+			assert_eq!(out["messages"][2 + ids.len()]["content"][i]["id"], id);
+			assert_eq!(call["input"], serde_json::json!({"city": "Paris"}));
+			if ["toolu_0", "call_VALID-123"].contains(original_id) {
+				assert_eq!(id, *original_id);
+			}
+		}
+		assert_eq!(serde_json::to_value(&req).unwrap(), original);
+		assert_eq!(
+			from_completions::translate(&req, None, None).unwrap(),
+			bytes
+		);
+		let vertex: serde_json::Value =
+			serde_json::from_slice(&crate::vertex::prepare_anthropic_message_body(bytes).unwrap())
+				.unwrap();
+		assert_eq!(vertex["messages"], out["messages"]);
+	}
+
+	#[test]
 	fn cap_thinking_budget_enforces_anthropic_bounds() {
 		assert_eq!(cap_thinking_budget_to_max_tokens(1, 4096), None);
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1024), None);
@@ -333,7 +406,7 @@ pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, AIError> {
 }
 
 pub mod from_completions {
-	use std::collections::HashMap;
+	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;
 
 	use agent_core::strng;
@@ -633,6 +706,50 @@ pub mod from_completions {
 		}
 	}
 
+	fn normalize_tool_call_ids(messages: &mut [messages::Message]) {
+		let mut used: HashSet<String> = messages
+			.iter()
+			.flat_map(|message| &message.content)
+			.filter_map(|block| match block {
+				messages::ContentBlock::ToolUse { id, .. }
+				| messages::ContentBlock::ToolResult {
+					tool_use_id: id, ..
+				} => Some(id.clone()),
+				_ => None,
+			})
+			.collect();
+		let mut mapped = HashMap::new();
+		let mut next_id = 0;
+		for block in messages.iter_mut().flat_map(|message| &mut message.content) {
+			let (messages::ContentBlock::ToolUse { id, .. }
+			| messages::ContentBlock::ToolResult {
+				tool_use_id: id, ..
+			}) = block
+			else {
+				continue;
+			};
+			if !id.is_empty()
+				&& id
+					.bytes()
+					.all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
+			{
+				continue;
+			}
+			*id = mapped
+				.entry(id.clone())
+				.or_insert_with(|| {
+					loop {
+						let candidate = format!("toolu_{next_id}");
+						next_id += 1;
+						if used.insert(candidate.clone()) {
+							break candidate;
+						}
+					}
+				})
+				.clone();
+		}
+	}
+
 	fn translate_internal(
 		req: completions::Request,
 		model_id: String,
@@ -707,7 +824,7 @@ pub mod from_completions {
 		};
 
 		// Convert messages to Anthropic format
-		let messages = req
+		let mut messages = req
 			.messages
 			.iter()
 			.filter_map(|msg| {
@@ -751,6 +868,7 @@ pub mod from_completions {
 				}
 			})
 			.collect::<Result<Vec<_>, _>>()?;
+		normalize_tool_call_ids(&mut messages);
 
 		let tools = if let Some(tools) = req.tools {
 			let mapped_tools: Vec<_> = tools
