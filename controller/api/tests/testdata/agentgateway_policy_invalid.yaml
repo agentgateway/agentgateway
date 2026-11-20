@@ -150,6 +150,90 @@ spec:
     tls:
       sni: ""
 ---
+_err: 'should be at least 1 char'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-spiffe-domain-empty
+spec:
+  backend:
+    tls:
+      certificateSource: SPIFFE
+      additionalTrustDomains:
+        - ""
+---
+_err: 'may not be more than 255 bytes'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-spiffe-domain-too-long
+spec:
+  backend:
+    tls:
+      certificateSource: SPIFFE
+      additionalTrustDomains:
+        - aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+---
+_err: 'should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-spiffe-domain-scheme
+spec:
+  backend:
+    tls:
+      certificateSource: SPIFFE
+      additionalTrustDomains:
+        - spiffe://example.org
+---
+_err: 'should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-spiffe-domain-path
+spec:
+  backend:
+    tls:
+      certificateSource: SPIFFE
+      additionalTrustDomains:
+        - example.org/workload
+---
+_err: 'should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-spiffe-domain-space
+spec:
+  backend:
+    tls:
+      certificateSource: SPIFFE
+      additionalTrustDomains:
+        - bad domain
+---
+_err: 'should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-spiffe-domain-port
+spec:
+  backend:
+    tls:
+      certificateSource: SPIFFE
+      additionalTrustDomains:
+        - example.org:443
+---
+_err: 'should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-spiffe-domain-wildcard
+spec:
+  backend:
+    tls:
+      certificateSource: SPIFFE
+      additionalTrustDomains:
+        - "*.example.org"
+---
 _err: "randomSampling in body must be of type string"
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

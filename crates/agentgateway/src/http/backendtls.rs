@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
+use ::spiffe::TrustDomain;
 use agent_core::strng;
 use agent_core::strng::Strng;
 use arc_swap::ArcSwap;
@@ -11,6 +12,7 @@ use rustls_pki_types::{CertificateDer, ServerName};
 use serde::Serializer;
 use tracing::{info, trace, warn};
 
+use crate::control::spiffe::normalize_trust_domains;
 use crate::resource_manager::FileAccess;
 use crate::serdes::{schema_de, schema_ser};
 use crate::transport::tls;
@@ -144,7 +146,7 @@ pub struct SpiffeBackendTLS {
 	pub verify_sans: Vec<String>,
 	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
 	/// local trust domain is always implicit. Combine with `verify_sans` to pin exact IDs.
-	pub additional_trust_domains: Vec<String>,
+	pub additional_trust_domains: Vec<TrustDomain>,
 }
 
 impl BackendTLS {
@@ -586,7 +588,12 @@ impl ResolvedBackendTLS {
 			BackendTLSSource::Spiffe(SpiffeBackendTLS {
 				alpn: self.alpn,
 				verify_sans: self.subject_alt_names.unwrap_or_default(),
-				additional_trust_domains: self.spiffe_additional_trust_domains.unwrap_or_default(),
+				additional_trust_domains: normalize_trust_domains(
+					self
+						.spiffe_additional_trust_domains
+						.as_deref()
+						.unwrap_or_default(),
+				),
 			})
 		} else {
 			let files = FileSources {
@@ -909,10 +916,36 @@ mod hot_reload_tests {
 	}
 }
 
-#[cfg(all(test, feature = "fips"))]
+#[cfg(test)]
 mod tests {
 	use super::*;
 
+	#[test]
+	fn spiffe_backend_normalizes_trust_domains_at_config_load() {
+		let config = ResolvedBackendTLS {
+			spiffe: true,
+			spiffe_additional_trust_domains: Some(
+				["Z.example", "bad domain", "", "a_example", "z.EXAMPLE"]
+					.map(String::from)
+					.to_vec(),
+			),
+			..Default::default()
+		}
+		.try_into()
+		.unwrap();
+		let BackendTLSSource::Spiffe(config) = config.source else {
+			panic!("expected SPIFFE backend TLS");
+		};
+		assert_eq!(
+			config.additional_trust_domains,
+			[
+				TrustDomain::new("a_example").unwrap(),
+				TrustDomain::new("z.example").unwrap(),
+			]
+		);
+	}
+
+	#[cfg(feature = "fips")]
 	#[test]
 	fn fips_config_backend_tls_rejects_non_approved_key_exchange_group() {
 		let result = ResolvedBackendTLS {

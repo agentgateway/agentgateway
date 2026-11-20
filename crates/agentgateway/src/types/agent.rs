@@ -7,6 +7,7 @@ use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use ::spiffe::TrustDomain;
 use anyhow::anyhow;
 use hashbrown::Equivalent;
 use heck::ToSnakeCase;
@@ -24,7 +25,7 @@ use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::control::caclient::CaClient;
-use crate::control::spiffe::SpiffeClient;
+use crate::control::spiffe::{SpiffeClient, normalize_trust_domains};
 use crate::http::auth::{BackendAuth, BackendAuthCredential, BackendAuthKind};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
@@ -258,7 +259,7 @@ enum ServerTlsCertificateSource {
 		default_alpns: Alpns,
 		/// Federated trust domains (beyond the gateway's own) whose client SVIDs this listener
 		/// accepts; the local trust domain is always implicit.
-		additional_trust_domains: Vec<String>,
+		additional_trust_domains: Vec<TrustDomain>,
 	},
 }
 
@@ -421,7 +422,7 @@ impl ServerTLSConfig {
 		Self {
 			source: ServerTlsCertificateSource::Spiffe {
 				default_alpns,
-				additional_trust_domains,
+				additional_trust_domains: normalize_trust_domains(&additional_trust_domains),
 			},
 			base_config: None,
 			inputs: None,
@@ -3474,6 +3475,30 @@ pub mod defaults {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn spiffe_listener_normalizes_trust_domains_at_config_load() {
+		let config = ServerTLSConfig::spiffe(
+			vec![],
+			["Z.example", "bad domain", "", "a_example", "z.EXAMPLE"]
+				.map(String::from)
+				.to_vec(),
+		);
+		let ServerTlsCertificateSource::Spiffe {
+			additional_trust_domains,
+			..
+		} = config.source
+		else {
+			panic!("expected SPIFFE listener TLS");
+		};
+		assert_eq!(
+			additional_trust_domains,
+			[
+				TrustDomain::new("a_example").unwrap(),
+				TrustDomain::new("z.example").unwrap(),
+			]
+		);
+	}
 
 	#[cfg(feature = "fips")]
 	fn fips_test_certificate() -> (Vec<u8>, Vec<u8>) {

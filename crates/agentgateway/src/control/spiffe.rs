@@ -55,16 +55,16 @@ pub enum Error {
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ServerConfigKey {
 	alpns: Vec<Vec<u8>>,
-	// Canonical (sorted, lowercased) additional (non-local) trust domain names.
-	additional_trust_domains: Vec<String>,
+	// Canonical (sorted, lowercased) additional (non-local) trust domains.
+	additional_trust_domains: Vec<TrustDomain>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ClientConfigCacheKey {
 	alpns: Vec<Vec<u8>>,
 	verify_sans: Vec<String>,
-	// Canonical (sorted, lowercased) additional (non-local) trust domain names.
-	additional_trust_domains: Vec<String>,
+	// Canonical (sorted, lowercased) additional (non-local) trust domains.
+	additional_trust_domains: Vec<TrustDomain>,
 }
 
 /// A rotation-aware map with 2 methods, Get & Insert, both having a sequence number parameter.
@@ -175,20 +175,19 @@ impl SpiffeClient {
 	pub fn server_config(
 		&self,
 		alpns: Vec<Vec<u8>>,
-		additional_trust_domains: Vec<String>,
+		additional_trust_domains: Vec<TrustDomain>,
 	) -> Result<Arc<ServerConfig>, Error> {
-		let additional = normalize_trust_domains(&additional_trust_domains);
 		let seq = self.updates.last();
 		let key = ServerConfigKey {
 			alpns: alpns.clone(),
-			additional_trust_domains: trust_domain_names(&additional),
+			additional_trust_domains,
 		};
 
 		if let Some(cfg) = self.server_cache.lock().unwrap().get(seq, &key) {
 			return Ok(cfg);
 		}
 
-		let cfg = Arc::new(self.build_server_config(alpns, &additional)?);
+		let cfg = Arc::new(self.build_server_config(alpns, &key.additional_trust_domains)?);
 		Ok(self.server_cache.lock().unwrap().insert(seq, key, cfg))
 	}
 
@@ -234,22 +233,22 @@ impl SpiffeClient {
 		&self,
 		alpns: Vec<Vec<u8>>,
 		verify_sans: Vec<String>,
-		additional_trust_domains: Vec<String>,
+		additional_trust_domains: Vec<TrustDomain>,
 	) -> Result<Arc<ClientConfig>, Error> {
-		let additional = normalize_trust_domains(&additional_trust_domains);
 		// Sequence sampled before the SVID read; see server_config.
 		let seq = self.updates.last();
 		let key = ClientConfigCacheKey {
 			alpns: alpns.clone(),
 			verify_sans: verify_sans.clone(),
-			additional_trust_domains: trust_domain_names(&additional),
+			additional_trust_domains,
 		};
 
 		if let Some(cfg) = self.client_cache.lock().unwrap().get(seq, &key) {
 			return Ok(cfg);
 		}
 
-		let cfg = Arc::new(self.build_client_config(alpns, verify_sans, &additional)?);
+		let cfg =
+			Arc::new(self.build_client_config(alpns, verify_sans, &key.additional_trust_domains)?);
 		Ok(self.client_cache.lock().unwrap().insert(seq, key, cfg))
 	}
 
@@ -296,9 +295,10 @@ fn snapshot_svid(ctx: &X509Context) -> Result<&Arc<X509Svid>, Error> {
 }
 
 /// Parse, validate, de-duplicate and canonically order trust domain names. `TrustDomain` lowercases
-/// names, so the result is a stable cache key regardless of input case or order. Invalid entries
-/// are skipped so they cannot disrupt traffic in other trust domains.
-fn normalize_trust_domains(names: &[String]) -> Vec<TrustDomain> {
+/// names, so the result is a stable cache key regardless of input case or order. Called when
+/// listener/backend configuration is built, not per request. Invalid entries are skipped so they
+/// cannot disrupt traffic in other trust domains.
+pub(crate) fn normalize_trust_domains(names: &[String]) -> Vec<TrustDomain> {
 	let mut tds: Vec<TrustDomain> = Vec::with_capacity(names.len());
 	for name in names {
 		let td = match TrustDomain::new(name) {
@@ -314,10 +314,6 @@ fn normalize_trust_domains(names: &[String]) -> Vec<TrustDomain> {
 	}
 	tds.sort();
 	tds
-}
-
-fn trust_domain_names(tds: &[TrustDomain]) -> Vec<String> {
-	tds.iter().map(|td| td.to_string()).collect()
 }
 
 /// Per-trust-domain root stores used to verify peer SVIDs. `additional` holds the non-local trust
@@ -1164,7 +1160,7 @@ mod tests {
 		.await;
 
 		let alpns = vec![b"h2".to_vec()];
-		let additional = vec!["federated.example".to_string()];
+		let additional = normalize_trust_domains(&["federated.example".to_string()]);
 
 		client
 			.server_config(alpns, additional)
@@ -1185,8 +1181,11 @@ mod tests {
 		]
 		.map(String::from);
 		assert_eq!(
-			trust_domain_names(&normalize_trust_domains(&names)),
-			["a_example", "z.example"]
+			normalize_trust_domains(&names),
+			[
+				TrustDomain::new("a_example").unwrap(),
+				TrustDomain::new("z.example").unwrap(),
+			]
 		);
 		assert!(normalize_trust_domains(&["bad domain".to_string()]).is_empty());
 	}
@@ -1203,9 +1202,17 @@ mod tests {
 		)
 		.await;
 
-		for valid in [vec![], vec!["federated.example".to_string()]] {
+		for mut valid in [vec![], vec!["federated.example".to_string()]] {
 			let mut mixed = valid.clone();
-			mixed.extend(["bad domain".to_string(), String::new()]);
+			mixed.extend([
+				"bad domain".to_string(),
+				String::new(),
+				"Z.example".to_string(),
+				"z.EXAMPLE".to_string(),
+			]);
+			valid.push("z.example".to_string());
+			let mixed = normalize_trust_domains(&mixed);
+			let valid = normalize_trust_domains(&valid);
 			let alpns = vec![b"h2".to_vec()];
 			let server = client.server_config(alpns.clone(), mixed.clone()).unwrap();
 			assert!(Arc::ptr_eq(
@@ -1408,10 +1415,17 @@ mod tests {
 		.await;
 		let alpns = vec![b"h2".to_vec()];
 		client
-			.server_config(alpns.clone(), vec!["federated.example".to_string()])
+			.server_config(
+				alpns.clone(),
+				normalize_trust_domains(&["federated.example".to_string()]),
+			)
 			.expect("server config should build for a delivered federated domain");
 		client
-			.client_config(alpns.clone(), vec![], vec!["federated.example".to_string()])
+			.client_config(
+				alpns.clone(),
+				vec![],
+				normalize_trust_domains(&["federated.example".to_string()]),
+			)
 			.expect("client config should build for a delivered federated domain");
 
 		// A gateway that accepts a domain with no delivered bundle still builds its config.
@@ -1423,7 +1437,10 @@ mod tests {
 		)
 		.await;
 		client2
-			.server_config(alpns, vec!["federated.example".to_string()])
+			.server_config(
+				alpns,
+				normalize_trust_domains(&["federated.example".to_string()]),
+			)
 			.expect("an undelivered federated bundle should be skipped");
 		handle.abort();
 		handle2.abort();
