@@ -142,7 +142,7 @@ pub struct SpiffeBackendTLS {
 	/// Explicit ALPN protocols; `None` means the default `h2,http/1.1` (and allows a per-request
 	/// HTTP-version hint to narrow the offered set).
 	pub alpn: Option<Vec<String>>,
-	/// Expected upstream SPIFFE IDs to pin; empty means accept any SVID chaining to the bundle.
+	/// Expected upstream DNS names or SPIFFE IDs; empty means accept any local-domain SVID.
 	pub verify_sans: Vec<String>,
 	/// Trust domains derived from `verify_sans` when configuration is built.
 	pub trust_domains: Vec<TrustDomain>,
@@ -329,9 +329,10 @@ pub struct LocalBackendTLS {
 	key_exchange_groups: Option<Vec<tls::KeyExchangeGroup>>,
 	/// Get the gateway's client identity and trust roots from the SPIFFE Workload API.
 	/// Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.
-	/// Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);
-	/// The SPIFFE IDs select their trust domains' Workload API bundles. If `subjectAltNames` is
-	/// omitted, any SVID from the gateway's local trust domain is accepted.
+	/// Verify upstream DNS names or SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`).
+	/// Only SPIFFE IDs select additional trust domains' Workload API bundles; DNS names do not.
+	/// The backend must match one of the listed SANs. If `subjectAltNames` is omitted, any SVID
+	/// from the gateway's local trust domain is accepted.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub spiffe: Option<LocalSpiffeBackendTLS>,
 }
@@ -908,6 +909,7 @@ mod tests {
 	fn spiffe_backend_derives_trust_domains_at_config_load() {
 		let sans = [
 			"spiffe://Z.example/service",
+			"api.partner.example",
 			"spiffe://a_example/service",
 			"spiffe://z.EXAMPLE/another",
 		]
@@ -934,9 +936,30 @@ mod tests {
 	}
 
 	#[test]
+	fn spiffe_backend_dns_sans_do_not_add_trust_domains() {
+		let sans = vec![
+			"federated.example".to_string(),
+			"api.partner.example".to_string(),
+		];
+		let config = ResolvedBackendTLS {
+			spiffe: true,
+			subject_alt_names: Some(sans.clone()),
+			..Default::default()
+		}
+		.try_into()
+		.unwrap();
+		let BackendTLSSource::Spiffe(config) = config.source else {
+			panic!("expected SPIFFE backend TLS");
+		};
+		assert!(config.trust_domains.is_empty());
+		assert_eq!(config.verify_sans, sans);
+	}
+
+	#[test]
 	fn spiffe_backend_rejects_invalid_sans_at_config_load() {
 		for san in [
-			"example.org",
+			"",
+			"bad domain",
 			"https://example.org/service",
 			"spiffe://",
 			"spiffe://example.org:443/service",

@@ -647,9 +647,10 @@ type BackendTLS struct {
 	// Subject Alternative Names (`SAN`)
 	// to verify in the server certificate.
 	// If not present, the destination hostname is automatically used.
-	// When certificateSource is SPIFFE, each entry must be a SPIFFE ID. Its trust domain selects
-	// the SPIRE-supplied bundle used for verification, and the backend must match one of these IDs.
-	// If omitted with SPIFFE, any SVID from the gateway's local trust domain is accepted.
+	// When certificateSource is SPIFFE, entries may be DNS names or SPIFFE IDs, and the backend
+	// must match one of the listed SANs. Only SPIFFE IDs select additional trust domains'
+	// SPIRE-supplied bundles; DNS names do not enable federation. If omitted with SPIFFE, any SVID
+	// from the gateway's local trust domain is accepted.
 	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16

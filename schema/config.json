@@ -3523,7 +3523,7 @@
           "default": null
         },
         "spiffe": {
-          "description": "Get the gateway's client identity and trust roots from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.\nPin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);\nThe SPIFFE IDs select their trust domains' Workload API bundles. If `subjectAltNames` is\nomitted, any SVID from the gateway's local trust domain is accepted.",
+          "description": "Get the gateway's client identity and trust roots from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.\nVerify upstream DNS names or SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`).\nOnly SPIFFE IDs select additional trust domains' Workload API bundles; DNS names do not.\nThe backend must match one of the listed SANs. If `subjectAltNames` is omitted, any SVID\nfrom the gateway's local trust domain is accepted.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalSpiffeBackendTLS"

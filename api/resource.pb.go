@@ -14562,8 +14562,9 @@ type BackendPolicySpec_BackendTLS struct {
 	// If set, override the SNI explicitly. Otherwise, it is auto-derived.
 	Hostname *string `protobuf:"bytes,5,opt,name=hostname,proto3,oneof" json:"hostname,omitempty"`
 	// If set, the backend certificate must match one of these names. Otherwise, the destination
-	// is used. With SPIFFE, these must be SPIFFE IDs: their trust domains select Workload API
-	// bundles, and an empty list accepts only the gateway's local trust domain.
+	// is used. With SPIFFE, DNS names and SPIFFE IDs are accepted, but only SPIFFE IDs select
+	// additional trust domains' Workload API bundles. An empty list accepts only the gateway's
+	// local trust domain.
 	VerifySubjectAltNames []string `protobuf:"bytes,6,rep,name=verify_subject_alt_names,json=verifySubjectAltNames,proto3" json:"verify_subject_alt_names,omitempty"`
 	// Unset: use defaults (h2,http/1.1)
 	// Set but empty: send none

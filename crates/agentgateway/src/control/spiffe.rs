@@ -211,8 +211,8 @@ impl SpiffeClient {
 	/// upstream. The gateway presents its current SVID as the client certificate. The upstream's
 	/// certificate is verified against its own trust domain's bundle. `trust_domains` is derived
 	/// from `verify_sans` when backend configuration is built. When `verify_sans` is empty, only the
-	/// local trust domain is accepted; otherwise the upstream's SPIFFE ID must match one of the
-	/// provided `spiffe://` URIs.
+	/// local trust domain is accepted; otherwise the backend must match one of the listed DNS
+	/// names or SPIFFE IDs.
 	pub fn client_config(
 		&self,
 		alpns: Vec<Vec<u8>>,
@@ -295,14 +295,17 @@ pub(crate) fn normalize_trust_domains(names: &[String]) -> Vec<TrustDomain> {
 }
 
 pub(crate) fn trust_domains_from_sans(sans: &[String]) -> Result<Vec<TrustDomain>, Error> {
-	let mut domains = sans
-		.iter()
-		.map(|san| {
-			::spiffe::SpiffeId::new(san)
-				.map(|id| id.trust_domain().clone())
-				.map_err(|error| Error::InvalidSan(format!("{san:?}: {error}")))
-		})
-		.collect::<Result<Vec<_>, _>>()?;
+	let mut domains = Vec::new();
+	for san in sans {
+		if let Ok(transport::tls::ExtendedServerName::Native(_)) =
+			transport::tls::ExtendedServerName::try_from(san.clone())
+		{
+			continue;
+		}
+		let id = ::spiffe::SpiffeId::new(san)
+			.map_err(|error| Error::InvalidSan(format!("{san:?}: {error}")))?;
+		domains.push(id.trust_domain().clone());
+	}
 	domains.sort();
 	domains.dedup();
 	Ok(domains)
@@ -749,6 +752,10 @@ mod tests {
 
 		/// Issue a leaf SVID for `spiffe_id`, signed by this CA.
 		fn issue(&self, spiffe_id: &str) -> IssuedSvid {
+			self.issue_with_dns(spiffe_id, &[])
+		}
+
+		fn issue_with_dns(&self, spiffe_id: &str, dns_names: &[&str]) -> IssuedSvid {
 			use rcgen::{
 				CertificateParams, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose,
 				SanType, SerialNumber,
@@ -770,6 +777,11 @@ mod tests {
 				ExtendedKeyUsagePurpose::ClientAuth,
 			];
 			params.subject_alt_names = vec![SanType::URI(spiffe_id.try_into().unwrap())];
+			params.subject_alt_names.extend(
+				dns_names
+					.iter()
+					.map(|name| SanType::DnsName((*name).try_into().unwrap())),
+			);
 			let issuer = Issuer::from_params(&self.params, &self.kp);
 			let leaf = params.signed_by(&leaf_kp, &issuer).unwrap();
 			IssuedSvid {
@@ -1280,6 +1292,69 @@ mod tests {
 		assert!(
 			pinned
 				.verify_server_cert(&other, &[], &sni, &[], now)
+				.is_err()
+		);
+		handle.abort();
+	}
+
+	#[tokio::test]
+	async fn spiffe_dns_sans_verify_names_without_enabling_federation() {
+		let local = TestCa::new();
+		let fed = TestCa::new();
+		let (client, _dir, handle) = connect_with_federated(
+			"spiffe://example.org/ns/default/sa/gateway",
+			&local,
+			HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
+		)
+		.await;
+		let ctx = client.source.x509_context().unwrap();
+		let now = UnixTime::now();
+		let sni = ServerName::try_from("different.example").unwrap();
+		let dns_name = "federated.example";
+		let local_id = "spiffe://example.org/service";
+		let fed_id = "spiffe://federated.example/service";
+		let local_dns = CertificateDer::from(local.issue_with_dns(local_id, &[dns_name]).leaf_der);
+		let fed_dns = CertificateDer::from(fed.issue_with_dns(fed_id, &[dns_name]).leaf_der);
+		let local_wrong_dns =
+			CertificateDer::from(local.issue_with_dns(local_id, &["wrong.example"]).leaf_der);
+		let local_no_dns = CertificateDer::from(local.issue(local_id).leaf_der);
+
+		let sans = vec![dns_name.to_string()];
+		let domains = trust_domains_from_sans(&sans).unwrap();
+		assert!(domains.is_empty());
+		let dns_only = build_server_verifier(&ctx, sans, &domains).unwrap();
+		assert!(
+			dns_only
+				.verify_server_cert(&local_dns, &[], &sni, &[], now)
+				.is_ok()
+		);
+		for rejected in [&fed_dns, &local_wrong_dns, &local_no_dns] {
+			assert!(
+				dns_only
+					.verify_server_cert(rejected, &[], &sni, &[], now)
+					.is_err()
+			);
+		}
+
+		let pinned_id = "spiffe://federated.example/pinned";
+		let sans = vec![dns_name.to_string(), pinned_id.to_string()];
+		let domains = trust_domains_from_sans(&sans).unwrap();
+		let mixed = build_server_verifier(&ctx, sans, &domains).unwrap();
+		assert!(
+			mixed
+				.verify_server_cert(&fed_dns, &[], &sni, &[], now)
+				.is_ok()
+		);
+		let fed_pinned = CertificateDer::from(fed.issue(pinned_id).leaf_der);
+		assert!(
+			mixed
+				.verify_server_cert(&fed_pinned, &[], &sni, &[], now)
+				.is_ok()
+		);
+		let fed_unmatched = CertificateDer::from(fed.issue(fed_id).leaf_der);
+		assert!(
+			mixed
+				.verify_server_cert(&fed_unmatched, &[], &sni, &[], now)
 				.is_err()
 		);
 		handle.abort();
