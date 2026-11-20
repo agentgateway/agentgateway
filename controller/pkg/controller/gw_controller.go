@@ -313,8 +313,7 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 			// status is reported from translator, so return normally
 			return err
 		}
-		if errors.Is(err, deployer.ErrSessionKey) {
-			// a session key Secret failure is a deployment problem, not invalid Gateway configuration
+		if errors.Is(err, deployer.ErrResourceUnavailable) {
 			condition := metav1.Condition{
 				Type:               string(gwv1.GatewayConditionProgrammed),
 				Status:             metav1.ConditionFalse,

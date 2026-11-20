@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -130,6 +133,25 @@ func TestGatewayReconciler_InvalidWorkloadOverlaySetsInvalidParameters(t *testin
 }
 
 func TestGatewayReconciler_SessionKeySecretFailureSetsDeploymentFailed(t *testing.T) {
+	testGatewayDeploymentFailure(t, nil, deployer.ErrSessionKey, "api server unavailable")
+}
+
+type unavailableResourcePostProcessor struct {
+	deployer.HelmValuesGenerator
+	err error
+}
+
+func (p unavailableResourcePostProcessor) PostProcessObjects(context.Context, client.Object, []client.Object) ([]client.Object, error) {
+	return nil, p.err
+}
+
+func TestGatewayReconciler_PostProcessorResourceUnavailableSetsDeploymentFailed(t *testing.T) {
+	err := fmt.Errorf("%w: waiting for ConfigMap settings", deployer.ErrResourceUnavailable)
+	testGatewayDeploymentFailure(t, err, deployer.ErrResourceUnavailable, "waiting for ConfigMap settings")
+}
+
+func testGatewayDeploymentFailure(t *testing.T, postProcessErr, wantErr error, wantMessage string) {
+	t.Helper()
 	gw := &gwv1.Gateway{
 		Name:       "gw",
 		Namespace:  "default",
@@ -154,7 +176,7 @@ func TestGatewayReconciler_SessionKeySecretFailureSetsDeploymentFailed(t *testin
 		func(k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, errors.New("api server unavailable")
 		})
-	gwParams := deployer.NewGatewayParameters(fakeClient, &deployer.Inputs{
+	inputs := &deployer.Inputs{
 		ImageDefaults: &agentgateway.Image{
 			Registry:   new("cr.agentgateway.dev"),
 			Repository: new("agentgateway"),
@@ -173,7 +195,14 @@ func TestGatewayReconciler_SessionKeySecretFailureSetsDeploymentFailed(t *testin
 			ControllerName:      wellknown.DefaultAgwControllerName,
 			GatewaysForDeployer: krt.NewStaticCollection[collections.GatewayForDeployer](nil, nil),
 		},
-	})
+	}
+	gwParams := deployer.NewGatewayParameters(fakeClient, inputs)
+	if postProcessErr != nil {
+		gwParams.WithHelmValuesGeneratorOverride(unavailableResourcePostProcessor{
+			HelmValuesGenerator: deployer.NewGatewayParameters(fakeClient, inputs),
+			err:                 postProcessErr,
+		})
+	}
 	d, err := deployer.NewGatewayDeployer(
 		wellknown.DefaultAgwControllerName,
 		wellknown.DefaultAgwClassName,
@@ -202,7 +231,7 @@ func TestGatewayReconciler_SessionKeySecretFailureSetsDeploymentFailed(t *testin
 	kube.WaitForCacheSync("test-gateway-reconciler", stop, hasSynced...)
 
 	err = reconciler.Reconcile(types.NamespacedName{Name: gw.Name, Namespace: gw.Namespace})
-	require.ErrorIs(t, err, deployer.ErrSessionKey)
+	require.ErrorIs(t, err, wantErr)
 	var programmed *metav1.Condition
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		updated := reconciler.gwClient.Get(gw.Name, gw.Namespace)
@@ -214,7 +243,7 @@ func TestGatewayReconciler_SessionKeySecretFailureSetsDeploymentFailed(t *testin
 	assert.Equal(t, metav1.ConditionFalse, programmed.Status)
 	assert.Equal(t, string(reports.GatewayReasonDeploymentFailed), programmed.Reason)
 	assert.Equal(t, gw.Generation, programmed.ObservedGeneration)
-	assert.Contains(t, programmed.Message, "api server unavailable")
+	assert.Contains(t, programmed.Message, wantMessage)
 
 	updated := reconciler.gwClient.Get(gw.Name, gw.Namespace)
 	require.NotNil(t, updated)
