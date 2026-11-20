@@ -1257,20 +1257,6 @@ fn overlay_config_resources(
 		anyhow::bail!("local config root must be a JSON object");
 	};
 	if has_llm_resources {
-		if has_llm_policies
-			&& !root.contains_key("llm")
-			&& !resources
-				.iter()
-				.any(|r| r.kind == ConfigResourceKind::LlmSettings)
-		{
-			return Err(
-				ConfigResourceError::Conflict(
-					"DB-backed LLM policies require llm in the file config or a llm.settings resource"
-						.to_string(),
-				)
-				.into(),
-			);
-		}
 		let llm = root
 			.entry("llm")
 			.or_insert_with(|| Value::Object(serde_json::Map::new()));
