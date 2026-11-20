@@ -40,6 +40,10 @@ info:
   },
   "parsed": {
     "provider_model": "gpt-x",
+    "response_id": "resp_truncated_tool_call",
+    "finish_reasons": [
+      "max_output_tokens"
+    ],
     "output_messages": [
       {
         "role": "assistant",

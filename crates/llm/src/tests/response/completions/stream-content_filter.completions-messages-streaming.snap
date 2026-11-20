@@ -17,5 +17,9 @@ data: {"type":"message_stop"}
   "input_tokens": 10,
   "output_tokens": 0,
   "total_tokens": 10,
-  "provider_model": "gpt-5.6-luna"
+  "provider_model": "gpt-5.6-luna",
+  "response_id": "chatcmpl_filtered",
+  "finish_reasons": [
+    "content_filter"
+  ]
 }

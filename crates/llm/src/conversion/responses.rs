@@ -55,6 +55,7 @@ pub fn passthrough_stream(
 			types::responses::typed::ResponseStreamEvent::ResponseCreated(created) => {
 				log.update(|r| {
 					r.response.provider_model = Some(strng::new(&created.response.model));
+					r.response.response_id = Some(strng::new(&created.response.id));
 					r.response.service_tier = created
 						.response
 						.service_tier
@@ -102,7 +103,14 @@ pub fn passthrough_stream(
 					tool_calls.insert(done.output_index, part);
 				}
 			},
+			types::responses::typed::ResponseStreamEvent::ResponseIncomplete(e) => {
+				record_provider_response(&log, &e.response);
+			},
+			types::responses::typed::ResponseStreamEvent::ResponseFailed(e) => {
+				record_provider_response(&log, &e.response);
+			},
 			types::responses::typed::ResponseStreamEvent::ResponseCompleted(completed) => {
+				record_provider_response(&log, &completed.response);
 				let finish_reason = types::serialize_str(&completed.response.status);
 				log.update(|r| {
 					r.response.provider_model = Some(strng::new(&completed.response.model));
@@ -137,6 +145,19 @@ pub fn passthrough_stream(
 			_ => {},
 		}
 	})
+}
+
+pub(crate) fn record_provider_response(
+	log: &StreamingUsageGuard,
+	resp: &types::responses::typed::Response,
+) {
+	let reason = types::responses::typed_finish_reason(resp);
+	log.update(|r| {
+		r.response.response_id = Some(strng::new(&resp.id));
+		if let Some(reason) = &reason {
+			r.response.set_finish_reason(0, reason.clone());
+		}
+	});
 }
 
 fn take_output_messages(
@@ -848,10 +869,14 @@ pub mod from_messages {
 				.map(|t| t as u64),
 			..Default::default()
 		});
+		let id = Some(strng::new(&resp.id));
+		let finish_reasons = types::responses::typed_finish_reason(&resp).map(|r| vec![r]);
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
+		Ok(Box::new(super::super::ProviderResponse {
 			response: anthropic,
-			provider_usage,
+			usage: provider_usage,
+			id,
+			finish_reasons,
 		}))
 	}
 
@@ -1263,6 +1288,7 @@ pub mod from_messages {
 			state.model = Some(response.model.clone());
 			log.update(|r| {
 				r.response.provider_model = Some(strng::new(&response.model));
+				r.response.response_id = Some(strng::new(&response.id));
 				r.response.service_tier = response
 					.service_tier
 					.as_ref()
@@ -1568,6 +1594,7 @@ pub mod from_messages {
 					},
 					responses::ResponseStreamEvent::ResponseCompleted(completed) => {
 						record_response_metadata(&mut state, &log, &completed.response);
+						super::record_provider_response(&log, &completed.response);
 						state.pending_stop_reason = Some(if state.saw_tool_call {
 							messages::StopReason::ToolUse
 						} else if state.saw_refusal {
@@ -1586,6 +1613,7 @@ pub mod from_messages {
 					},
 					responses::ResponseStreamEvent::ResponseIncomplete(incomplete) => {
 						record_response_metadata(&mut state, &log, &incomplete.response);
+						super::record_provider_response(&log, &incomplete.response);
 						state.pending_stop_reason = incomplete
 							.response
 							.incomplete_details
@@ -1602,6 +1630,7 @@ pub mod from_messages {
 					},
 					responses::ResponseStreamEvent::ResponseFailed(failed) => {
 						record_response_metadata(&mut state, &log, &failed.response);
+						super::record_provider_response(&log, &failed.response);
 						tracing::warn!(
 							"Responses stream failed during messages translation; emitting error event"
 						);

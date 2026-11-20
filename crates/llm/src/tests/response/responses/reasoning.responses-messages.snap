@@ -96,6 +96,10 @@ info:
     "total_tokens": 23,
     "reasoning_tokens": 8,
     "service_tier": "default",
-    "provider_model": "qwen3-8b"
+    "provider_model": "qwen3-8b",
+    "response_id": "resp_0fd43e1b46691ead0069a89a2144808199a06ce29faf5798da",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

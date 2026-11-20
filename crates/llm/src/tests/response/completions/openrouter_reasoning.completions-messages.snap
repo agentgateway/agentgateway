@@ -56,6 +56,10 @@ info:
     "input_tokens": 23,
     "output_tokens": 796,
     "total_tokens": 819,
-    "provider_model": "test"
+    "provider_model": "test",
+    "response_id": "gen-1758648153-xeB95xIQsxABYYNTJLAj",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

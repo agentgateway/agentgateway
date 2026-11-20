@@ -588,3 +588,10 @@ impl OutputMessage {
 pub fn serialize_str<T: Serialize>(value: &T) -> Option<Strng> {
 	serde_json::to_value(value).ok()?.as_str().map(Into::into)
 }
+
+pub(crate) fn finish_reasons<S: AsRef<str>>(
+	reasons: impl IntoIterator<Item = Option<S>>,
+) -> Option<Vec<Strng>> {
+	let reasons: Vec<Strng> = reasons.into_iter().flatten().map(strng::new).collect();
+	(!reasons.is_empty()).then_some(reasons)
+}

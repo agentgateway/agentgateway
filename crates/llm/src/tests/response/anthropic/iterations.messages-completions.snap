@@ -70,6 +70,10 @@ info:
     "cached_input_tokens": 50,
     "service_tier": "standard",
     "provider_model": "claude-sonnet-4-6",
+    "response_id": "msg_iterations",
+    "finish_reasons": [
+      "end_turn"
+    ],
     "usage_lines": [
       {
         "input_tokens": 100,

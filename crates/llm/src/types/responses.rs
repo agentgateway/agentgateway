@@ -1240,6 +1240,38 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 	})
 }
 
+pub fn finish_reason(status: &str, incomplete_reason: Option<&str>) -> Strng {
+	match status {
+		"completed" => strng::literal!("stop"),
+		"incomplete" => incomplete_reason
+			.map(strng::new)
+			.unwrap_or_else(|| strng::literal!("incomplete")),
+		"failed" => strng::literal!("error"),
+		status => strng::new(status),
+	}
+}
+
+pub fn typed_finish_reason(resp: &typed::Response) -> Option<Strng> {
+	let status = serialize_str(&resp.status)?;
+	Some(finish_reason(
+		&status,
+		resp.incomplete_details.as_ref().map(|d| d.reason.as_str()),
+	))
+}
+
+impl Response {
+	pub fn finish_reason(&self) -> Strng {
+		finish_reason(
+			&self.status,
+			self
+				.rest
+				.get("incomplete_details")
+				.and_then(|d| d.get("reason"))
+				.and_then(|r| r.as_str()),
+		)
+	}
+}
+
 impl ResponseType for Response {
 	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
 		let output_messages = if log_content.tool_calls {
@@ -1292,6 +1324,8 @@ impl ResponseType for Response {
 			}),
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
+			response_id: Some(strng::new(&self.id)),
+			finish_reasons: Some(vec![self.finish_reason()]),
 			completion: if log_content.completion {
 				Some(
 					self

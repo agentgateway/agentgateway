@@ -59,6 +59,10 @@ info:
     "reasoning_tokens": 0,
     "cached_input_tokens": 0,
     "service_tier": "default",
-    "provider_model": "input-model"
+    "provider_model": "input-model",
+    "response_id": "chatcmpl-C3kBOLGARFj2WJrm5MRyuTiK4u6eF",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

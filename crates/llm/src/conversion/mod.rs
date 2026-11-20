@@ -1,3 +1,5 @@
+use agent_core::prelude::Strng;
+
 pub mod bedrock;
 pub mod completions;
 pub mod copilot;
@@ -64,16 +66,18 @@ struct ProviderUsage {
 	usage_lines: Vec<crate::UsageLine>,
 }
 
-/// Keep provider token counts for accounting when translating client usage conventions.
-struct ResponseWithProviderUsage<T> {
+/// Keep what the provider reported when the response is translated to the client's format.
+struct ProviderResponse<T> {
 	response: T,
-	provider_usage: Option<ProviderUsage>,
+	usage: Option<ProviderUsage>,
+	id: Option<Strng>,
+	finish_reasons: Option<Vec<Strng>>,
 }
 
-impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithProviderUsage<T> {
+impl<T: crate::types::ResponseType> crate::types::ResponseType for ProviderResponse<T> {
 	fn to_llm_response(&self, log_content: crate::LogContentFields) -> crate::LLMResponse {
 		let mut response = self.response.to_llm_response(log_content);
-		if let Some(usage) = &self.provider_usage {
+		if let Some(usage) = &self.usage {
 			response.input_tokens = Some(usage.input_tokens);
 			response.total_tokens = Some(usage.total_tokens);
 			response.reasoning_tokens = usage.reasoning_tokens.or(response.reasoning_tokens);
@@ -85,6 +89,8 @@ impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithP
 				.or(response.cache_creation_12h_input_tokens);
 			response.usage_lines.clone_from(&usage.usage_lines);
 		}
+		response.response_id = self.id.clone();
+		response.finish_reasons = self.finish_reasons.clone();
 		response
 	}
 

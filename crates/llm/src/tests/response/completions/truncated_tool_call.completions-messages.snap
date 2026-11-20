@@ -49,6 +49,10 @@ info:
     "output_tokens": 15,
     "total_tokens": 35,
     "provider_model": "gpt-x",
+    "response_id": "chatcmpl-truncated-tool-call",
+    "finish_reasons": [
+      "length"
+    ],
     "output_messages": [
       {
         "role": "assistant",

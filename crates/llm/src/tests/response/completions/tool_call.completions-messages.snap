@@ -80,6 +80,10 @@ info:
     "cached_input_tokens": 0,
     "service_tier": "default",
     "provider_model": "gpt-4-turbo",
+    "response_id": "chatcmpl-tool-call-test",
+    "finish_reasons": [
+      "tool_calls"
+    ],
     "output_messages": [
       {
         "role": "assistant",

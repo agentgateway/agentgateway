@@ -29,6 +29,10 @@ data: {"type":"message_stop"}
   "cache_creation_input_tokens": 0,
   "cached_input_tokens": 50,
   "provider_model": "claude-sonnet-4-6",
+  "response_id": "msg_iterations",
+  "finish_reasons": [
+    "end_turn"
+  ],
   "completion": [
     "Done"
   ],
