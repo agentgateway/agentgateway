@@ -45,9 +45,10 @@ type InMemoryGatewayParametersConfig struct {
 
 var (
 	// ErrNoValidPorts is returned when no valid ports are found for the Gateway
-	ErrNoValidPorts = errors.New("no valid ports")
+	ErrNoValidPorts        = errors.New("no valid ports")
+	ErrResourceUnavailable = errors.New("required resource unavailable")
 	// ErrSessionKey is returned when the Gateway's managed session key Secret cannot be read or created
-	ErrSessionKey = errors.New("session key unavailable")
+	ErrSessionKey = fmt.Errorf("%w: session key unavailable", ErrResourceUnavailable)
 )
 
 const sessionKeyChecksumAnnotation = "checksum/session-key"
