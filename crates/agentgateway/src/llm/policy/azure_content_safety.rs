@@ -2,7 +2,7 @@ use agent_core::strng;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::http::auth::BackendAuthKind;
+use crate::http::auth::{AuthorizationLocation, BackendAuth, BackendAuthKind};
 use crate::http::jwt::Claims;
 use crate::llm::policy::{
 	AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig, with_default_timeout,
@@ -139,13 +139,39 @@ fn resolve_host(root: &AzureContentSafety) -> agent_core::strng::Strng {
 }
 
 /// Build the common set of backend policies from the root config.
-fn build_policies(root: &AzureContentSafety) -> Vec<BackendTrafficPolicy> {
-	let mut pols = vec![
-		BackendTrafficPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		BackendTrafficPolicy::backend_auth(BackendAuthKind::Azure(root.cached_azure_auth.clone())),
-	];
-	pols.extend(root.policies.iter().cloned());
+/// User-provided policies come first so they take precedence during resolution;
+/// system TLS and implicit Azure auth are appended as fallbacks.
+pub(crate) fn build_policies(root: &AzureContentSafety) -> Vec<BackendTrafficPolicy> {
+	let mut pols: Vec<BackendTrafficPolicy> = root
+		.policies
+		.iter()
+		.cloned()
+		.map(with_default_key_location)
+		.collect();
+	pols.push(BackendTrafficPolicy::BackendTLS(
+		crate::http::backendtls::SYSTEM_TRUST.clone(),
+	));
+	pols.push(BackendTrafficPolicy::backend_auth(BackendAuthKind::Azure(
+		root.cached_azure_auth.clone(),
+	)));
 	pols
+}
+
+/// Content Safety reads resource keys from `Ocp-Apim-Subscription-Key`, not
+/// `Authorization: Bearer`, so key auth without an explicit location defaults there.
+fn with_default_key_location(mut policy: BackendTrafficPolicy) -> BackendTrafficPolicy {
+	if let BackendTrafficPolicy::BackendAuth(BackendAuth {
+		kind: Some(BackendAuthKind::Key { location, .. }),
+		..
+	}) = &mut policy
+		&& location.is_none()
+	{
+		*location = Some(AuthorizationLocation::Header {
+			name: ::http::HeaderName::from_static("ocp-apim-subscription-key"),
+			prefix: None,
+		});
+	}
+	policy
 }
 
 /// Send an arbitrary JSON POST to an Azure Content Safety sub-path and
