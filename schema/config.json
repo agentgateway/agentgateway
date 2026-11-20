@@ -13969,9 +13969,99 @@
               "type": "null"
             }
           ]
+        },
+        "endpoints": {
+          "description": "endpoints serves MCP servers under their own paths. Endpoints inherit the top-level settings and\n`policies`; a policy set on an endpoint replaces the top-level policy of the same type, except\n`authorization` and `mcpAuthorization`, whose rules from both apply. The top-level\n`targets` are the targets of the `/mcp` endpoint, which also serves `/sse`; list an endpoint with\npath `/mcp` to give it its own settings or policies. Requires `gateways`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalMcpEndpoint"
+          }
         }
       },
       "additionalProperties": false
+    },
+    "LocalMcpEndpoint": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "path the endpoint is served under, for example `/eng/mcp`. Clients connect with Streamable HTTP.",
+          "type": "string"
+        },
+        "targets": {
+          "description": "MCP server targets to multiplex together.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalMcpTarget"
+          }
+        },
+        "statefulMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpStatefulMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prefixMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpPrefixMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failureMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpBackendFailureMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sseKeepAlive": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dnsRebindingProtection": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "server": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerOverrides"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policies": {
+          "description": "Policies applied to MCP requests for this endpoint, on top of the top-level `policies`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FilterOrPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ]
     },
     "LocalUIConfig": {
       "type": "object",

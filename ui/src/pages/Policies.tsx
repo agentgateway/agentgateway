@@ -5,8 +5,9 @@ import type { ComponentType, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { PolicyResourceKind } from '@/api/configResourcesApi';
-import { PageHeader, StatusBanner, YamlBlock } from '@/components/Primitives';
-import { ensureLlm, ensureMcp } from '@/config';
+import { Dropdown, PageHeader, StatusBanner, YamlBlock } from '@/components/Primitives';
+import { ensureLlm, ensureMcpPolicies, mcpPolicies } from '@/config';
+import { useStickyQueryParam } from '@/drawerRouteState';
 import {
 	resetFinishedSaves,
 	useDeleteConfigResource,
@@ -15,6 +16,7 @@ import {
 	useRuntimeInfo,
 	useUpsertPolicyResource
 } from '@/hooks';
+import { mcpResourceId, mcpServerEndpoints } from '@/mcp';
 import { PolicyDrawer } from '@/policies/PolicyDrawer';
 import { policyEnabled, policySummary, titleFromKey } from '@/policies/policyUtils';
 import { policyUi } from '@/policies/registry';
@@ -42,24 +44,6 @@ const llmPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
 	},
 	{ title: 'Mutation', keys: ['transformations', 'extProc'] as PolicyKey[] }
 ];
-
-const mcpPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
-	{
-		title: 'MCP',
-		keys: ['mcpAuthentication', 'mcpAuthorization', 'mcpGuardrails'] as PolicyKey[]
-	},
-	{
-		title: 'Access',
-		keys: ['authorization', 'cors', 'extAuthz', 'jwtAuth'] as PolicyKey[]
-	},
-	{
-		title: 'Traffic Shaping',
-		keys: ['localRateLimit', 'remoteRateLimit'] as PolicyKey[]
-	},
-	{ title: 'Mutation', keys: ['transformations', 'extProc'] as PolicyKey[] }
-];
-
-const mcpPolicyKeys = mcpPolicySections.flatMap(section => section.keys);
 
 export function PoliciesPage() {
 	return (
@@ -90,25 +74,89 @@ export function PoliciesPage() {
 	);
 }
 
+const mcpPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
+	{
+		title: 'MCP',
+		keys: ['mcpAuthentication', 'mcpAuthorization', 'mcpGuardrails'] as PolicyKey[]
+	},
+	{
+		title: 'Access',
+		keys: ['authorization', 'cors', 'extAuthz', 'jwtAuth'] as PolicyKey[]
+	},
+	{
+		title: 'Traffic Shaping',
+		keys: ['localRateLimit', 'remoteRateLimit'] as PolicyKey[]
+	},
+	{ title: 'Mutation', keys: ['transformations', 'extProc'] as PolicyKey[] }
+];
+
 export function McpPoliciesPage() {
+	const config = useEffectiveGatewayConfig();
+	const endpoints = mcpServerEndpoints(config.data?.mcp).filter(endpoint => endpoint.endpoint);
+	const [endpointParam, setEndpointParam] = useStickyQueryParam('endpoint');
+	const endpoint = endpoints.find(item => item.endpoint === endpointParam)?.endpoint;
 	return (
 		<PolicyCatalogPage
+			key={endpoint ?? ''}
 			title="MCP Policies"
-			description="Configure top-level behavior for MCP gateway traffic."
+			description={
+				endpoint
+					? `Policies for ${endpoint}. They replace shared policies; authorization rules add to them.`
+					: endpoints.length
+						? 'Policies shared by all MCP endpoints.'
+						: 'Configure top-level behavior for MCP gateway traffic.'
+			}
+			actions={
+				endpoints.length ? (
+					<div className="policy-scope">
+						<span>Applies to</span>
+						<Dropdown
+							ariaLabel="Applies to"
+							value={endpoint ?? ''}
+							searchable={endpoints.length > 8}
+							options={[
+								{ value: '', label: 'All endpoints' },
+								...endpoints.map(item => ({
+									value: item.endpoint ?? '',
+									label: item.endpoint
+								}))
+							]}
+							onChange={value => setEndpointParam(value || null)}
+						/>
+					</div>
+				) : undefined
+			}
 			schemaRoot="FilterOrPolicy"
 			resourceKind="mcp.policy"
+			resourceId={key => mcpResourceId(key, endpoint)}
+			policyNote={key => {
+				const mcp = config.data?.mcp;
+				// Authorization rules from both scopes apply; other policies replace the shared one.
+				const combines = key === 'authorization' || key === 'mcpAuthorization';
+				const has = (scope?: string) => Object.hasOwn(mcpPolicies(mcp, scope) ?? {}, key);
+				if (endpoint) {
+					if (!has()) return undefined;
+					if (!has(endpoint)) return 'shared';
+					return combines ? 'adds to shared' : 'overrides shared';
+				}
+				if (!has()) return undefined;
+				const count = endpoints.filter(item => has(item.endpoint)).length;
+				if (!count) return undefined;
+				return `${count} ${combines ? (count === 1 ? 'addition' : 'additions') : count === 1 ? 'override' : 'overrides'}`;
+			}}
 			sections={mcpPolicySections}
-			policyKeys={mcpPolicyKeys}
-			yamlDescription="Read-only view of mcp.policies."
-			policies={config => config.data?.mcp?.policies as Record<string, unknown> | null | undefined}
+			policyKeys={mcpPolicySections.flatMap(section => section.keys)}
+			yamlDescription={
+				endpoint
+					? `Read-only view of the ${endpoint} endpoint policies.`
+					: 'Read-only view of mcp.policies.'
+			}
+			policies={config => mcpPolicies(config.data?.mcp, endpoint)}
 			onSavePolicy={(next, key, value) => {
-				const mcp = ensureMcp(next);
-				mcp.policies ??= {};
-				(mcp.policies as Record<string, unknown>)[key] = value;
+				ensureMcpPolicies(next, endpoint)[key] = value;
 			}}
 			onDisablePolicy={(next, key) => {
-				const mcp = ensureMcp(next);
-				if (mcp.policies) delete (mcp.policies as Record<string, unknown>)[key];
+				delete ensureMcpPolicies(next, endpoint)[key];
 			}}
 		/>
 	);
@@ -121,6 +169,10 @@ export function PolicyCatalogPage(props: {
 	beforePolicies?: ReactNode;
 	schemaRoot: string;
 	resourceKind: PolicyResourceKind;
+	/** Maps a policy key to its resource ID; defaults to the key. */
+	resourceId?: (key: PolicyKey) => string;
+	/** A short note shown by the enabled chip, for example how the policy relates to another scope. */
+	policyNote?: (key: PolicyKey) => string | undefined;
 	sections: Array<{ title: string; keys: PolicyKey[] }>;
 	policyKeys?: PolicyKey[];
 	yamlDescription: string;
@@ -178,9 +230,10 @@ export function PolicyCatalogPage(props: {
 		return policyCatalog.map(meta => ({
 			...meta,
 			enabled: policyEnabled(policies, meta.key),
-			summary: policySummary(policies, meta.key)
+			summary: policySummary(policies, meta.key),
+			note: props.policyNote?.(meta.key)
 		}));
-	}, [policies, policyCatalog]);
+	}, [policies, policyCatalog, props.policyNote]);
 	const groupedPolicyItems = useMemo(() => {
 		const byKey = new Map(policyItems.map(policy => [policy.key, policy]));
 		const known = new Set(props.sections.flatMap(section => section.keys));
@@ -323,13 +376,13 @@ export function PolicyCatalogPage(props: {
 					}}
 					onSave={value => {
 						upsertPolicy.mutate(
-							{ kind: props.resourceKind, id: selected, value },
+							{ kind: props.resourceKind, id: props.resourceId?.(selected) ?? selected, value },
 							{ onSuccess: closePolicy }
 						);
 					}}
 					onDisable={() => {
 						deleteResource.mutate(
-							{ kind: props.resourceKind, id: selected },
+							{ kind: props.resourceKind, id: props.resourceId?.(selected) ?? selected },
 							{ onSuccess: closePolicy }
 						);
 					}}
@@ -397,6 +450,7 @@ function PolicyTileContent(props: {
 		title: string;
 		enabled: boolean;
 		summary: string;
+		note?: string;
 		description: string;
 		icon: ComponentType<{ size?: number }>;
 	};
@@ -410,9 +464,14 @@ function PolicyTileContent(props: {
 				<span className="policy-icon">
 					<Icon size={18} />
 				</span>
-				<Tag color={props.policy.enabled ? 'success' : undefined}>
-					{props.policy.enabled ? 'enabled' : 'disabled'}
-				</Tag>
+				<span className="policy-tile-badges">
+					{props.policy.note ? <Tag color="purple">{props.policy.note}</Tag> : null}
+					{props.policy.enabled || !props.policy.note ? (
+						<Tag color={props.policy.enabled ? 'success' : undefined}>
+							{props.policy.enabled ? 'enabled' : 'disabled'}
+						</Tag>
+					) : null}
+				</span>
 			</div>
 			<strong>{props.policy.title}</strong>
 			{summary ? <span>{summary}</span> : null}
