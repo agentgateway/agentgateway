@@ -29,6 +29,9 @@ findings:
   - sourcePath: "model_list[1]"
     status: exact
     message: Imported model deployment for fast
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
   - sourcePath: router_settings.default_fallbacks
     status: manual
     message: "Default fallbacks cannot be attached to wildcard model \"*\": failover requires a virtual model and virtual model names match exactly; configure failover for requests served by this wildcard manually"
