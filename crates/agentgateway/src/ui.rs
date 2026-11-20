@@ -278,6 +278,9 @@ struct UiConfigResource {
 	kind: ConfigResourceKind,
 	/// The resource id, unique within its kind.
 	id: String,
+	/// The stable UUID for a stored resource. Preserved across updates and renames.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	uid: Option<String>,
 	/// The resource, in the configuration file format of its kind. The value is an object for
 	/// non-policy kinds. For policy kinds, it has the policy's configuration shape, which can be an
 	/// array or null for some IDs.
@@ -312,6 +315,7 @@ impl From<ConfigResource> for UiConfigResource {
 		Self {
 			kind: resource.kind,
 			id: resource.id,
+			uid: resource.uid,
 			value: resource.value,
 			source: ConfigResourceSource::Database,
 			revision: Some(resource.revision),
@@ -327,6 +331,7 @@ impl From<PreparedResource> for UiConfigResource {
 		Self {
 			kind: resource.kind,
 			id: resource.id,
+			uid: None,
 			value: resource.value,
 			source: ConfigResourceSource::File,
 			revision: None,
@@ -1455,8 +1460,8 @@ mod tests {
 			app.resource_manager.clone(),
 			&EMPTY_ASSETS_DIR,
 		);
+		let mut uid = None;
 		for (method, uri, body) in [
-			("GET", "/api/config/resources", ""),
 			(
 				"PUT",
 				"/api/config/resources/modelCatalog",
@@ -1467,6 +1472,8 @@ mod tests {
 				"/api/config/resources/modelCatalog/default",
 				r#"{"value":{"custom":{}}}"#,
 			),
+			("GET", "/api/config/resources", ""),
+			("GET", "/api/config/resources/modelCatalog", ""),
 			("DELETE", "/api/config/resources/modelCatalog/default", ""),
 		] {
 			let response = router
@@ -1489,6 +1496,11 @@ mod tests {
 			assert_eq!(status, StatusCode::OK, "{method} {uri}: {body:?}");
 			let value: Value = serde_json::from_slice(&body).unwrap();
 			assert!(value.get("generation").is_none(), "{method} {uri}: {value}");
+			if method != "DELETE" {
+				let returned_uid =
+					uuid::Uuid::parse_str(value["resources"][0]["uid"].as_str().unwrap()).unwrap();
+				assert_eq!(returned_uid, *uid.get_or_insert(returned_uid));
+			}
 		}
 	}
 

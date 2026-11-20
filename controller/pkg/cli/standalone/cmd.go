@@ -51,6 +51,7 @@ type client struct {
 type resource struct {
 	Kind      string          `json:"kind" yaml:"kind"`
 	ID        string          `json:"id,omitempty" yaml:"id,omitempty"`
+	UID       string          `json:"uid,omitempty" yaml:"uid,omitempty"`
 	Value     json.RawMessage `json:"value" yaml:"value"`
 	Source    string          `json:"source,omitempty" yaml:"source,omitempty"`
 	Revision  *int64          `json:"revision,omitempty" yaml:"revision,omitempty"`
@@ -200,6 +201,7 @@ func getCommand(c *client) *cobra.Command {
 						result.Resources[i].ID = ""
 					}
 					result.Resources[i].Source = ""
+					result.Resources[i].UID = ""
 					result.Resources[i].Revision = nil
 					result.Resources[i].CreatedAt = ""
 					result.Resources[i].UpdatedAt = ""
@@ -484,9 +486,13 @@ func printResources(w io.Writer, result resourceList, output string) error {
 		for _, r := range result.Resources {
 			allModels = allModels && r.Kind == "llm.model"
 		}
+		header := "KIND\tNAME\tID\tSOURCE"
 		if allModels {
-			fmt.Fprintln(tw, "NAME\tPROVIDER\tMODEL\tID\tSOURCE")
-			for _, r := range result.Resources {
+			header = "NAME\tPROVIDER\tMODEL\tID\tSOURCE"
+		}
+		fmt.Fprintln(tw, header)
+		for _, r := range result.Resources {
+			if allModels {
 				var value struct {
 					Provider any `json:"provider"`
 					Params   struct {
@@ -503,10 +509,7 @@ func printResources(w io.Writer, result resourceList, output string) error {
 					model = "<incoming>"
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", resourceName(r), provider, model, r.ID, r.Source)
-			}
-		} else {
-			fmt.Fprintln(tw, "KIND\tNAME\tID\tSOURCE")
-			for _, r := range result.Resources {
+			} else {
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.Kind, resourceName(r), r.ID, r.Source)
 			}
 		}
