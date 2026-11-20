@@ -198,6 +198,12 @@ export function McpServersPage() {
 					const overrides = endpoint.endpoint
 						? Object.keys(mcpPolicies(mcp, endpoint.endpoint) ?? {}).length
 						: 0;
+					const entry = mcp?.endpoints?.find(
+						item => trimTrailingSlash(item.path) === endpoint.path
+					);
+					const settingOverrides = mcpSettingsFields.filter(
+						field => (entry as McpSettingsResource | undefined)?.[field] != null
+					).length;
 					return (
 						<Panel key={endpoint.path} className="mcp-endpoint-panel">
 							<div className="mcp-endpoint-header">
@@ -227,6 +233,11 @@ export function McpServersPage() {
 										onClick={() => setSettingsEndpoint(endpoint.path)}
 									>
 										Settings
+										{settingOverrides ? (
+											<Tag color="purple">
+												{settingOverrides} {settingOverrides === 1 ? 'override' : 'overrides'}
+											</Tag>
+										) : null}
 									</Button>
 									<Button
 										size="small"
@@ -506,9 +517,10 @@ function McpSettings(props: {
 		port: props.mcp?.port ?? null
 	});
 	// Settings an endpoint leaves unset come from the shared settings.
-	const inheritOption = props.endpoint
-		? [{ value: 'inherit' as const, label: 'Inherit', description: 'Use the shared MCP setting.' }]
-		: [];
+	const shared = props.endpoint ? props.config?.mcp : undefined;
+	const inheritLabel = (value?: string | null) => (value ? `Inherit (${value})` : 'Inherit');
+	const inheritDescription = 'Use the shared MCP setting.';
+	const overrideHint = props.endpoint ? 'Overrides the shared MCP setting.' : undefined;
 	const [statefulMode, setStatefulMode] = useState<McpStatefulMode | 'inherit'>(
 		props.mcp?.statefulMode ?? (props.endpoint ? 'inherit' : 'stateful')
 	);
@@ -606,6 +618,7 @@ function McpSettings(props: {
 				<div className="form-grid">
 					<FieldGroup
 						label="State mode"
+						hint={statefulMode === 'inherit' ? undefined : overrideHint}
 						tooltip={props.help.field<McpConfig>(
 							'LocalSimpleMcpConfig',
 							'statefulMode',
@@ -616,7 +629,15 @@ function McpSettings(props: {
 							ariaLabel="State mode"
 							value={statefulMode}
 							options={[
-								...inheritOption,
+								...(props.endpoint
+									? [
+											{
+												value: 'inherit' as const,
+												label: inheritLabel(shared?.statefulMode ?? 'stateful'),
+												description: inheritDescription
+											}
+										]
+									: []),
 								{
 									value: 'stateless',
 									label: 'Stateless',
@@ -640,6 +661,7 @@ function McpSettings(props: {
 					</FieldGroup>
 					<FieldGroup
 						label="Prefix mode"
+						hint={prefixMode === 'inherit' ? undefined : overrideHint}
 						tooltip={props.help.field<McpConfig>(
 							'LocalSimpleMcpConfig',
 							'prefixMode',
@@ -650,7 +672,15 @@ function McpSettings(props: {
 							ariaLabel="Prefix mode"
 							value={prefixMode}
 							options={[
-								...inheritOption,
+								...(props.endpoint
+									? [
+											{
+												value: 'inherit' as const,
+												label: inheritLabel(shared?.prefixMode ?? 'conditional'),
+												description: inheritDescription
+											}
+										]
+									: []),
 								{ value: 'conditional', label: 'Conditional' },
 								{ value: 'always', label: 'Always' },
 								{ value: 'never', label: 'Never' }
@@ -667,13 +697,22 @@ function McpSettings(props: {
 					</FieldGroup>
 					<FieldGroup
 						label="Failure mode"
+						hint={failureMode === 'inherit' ? undefined : overrideHint}
 						tooltip={props.help.field<McpConfig>('LocalSimpleMcpConfig', 'failureMode')}
 					>
 						<EnumSelector
 							ariaLabel="Failure mode"
 							value={failureMode}
 							options={[
-								...inheritOption,
+								...(props.endpoint
+									? [
+											{
+												value: 'inherit' as const,
+												label: inheritLabel(shared?.failureMode),
+												description: inheritDescription
+											}
+										]
+									: []),
 								{ value: 'failClosed', label: 'Fail closed' },
 								{ value: 'failOpen', label: 'Fail open' }
 							]}
@@ -684,13 +723,14 @@ function McpSettings(props: {
 					</FieldGroup>
 					<Field
 						label="SSE keep-alive"
+						hint={sseKeepAlive.trim() ? overrideHint : undefined}
 						tooltip={props.help.field<McpConfig>('LocalSimpleMcpConfig', 'sseKeepAlive')}
 					>
 						<Input
 							value={sseKeepAlive}
 							disabled={props.readOnlyFields?.has('sseKeepAlive')}
 							onChange={event => setSseKeepAlive(event.target.value)}
-							placeholder="15s"
+							placeholder={shared?.sseKeepAlive ?? '15s'}
 						/>
 					</Field>
 				</div>
@@ -698,7 +738,16 @@ function McpSettings(props: {
 			<CollapsiblePolicySection
 				icon={<Info size={17} />}
 				title="Server info"
-				description="Override the server info and instructions reported to clients when multiplexing targets."
+				description={
+					props.endpoint
+						? 'Setting any field replaces the shared server info and instructions as a whole.'
+						: 'Override the server info and instructions reported to clients when multiplexing targets.'
+				}
+				summary={
+					props.endpoint && Object.keys(serverOverrides).length > 0 ? (
+						<Tag color="purple">override</Tag>
+					) : undefined
+				}
 			>
 				<div className="form-grid">
 					<Field
