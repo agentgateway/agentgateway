@@ -22,6 +22,7 @@ pub const RESOURCES_LIST: Strng = strng::literal!(ListResourcesRequestMethod::VA
 pub const RESOURCES_TEMPLATES_LIST: Strng =
 	strng::literal!(ListResourceTemplatesRequestMethod::VALUE);
 pub const SKILLS_LIST: Strng = strng::literal!(ListSkillsRequestMethod::VALUE);
+// A single-target read, but its result is a listing filtered per child like the lists above.
 pub const RESOURCES_DIRECTORY_READ: Strng =
 	strng::literal!(ReadResourceDirectoryRequestMethod::VALUE);
 

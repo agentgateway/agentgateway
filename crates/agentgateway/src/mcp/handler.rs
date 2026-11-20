@@ -14,10 +14,10 @@ use rmcp::model::{
 	CacheScope, CallToolRequestMethod, ClientJsonRpcMessage, ClientNotification, ClientRequest,
 	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, GetMeta, Implementation,
 	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
-	ListResourcesResult, ListSkillsRequestMethod, ListToolsResult, PaginatedRequestParams,
-	ProtocolVersion, ReadResourceDirectoryRequestMethod, RequestId, RequestMetaObject, ResultType,
-	SKILLS_EXTENSION_ID, ServerCapabilities, ServerConfig, ServerJsonRpcMessage, ServerNotification,
-	ServerRequest, ServerResult, SubscriptionFilter,
+	ListResourcesResult, ListSkillsRequestMethod, ListSkillsResult, ListToolsResult,
+	PaginatedRequestParams, ProtocolVersion, ReadResourceDirectoryRequestMethod, RequestId,
+	RequestMetaObject, ResultType, SKILLS_EXTENSION_ID, ServerCapabilities, ServerConfig,
+	ServerJsonRpcMessage, ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
 
@@ -1045,11 +1045,13 @@ impl Relay {
 	pub fn merge_skills(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		Box::new(move |streams, cel| {
-			let Some((server_name, ServerResult::ListSkillsResult(mut list))) =
-				streams.into_iter().next()
-			else {
-				return Err(incompatible_upstream_result(ListSkillsRequestMethod::VALUE));
+			let (server_name, mut list) = match streams.into_iter().next() {
+				Some((server_name, ServerResult::ListSkillsResult(list))) => (server_name, list),
+				Some(_) => return Err(incompatible_upstream_result(ListSkillsRequestMethod::VALUE)),
+				None => return Ok(ListSkillsResult::default().into()),
 			};
+			// Authorization is per skill. A listed skill's `resources` manifest is passed through
+			// whole, so it can name files that `resources/read` will deny.
 			list.skills.retain(|skill| {
 				policies.validate(
 					&rbac::ResourceType::Resource(rbac::ResourceId::new(

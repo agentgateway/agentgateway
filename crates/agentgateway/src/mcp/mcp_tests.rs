@@ -2636,8 +2636,7 @@ async fn modern_unknown_method_without_meta_returns_404() {
 	);
 }
 
-// Includes `_meta` at every level: rmcp used to decode any result carrying `_meta` as a
-// `CallToolResult`, dropping the skills payload.
+// Includes `_meta` at every level, which must survive the round trip.
 fn skills_result(method: &str) -> serde_json::Value {
 	let skill = |name: &str| {
 		serde_json::json!({

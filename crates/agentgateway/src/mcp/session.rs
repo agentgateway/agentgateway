@@ -770,14 +770,48 @@ impl Session {
 						let Some(service_name) = self.relay.upstreams.default_target_name.as_deref() else {
 							return Err(UpstreamError::InvalidMethod(method.to_string()));
 						};
-						self.authorize_resource_request(service_name, &req.params.uri, &method, &log, &cel)?;
+						let uri = req.params.uri.clone();
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), uri.clone());
+						});
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							&method,
+							&mut req.params,
+							&mut req.extensions,
+							&mut ctx,
+							rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								uri.clone(),
+							)),
+							"resource",
+							&uri,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::ReadResourceDirectoryRequest(req) => {
 						let Some(service_name) = self.relay.upstreams.default_target_name.as_deref() else {
 							return Err(UpstreamError::InvalidMethod(method.to_string()));
 						};
-						self.authorize_resource_request(service_name, &req.params.uri, &method, &log, &cel)?;
+						let uri = req.params.uri.clone();
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), uri.clone());
+						});
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							&method,
+							&mut req.params,
+							&mut req.extensions,
+							&mut ctx,
+							rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								uri.clone(),
+							)),
+							"resource",
+							&uri,
+						))
+						.await?;
 						Box::pin(
 							self
 								.relay
