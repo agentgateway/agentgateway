@@ -1,10 +1,10 @@
 import { Input } from 'antd';
-import { useEffect } from 'react';
 
 import { Dropdown, Field, FieldGroup } from '@/components/Primitives';
 import type { GatewayConfig } from '@/types';
 
 const dedicatedPort = '__port__';
+const automatic = '__automatic__';
 
 export type GatewayBindingValue = {
 	gateways?: string | string[] | null;
@@ -26,13 +26,8 @@ export function GatewayBindingEditor(props: {
 	const gateway = firstGatewayRef(props.value.gateways);
 	const hasDedicatedPort = props.value.port !== null && props.value.port !== undefined;
 	const showDedicatedPort = !gateway && hasDedicatedPort;
-	const selectedValue = gateway ?? (showDedicatedPort ? dedicatedPort : '');
-
-	useEffect(() => {
-		if (!gateway && !hasDedicatedPort && options[0]) {
-			props.onChange({ gateways: options[0].value, port: null });
-		}
-	}, [gateway, hasDedicatedPort, options, props]);
+	// With neither a gateway nor a port set, the gateway chooses where the surface is served.
+	const selectedValue = gateway ?? (showDedicatedPort ? dedicatedPort : automatic);
 
 	if (!options.length) {
 		return (
@@ -54,8 +49,18 @@ export function GatewayBindingEditor(props: {
 					ariaLabel={props.gatewayLabel ?? 'Gateway'}
 					value={selectedValue}
 					options={
-						showDedicatedPort
-							? [
+						gateway
+							? options
+							: [
+									...(showDedicatedPort
+										? []
+										: [
+												{
+													value: automatic,
+													label: 'Automatic',
+													description: `The default gateway when it serves HTTP, otherwise port ${props.defaultPort}.`
+												}
+											]),
 									{
 										value: dedicatedPort,
 										label: 'Dedicated port',
@@ -63,11 +68,12 @@ export function GatewayBindingEditor(props: {
 									},
 									...options
 								]
-							: options
 					}
 					disabled={props.disabled}
 					onChange={value => {
-						if (value === dedicatedPort) {
+						if (value === automatic) {
+							props.onChange({ gateways: null, port: null });
+						} else if (value === dedicatedPort) {
 							props.onChange({
 								gateways: null,
 								port: props.value.port ?? props.defaultPort

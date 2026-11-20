@@ -23,10 +23,15 @@ export function CorsPolicyEditor(props: {
 	const [maxAge, setMaxAge] = useState(props.cors?.maxAge ?? '');
 	const [allMethods, setAllMethods] = useState(Boolean(props.cors?.allowMethods?.includes('*')));
 	const [methods, setMethods] = useState(
-		() => new Set((props.cors?.allowMethods ?? ['GET', 'POST']).filter(method => method !== '*'))
+		() =>
+			new Set(
+				(props.cors ? (props.cors.allowMethods ?? []) : ['GET', 'POST']).filter(
+					method => method !== '*'
+				)
+			)
 	);
 	const [allHeaders, setAllHeaders] = useState(
-		Boolean(props.cors?.allowHeaders?.includes('*') ?? true)
+		props.cors ? Boolean(props.cors.allowHeaders?.includes('*')) : true
 	);
 	const [headers, setHeaders] = useState(
 		(props.cors?.allowHeaders ?? []).filter(header => header !== '*')

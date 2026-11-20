@@ -3,9 +3,9 @@ import { Bot, Network, Server, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
-import type { LlmSettingsResource, McpSettingsResource } from '@/api/configResourcesApi';
+import type { LlmSettingsResource } from '@/api/configResourcesApi';
 import { ButtonLink, PageHeader, StatusBanner } from '@/components/Primitives';
-import { ensureLlm, fileOwnedLlmSettingFields, fileOwnedMcpSettingFields } from '@/config';
+import { fileOwnedLlmSettingFields, fileOwnedMcpSettingFields } from '@/config';
 import {
 	useConfigDumpMode,
 	useEnableSurface,
@@ -16,7 +16,7 @@ import {
 	useUpsertConfigResource
 } from '@/hooks';
 import { McpSettingsDrawer } from '@/pages/McpServers';
-import { LlmSettingsDrawer } from '@/pages/models/LlmSettingsDrawer';
+import { applyLlmSettings, LlmSettingsDrawer } from '@/pages/models/LlmSettingsDrawer';
 import { ReadonlyModeBanner, TrafficDumpOverview } from '@/pages/traffic/TrafficConfigDumpPanel';
 import { useSchemaHelp } from '@/schemaHelp';
 import { trafficStats } from '@/traffic';
@@ -317,7 +317,7 @@ export function HomePage() {
 						} else {
 							update.mutate(
 								next => {
-									Object.assign(ensureLlm(next), settings);
+									applyLlmSettings(next, settings);
 								},
 								{ onSuccess }
 							);
@@ -335,10 +335,7 @@ export function HomePage() {
 					saving={update.isPending || upsertResource.isPending}
 					saveError={update.error?.message ?? upsertResource.error?.message ?? null}
 					onClose={() => setMcpSettingsOpen(false)}
-					onSave={settings => {
-						const value = Object.fromEntries(
-							Object.entries(settings).filter(([, field]) => field != null)
-						) as McpSettingsResource;
+					onSave={value => {
 						upsertResource.mutate(
 							{ kind: 'mcp.settings', value },
 							{ onSuccess: () => setMcpSettingsOpen(false) }
