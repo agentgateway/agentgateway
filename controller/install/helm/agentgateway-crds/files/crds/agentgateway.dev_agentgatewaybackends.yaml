@@ -314,8 +314,11 @@ spec:
                                         == 0) && (!has(self.kind) || self.kind ==
                                         ''Service'')) ? has(self.port) : true'
                                   formats:
-                                    description: Provider-native API formats this
-                                      provider supports.
+                                    description: |-
+                                      Endpoints this provider supports, with optional path overrides. Chat and
+                                      decisions requests are translated to another listed format of the same kind
+                                      if needed. Image, audio and OCR requests are always forwarded; listing one
+                                      only sets its path.
                                     items:
                                       description: Provider-native LLM API format
                                         settings.
@@ -331,10 +334,17 @@ spec:
                                           description: Provider-native API format.
                                           enum:
                                           - AnthropicTokenCount
+                                          - AudioSpeech
+                                          - AudioTranscriptions
+                                          - AudioTranslations
                                           - Completions
                                           - Decisions
                                           - Embeddings
+                                          - ImageEdits
+                                          - ImageGenerations
+                                          - ImageVariations
                                           - Messages
+                                          - OCR
                                           - Realtime
                                           - Rerank
                                           - Responses
@@ -346,7 +356,7 @@ spec:
                                       x-kubernetes-validations:
                                       - message: path must start with /
                                         rule: '!has(self.path) || self.path.startsWith(''/'')'
-                                    maxItems: 6
+                                    maxItems: 18
                                     minItems: 1
                                     type: array
                                     x-kubernetes-list-map-keys:
@@ -10106,8 +10116,11 @@ spec:
                                 && (!has(self.kind) || self.kind == ''Service''))
                                 ? has(self.port) : true'
                           formats:
-                            description: Provider-native API formats this provider
-                              supports.
+                            description: |-
+                              Endpoints this provider supports, with optional path overrides. Chat and
+                              decisions requests are translated to another listed format of the same kind
+                              if needed. Image, audio and OCR requests are always forwarded; listing one
+                              only sets its path.
                             items:
                               description: Provider-native LLM API format settings.
                               properties:
@@ -10122,10 +10135,17 @@ spec:
                                   description: Provider-native API format.
                                   enum:
                                   - AnthropicTokenCount
+                                  - AudioSpeech
+                                  - AudioTranscriptions
+                                  - AudioTranslations
                                   - Completions
                                   - Decisions
                                   - Embeddings
+                                  - ImageEdits
+                                  - ImageGenerations
+                                  - ImageVariations
                                   - Messages
+                                  - OCR
                                   - Realtime
                                   - Rerank
                                   - Responses
@@ -10137,7 +10157,7 @@ spec:
                               x-kubernetes-validations:
                               - message: path must start with /
                                 rule: '!has(self.path) || self.path.startsWith(''/'')'
-                            maxItems: 6
+                            maxItems: 18
                             minItems: 1
                             type: array
                             x-kubernetes-list-map-keys:
