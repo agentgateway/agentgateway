@@ -1978,17 +1978,18 @@ fn wrap_with_guardrails(
 ) -> impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static {
 	use futures_util::StreamExt;
 	let guardrails = Arc::new(guardrails);
-	stream.then(move |rpc| {
+	stream.filter_map(move |rpc| {
 		let ctx = guardrails.clone();
 		async move {
 			match rpc {
-				Ok(mut rpc) => {
-					if let Some(scrubbed) = apply_guardrails_response_intercept(&ctx, &rpc).await {
-						rpc = scrubbed;
-					}
-					Ok(rpc)
+				Ok(rpc) => match apply_guardrails_response_intercept(&ctx, &rpc).await {
+					GuardrailIntercept::Keep => Some(Ok(rpc)),
+					GuardrailIntercept::Replace(message) => Some(Ok(*message)),
+					// A rejected log or reverse request is omitted. Replacing it with a
+					// JSON-RPC error would race the terminal result still coming on this stream.
+					GuardrailIntercept::Drop => None,
 				},
-				Err(e) => Err(e),
+				Err(e) => Some(Err(e)),
 			}
 		}
 	})
@@ -2193,31 +2194,136 @@ fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMess
 	msg
 }
 
+enum GuardrailIntercept {
+	Keep,
+	Replace(Box<ServerJsonRpcMessage>),
+	Drop,
+}
+
+fn replace_message(message: ServerJsonRpcMessage) -> GuardrailIntercept {
+	GuardrailIntercept::Replace(Box::new(message))
+}
+
+// Response-phase processors see every content-bearing server message on the
+// request stream, not only JSON-RPC results. Tool results (including isError)
+// are the `result` object. Protocol errors are the `error` object. Notifications
+// and server-initiated requests contribute their `params`, which is where log
+// lines and reverse-request content live.
 async fn apply_guardrails_response_intercept(
 	ctx: &GuardrailsCtx,
 	msg: &ServerJsonRpcMessage,
-) -> Option<ServerJsonRpcMessage> {
+) -> GuardrailIntercept {
 	use crate::mcp::guardrails::Outcome;
-	// The stream is request-scoped, so the only Response on it is the terminal.
-	let ServerJsonRpcMessage::Response(resp) = msg else {
-		return None;
-	};
-	match crate::mcp::guardrails::run_response(
+	match msg {
+		ServerJsonRpcMessage::Response(resp) => {
+			match run_guardrails_response(ctx, &resp.result).await {
+				Outcome::Pass => GuardrailIntercept::Keep,
+				Outcome::Mutated(result) => {
+					replace_message(ServerJsonRpcMessage::response(result, resp.id.clone()))
+				},
+				Outcome::Reject(rej) => {
+					replace_message(ServerJsonRpcMessage::error(rej, Some(resp.id.clone())))
+				},
+			}
+		},
+		ServerJsonRpcMessage::Error(err) => match run_guardrails_response(ctx, &err.error).await {
+			Outcome::Pass => GuardrailIntercept::Keep,
+			Outcome::Mutated(error) => {
+				replace_message(ServerJsonRpcMessage::error(error, err.id.clone()))
+			},
+			Outcome::Reject(rej) => replace_message(ServerJsonRpcMessage::error(rej, err.id.clone())),
+		},
+		ServerJsonRpcMessage::Notification(notification) => {
+			intercept_params(ctx, &notification.notification, |body| {
+				let mut notification = notification.clone();
+				notification.notification = body;
+				ServerJsonRpcMessage::Notification(notification)
+			})
+			.await
+		},
+		ServerJsonRpcMessage::Request(request) => {
+			intercept_params(ctx, &request.request, |body| {
+				let mut request = request.clone();
+				request.request = body;
+				ServerJsonRpcMessage::Request(request)
+			})
+			.await
+		},
+	}
+}
+
+fn run_guardrails_response<'a, P>(
+	ctx: &'a GuardrailsCtx,
+	body: &'a P,
+) -> impl std::future::Future<Output = crate::mcp::guardrails::Outcome<P>> + Send + 'a
+where
+	P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Send + Sync,
+{
+	crate::mcp::guardrails::run_response(
 		&ctx.ext,
 		&ctx.method,
 		&ctx.backends,
-		&resp.result,
+		body,
 		&ctx.req_ctx,
 		&ctx.client,
 	)
-	.await
-	{
-		Outcome::Pass => None,
-		Outcome::Mutated(new_result) => {
-			Some(ServerJsonRpcMessage::response(new_result, resp.id.clone()))
+}
+
+async fn intercept_params<T, F>(ctx: &GuardrailsCtx, inner: &T, rebuild: F) -> GuardrailIntercept
+where
+	T: serde::Serialize + serde::de::DeserializeOwned + Send + Sync,
+	F: FnOnce(T) -> ServerJsonRpcMessage,
+{
+	use crate::mcp::guardrails::Outcome;
+	let params = match message_params(inner) {
+		Ok(Some(params)) => params,
+		Ok(None) => return GuardrailIntercept::Keep,
+		Err(error) => {
+			warn!(%error, "mcpGuardrails: failed to read server message; dropping it");
+			return GuardrailIntercept::Drop;
 		},
-		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, Some(resp.id.clone()))),
+	};
+	match run_guardrails_response(ctx, &params).await {
+		Outcome::Pass => GuardrailIntercept::Keep,
+		Outcome::Reject(rej) => {
+			debug!(
+				message = %rej.message,
+				"mcpGuardrails: dropping non-terminal server message"
+			);
+			GuardrailIntercept::Drop
+		},
+		Outcome::Mutated(params) => match replace_message_params(inner, params) {
+			Ok(inner) => replace_message(rebuild(inner)),
+			Err(error) => {
+				warn!(%error, "mcpGuardrails: mutated server message failed to decode; dropping it");
+				GuardrailIntercept::Drop
+			},
+		},
 	}
+}
+
+fn message_params(
+	inner: &impl serde::Serialize,
+) -> Result<Option<serde_json::Value>, serde_json::Error> {
+	let wire = serde_json::to_value(inner)?;
+	Ok(match wire.get("params") {
+		Some(params) if !params.is_null() => Some(params.clone()),
+		_ => None,
+	})
+}
+
+fn replace_message_params<T>(inner: &T, params: serde_json::Value) -> Result<T, serde_json::Error>
+where
+	T: serde::Serialize + serde::de::DeserializeOwned,
+{
+	let mut wire = serde_json::to_value(inner)?;
+	let Some(obj) = wire.as_object_mut() else {
+		return Err(serde::de::Error::custom(
+			"server message is not a JSON object",
+		));
+	};
+	obj.insert("params".to_string(), params);
+	serde_json::from_value(wire)
 }
 
 fn capture_terminal_mcp_payload(
@@ -2689,5 +2795,203 @@ mod tests {
 		let parsed = parse_downstream_server_request_id(&remapped).expect("parsed");
 		assert_eq!(parsed.upstream.as_str(), upstream);
 		assert_eq!(parsed.original_id, original_id);
+	}
+
+	fn guardrails_expr(source: &str) -> std::sync::Arc<crate::cel::Expression> {
+		std::sync::Arc::new(crate::cel::Expression::new_strict(source).expect("guardrail expression"))
+	}
+
+	fn response_expression(
+		condition: &str,
+		action: crate::mcp::guardrails::ExpressionAction,
+	) -> crate::mcp::guardrails::Processor {
+		use crate::mcp::guardrails::{Phase, Processor, ProcessorKind};
+		Processor {
+			methods: std::collections::HashMap::from([("tools/call".to_string(), Phase::Response)]),
+			kind: ProcessorKind::Expression(crate::mcp::guardrails::ExpressionProcessor {
+				condition: Some(guardrails_expr(condition)),
+				action,
+			}),
+		}
+	}
+
+	fn response_guard_ctx(ext: crate::mcp::guardrails::McpGuardrails) -> GuardrailsCtx {
+		let mut req_ctx = IncomingRequestContext::empty();
+		req_ctx
+			.extensions_mut()
+			.insert(crate::mcp::MCPInfo::default());
+		GuardrailsCtx {
+			ext: std::sync::Arc::new(ext),
+			method: "tools/call".to_string(),
+			backends: vec!["backend".to_string()],
+			client: crate::test_helpers::policy_client(),
+			req_ctx: std::sync::Arc::new(req_ctx),
+		}
+	}
+
+	async fn drive_guardrails(
+		ext: crate::mcp::guardrails::McpGuardrails,
+		messages: Vec<ServerJsonRpcMessage>,
+	) -> Vec<serde_json::Value> {
+		let stream = stream::iter(messages.into_iter().map(Ok));
+		wrap_with_guardrails(stream, response_guard_ctx(ext))
+			.collect::<Vec<_>>()
+			.await
+			.into_iter()
+			.map(|item| serde_json::to_value(item.expect("server message")).expect("json"))
+			.collect()
+	}
+
+	fn progress_notification(message: &str) -> ServerJsonRpcMessage {
+		use rmcp::model::{ProgressNotification, ProgressNotificationParam, ProgressToken};
+		ServerJsonRpcMessage::notification(ServerNotification::ProgressNotification(
+			ProgressNotification::new(
+				ProgressNotificationParam::new(ProgressToken(RequestId::Number(7)), 0.5)
+					.with_message(message),
+			),
+		))
+	}
+
+	#[allow(deprecated)]
+	fn logging_notification(data: &str) -> ServerJsonRpcMessage {
+		use rmcp::model::{LoggingLevel, LoggingMessageNotification, LoggingMessageNotificationParam};
+		ServerJsonRpcMessage::notification(ServerNotification::LoggingMessageNotification(
+			LoggingMessageNotification::new(LoggingMessageNotificationParam::new(
+				LoggingLevel::Error,
+				serde_json::Value::String(data.to_string()),
+			)),
+		))
+	}
+
+	fn elicit_request(id: i64, message: &str) -> ServerJsonRpcMessage {
+		use rmcp::model::{ElicitRequest, ElicitRequestParams, ElicitationSchema, ServerRequest};
+		ServerJsonRpcMessage::request(
+			ServerRequest::ElicitRequest(ElicitRequest::new(
+				ElicitRequestParams::FormElicitationParams {
+					meta: None,
+					message: message.to_string(),
+					requested_schema: ElicitationSchema::new(Default::default()),
+				},
+			)),
+			RequestId::Number(id),
+		)
+	}
+
+	fn tool_result(id: i64, text: &str) -> ServerJsonRpcMessage {
+		use rmcp::model::ContentBlock;
+		ServerJsonRpcMessage::response(
+			ServerResult::CallToolResult(CallToolResult::success(vec![ContentBlock::text(text)])),
+			RequestId::Number(id),
+		)
+	}
+
+	fn masking_guardrails() -> crate::mcp::guardrails::McpGuardrails {
+		use crate::mcp::guardrails::{ExpressionAction, McpGuardrails};
+		McpGuardrails {
+			processors: vec![
+				response_expression(
+					"has(mcp.result.content)",
+					ExpressionAction::Transform(guardrails_expr(
+						"mcp.result.with(r, r.merge({'content': r.content.map(item, item.type == 'text' ? item.merge({'text': item.text.regexReplaceAll('secret-token', '[SECRET]')}) : item)}))",
+					)),
+				),
+				response_expression(
+					"(has(mcp.result.message) && mcp.result.message.contains('secret-token')) || (has(mcp.result.data) && mcp.result.data.contains('secret-token'))",
+					ExpressionAction::Transform(guardrails_expr(
+						"has(mcp.result.message) && mcp.result.message.contains('secret-token') ? mcp.result.with(r, r.merge({'message': r.message.regexReplaceAll('secret-token', '[SECRET]')})) : mcp.result.with(r, r.merge({'data': r.data.regexReplaceAll('secret-token', '[SECRET]')}))",
+					)),
+				),
+			],
+		}
+	}
+
+	// Response-phase guardrails already see JSON-RPC results, including tool results
+	// with isError. Errors, log notifications, and server-initiated requests carry
+	// the same kind of content and have to be scrubbed too.
+	#[tokio::test]
+	async fn guardrails_scrub_errors_logs_and_server_requests() {
+		let secret = "secret-token";
+		let messages = drive_guardrails(
+			masking_guardrails(),
+			vec![
+				ServerJsonRpcMessage::error(
+					ErrorData::internal_error(format!("upstream leaked {secret}"), None),
+					Some(RequestId::Number(1)),
+				),
+				progress_notification(&format!("progress {secret}")),
+				logging_notification(&format!("log {secret}")),
+				elicit_request(4, &format!("please confirm {secret}")),
+				ServerJsonRpcMessage::request(
+					rmcp::model::ServerRequest::PingRequest(Default::default()),
+					RequestId::Number(5),
+				),
+				progress_notification("all good"),
+				tool_result(6, &format!("tool {secret}")),
+			],
+		)
+		.await;
+
+		let rendered = serde_json::to_string(&messages).unwrap();
+		assert!(
+			!rendered.contains(secret),
+			"guardrails forwarded server content: {rendered}"
+		);
+		assert_eq!(
+			messages.len(),
+			7,
+			"content-free and clean messages stay: {rendered}"
+		);
+		assert_eq!(messages[0]["error"]["message"], "upstream leaked [SECRET]");
+		assert_eq!(messages[0]["id"], 1);
+		assert_eq!(messages[1]["method"], "notifications/progress");
+		assert_eq!(messages[1]["params"]["message"], "progress [SECRET]");
+		assert_eq!(messages[2]["method"], "notifications/message");
+		assert_eq!(messages[2]["params"]["data"], "log [SECRET]");
+		assert_eq!(messages[3]["method"], "elicitation/create");
+		assert_eq!(messages[3]["id"], 4);
+		assert_eq!(messages[3]["params"]["message"], "please confirm [SECRET]");
+		assert_eq!(messages[4]["method"], "ping");
+		assert_eq!(messages[5]["params"]["message"], "all good");
+		assert_eq!(messages[6]["result"]["content"][0]["text"], "tool [SECRET]");
+	}
+
+	#[tokio::test]
+	async fn guardrails_reject_errors_and_drop_non_terminal_server_messages() {
+		use crate::mcp::guardrails::{ExpressionAction, McpGuardrails};
+		let blocked = "DO_NOT_FORWARD";
+		let messages = drive_guardrails(
+			McpGuardrails {
+				processors: vec![response_expression(
+					"(has(mcp.result.message) && mcp.result.message.contains('DO_NOT_FORWARD')) || (has(mcp.result.data) && mcp.result.data.contains('DO_NOT_FORWARD'))",
+					ExpressionAction::Reject("blocked".to_string()),
+				)],
+			},
+			vec![
+				ServerJsonRpcMessage::error(
+					ErrorData::internal_error(blocked, None),
+					Some(RequestId::Number(1)),
+				),
+				progress_notification(blocked),
+				logging_notification(blocked),
+				elicit_request(4, blocked),
+				progress_notification("keep me"),
+				tool_result(6, "ok"),
+			],
+		)
+		.await;
+
+		let rendered = serde_json::to_string(&messages).unwrap();
+		assert!(
+			!rendered.contains(blocked),
+			"rejected server content was forwarded: {rendered}"
+		);
+		// The terminal error is still a response to the client call. A rejected log or
+		// reverse request is not forwarded: injecting another JSON-RPC error would race
+		// the real result that follows on this stream.
+		assert_eq!(messages.len(), 3, "{rendered}");
+		assert_eq!(messages[0]["id"], 1);
+		assert_eq!(messages[0]["error"]["message"], "blocked");
+		assert_eq!(messages[1]["params"]["message"], "keep me");
+		assert_eq!(messages[2]["result"]["content"][0]["text"], "ok");
 	}
 }

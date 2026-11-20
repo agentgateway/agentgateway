@@ -355,14 +355,17 @@ impl Processor {
 		}
 	}
 
-	async fn response(
+	async fn response<P>(
 		&self,
 		method: &str,
 		backends: &[String],
-		body: &mut MCPBody<'_, rmcp::model::ServerResult>,
+		body: &mut MCPBody<'_, P>,
 		req_ctx: &IncomingRequestContext,
 		client: &PolicyClient,
-	) -> Outcome<rmcp::model::ServerResult> {
+	) -> Outcome<P>
+	where
+		P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Send + Sync,
+	{
 		match &self.kind {
 			ProcessorKind::Expression(c) => expression::check(c, method, body, req_ctx, true),
 			ProcessorKind::Remote(remote) => {
@@ -401,14 +404,17 @@ pub async fn run_call_request<
 		.map_or(Outcome::Pass, Outcome::Mutated)
 }
 
-pub async fn run_response(
+pub async fn run_response<P>(
 	ext: &McpGuardrails,
 	method: &str,
 	backends: &[String],
-	result: &rmcp::model::ServerResult,
+	result: &P,
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
-) -> Outcome<rmcp::model::ServerResult> {
+) -> Outcome<P>
+where
+	P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Send + Sync,
+{
 	let client = client.with_parent_extensions(req_ctx.extensions());
 	let mut body = MCPBody::new(Some(result));
 	for processor in &ext.processors {

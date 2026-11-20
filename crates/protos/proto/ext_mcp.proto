@@ -38,7 +38,10 @@ message McpResponse {
   repeated string service_names = 1;
   string method = 2;
   google.protobuf.Struct metadata_context = 3;
-  // JSON-RPC `result` from upstream as raw JSON bytes. Errors skip this hook.
+  // JSON payload inspected by the response-phase hook, as raw JSON bytes.
+  // A successful response sends the JSON-RPC `result`. An error sends the
+  // `error` object. A notification or server-initiated request sends `params`,
+  // which carries log lines and reverse-request content.
   bytes mcp_response = 4;
 }
 

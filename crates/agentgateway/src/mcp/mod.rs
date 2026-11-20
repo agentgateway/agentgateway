@@ -629,7 +629,9 @@ pub struct MCPView<'a> {
 	#[dynamic(skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
 	pub params: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
-	/// Current response result, with the same structure as the `result` object in an MCP response.
+	/// Payload the response-phase guardrail is inspecting.
+	/// JSON-RPC results use the `result` object, errors use the `error` object,
+	/// and notifications or server-initiated requests use `params`.
 	/// Available only during response-phase CEL guardrails.
 	#[dynamic(skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
