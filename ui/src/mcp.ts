@@ -98,6 +98,7 @@ export function mcpServerEndpoints(mcp: McpConfig | null | undefined): McpServer
 	});
 	if (endpoints.length === 0) return [{ path: '/mcp', targets: topLevel, ids: topLevelIds }];
 	// The top-level targets are the targets of the /mcp endpoint.
+	if (topLevel.length === 0) return endpoints;
 	const defaultEndpoint = endpoints.find(endpoint => endpoint.path === '/mcp');
 	if (defaultEndpoint) {
 		defaultEndpoint.targets = [...topLevel, ...defaultEndpoint.targets];

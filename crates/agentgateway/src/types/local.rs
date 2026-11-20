@@ -3503,7 +3503,10 @@ async fn convert(
 	}
 
 	// Built-in paths on the same listeners as the MCP endpoints, which an endpoint must not overlap.
-	let mut mcp_reserved_paths = vec![(strng::literal!("/.well-known"), "built-in")];
+	let mut mcp_reserved_paths = vec![
+		(strng::literal!("/.well-known"), "built-in"),
+		(strng::literal!("/sse"), "built-in"),
+	];
 	if let Some(mcp) = &mcp
 		&& !mcp.endpoints.is_empty()
 	{
@@ -4305,8 +4308,11 @@ async fn convert_attached_mcp(
 			policies,
 		} = endpoint;
 		let path = path.trim_end_matches('/');
-		if !path.starts_with('/') {
-			bail!("mcp endpoint path {path:?} must start with '/' and must not be '/'");
+		if !path.starts_with('/')
+			|| path.contains(['?', '#'])
+			|| path.parse::<::http::uri::PathAndQuery>().is_err()
+		{
+			bail!("mcp endpoint path {path:?} must be a URL path starting with '/' and must not be '/'");
 		}
 		let path = strng::new(path);
 		if seen_paths.contains(&path) {
@@ -4358,14 +4364,18 @@ async fn convert_attached_mcp(
 				kind: None,
 			},
 			hostnames: vec![],
-			matches: [
-				prefix(path.to_string()),
-				prefix(format!("/.well-known/oauth-protected-resource{path}")),
-				prefix(format!("/.well-known/oauth-authorization-server{path}")),
-			]
-			.into_iter()
-			.chain((path == "/mcp").then(|| prefix("/sse".to_string())))
-			.collect(),
+			// Legacy SSE clients reach the /mcp endpoint at /sse.
+			matches: [Some(path.as_str()), (path == "/mcp").then_some("/sse")]
+				.into_iter()
+				.flatten()
+				.flat_map(|p| {
+					[
+						prefix(p.to_string()),
+						prefix(format!("/.well-known/oauth-protected-resource{p}")),
+						prefix(format!("/.well-known/oauth-authorization-server{p}")),
+					]
+				})
+				.collect(),
 			backends: vec![RouteBackendReference {
 				weight: 1,
 				target: BackendReference::Backend(strng::format!("/{backend_name}")).into(),
