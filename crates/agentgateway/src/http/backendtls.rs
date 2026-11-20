@@ -1,4 +1,4 @@
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use agent_core::strng;
@@ -14,6 +14,7 @@ use tracing::{info, trace, warn};
 use crate::serdes::{schema_de, schema_ser};
 use crate::transport::tls;
 use crate::types::agent::{parse_cert, parse_key};
+use crate::resource_manager::FileAccess;
 use crate::types::discovery::Identity;
 use crate::{apply, transport};
 
@@ -432,52 +433,21 @@ fn build_client_config(
 	Ok((cc, allow_custom_alpn))
 }
 
-/// Directories that file-sourced backend TLS material must live under, from the gateway config.
-/// Empty means no file may be used.
-static ALLOWED_FILE_DIRS: Lazy<ArcSwap<Vec<PathBuf>>> = Lazy::new(|| ArcSwap::from_pointee(vec![]));
+/// Limits which files file-sourced backend TLS may read, from `config.fileAccess`.
+/// xDS conversion has no access to the gateway config, so it is set once at startup.
+static FILE_ACCESS: Lazy<ArcSwap<FileAccess>> = Lazy::new(Default::default);
 
-pub fn set_allowed_file_dirs(dirs: Vec<PathBuf>) {
-	ALLOWED_FILE_DIRS.store(Arc::new(dirs));
+pub fn set_file_access(file_access: FileAccess) {
+	FILE_ACCESS.store(Arc::new(file_access));
 }
 
-pub fn allowed_file_dirs() -> Arc<Vec<PathBuf>> {
-	ALLOWED_FILE_DIRS.load_full()
-}
-
-/// Reads `path` if it is under one of `allowed_dirs`, after resolving symlinks.
-fn read_allowed_file(path: &Path, allowed_dirs: &[PathBuf]) -> anyhow::Result<Vec<u8>> {
-	let not_allowed = || {
-		anyhow::anyhow!(
-			"backend TLS file {} is not under a directory allowed by config.allowedBackendTlsFileDirs",
-			path.display()
-		)
-	};
-	// Checked before touching the filesystem, so paths outside the allowed directories can't be probed.
-	if !path.is_absolute()
-		|| path.components().any(|c| c == Component::ParentDir)
-		|| !allowed_dirs.iter().any(|dir| path.starts_with(dir))
-	{
-		return Err(not_allowed());
-	}
-	// A symlink inside an allowed directory must not lead outside of it.
-	let resolved = fs_err::canonicalize(path)?;
-	if !allowed_dirs
-		.iter()
-		.filter_map(|dir| fs_err::canonicalize(dir).ok())
-		.any(|dir| resolved.starts_with(dir))
-	{
-		return Err(not_allowed());
-	}
-	Ok(fs_err::read(resolved)?)
-}
-
-/// Files a config reads its cert, key and root from, and the directories they must be under.
+/// Files a config reads its cert, key and root from, and the access rules they must pass.
 #[derive(Clone)]
 struct FileSources {
 	cert: Option<PathBuf>,
 	key: Option<PathBuf>,
 	root: Option<PathBuf>,
-	allowed_dirs: Vec<PathBuf>,
+	file_access: Arc<FileAccess>,
 }
 
 impl FileSources {
@@ -501,7 +471,10 @@ impl FileSources {
 		let read = |path: &Option<PathBuf>| {
 			path
 				.as_deref()
-				.map(|path| read_allowed_file(path, &self.allowed_dirs))
+				.map(|path| -> anyhow::Result<Vec<u8>> {
+					self.file_access.check(path)?;
+					Ok(fs_err::read(path)?)
+				})
 				.transpose()
 		};
 		Ok(CertMaterial {
@@ -577,11 +550,11 @@ fn spawn_cert_file_watcher(
 
 impl ResolvedBackendTLS {
 	pub fn try_into(self) -> anyhow::Result<BackendTLS> {
-		self.try_into_with(&allowed_file_dirs())
+		self.try_into_with(FILE_ACCESS.load_full())
 	}
 
-	/// Like `try_into`, with `allowed_file_dirs` limiting where `cert_path`/`key_path`/`root_path` may point.
-	fn try_into_with(self, allowed_file_dirs: &[PathBuf]) -> anyhow::Result<BackendTLS> {
+	/// Like `try_into`, with `file_access` limiting where `cert_path`/`key_path`/`root_path` may point.
+	fn try_into_with(self, file_access: Arc<FileAccess>) -> anyhow::Result<BackendTLS> {
 		let metadata = BackendTLSInfo::from_resolved(&self);
 		let hostname_override = self.hostname.map(|s| s.try_into()).transpose()?;
 
@@ -609,7 +582,7 @@ impl ResolvedBackendTLS {
 				cert: self.cert_path,
 				key: self.key_path,
 				root: self.root_path,
-				allowed_dirs: allowed_file_dirs.to_vec(),
+				file_access,
 			};
 			let should_watch = !files.is_empty();
 			// Files are re-read on every reload, so inline values would be lost.
@@ -730,14 +703,14 @@ mod hot_reload_tests {
 		(cert_path, key_path)
 	}
 
-	fn from_files(allowed: &[&Path], cert: &Path, key: &Path) -> anyhow::Result<BackendTLS> {
+	fn from_files(file_access: FileAccess, cert: &Path, key: &Path) -> anyhow::Result<BackendTLS> {
 		ResolvedBackendTLS {
 			insecure: true,
 			cert_path: Some(cert.to_path_buf()),
 			key_path: Some(key.to_path_buf()),
 			..Default::default()
 		}
-		.try_into_with(&allowed.iter().map(|d| d.to_path_buf()).collect::<Vec<_>>())
+		.try_into_with(Arc::new(file_access))
 	}
 
 	/// Polls until the config differs from `previous` (reloads are debounced by 250ms).
@@ -766,7 +739,7 @@ mod hot_reload_tests {
 			root_path: Some(cert_path),
 			..Default::default()
 		}
-		.try_into_with(&[dir.path().to_path_buf()])
+		.try_into_with(Default::default())
 		.expect_err("inline cert/key alongside a file-based root must be rejected");
 		assert!(
 			err
@@ -787,49 +760,30 @@ mod hot_reload_tests {
 				key_path: key,
 				..Default::default()
 			}
-			.try_into_with(&[dir.path().to_path_buf()])
+			.try_into_with(Default::default())
 			.expect_err("a cert without a key (or the reverse) must be rejected");
 			assert!(err.to_string().contains("must be set together"));
 		}
 	}
 
 	#[test]
-	fn files_must_be_under_an_allowed_dir() {
+	fn files_must_pass_file_access() {
 		let dir = tempfile::tempdir().unwrap();
-		let other = tempfile::tempdir().unwrap();
 		let (cert_path, key_path) = write_cert_key(dir.path());
 
-		from_files(&[dir.path()], &cert_path, &key_path).expect("file under an allowed dir");
-		for allowed in [&[][..], &[other.path()][..]] {
-			let err = from_files(allowed, &cert_path, &key_path).expect_err("file outside allowed dirs");
-			assert!(err.to_string().contains("allowedBackendTlsFileDirs"));
-		}
-
-		let traversal = dir.path().join("../").join(dir.path().file_name().unwrap());
-		let err = from_files(&[dir.path()], &traversal.join("cert.pem"), &key_path)
-			.expect_err("`..` must be rejected");
-		assert!(err.to_string().contains("allowedBackendTlsFileDirs"));
-	}
-
-	#[cfg(unix)]
-	#[test]
-	fn symlink_out_of_an_allowed_dir_is_rejected() {
-		let dir = tempfile::tempdir().unwrap();
-		let outside = tempfile::tempdir().unwrap();
-		let (_, key_path) = write_cert_key(dir.path());
-		let (outside_cert, _) = write_cert_key(outside.path());
-		let link = dir.path().join("link.pem");
-		std::os::unix::fs::symlink(&outside_cert, &link).unwrap();
-
-		let err = from_files(&[dir.path()], &link, &key_path).expect_err("symlink escapes");
-		assert!(err.to_string().contains("allowedBackendTlsFileDirs"));
+		let deny = FileAccess {
+			deny: vec![dir.path().to_path_buf()],
+			..Default::default()
+		};
+		let err = from_files(deny, &cert_path, &key_path).expect_err("denied file must be rejected");
+		assert!(err.to_string().contains("config.fileAccess"));
 	}
 
 	#[tokio::test]
 	async fn reloads_client_cert_on_file_change() {
 		let dir = tempfile::tempdir().unwrap();
 		let (cert_path, key_path) = write_cert_key(dir.path());
-		let tls = from_files(&[dir.path()], &cert_path, &key_path).unwrap();
+		let tls = from_files(Default::default(), &cert_path, &key_path).unwrap();
 		let before = tls.base_config().config;
 
 		// Let the watcher register before the files are rewritten.
@@ -847,7 +801,7 @@ mod hot_reload_tests {
 	async fn keeps_reloading_after_a_delete_and_recreate_rotation() {
 		let dir = tempfile::tempdir().unwrap();
 		let (cert_path, key_path) = write_cert_key(dir.path());
-		let tls = from_files(&[dir.path()], &cert_path, &key_path).unwrap();
+		let tls = from_files(Default::default(), &cert_path, &key_path).unwrap();
 		let initial = tls.base_config().config;
 		tokio::time::sleep(Duration::from_millis(300)).await;
 
@@ -873,12 +827,16 @@ mod hot_reload_tests {
 
 	#[cfg(unix)]
 	#[tokio::test]
-	async fn reload_keeps_previous_config_if_a_file_leaves_the_allowed_dir() {
+	async fn reload_keeps_previous_config_if_a_file_is_not_allowed() {
 		let dir = tempfile::tempdir().unwrap();
 		let outside = tempfile::tempdir().unwrap();
 		let (cert_path, key_path) = write_cert_key(dir.path());
 		let (outside_cert, _) = write_cert_key(outside.path());
-		let tls = from_files(&[dir.path()], &cert_path, &key_path).unwrap();
+		let allow = FileAccess {
+			allow: vec![dir.path().to_path_buf()],
+			..Default::default()
+		};
+		let tls = from_files(allow, &cert_path, &key_path).unwrap();
 		let before = tls.base_config().config;
 		tokio::time::sleep(Duration::from_millis(300)).await;
 
@@ -896,7 +854,7 @@ mod hot_reload_tests {
 	async fn watcher_task_stops_once_config_is_dropped() {
 		let dir = tempfile::tempdir().unwrap();
 		let (cert_path, key_path) = write_cert_key(dir.path());
-		let tls = from_files(&[dir.path()], &cert_path, &key_path).unwrap();
+		let tls = from_files(Default::default(), &cert_path, &key_path).unwrap();
 
 		let BackendTLSSource::Static(config) = &tls.source else {
 			panic!("expected a static backend TLS source");

@@ -688,8 +688,8 @@ type BackendTLSCertificateRef struct {
 	// +optional
 	Kind string `json:"kind,omitempty"`
 
-	// Paths on the agentgateway pod's local filesystem, which must be under a directory in the
-	// gateway's `allowedBackendTlsFileDirs` config. Required when `kind` is `File`.
+	// Paths on the agentgateway pod's local filesystem, which must be allowed by the gateway's
+	// `fileAccess` config. Required when `kind` is `File`.
 	// +optional
 	File *BackendTLSFile `json:"file,omitempty"`
 }

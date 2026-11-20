@@ -71,7 +71,7 @@
 |`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`, `readOnly`.|
-|`config.fileAccess`|object|Restricts which resource files configuration API validation may use.<br>The longest matching prefix wins. A tie goes to `deny`.|
+|`config.fileAccess`|object|Restricts which resource files configuration API validation and xDS backend TLS may use.<br>The longest matching prefix wins. A tie goes to `deny`.|
 |`config.fileAccess.allow`|[]string|Absolute path prefixes to allow. An empty list allows any path that passes the deny rules.|
 |`config.fileAccess.deny`|[]string|Absolute path prefixes to deny alongside the default prefixes `/dev`, `/proc`, and `/sys`.|
 |`config.caAddress`|string|Address of the Certificate Authority used to issue SPIFFE certificates.|
@@ -80,7 +80,6 @@
 |`config.xdsAuthToken`|string|Authentication token for communicating with the xDS control plane.|
 |`config.spiffe`|object|Local SPIFFE Workload API configuration<br>When set, listeners and backends may source their TLS identity from SPIFFE.|
 |`config.spiffe.endpoint`|string|SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).|
-|`config.allowedBackendTlsFileDirs`|[]string|Directories that cert, key and root files referenced by xDS-configured backend TLS must be under.<br>If unset, such files are rejected.|
 |`config.namespace`|string|Kubernetes namespace for this gateway instance.|
 |`config.gateway`|string|Name of this gateway. Required when xDS is configured.|
 |`config.trustDomain`|string|SPIFFE trust domain for this gateway.|

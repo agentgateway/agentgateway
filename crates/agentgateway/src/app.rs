@@ -77,7 +77,7 @@ pub async fn run_with_ui_assets(
 	} else {
 		None
 	};
-	crate::http::backendtls::set_allowed_file_dirs(config.allowed_backend_tls_file_dirs.clone());
+	crate::http::backendtls::set_file_access(config.file_access.clone());
 	let spiffe = if let Some(cfg) = &config.spiffe {
 		let client = Arc::new(
 			spiffe::SpiffeClient::new(cfg.endpoint.clone())
