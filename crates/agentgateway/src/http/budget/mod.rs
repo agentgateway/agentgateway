@@ -257,8 +257,26 @@ impl BudgetExceededAction {
 #[derive(Debug, Clone)]
 pub struct MatchedBudgets {
 	pub(crate) api_key: String,
-	pub(crate) api_key_id: String,
-	pub(crate) budgets: Vec<Budget>,
+	pub(crate) budgets: Arc<[MatchedBudget]>,
+}
+
+#[derive(Debug)]
+pub(crate) struct MatchedBudget {
+	pub(crate) id: String,
+	pub(crate) budget: Budget,
+}
+
+impl MatchedBudgets {
+	pub(crate) fn for_api_key(api_key: String, api_key_id: &str, budgets: Vec<Budget>) -> Self {
+		let budgets = budgets
+			.into_iter()
+			.map(|budget| MatchedBudget {
+				id: budget_id(api_key_id, &budget),
+				budget,
+			})
+			.collect();
+		Self { api_key, budgets }
+	}
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -406,12 +424,11 @@ impl BudgetPolicy {
 			let Some(budgets) = policy.budgets.as_ref() else {
 				continue;
 			};
-			for budget in &budgets.budgets {
-				let budget_id = budget_id(&budgets.api_key_id, budget);
+			for MatchedBudget { id, budget } in budgets.budgets.iter() {
 				if let Some(registration) = &self.registration {
 					BudgetCounter::configured(&budgets.api_key, budget, now)?;
 					registration.insert(
-						budget_id,
+						id.clone(),
 						BudgetDefinition {
 							api_key: budgets.api_key.clone(),
 							budget: budget.clone(),
@@ -419,7 +436,7 @@ impl BudgetPolicy {
 					);
 					continue;
 				}
-				match self.counters.entry(budget_id) {
+				match self.counters.entry(id.clone()) {
 					Entry::Occupied(mut entry) => {
 						entry.get_mut().configure(&budgets.api_key, budget, now)?;
 					},
@@ -437,12 +454,11 @@ impl BudgetPolicy {
 	fn check(&self, budgets: &MatchedBudgets) -> anyhow::Result<Option<BudgetExceeded>> {
 		let now = Utc::now();
 		let mut blocked = None;
-		for budget in &budgets.budgets {
-			let budget_id = budget_id(&budgets.api_key_id, budget);
+		for MatchedBudget { id, budget } in budgets.budgets.iter() {
 			let (used, window_end, rolling) = {
 				let mut counter = self
 					.counters
-					.get_mut(&budget_id)
+					.get_mut(id)
 					.context("budget counter was not registered")?;
 				counter.refresh(now);
 				(counter.amount, counter.window_end, counter.rolling)
@@ -493,7 +509,7 @@ impl BudgetPolicy {
 	/// delta. A counter is advanced first if the request crossed a window boundary.
 	fn settle(&self, budgets: &MatchedBudgets, response: &LLMContext) {
 		let now = Utc::now();
-		for budget in &budgets.budgets {
+		for MatchedBudget { id, budget } in budgets.budgets.iter() {
 			let charged = match budget.limit.unit {
 				BudgetLimitUnit::Usd => response.cost.as_ref().map(|cost| cost.total()),
 				BudgetLimitUnit::Tokens => response.total_tokens.map(Decimal::from),
@@ -509,9 +525,8 @@ impl BudgetPolicy {
 				continue;
 			};
 
-			let budget_id = budget_id(&budgets.api_key_id, budget);
-			let Some(mut counter) = self.counters.get_mut(&budget_id) else {
-				tracing::warn!(target: "budget", budget_id, "budget counter was not registered before settlement");
+			let Some(mut counter) = self.counters.get_mut(id) else {
+				tracing::warn!(target: "budget", budget_id = id, "budget counter was not registered before settlement");
 				continue;
 			};
 			counter.refresh(now);
@@ -812,7 +827,7 @@ CREATE TABLE budget_usage (
 			.values()
 			.find_map(|policy| policy.budgets.clone())
 			.unwrap();
-		let budget_id = budget_id(&budgets.api_key_id, &budgets.budgets[0]);
+		let budget_id = &budgets.budgets[0].id;
 		let policy = Arc::new(BudgetPolicy::default());
 		policy
 			.initialize(crate::database::DatabasePool::Sqlite(pool.clone()))
@@ -820,7 +835,7 @@ CREATE TABLE budget_usage (
 			.unwrap();
 		policy.register(&authentication, true).unwrap();
 		{
-			let mut counter = policy.counters.get_mut(&budget_id).unwrap();
+			let mut counter = policy.counters.get_mut(budget_id).unwrap();
 			counter.amount = Decimal::from(10);
 			counter.pending = Decimal::from(10);
 		}
@@ -834,18 +849,18 @@ CREATE TABLE budget_usage (
 			.unwrap();
 		restarted.register(&authentication, true).unwrap();
 		assert_eq!(
-			restarted.counters.get(&budget_id).unwrap().amount,
+			restarted.counters.get(budget_id).unwrap().amount,
 			Decimal::from(10)
 		);
 
 		// Switching to a rolling window replaces the lifetime row instead of being rejected as an
 		// older window.
-		let mut rolling = budgets.budgets[0].clone();
+		let mut rolling = budgets.budgets[0].budget.clone();
 		rolling.window = Some(BudgetWindow {
 			rolling: Duration::from_secs(60 * 60),
 		});
 		{
-			let mut counter = restarted.counters.get_mut(&budget_id).unwrap();
+			let mut counter = restarted.counters.get_mut(budget_id).unwrap();
 			counter
 				.configure(&budgets.api_key, &rolling, Utc::now())
 				.unwrap();
@@ -855,7 +870,7 @@ CREATE TABLE budget_usage (
 		}
 		restarted.flush().await.unwrap();
 		assert_eq!(
-			restarted.counters.get(&budget_id).unwrap().amount,
+			restarted.counters.get(budget_id).unwrap().amount,
 			Decimal::from(3)
 		);
 	}
