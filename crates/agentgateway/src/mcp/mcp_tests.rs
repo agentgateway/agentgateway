@@ -10013,3 +10013,225 @@ async fn upstream_calls_proxy_grpc_policy() {
 		"application/grpc"
 	);
 }
+
+#[test]
+fn test_instructions_resources_per_target() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ListResourcesResult, ProtocolVersion, ServerCapabilities,
+		ServerResult,
+	};
+
+	let deny_beta = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.resource.name == "instructions://beta""#).unwrap(),
+		)],
+		vec![],
+	)));
+	let relay = Relay::new_for_request(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30111))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30112))),
+				fake_streamable_target("gamma", SocketAddr::from(([127, 0, 0, 1], 30113))),
+			],
+			..Default::default()
+		},
+		crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(vec![
+			deny_beta.into_inner(),
+		])),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
+	)
+	.unwrap();
+
+	let init = |name: &str| {
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new(name, "1.0"))
+				.with_instructions(format!("{name} instructions")),
+		)
+	};
+	relay.merge_initialize(ProtocolVersion::V_2025_06_18, true)(
+		vec![
+			("alpha".into(), init("alpha")),
+			("beta".into(), init("beta")),
+			(
+				"gamma".into(),
+				ServerResult::InitializeResult(InitializeResult::new(ServerCapabilities::default())),
+			),
+		],
+		&empty_cel(),
+	)
+	.unwrap();
+
+	let empty = || ServerResult::ListResourcesResult(ListResourcesResult::default());
+	let list = |first_page: bool| {
+		let ServerResult::ListResourcesResult(listed) = relay.merge_resources(first_page)(
+			vec![
+				("alpha".into(), empty()),
+				("beta".into(), empty()),
+				("gamma".into(), empty()),
+			],
+			&empty_cel(),
+		)
+		.unwrap() else {
+			panic!("expected ListResourcesResult");
+		};
+		listed
+			.resources
+			.iter()
+			.map(|r| r.uri.to_string())
+			.collect::<Vec<_>>()
+	};
+	// beta is denied by the policy and gamma sent no instructions, so only alpha is listed.
+	assert_eq!(list(true), vec!["instructions://alpha"]);
+	// Later pages of a paginated list do not repeat them.
+	assert!(list(false).is_empty());
+
+	let (target, text) = relay.instructions_resource("instructions://alpha").unwrap();
+	assert_eq!((target, text.as_str()), ("alpha", "alpha instructions"));
+	assert!(
+		relay
+			.instructions_resource("instructions://missing")
+			.is_none()
+	);
+	assert!(relay.instructions_resource("alpha+file:///x").is_none());
+
+	// Re-initialize: alpha no longer sends instructions, so its resource is gone.
+	relay.merge_initialize(ProtocolVersion::V_2025_06_18, true)(
+		vec![
+			(
+				"alpha".into(),
+				ServerResult::InitializeResult(InitializeResult::new(ServerCapabilities::default())),
+			),
+			("beta".into(), init("beta")),
+		],
+		&empty_cel(),
+	)
+	.unwrap();
+	assert!(
+		relay
+			.instructions_resource("instructions://alpha")
+			.is_none()
+	);
+	assert!(list(true).is_empty());
+}
+
+#[tokio::test]
+async fn instructions_resources_read_through_gateway() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let deny_b = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.resource.name == "instructions://b""#).unwrap(),
+		)],
+		vec![],
+	)));
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+			vec![BackendTrafficPolicy::McpAuthorization(deny_b)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	let listed = client.list_resources(None).await.unwrap();
+	let uris: Vec<_> = listed.resources.iter().map(|r| r.uri.as_str()).collect();
+	assert!(uris.contains(&"instructions://a"), "got: {uris:?}");
+	assert!(!uris.contains(&"instructions://b"), "got: {uris:?}");
+
+	let read = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"instructions://a",
+		))
+		.await
+		.unwrap();
+	let [rmcp::model::ResourceContents::TextResourceContents { uri, text, .. }] =
+		read.contents.as_slice()
+	else {
+		panic!("expected one text content, got: {:?}", read.contents);
+	};
+	assert_eq!(uri, "instructions://a");
+	assert_eq!(text, "This server provides counter tools and prompts.");
+
+	let Err(rmcp::ServiceError::McpError(err)) = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"instructions://b",
+		))
+		.await
+	else {
+		panic!("expected denied read to fail");
+	};
+	assert_eq!(err.message.as_ref(), "unknown resource");
+}
+
+#[tokio::test]
+async fn instructions_resources_not_listed_for_single_target() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = mcp_streamable_client(io).await;
+
+	let listed = client.list_resources(None).await.unwrap();
+	assert!(
+		!listed
+			.resources
+			.iter()
+			.any(|r| r.uri.starts_with("instructions://")),
+		"got: {:?}",
+		listed.resources
+	);
+}
+
+#[tokio::test]
+async fn instructions_resources_read_runs_guardrails() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, pass_request, pass_response, reject_request,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			if req.method != "resources/read" {
+				return pass_request();
+			}
+			reject_request(Code::PermissionDenied, "denied by mock mcpGuardrails")
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+			vec![guardrails_test_support::policy(extmcp_mock.address)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	let err = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"instructions://a",
+		))
+		.await
+		.expect_err("guardrails should deny the instructions read");
+	let rmcp::ServiceError::McpError(err) = err else {
+		panic!("expected McpError, got: {err:?}");
+	};
+	assert_eq!(err.message.as_ref(), "denied by mock mcpGuardrails");
+}

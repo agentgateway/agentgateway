@@ -605,11 +605,16 @@ impl Session {
 						)
 						.await
 					},
-					ClientRequest::ListResourcesRequest(_) => {
+					ClientRequest::ListResourcesRequest(lrr) => {
+						let first_page = lrr
+							.params
+							.as_ref()
+							.and_then(|p| p.cursor.as_ref())
+							.is_none();
 						Box::pin(self.relay.send_list(
 							r,
 							ctx,
-							self.relay.merge_resources(),
+							self.relay.merge_resources(first_page),
 							self.encoder.clone(),
 						))
 						.await
@@ -703,6 +708,35 @@ impl Session {
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						let uri = rrr.params.uri.clone();
+						if let Some((target, text)) = self.relay.instructions_resource(&uri) {
+							log.non_atomic_mutate(|l| l.set_resource(target.to_string(), uri.clone()));
+							Box::pin(self.authorize_with_ctx(
+								target,
+								&mcp::guardrails::methods::RESOURCES_READ,
+								&mut rrr.params,
+								&mut rrr.extensions,
+								&mut ctx,
+								rbac::ResourceType::Resource(rbac::ResourceId::new(
+									target.to_string(),
+									uri.clone(),
+								)),
+								"resource",
+								&uri,
+							))
+							.await?;
+							let contents = vec![rmcp::model::ResourceContents::text(text.as_str(), uri)];
+							let response = ServerJsonRpcMessage::response(
+								rmcp::model::ReadResourceResult::new(contents).into(),
+								r.id.clone(),
+							);
+							return mcp::handler::messages_to_response(
+								r.id.clone(),
+								futures_util::stream::once(async move { Ok(response) }),
+								None,
+								mcp::handler::ctx_downstream_modern(&ctx),
+								None,
+							);
+						}
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
 						log.non_atomic_mutate(|l| {
 							l.set_resource(service_name.to_string(), original_uri.to_string());
