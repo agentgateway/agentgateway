@@ -363,6 +363,12 @@ impl Upstream {
 					"subscriptions/listen is not supported for stdio/SSE upstreams".to_string(),
 				));
 			}
+			// Rejecting discovery makes modern clients fall back to `initialize` instead.
+			if matches!(&self, Upstream::McpStdio(_) | Upstream::McpSSE(_))
+				&& matches!(&request.request, ClientRequest::DiscoverRequest(_))
+			{
+				return Err(UpstreamError::InvalidMethod(method.clone()));
+			}
 			ctx.stamp_trace_context(&mut request.request.get_meta_mut().0);
 			match &self {
 				Upstream::McpStdio(c) => {
