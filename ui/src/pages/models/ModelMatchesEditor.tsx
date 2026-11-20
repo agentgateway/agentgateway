@@ -1,6 +1,7 @@
 import { Button, Checkbox, Input } from 'antd';
 import { Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 
+import { useRowKeys } from '@/components/EditorContracts';
 import { Tooltip } from '@/components/Primitives';
 import { CollapsiblePolicySection } from '@/policies/PolicyLayout';
 import type { LlmModel } from '@/types';
@@ -14,12 +15,14 @@ export function ModelMatchesEditor(props: {
 	onChange: (matches: ModelMatches) => void;
 }) {
 	const matches = props.matches;
+	const rows = useRowKeys(matches.length);
 
 	function updateMatch(index: number, match: ModelMatch) {
 		props.onChange(matches.map((item, itemIndex) => (itemIndex === index ? match : item)));
 	}
 
 	function removeMatch(index: number) {
+		rows.remove(index);
 		props.onChange(matches.filter((_, itemIndex) => itemIndex !== index));
 	}
 
@@ -34,8 +37,7 @@ export function ModelMatchesEditor(props: {
 				<div className="policy-editor-stack compact">
 					{matches.map((match, index) => (
 						<MatchCard
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							key={index}
+							key={rows.keys[index]}
 							index={index}
 							match={match}
 							onChange={next => updateMatch(index, next)}
@@ -77,6 +79,7 @@ function MatchCard(props: {
 	onRemove: () => void;
 }) {
 	const headers = props.match.headers ?? [];
+	const rows = useRowKeys(headers.length);
 
 	function updateHeader(index: number, header: HeaderMatch) {
 		props.onChange({
@@ -86,6 +89,7 @@ function MatchCard(props: {
 	}
 
 	function removeHeader(index: number) {
+		rows.remove(index);
 		props.onChange({
 			...props.match,
 			headers: headers.filter((_, itemIndex) => itemIndex !== index)
@@ -110,8 +114,7 @@ function MatchCard(props: {
 					<div className="match-header-list">
 						{headers.map((header, index) => (
 							<HeaderMatchRow
-								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								key={index}
+								key={rows.keys[index]}
 								header={header}
 								onChange={next => updateHeader(index, next)}
 								onRemove={() => removeHeader(index)}

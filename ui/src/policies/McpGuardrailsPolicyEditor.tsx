@@ -2,7 +2,12 @@ import { Button, Input, Tag } from 'antd';
 import { Braces, Plus, Server, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
-import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
+import {
+	LostFieldsWarning,
+	UnsupportedInForm,
+	useMergedEdits,
+	useRowKeys
+} from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { EmptyState, Field, FieldGroup, StatusBanner } from '@/components/Primitives';
@@ -78,6 +83,7 @@ export function McpGuardrailsPolicyEditor(props: {
 	const [error, setError] = useState<string | null>(null);
 	const preview = buildGuardrails(processors);
 	const merged = useMergedEdits(props.guardrails, preview);
+	const rows = useRowKeys(processors.length);
 
 	if (!initial) {
 		return (
@@ -106,6 +112,7 @@ export function McpGuardrailsPolicyEditor(props: {
 	}
 
 	function removeProcessor(index: number) {
+		rows.remove(index);
 		setProcessors(current => current.filter((_, processorIndex) => processorIndex !== index));
 		setErrors({});
 		setError(null);
@@ -166,8 +173,7 @@ export function McpGuardrailsPolicyEditor(props: {
 					{processors.map((processor, index) => (
 						<section
 							className={errors[index] ? 'mcp-processor-card invalid' : 'mcp-processor-card'}
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							key={index}
+							key={rows.keys[index]}
 						>
 							<div className="mcp-processor-header">
 								<span className="policy-form-section-icon compact">

@@ -1,7 +1,7 @@
 import { Button, Input } from 'antd';
 import { Check, Clipboard, Code2, GitBranch, KeyRound, Terminal } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import type { ReactElement, ReactNode } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 import claudeIcon from '@/assets/claude-color.svg';
 import codexIcon from '@/assets/codex-color.svg';
@@ -26,6 +26,7 @@ import {
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { WildcardModelSelector } from '@/components/WildcardModelSelector';
 import { providerLabel } from '@/config';
+import { contentKeys } from '@/contentKeys';
 import { hasKeyValue, keyLabel, maskKey } from '@/credentialDisplay';
 import { llmGatewayOrigin } from '@/gatewayUrls';
 import { useConfigDumpMode, useLlmConfigData } from '@/hooks';
@@ -57,7 +58,8 @@ type ClientRecipe = {
 		| 'pi'
 		| 'windsurf';
 	provider?: ProviderName;
-	steps?: ReactNode[];
+	// Each step is a <Fragment key=...>: ClientRecipeCard keys its list items by step.key.
+	steps?: ReactElement[];
 	language: string;
 	code: string;
 };
@@ -435,9 +437,8 @@ function ClientRecipeCard(props: {
 			</div>
 			{props.recipe.steps?.length ? (
 				<ol className="client-recipe-steps">
-					{props.recipe.steps.map((step, index) => (
-						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						<li key={index}>{step}</li>
+					{props.recipe.steps.map(step => (
+						<li key={step.key}>{step}</li>
 					))}
 				</ol>
 			) : null}
@@ -528,19 +529,21 @@ claude --model ${JSON.stringify(args.model)}`
 			description: 'Connect Claude Desktop to agentgateway using third-party inference settings.',
 			icon: 'claude',
 			steps: [
-				<>
+				<Fragment key="developer-mode">
 					Open Claude Desktop and enable developer mode: <strong>Help</strong> &gt;{' '}
 					<strong>Troubleshooting</strong> &gt; <strong>Enable Developer Mode</strong>.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="relaunch">
 					Fully quit and relaunch Claude Desktop. A new <strong>Developer</strong> menu appears in
 					the menu bar.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="configure-gateway">
 					Open <strong>Developer</strong> &gt; <strong>Configure Third-Party Inference</strong> &gt;{' '}
 					<strong>Gateway</strong>.
-				</>,
-				<>Enter the gateway URL and virtual API key, save, then restart Claude Desktop.</>
+				</Fragment>,
+				<Fragment key="enter-key">
+					Enter the gateway URL and virtual API key, save, then restart Claude Desktop.
+				</Fragment>
 			],
 			language: 'text',
 			code: `Gateway URL: ${base}
@@ -569,12 +572,12 @@ codex --model "${args.model}" \\
 			description: 'Connect OpenCode to agentgateway.',
 			icon: 'opencode',
 			steps: [
-				<>
+				<Fragment key="create-config">
 					Create this <code>opencode.json</code> in your project root.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="run">
 					Run <code>opencode</code> from the same directory.
-				</>
+				</Fragment>
 			],
 			language: 'bash',
 			code: `
@@ -607,14 +610,14 @@ opencode`
 			description: 'Connect Pi to agentgateway using the Responses API.',
 			icon: 'pi',
 			steps: [
-				<>
+				<Fragment key="add-config">
 					Add this configuration to <code>~/.pi/agent/models.json</code>. If the file exists, merge
 					the <code>agentgateway</code> entry into its <code>providers</code> object.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="select-model">
 					Start <code>pi</code>, then use <code>/model</code> to select <code>{args.model}</code>{' '}
 					under <code>agentgateway</code>.
-				</>
+				</Fragment>
 			],
 			language: 'json',
 			code: JSON.stringify(
@@ -638,17 +641,17 @@ opencode`
 			description: 'Connect Goose to agentgateway using its OpenAI provider.',
 			icon: 'goose',
 			steps: [
-				<>
+				<Fragment key="configure">
 					Run <code>goose configure</code> &gt; <strong>Configure Providers</strong> &gt;{' '}
 					<strong>OpenAI</strong>, or export the variables below before starting a session.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="persist">
 					To persist the settings, add them to <code>~/.config/goose/config.yaml</code>.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="custom-model">
 					<code>goose configure</code> cannot enter custom model names; set <code>GOOSE_MODEL</code>{' '}
 					in <code>config.yaml</code> for models missing from the provider list.
-				</>
+				</Fragment>
 			],
 			language: 'bash',
 			code: `export GOOSE_PROVIDER=openai
@@ -666,16 +669,16 @@ goose session`
 			description: 'Connect Cursor to agentgateway using the OpenAI base URL override.',
 			icon: 'cursor',
 			steps: [
-				<>
+				<Fragment key="open-settings">
 					Open <strong>Cursor Settings</strong> &gt; <strong>Models</strong>.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="override-url">
 					Enable <strong>Override OpenAI Base URL</strong> and set it to <code>{base}</code>.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="add-model">
 					Add <code>{args.model}</code> as a custom model, then test from <strong>Ask</strong> or{' '}
 					<strong>Plan</strong> mode.
-				</>
+				</Fragment>
 			],
 			language: 'text',
 			code: `Override OpenAI Base URL: ${base}
@@ -688,13 +691,13 @@ Custom model: ${args.model}`
 			description: 'Connect VS Code Copilot Business or Enterprise to agentgateway.',
 			icon: 'copilot',
 			steps: [
-				<>
+				<Fragment key="open-settings">
 					Open <strong>VS Code Settings</strong> and search for <code>github.copilot</code>.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="set-proxy">
 					Edit <code>settings.json</code> and set the advanced proxy URL.
-				</>,
-				<>Reload VS Code and test Copilot suggestions or chat.</>
+				</Fragment>,
+				<Fragment key="reload">Reload VS Code and test Copilot suggestions or chat.</Fragment>
 			],
 			language: 'json',
 			code: `{
@@ -709,13 +712,13 @@ Custom model: ${args.model}`
 			description: 'Connect Continue to agentgateway using an OpenAI-compatible model.',
 			icon: 'continue',
 			steps: [
-				<>
+				<Fragment key="add-config">
 					Add this configuration to <code>~/.continue/config.yaml</code>. If the file exists, add
 					the model to its <code>models</code> list.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="select-model">
 					Save the file, then select <strong>agentgateway</strong> in the Continue model selector.
-				</>
+				</Fragment>
 			],
 			language: 'text',
 			code: `name: agentgateway
@@ -733,15 +736,15 @@ models:
 			description: 'Connect Windsurf to agentgateway using its HTTP proxy setting.',
 			icon: 'windsurf',
 			steps: [
-				<>
+				<Fragment key="open-settings">
 					Open <strong>Windsurf Settings</strong>.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="find-proxy">
 					Search for <strong>Http: Proxy</strong>.
-				</>,
-				<>
+				</Fragment>,
+				<Fragment key="set-proxy">
 					Set the proxy URL to <code>{base}</code> and save.
-				</>
+				</Fragment>
 			],
 			language: 'text',
 			code: `Http: Proxy: ${base}`
@@ -886,14 +889,10 @@ function HighlightedCode(props: { code: string; language: string }) {
 }
 
 function highlightCode(code: string, language: string) {
-	return code.split('\n').flatMap((line, lineIndex, lines) => [
-		<span
-			className="code-line"
-			key={`line-${
-				// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-				lineIndex
-			}`}
-		>
+	const lines = code.split('\n');
+	const keys = contentKeys(lines);
+	return lines.flatMap((line, lineIndex) => [
+		<span className="code-line" key={keys[lineIndex]}>
 			{highlightLine(line, language, lineIndex)}
 		</span>,
 		lineIndex < lines.length - 1 ? '\n' : null

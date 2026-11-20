@@ -5,7 +5,7 @@ import type * as Monaco from 'monaco-editor';
 import { useState } from 'react';
 
 import { celEditorOptions, celLanguage, configureCelMonaco } from '@/celMonaco';
-import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
+import { LostFieldsWarning, useMergedEdits, useRowKeys } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import { ButtonLink, EmptyState, StatusBanner } from '@/components/Primitives';
 import { monacoTheme } from '@/monacoWorkers';
@@ -49,6 +49,7 @@ export function AuthorizationPolicyEditor(props: {
 	const [errors, setErrors] = useState<Record<number, string>>({});
 	const [summaryError, setSummaryError] = useState<string | null>(null);
 	const merged = useMergedEdits(props.authorization, buildAuthorization(rules));
+	const rows = useRowKeys(rules.length);
 
 	function addRule() {
 		setRules(current => [
@@ -89,6 +90,7 @@ export function AuthorizationPolicyEditor(props: {
 	}
 
 	function removeRule(index: number) {
+		rows.remove(index);
 		setRules(current => current.filter((_, ruleIndex) => ruleIndex !== index));
 		setErrors(current => remapErrorsAfterDelete(current, index));
 		setEditingIndex(current => {
@@ -150,8 +152,7 @@ export function AuthorizationPolicyEditor(props: {
 						return (
 							<section
 								className={errors[index] ? 'authz-rule-card invalid' : 'authz-rule-card'}
-								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								key={index}
+								key={rows.keys[index]}
 							>
 								<div className="authz-rule-header">
 									<div>

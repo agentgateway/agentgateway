@@ -58,6 +58,7 @@ import {
 	setUiLogAttributeExpressions,
 	uiLogAttributeExpressions
 } from '@/config';
+import { contentKeys } from '@/contentKeys';
 import { queryParam, useStickyQueryParam } from '@/drawerRouteState';
 import { useLlmConfigData, useUpdateConfig } from '@/hooks';
 import { llmModelOptions } from '@/llmModelOptions';
@@ -1193,9 +1194,17 @@ function logGuardrails(entry: LogEntry): Record<string, unknown>[] {
 	);
 }
 
+// Keyed by the fields each row shows instead of serializing the whole evaluation.
+function guardrailKeys(guards: Record<string, unknown>[]) {
+	return contentKeys(
+		guards.map(guard => `${String(guard.phase)}:${String(guard.guard)}:${String(guard.action)}`)
+	);
+}
+
 function LogGuardrailBadge(props: { entry: LogEntry }) {
 	const guards = logGuardrails(props.entry);
 	if (!guards.length) return null;
+	const keys = guardrailKeys(guards);
 	const rejected = guards.some(guard => guard.action === 'reject');
 	const masked = guards.some(guard => guard.action === 'mask');
 	const failedOpen = guards.some(guard => guard.action === 'failOpen');
@@ -1214,8 +1223,7 @@ function LogGuardrailBadge(props: { entry: LogEntry }) {
 				<>
 					<strong>{label}</strong>
 					{guards.map((guard, index) => (
-						// biome-ignore lint/suspicious/noArrayIndexKey: Log evaluations are immutable and may repeat the same guard.
-						<div key={index}>
+						<div key={keys[index]}>
 							{String(guard.phase ?? '')}: {String(guard.guard ?? 'guardrail')} (
 							{String(guard.action ?? 'unknown')})
 						</div>
@@ -1233,6 +1241,7 @@ function LogGuardrailBadge(props: { entry: LogEntry }) {
 function LogGuardrailDetails(props: { entry: LogEntry }) {
 	const guards = logGuardrails(props.entry);
 	if (!guards.length) return null;
+	const keys = guardrailKeys(guards);
 	const outcomes: Record<string, { label: string; description: string }> = {
 		allow: { label: 'Allowed', description: 'Content passed without modification.' },
 		reject: { label: 'Rejected', description: 'The guardrail blocked the call.' },
@@ -1264,8 +1273,7 @@ function LogGuardrailDetails(props: { entry: LogEntry }) {
 					const Icon =
 						action === 'reject' ? ShieldBan : action === 'mask' ? ShieldEllipsis : Shield;
 					return (
-						// biome-ignore lint/suspicious/noArrayIndexKey: Log evaluations are immutable and may repeat the same guard.
-						<div className="log-guardrail-result" key={index}>
+						<div className="log-guardrail-result" key={keys[index]}>
 							<span className={`log-guardrail-badge ${state}`}>
 								<Icon size={18} aria-hidden="true" />
 							</span>
@@ -1533,6 +1541,7 @@ function LogDetailView(props: {
 	onOpenSettings?: () => void;
 }) {
 	const messages = logConversation(props.entry);
+	const messageKeys = contentKeys(messages.map(message => message.role));
 	const trajectory = trajectoryEvents(messages);
 	const conversationRef = useRef<HTMLDetailsElement>(null);
 	const usage = logUsageDetail(props.entry);
@@ -1674,10 +1683,7 @@ function LogDetailView(props: {
 							<LogMessageView
 								events={trajectory.filter(event => event.messageIndex === index)}
 								message={message}
-								key={`${message.role}-${
-									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-									index
-								}`}
+								key={messageKeys[index]}
 							/>
 						))}
 					</div>
@@ -1763,10 +1769,7 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 											aria-label={`Step ${index + 1}: ${event.label}`}
 											aria-pressed={selected === index}
 											className={`log-trajectory-bar ${lane}${event.system ? ' system' : ''}${selected === index ? ' selected' : ''}`}
-											key={`${lane}-${
-												// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-												index
-											}`}
+											key={`${lane}-${event.anchorId}`}
 											// Inline so antd's text-button hover fill can't replace the lane colour.
 											style={{
 												background: `var(--log-step-${event.system ? 'system' : lane})`
@@ -1782,10 +1785,7 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 										<span
 											aria-hidden="true"
 											className="log-trajectory-gap"
-											key={`${lane}-${
-												// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-												index
-											}`}
+											key={`${lane}-${event.anchorId}`}
 										/>
 									)
 								)}
@@ -2161,6 +2161,18 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 	const toolCallEvents = props.events.filter(
 		event => event.partIndex == null && event.lane === 'tool-call'
 	);
+	const partKeys = contentKeys(message.parts?.map(part => part.type) ?? []);
+	const toolCallKeys = contentKeys(message.toolCalls?.map(call => call.name) ?? []);
+	const toolResultKeys = contentKeys(
+		message.toolResults?.map(result => result.id ?? result.name ?? 'result') ?? []
+	);
+	// Keyed by item ID, never by content: encrypted reasoning can be large.
+	const reasoningKeys = contentKeys(
+		message.reasoning?.map(reasoning => {
+			const id = (reasoning as { id?: unknown } | null)?.id;
+			return typeof id === 'string' ? id : 'reasoning';
+		}) ?? []
+	);
 	const collapseToggle = collapsible ? (
 		<Button
 			type="text"
@@ -2193,10 +2205,7 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								anchorId={props.events.find(event => event.partIndex === index)?.anchorId}
 								part={part}
 								collapsed={part.type === 'text' && collapsed}
-								key={`${part.type}-${
-									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-									index
-								}`}
+								key={partKeys[index]}
 							/>
 						))}
 						{collapseToggle}
@@ -2216,10 +2225,7 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								kind="call"
 								name={call.name}
 								value={call.arguments}
-								key={`${call.name}-${
-									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-									index
-								}`}
+								key={toolCallKeys[index]}
 							/>
 						))
 					: null}
@@ -2230,22 +2236,13 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								name={result.name ?? 'unknown'}
 								value={result.content}
 								isError={result.isError}
-								key={`${result.id ?? result.name ?? 'result'}-${
-									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-									index
-								}`}
+								key={toolResultKeys[index]}
 							/>
 						))
 					: null}
 				{!message.parts && hasReasoning
 					? message.reasoning?.map((reasoning, index) => (
-							<LogReasoningBlock
-								content={reasoning}
-								key={`reasoning-${
-									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-									index
-								}`}
-							/>
+							<LogReasoningBlock content={reasoning} key={reasoningKeys[index]} />
 						))
 					: null}
 				{!content && !hasToolCalls && !hasToolResults && !hasReasoning ? (

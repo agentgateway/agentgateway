@@ -51,6 +51,7 @@ import {
 	configValueErrors,
 	schemaRequires
 } from '@/configValidation';
+import { contentKeys } from '@/contentKeys';
 import { useSchemaHelp } from '@/schemaHelp';
 
 // antd marks select search inputs autocomplete="new-password", which opens browser and
@@ -354,13 +355,12 @@ export function Tooltip(props: {
 function formatTooltipContent(content: ReactNode) {
 	if (typeof content !== 'string') return content;
 	const parts = content.split(/(`[^`]+`)/g);
+	const keys = contentKeys(parts);
 	return parts.map((part, index) => {
 		if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
-			// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-			return <code key={index}>{part.slice(1, -1)}</code>;
+			return <code key={keys[index]}>{part.slice(1, -1)}</code>;
 		}
-		// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-		return <span key={index}>{part}</span>;
+		return <span key={keys[index]}>{part}</span>;
 	});
 }
 
@@ -890,6 +890,7 @@ export function YamlBlock(props: { value: unknown }) {
 export function YamlTextBlock(props: { value: string; className?: string }) {
 	const text = props.value.replace(/\n$/, '');
 	const lines = text.split('\n');
+	const keys = contentKeys(lines);
 	return (
 		<pre
 			className={
@@ -897,13 +898,7 @@ export function YamlTextBlock(props: { value: string; className?: string }) {
 			}
 		>
 			{lines.map((line, index) => (
-				<span
-					className="yaml-line"
-					key={`${
-						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						index
-					}-${line}`}
-				>
+				<span className="yaml-line" key={keys[index]}>
 					{highlightYamlLine(line)}
 					{index < lines.length - 1 ? '\n' : null}
 				</span>

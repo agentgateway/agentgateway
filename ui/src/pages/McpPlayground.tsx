@@ -16,6 +16,7 @@ import {
 	Panel,
 	StatusBanner
 } from '@/components/Primitives';
+import { contentKeys } from '@/contentKeys';
 import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from '@/cors';
 import { mcpPlaygroundEndpoint } from '@/gatewayUrls';
 import { useMcpConfigData, useStoredStringState, useUpsertPolicyResource } from '@/hooks';
@@ -539,6 +540,7 @@ function McpResultView(props: { response: McpResponse }) {
 		result && typeof result === 'object' && Array.isArray((result as { content?: unknown }).content)
 			? (result as { content: unknown[] }).content
 			: [];
+	const contentBlockKeys = contentKeys(content.map(contentBlockKey));
 	const structuredContent =
 		result && typeof result === 'object'
 			? (result as { structuredContent?: unknown }).structuredContent
@@ -576,8 +578,7 @@ function McpResultView(props: { response: McpResponse }) {
 				<div className="mcp-result-card">
 					<strong>{toolError ? 'Tool error' : 'Tool output'}</strong>
 					{content.map((item, index) => (
-						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						<ContentBlock block={item} key={index} />
+						<ContentBlock block={item} key={contentBlockKeys[index]} />
 					))}
 					{structuredContent !== undefined ? (
 						<details className="schema-details" open>
@@ -599,6 +600,14 @@ function McpResultView(props: { response: McpResponse }) {
 			</details>
 		</div>
 	);
+}
+
+// Keyed by type and URI, never the whole block: an image block carries its base64 data.
+function contentBlockKey(item: unknown) {
+	if (!item || typeof item !== 'object') return typeof item;
+	const block = item as { type?: unknown; uri?: unknown; resource?: { uri?: unknown } | null };
+	const uri = block.uri ?? block.resource?.uri;
+	return typeof uri === 'string' ? `${String(block.type)}:${uri}` : String(block.type);
 }
 
 function ContentBlock(props: { block: unknown }) {
