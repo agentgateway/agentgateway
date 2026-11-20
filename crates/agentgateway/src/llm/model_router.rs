@@ -285,8 +285,7 @@ pub struct ResolvedBackend {
 }
 
 pub enum ResolveResult {
-	/// A response the router serves itself, such as the model list.
-	DirectResponse(Response),
+	ModelDiscovery(Response),
 	Rejected(ProxyResponseReason, Response),
 	Error(Error),
 	Backend(ResolvedBackend),
@@ -448,7 +447,7 @@ impl ModelRouter {
 			return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, response);
 		}
 		if is_model_list_request(req) {
-			return ResolveResult::DirectResponse(self.model_list_response(req, catalog));
+			return ResolveResult::ModelDiscovery(self.model_list_response(req, catalog));
 		}
 		let requested_model = match requested_model(req).await {
 			Ok(requested_model) => requested_model,
@@ -1812,7 +1811,7 @@ mod tests {
 			router.trace_path(&req).as_deref(),
 			Some("/public/foo/v1/models")
 		);
-		let ResolveResult::DirectResponse(response) = router
+		let ResolveResult::ModelDiscovery(response) = router
 			.resolve(
 				&mut req,
 				&llm::catalog::ModelCatalog::default(),
