@@ -224,10 +224,13 @@ export function isDatabaseConfigResource(
 
 export function fileOwnedMcpSettingFields(
 	config: GatewayConfig | null | undefined,
-	hybrid: boolean
+	hybrid: boolean,
+	endpoint?: string
 ): ReadonlySet<string> {
 	if (!hybrid) return new Set();
-	const mcp = config?.mcp;
+	const mcp = endpoint
+		? config?.mcp?.endpoints?.find(item => trimTrailingSlash(item.path) === endpoint)
+		: config?.mcp;
 	return new Set(mcpSettingsFields.filter(field => Object.hasOwn(mcp ?? {}, field)));
 }
 

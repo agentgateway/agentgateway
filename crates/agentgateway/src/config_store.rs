@@ -576,6 +576,44 @@ fn split_mcp_endpoint_id(id: &str) -> (Option<&str>, &str) {
 	}
 }
 
+/// Splits an MCP target or policy resource into its endpoint, its name, and its value as written
+/// inside that endpoint.
+fn from_endpoint_scoped(id: &str, mut value: Value) -> (Option<&str>, &str, Value) {
+	let (endpoint, name) = split_mcp_endpoint_id(id);
+	if let Some(object) = value.as_object_mut() {
+		object.remove("endpoint");
+	}
+	(endpoint, name, value)
+}
+
+/// The endpoint a settings resource applies to, and the fields it may set. An `mcp.settings`
+/// resource other than `default` is identified by its endpoint path.
+pub(crate) fn settings_scope(
+	kind: ConfigResourceKind,
+	id: &str,
+) -> (Option<&str>, &'static [&'static str]) {
+	let (_, fields) = kind.settings_fields().expect("settings resource");
+	if kind == ConfigResourceKind::McpSettings && id != "default" {
+		// An endpoint shares the gateway binding of `mcp`.
+		(Some(id), &fields[2..])
+	} else {
+		(None, fields)
+	}
+}
+
+/// Returns the settings object `kind`/`id` is written to in a file-backed config.
+pub(crate) fn file_settings<'a>(
+	config: &'a Value,
+	kind: ConfigResourceKind,
+	id: &str,
+) -> Option<&'a serde_json::Map<String, Value>> {
+	let (section, _) = kind.settings_fields().expect("settings resource");
+	match settings_scope(kind, id).0 {
+		Some(endpoint) => file_mcp_container(config, Some(endpoint))?.as_object(),
+		None => config.get(section)?.as_object(),
+	}
+}
+
 fn validate_mcp_endpoint_path(path: &str) -> anyhow::Result<()> {
 	if !path.starts_with('/') || path.ends_with('/') {
 		return Err(
@@ -694,13 +732,9 @@ fn upsert_file_mcp_resource(
 	previous_id: Option<&str>,
 ) -> anyhow::Result<()> {
 	let kind = prepared.kind;
-	let (endpoint, name) = split_mcp_endpoint_id(&prepared.id);
+	let (endpoint, name, value) = from_endpoint_scoped(&prepared.id, prepared.value.clone());
 	let (previous_endpoint, previous_name) =
 		split_mcp_endpoint_id(previous_id.unwrap_or(&prepared.id));
-	let mut value = prepared.value.clone();
-	if let Some(object) = value.as_object_mut() {
-		object.remove("endpoint");
-	}
 	let local = PreparedResource {
 		kind,
 		id: name.to_string(),
@@ -751,25 +785,31 @@ fn delete_file_mcp_resource(
 	} else {
 		delete_file_list_resource(container, &["targets"], kind, name)?
 	};
-	// Drop the endpoint once it no longer configures anything beyond its path.
-	if let Some(endpoint) = endpoint
-		&& let Some(endpoints) = config
-			.pointer_mut("/mcp/endpoints")
-			.and_then(Value::as_array_mut)
-	{
-		endpoints.retain(|g| {
-			file_mcp_endpoint_path(g) != Some(endpoint)
-				|| g.as_object().is_none_or(|g| {
-					g.iter().any(|(key, value)| match key.as_str() {
-						"path" => false,
-						"targets" => value.as_array().is_none_or(|v| !v.is_empty()),
-						"policies" => value.as_object().is_none_or(|v| !v.is_empty()),
-						_ => true,
-					})
-				})
-		});
+	if let Some(endpoint) = endpoint {
+		prune_file_mcp_endpoint(config, endpoint);
 	}
 	Ok(deleted)
+}
+
+/// Drops the endpoint once it no longer configures anything beyond its path.
+fn prune_file_mcp_endpoint(config: &mut Value, endpoint: &str) {
+	let Some(endpoints) = config
+		.pointer_mut("/mcp/endpoints")
+		.and_then(Value::as_array_mut)
+	else {
+		return;
+	};
+	endpoints.retain(|g| {
+		file_mcp_endpoint_path(g) != Some(endpoint)
+			|| g.as_object().is_none_or(|g| {
+				g.iter().any(|(key, value)| match key.as_str() {
+					"path" => false,
+					"targets" => value.as_array().is_none_or(|v| !v.is_empty()),
+					"policies" => value.as_object().is_none_or(|v| !v.is_empty()),
+					_ => true,
+				})
+			})
+	});
 }
 
 /// Lists the resources defined in a file-backed config. API keys are listed as `llm.apiKey`
@@ -888,7 +928,7 @@ pub(crate) fn upsert_file_config_resource(
 			upsert_file_mcp_resource(config, prepared, previous_id)
 		},
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
-			upsert_file_settings(config, prepared.kind, &prepared.value)
+			upsert_file_settings(config, prepared)
 		},
 		ConfigResourceKind::SessionKey => Err(session_key_file_error()),
 		ConfigResourceKind::LlmProvider
@@ -921,7 +961,7 @@ pub(crate) fn delete_file_config_resource(
 			delete_file_mcp_resource(config, kind, id)
 		},
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
-			delete_file_settings(config, kind)
+			delete_file_settings(config, kind, id)
 		},
 		ConfigResourceKind::SessionKey => Err(session_key_file_error()),
 		ConfigResourceKind::LlmProvider
@@ -1161,16 +1201,19 @@ fn session_key_file_error() -> anyhow::Error {
 	.into()
 }
 
-fn upsert_file_settings(
-	config: &mut Value,
-	kind: ConfigResourceKind,
-	value: &Value,
-) -> anyhow::Result<()> {
-	let (section, fields) = kind.settings_fields().expect("settings resource");
+fn upsert_file_settings(config: &mut Value, prepared: &PreparedResource) -> anyhow::Result<()> {
+	let PreparedResource { kind, id, value } = prepared;
+	let (section, _) = kind.settings_fields().expect("settings resource");
+	let (endpoint, fields) = settings_scope(*kind, id);
 	let value = value
 		.as_object()
-		.ok_or_else(|| anyhow::anyhow!("{kind}/default must be an object"))?;
-	let settings = ensure_file_object(config, &[section])?;
+		.ok_or_else(|| anyhow::anyhow!("{kind}/{id} must be an object"))?;
+	let settings = match endpoint {
+		Some(endpoint) => ensure_file_mcp_container(config, Some(endpoint))?
+			.as_object_mut()
+			.ok_or_else(|| anyhow::anyhow!("local config mcp.endpoints entries must be objects"))?,
+		None => ensure_file_object(config, &[section])?,
+	};
 	for &field in fields {
 		if let Some(value) = value.get(field) {
 			settings.insert(field.to_string(), value.clone());
@@ -1178,18 +1221,38 @@ fn upsert_file_settings(
 			settings.remove(field);
 		}
 	}
+	if let Some(endpoint) = endpoint {
+		prune_file_mcp_endpoint(config, endpoint);
+	}
 	Ok(())
 }
 
-fn delete_file_settings(config: &mut Value, kind: ConfigResourceKind) -> anyhow::Result<bool> {
-	let (section, fields) = kind.settings_fields().expect("settings resource");
-	let Some(settings) = crate::json::traverse_mut(config, &[section]).and_then(Value::as_object_mut)
-	else {
+fn delete_file_settings(
+	config: &mut Value,
+	kind: ConfigResourceKind,
+	id: &str,
+) -> anyhow::Result<bool> {
+	let (section, _) = kind.settings_fields().expect("settings resource");
+	let (endpoint, fields) = settings_scope(kind, id);
+	let settings = match endpoint {
+		Some(endpoint) if file_mcp_container(config, Some(endpoint)).is_some() => {
+			ensure_file_mcp_container(config, Some(endpoint))?
+		},
+		Some(_) => return Ok(false),
+		None => match config.get_mut(section) {
+			Some(settings) => settings,
+			None => return Ok(false),
+		},
+	};
+	let Some(settings) = settings.as_object_mut() else {
 		return Ok(false);
 	};
 	let mut deleted = false;
 	for &field in fields {
 		deleted |= settings.remove(field).is_some();
+	}
+	if let Some(endpoint) = endpoint {
+		prune_file_mcp_endpoint(config, endpoint);
 	}
 	Ok(deleted)
 }
@@ -1665,43 +1728,21 @@ fn append_mcp_endpoints(
 ) -> anyhow::Result<()> {
 	let mut by_endpoint: Vec<(String, Vec<ConfigResource>)> = Vec::new();
 	for mut resource in resources {
-		let (Some(endpoint), name) = split_mcp_endpoint_id(&resource.id) else {
+		let (Some(endpoint), name, value) =
+			from_endpoint_scoped(&resource.id, std::mem::take(&mut resource.value))
+		else {
 			continue;
 		};
-		let endpoint = endpoint.to_string();
-		resource.id = name.to_string();
-		if let Some(object) = resource.value.as_object_mut() {
-			object.remove("endpoint");
-		}
+		let (endpoint, name) = (endpoint.to_string(), name.to_string());
+		resource.id = name;
+		resource.value = value;
 		match by_endpoint.iter_mut().find(|(path, _)| *path == endpoint) {
 			Some((_, resources)) => resources.push(resource),
 			None => by_endpoint.push((endpoint, vec![resource])),
 		}
 	}
-	if by_endpoint.is_empty() {
-		return Ok(());
-	}
-	let Some(endpoints) = mcp
-		.entry("endpoints")
-		.or_insert_with(|| Value::Array(Vec::new()))
-		.as_array_mut()
-	else {
-		anyhow::bail!("local config mcp.endpoints must be an array");
-	};
 	for (path, resources) in by_endpoint {
-		let index = match endpoints
-			.iter()
-			.position(|g| file_mcp_endpoint_path(g) == Some(path.as_str()))
-		{
-			Some(index) => index,
-			None => {
-				endpoints.push(serde_json::json!({ "path": path }));
-				endpoints.len() - 1
-			},
-		};
-		let Some(endpoint) = endpoints[index].as_object_mut() else {
-			anyhow::bail!("local config mcp.endpoints entries must be objects");
-		};
+		let endpoint = mcp_endpoint_entry(mcp, &path)?;
 		append_policy_kind(
 			endpoint,
 			"policies",
@@ -1805,33 +1846,67 @@ fn append_settings(
 	resources: &[ConfigResource],
 	kind: ConfigResourceKind,
 ) -> anyhow::Result<()> {
-	let (_, fields) = kind.settings_fields().expect("settings resource");
-	let Some(resource) = resources.iter().find(|resource| resource.kind == kind) else {
-		return Ok(());
-	};
-	let value = resource.value.as_object().ok_or_else(|| {
-		ConfigResourceError::InvalidRequest(format!("{kind}/default must be an object"))
-	})?;
-	for (field, value) in value {
-		if !fields.contains(&field.as_str()) {
-			return Err(
-				ConfigResourceError::InvalidRequest(format!(
-					"{kind}/default contains unsupported field: {field}"
-				))
-				.into(),
-			);
+	for resource in resources.iter().filter(|resource| resource.kind == kind) {
+		let id = &resource.id;
+		let (endpoint, fields) = settings_scope(kind, id);
+		let value = resource.value.as_object().ok_or_else(|| {
+			ConfigResourceError::InvalidRequest(format!("{kind}/{id} must be an object"))
+		})?;
+		let settings = match endpoint {
+			Some(endpoint) => mcp_endpoint_entry(settings, endpoint)?,
+			None => &mut *settings,
+		};
+		for (field, value) in value {
+			if endpoint.is_some() && field == "endpoint" {
+				continue;
+			}
+			if !fields.contains(&field.as_str()) {
+				return Err(
+					ConfigResourceError::InvalidRequest(format!(
+						"{kind}/{id} contains unsupported field: {field}"
+					))
+					.into(),
+				);
+			}
+			if settings.contains_key(field) {
+				return Err(
+					ConfigResourceError::Conflict(format!(
+						"config resource {kind}/{id} field {field} conflicts with file-owned configuration"
+					))
+					.into(),
+				);
+			}
+			settings.insert(field.clone(), value.clone());
 		}
-		if settings.contains_key(field) {
-			return Err(
-				ConfigResourceError::Conflict(format!(
-					"config resource {kind}/default field {field} conflicts with file-owned configuration"
-				))
-				.into(),
-			);
-		}
-		settings.insert(field.clone(), value.clone());
 	}
 	Ok(())
+}
+
+/// Returns the entry for `path` in `mcp.endpoints`, creating it if it does not exist.
+fn mcp_endpoint_entry<'a>(
+	mcp: &'a mut serde_json::Map<String, Value>,
+	path: &str,
+) -> anyhow::Result<&'a mut serde_json::Map<String, Value>> {
+	let Some(endpoints) = mcp
+		.entry("endpoints")
+		.or_insert_with(|| Value::Array(Vec::new()))
+		.as_array_mut()
+	else {
+		anyhow::bail!("local config mcp.endpoints must be an array");
+	};
+	let index = match endpoints
+		.iter()
+		.position(|g| file_mcp_endpoint_path(g) == Some(path))
+	{
+		Some(index) => index,
+		None => {
+			endpoints.push(serde_json::json!({ "path": path }));
+			endpoints.len() - 1
+		},
+	};
+	endpoints[index]
+		.as_object_mut()
+		.ok_or_else(|| anyhow::anyhow!("local config mcp.endpoints entries must be objects"))
 }
 
 fn append_traffic_gateways(
@@ -1955,7 +2030,14 @@ pub(crate) fn prepare_resource(
 fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String> {
 	match kind {
 		ConfigResourceKind::ModelCatalog | ConfigResourceKind::SessionKey => Ok("default".to_string()),
-		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => Ok("default".to_string()),
+		ConfigResourceKind::LlmSettings => Ok("default".to_string()),
+		ConfigResourceKind::McpSettings => match value.get("endpoint").and_then(Value::as_str) {
+			Some(endpoint) => {
+				validate_mcp_endpoint_path(endpoint)?;
+				Ok(endpoint.to_string())
+			},
+			None => Ok("default".to_string()),
+		},
 		ConfigResourceKind::McpTarget => {
 			let name = string_field(value, "name", || {
 				format!("{kind} resources require value.name")
@@ -3624,6 +3706,11 @@ routes:
 						"/sales/mcp:db",
 						json!({"name": "db", "endpoint": "/sales/mcp", "stdio": {"cmd": "d"}}),
 					),
+					test_resource(
+						ConfigResourceKind::McpSettings,
+						"/sales/mcp",
+						json!({"endpoint": "/sales/mcp", "prefixMode": "always"}),
+					),
 				],
 			)
 			.expect("materialize"),
@@ -3633,7 +3720,7 @@ routes:
 			materialized.pointer("/mcp/endpoints"),
 			Some(&json!([
 				{"path": "/eng/mcp", "statefulMode": "stateless", "targets": [{"name": "db", "stdio": {"cmd": "c"}}]},
-				{"path": "/sales/mcp", "targets": [{"name": "db", "stdio": {"cmd": "d"}}]}
+				{"path": "/sales/mcp", "prefixMode": "always", "targets": [{"name": "db", "stdio": {"cmd": "d"}}]}
 			]))
 		);
 	}

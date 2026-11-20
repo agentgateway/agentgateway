@@ -56,7 +56,10 @@ import type {
 
 const targetKinds: McpTargetKind[] = ['mcp', 'sse', 'stdio', 'openapi'];
 
-type McpSettingsPatch = Partial<Omit<McpConfig, 'gateways' | 'port' | 'dnsRebindingProtection'>> & {
+type McpSettingsPatch = Partial<
+	Omit<McpConfig, 'gateways' | 'port' | 'statefulMode' | 'dnsRebindingProtection'>
+> & {
+	statefulMode?: McpStatefulMode | null;
 	gateways?: McpConfig['gateways'] | null;
 	port?: number | null;
 	dnsRebindingProtection?: boolean | null;
@@ -95,6 +98,7 @@ export function McpServersPage() {
 		target: McpTarget;
 	} | null>(null);
 	const [deletingServer, setDeletingServer] = useState<string | null>(null);
+	const [settingsEndpoint, setSettingsEndpoint] = useState<string | null>(null);
 	const [serverDrawer, setServerDrawer] = useStickyQueryParam('server');
 	const linkedTarget =
 		serverDrawer && serverDrawer !== 'new' && serverDrawer !== 'settings'
@@ -152,7 +156,7 @@ export function McpServersPage() {
 				}
 			/>
 
-			{saveError && !activeEditing && !settingsOpen ? (
+			{saveError && !activeEditing && !settingsOpen && !settingsEndpoint ? (
 				<StatusBanner state="bad" title="Save failed">
 					{saveError}
 				</StatusBanner>
@@ -217,6 +221,13 @@ export function McpServersPage() {
 											) : null}
 										</Button>
 									</Link>
+									<Button
+										size="small"
+										icon={<SlidersHorizontal size={14} />}
+										onClick={() => setSettingsEndpoint(endpoint.path)}
+									>
+										Settings
+									</Button>
 									<Button
 										size="small"
 										icon={<Plus size={14} />}
@@ -290,6 +301,39 @@ export function McpServersPage() {
 							{
 								onSuccess: closeServerDrawer
 							}
+						);
+					}}
+				/>
+			) : null}
+			{settingsEndpoint ? (
+				<McpSettingsDrawer
+					endpoint={settingsEndpoint}
+					config={effectiveConfig}
+					mcp={
+						mcp?.endpoints?.find(item => trimTrailingSlash(item.path) === settingsEndpoint) as
+							| McpSettingsResource
+							| undefined
+					}
+					databaseBacked={hybrid}
+					readOnlyFields={fileOwnedMcpSettingFields(rawConfig.data, hybrid, settingsEndpoint)}
+					help={help}
+					saving={saving}
+					saveError={saveError}
+					onClose={() => setSettingsEndpoint(null)}
+					onSave={value => {
+						const done = { onSuccess: () => setSettingsEndpoint(null) };
+						// A stored resource without settings would keep an otherwise empty endpoint alive.
+						if (hybrid && Object.keys(value).length === 0) {
+							if (isDatabaseConfigResource(resources, 'mcp.settings', settingsEndpoint)) {
+								deleteResource.mutate({ kind: 'mcp.settings', id: settingsEndpoint }, done);
+							} else {
+								setSettingsEndpoint(null);
+							}
+							return;
+						}
+						upsertResource.mutate(
+							{ kind: 'mcp.settings', value: { ...value, endpoint: settingsEndpoint } },
+							done
 						);
 					}}
 				/>
@@ -415,7 +459,9 @@ function McpServerTable(props: {
 
 export function McpSettingsDrawer(props: {
 	config?: GatewayConfig | null;
-	mcp?: McpConfig | null;
+	/** Edits the overrides of this endpoint rather than the shared settings. */
+	endpoint?: string;
+	mcp?: McpSettingsResource | null;
 	databaseBacked?: boolean;
 	readOnlyFields?: ReadonlySet<string>;
 	help: SchemaHelp;
@@ -425,9 +471,14 @@ export function McpSettingsDrawer(props: {
 	onSave: (settings: McpSettingsResource) => void;
 }) {
 	return (
-		<Drawer title="Settings" onClose={props.onClose} error={props.saveError}>
+		<Drawer
+			title={props.endpoint ? `Settings for ${props.endpoint}` : 'Settings'}
+			onClose={props.onClose}
+			error={props.saveError}
+		>
 			<McpSettings
 				config={props.config}
+				endpoint={props.endpoint}
 				mcp={props.mcp}
 				databaseBacked={props.databaseBacked}
 				readOnlyFields={props.readOnlyFields}
@@ -441,7 +492,9 @@ export function McpSettingsDrawer(props: {
 
 function McpSettings(props: {
 	config?: GatewayConfig | null;
-	mcp?: McpConfig | null;
+	/** Edits the overrides of this endpoint rather than the shared settings. */
+	endpoint?: string;
+	mcp?: McpSettingsResource | null;
 	databaseBacked?: boolean;
 	readOnlyFields?: ReadonlySet<string>;
 	help: SchemaHelp;
@@ -452,14 +505,18 @@ function McpSettings(props: {
 		gateways: props.mcp?.gateways ?? null,
 		port: props.mcp?.port ?? null
 	});
-	const [statefulMode, setStatefulMode] = useState<McpStatefulMode>(
-		props.mcp?.statefulMode ?? 'stateful'
+	// Settings an endpoint leaves unset come from the shared settings.
+	const inheritOption = props.endpoint
+		? [{ value: 'inherit' as const, label: 'Inherit', description: 'Use the shared MCP setting.' }]
+		: [];
+	const [statefulMode, setStatefulMode] = useState<McpStatefulMode | 'inherit'>(
+		props.mcp?.statefulMode ?? (props.endpoint ? 'inherit' : 'stateful')
 	);
-	const [prefixMode, setPrefixMode] = useState<McpPrefixMode>(
-		props.mcp?.prefixMode ?? 'conditional'
+	const [prefixMode, setPrefixMode] = useState<McpPrefixMode | 'inherit'>(
+		props.mcp?.prefixMode ?? (props.endpoint ? 'inherit' : 'conditional')
 	);
-	const [failureMode, setFailureMode] = useState<McpFailureMode>(
-		props.mcp?.failureMode ?? 'failClosed'
+	const [failureMode, setFailureMode] = useState<McpFailureMode | 'inherit'>(
+		props.mcp?.failureMode ?? (props.endpoint ? 'inherit' : 'failClosed')
 	);
 	const [sseKeepAlive, setSseKeepAlive] = useState(props.mcp?.sseKeepAlive ?? '');
 	const [server, setServer] = useState({
@@ -473,11 +530,15 @@ function McpSettings(props: {
 	);
 	const serverReadOnly = props.readOnlyFields?.has('server');
 	const patch: McpSettingsPatch = {
-		gateways: binding.gateways ?? [],
-		port: binding.gateways != null && binding.gateways.length > 0 ? null : binding.port,
-		statefulMode,
-		prefixMode,
-		failureMode,
+		...(props.endpoint
+			? {}
+			: {
+					gateways: binding.gateways ?? [],
+					port: binding.gateways != null && binding.gateways.length > 0 ? null : binding.port
+				}),
+		statefulMode: statefulMode === 'inherit' ? null : statefulMode,
+		prefixMode: prefixMode === 'inherit' ? null : prefixMode,
+		failureMode: failureMode === 'inherit' ? null : failureMode,
 		sseKeepAlive: sseKeepAlive.trim() || null,
 		dnsRebindingProtection: props.mcp?.dnsRebindingProtection ?? null,
 		server: Object.keys(serverOverrides).length > 0 ? serverOverrides : null
@@ -513,28 +574,30 @@ function McpSettings(props: {
 					saved to the database.
 				</StatusBanner>
 			) : null}
-			<PolicySection
-				icon={<Server size={17} />}
-				title="Gateway binding"
-				description="Choose how MCP is exposed."
-			>
-				<div className="form-grid">
-					<GatewayBindingEditor
-						config={props.config}
-						value={binding}
-						defaultPort={3000}
-						portLabel="Port"
-						portPlaceholder="3000"
-						portTooltip={props.help.field<McpConfig>(
-							'LocalSimpleMcpConfig',
-							'port',
-							'Gateway port for MCP traffic.'
-						)}
-						disabled={bindingReadOnly}
-						onChange={setBinding}
-					/>
-				</div>
-			</PolicySection>
+			{props.endpoint ? null : (
+				<PolicySection
+					icon={<Server size={17} />}
+					title="Gateway binding"
+					description="Choose how MCP is exposed."
+				>
+					<div className="form-grid">
+						<GatewayBindingEditor
+							config={props.config}
+							value={binding}
+							defaultPort={3000}
+							portLabel="Port"
+							portPlaceholder="3000"
+							portTooltip={props.help.field<McpConfig>(
+								'LocalSimpleMcpConfig',
+								'port',
+								'Gateway port for MCP traffic.'
+							)}
+							disabled={bindingReadOnly}
+							onChange={setBinding}
+						/>
+					</div>
+				</PolicySection>
+			)}
 			<CollapsiblePolicySection
 				icon={<SlidersHorizontal size={17} />}
 				title="MCP behavior"
@@ -553,6 +616,7 @@ function McpSettings(props: {
 							ariaLabel="State mode"
 							value={statefulMode}
 							options={[
+								...inheritOption,
 								{
 									value: 'stateless',
 									label: 'Stateless',
@@ -585,7 +649,12 @@ function McpSettings(props: {
 						<EnumSelector
 							ariaLabel="Prefix mode"
 							value={prefixMode}
-							labels={{ always: 'Always', conditional: 'Conditional', never: 'Never' }}
+							options={[
+								...inheritOption,
+								{ value: 'conditional', label: 'Conditional' },
+								{ value: 'always', label: 'Always' },
+								{ value: 'never', label: 'Never' }
+							]}
 							schema={props.help.node([
 								'$defs',
 								'LocalSimpleMcpConfig',
@@ -604,6 +673,7 @@ function McpSettings(props: {
 							ariaLabel="Failure mode"
 							value={failureMode}
 							options={[
+								...inheritOption,
 								{ value: 'failClosed', label: 'Fail closed' },
 								{ value: 'failOpen', label: 'Fail open' }
 							]}
@@ -695,11 +765,21 @@ function McpSettings(props: {
 				onSave={() => props.onSave(settings)}
 				resourceDiff={props.databaseBacked ? { original, modified: settings } : undefined}
 				applyDiff={next => {
-					const mcp: Record<string, unknown> = ensureMcp(next);
+					const mcp = ensureMcp(next);
+					let target: Record<string, unknown> = mcp;
+					if (props.endpoint) {
+						mcp.endpoints ??= [];
+						let entry = mcp.endpoints.find(item => trimTrailingSlash(item.path) === props.endpoint);
+						if (!entry) {
+							entry = { path: props.endpoint };
+							mcp.endpoints.push(entry);
+						}
+						target = entry;
+					}
 					for (const field of mcpSettingsFields) {
 						if (props.readOnlyFields?.has(field)) continue;
-						if (field in settings) mcp[field] = settings[field];
-						else delete mcp[field];
+						if (field in settings) target[field] = settings[field];
+						else delete target[field];
 					}
 				}}
 			/>
