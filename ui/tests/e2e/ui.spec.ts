@@ -873,6 +873,19 @@ test('Client Setup hides client snippets until the gateway URL is set', async ({
 	await expect(page.locator('.client-setup-summary')).toContainText('Not set');
 });
 
+test('Devin Desktop recipe points its Claude Agent at the gateway URL', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/client-setup');
+	await page.getByLabel('Gateway base URL').fill('https://gw.example.com');
+
+	await page.getByRole('combobox', { name: 'Integration' }).click();
+	await page.getByRole('option', { name: 'Devin Desktop' }).click();
+	const clientRecipe = page.locator('.client-recipe-card');
+	await expect(clientRecipe).toContainText('"ANTHROPIC_BASE_URL": "https://gw.example.com"');
+	// LLM listeners reject CONNECT, so the gateway URL must not be offered as an HTTP proxy.
+	await expect(clientRecipe).not.toContainText('Http: Proxy');
+});
+
 test('native Field hint describes its input and label focuses it', async ({ page }) => {
 	await mockGateway(page);
 	await page.goto('/llm/client-setup');
