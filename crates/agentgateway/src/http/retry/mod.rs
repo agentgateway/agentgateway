@@ -39,6 +39,29 @@ pub struct Policy {
 	pub condition: Option<Arc<Expression>>,
 }
 
+impl Policy {
+	pub(crate) fn matches_request(&self, req: &http::Request) -> bool {
+		if let Some(precondition) = &self.precondition
+			&& !cel::Executor::new_request(req).eval_bool(precondition)
+		{
+			debug!("retry precondition not met, disabling retries");
+			return false;
+		}
+		true
+	}
+
+	pub(crate) fn matches_response(
+		&self,
+		request: Option<&cel::RequestSnapshot>,
+		response: &http::Response,
+	) -> bool {
+		self.codes.contains(&response.status())
+			|| self.condition.as_ref().is_some_and(|condition| {
+				cel::Executor::new_response(request, response).eval_bool(condition)
+			})
+	}
+}
+
 impl HasExpressions for Policy {
 	/// Exposes the precondition/condition expressions so the proxy snapshots the
 	/// request/response attributes they reference.
