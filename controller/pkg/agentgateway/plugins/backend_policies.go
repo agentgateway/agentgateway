@@ -1459,6 +1459,7 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 		Alg:               translateJWTSigningAlg(auth.Alg),
 		Kid:               auth.KeyID,
 		AssertionAudience: auth.AssertionAudience,
+		AssertionTtl:      durationToProto(auth.AssertionTTL),
 		CertificateHeader: translateOAuthPrivateKeyJWTCertificateHeader(auth.CertificateHeader),
 	}
 

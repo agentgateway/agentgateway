@@ -2798,6 +2798,12 @@
             "assertionAudience": {
               "type": "string"
             },
+            "assertionTtl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "method": {
               "type": "string",
               "const": "privateKeyJwt"

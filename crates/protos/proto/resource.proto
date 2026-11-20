@@ -2199,6 +2199,7 @@ message OAuthClientAuth {
     // JWS certificate header. Required when certificate is set and must be
     // unspecified otherwise.
     CertificateHeader certificate_header = 6;
+    optional google.protobuf.Duration assertion_ttl = 7;
   }
 
   // Required and non-empty when client_auth is set.

@@ -9,7 +9,7 @@ use url::form_urlencoded;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::client_auth::{CertificateHeader, RawPrivateKeyJwt};
+use super::client_auth::{CertificateHeader, RawPrivateKeyJwt, client_assertion_claim_times};
 use super::cross_app_access::{
 	CrossAppAccessAuthConfig, CrossAppAccessEndpoint, CrossAppAccessSubjectToken,
 };
@@ -728,6 +728,7 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 		alg: JwtSigningAlg::Es256,
 		kid: Some("kid-1".into()),
 		assertion_audience: "https://issuer.example/token".into(),
+		assertion_ttl: None,
 	})
 	.unwrap();
 	let a = OAuthTokenExchangeAuth {
@@ -773,7 +774,7 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 	assert_eq!(claims.aud, "https://issuer.example/token");
 	assert!(!claims.jti.is_empty());
 	assert_eq!(claims.nbf, claims.iat);
-	assert_eq!(claims.exp - claims.iat, 310);
+	assert_eq!(claims.exp - claims.iat, 300);
 }
 
 #[test]
@@ -785,6 +786,7 @@ fn private_key_jwt_debug_redacts_key_and_certificate() {
 		alg: JwtSigningAlg::Es256,
 		kid: Some("kid-1".into()),
 		assertion_audience: "https://issuer.example/token".into(),
+		assertion_ttl: None,
 	};
 	let raw_debug = format!("{raw:?}");
 	assert!(!raw_debug.contains(TEST_EC_PRIVATE_KEY_PEM));
@@ -832,6 +834,7 @@ fn private_key_jwt_signs_with_ps256() {
 		alg: JwtSigningAlg::Ps256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
+		assertion_ttl: None,
 	})
 	.unwrap();
 
@@ -852,6 +855,89 @@ fn private_key_jwt_signs_with_ps256() {
 }
 
 #[rstest]
+#[case::default_lifetime(1000, Duration::from_secs(300), 990, 1290)]
+#[case::configured_lifetime(1000, Duration::from_secs(120), 990, 1110)]
+#[case::short_lifetime(1000, Duration::from_secs(15), 993, 1008)]
+#[case::one_second(1000, Duration::from_secs(1), 1000, 1001)]
+#[case::fractional_lifetime(1000, Duration::from_millis(1500), 1000, 1001)]
+#[case::issued_at_underflow(5, Duration::from_secs(300), 0, 295)]
+fn client_assertion_claim_times_bound_exp_minus_iat(
+	#[case] now: u64,
+	#[case] lifetime: Duration,
+	#[case] expected_issued_at: u64,
+	#[case] expected_expires_at: u64,
+) {
+	let times = client_assertion_claim_times(now, lifetime).unwrap();
+	assert_eq!(
+		(times.issued_at, times.expires_at),
+		(expected_issued_at, expected_expires_at)
+	);
+}
+
+#[test]
+fn private_key_jwt_uses_configured_assertion_ttl() {
+	crate::crypto::jwt::init();
+	let auth = serde_json::from_value::<OAuthTokenExchangeAuth>(json!({
+		"host": "localhost:8089",
+		"clientAuth": {
+			"clientId": "gateway-client",
+			"method": "privateKeyJwt",
+			"signingKey": TEST_EC_PRIVATE_KEY_PEM,
+			"alg": "ES256",
+			"assertionAudience": "https://issuer.example/token",
+			"assertionTtl": "2m",
+		},
+	}))
+	.unwrap();
+	let Some(OAuthClientAuth {
+		method: OAuthClientAuthMethod::PrivateKeyJwt(private_key),
+		..
+	}) = auth.client_auth
+	else {
+		panic!("expected privateKeyJwt client auth");
+	};
+	assert_eq!(
+		serde_json::to_value(&private_key).unwrap()["assertionTtl"],
+		json!("2m0s")
+	);
+
+	#[derive(serde::Deserialize)]
+	struct AssertionTimes {
+		nbf: u64,
+		iat: u64,
+		exp: u64,
+	}
+	let assertion = sign_client_assertion("gateway-client", &private_key).unwrap();
+	let claims: AssertionTimes = decode_unverified_jwt_claims(&assertion).unwrap();
+	assert_eq!(claims.nbf, claims.iat);
+	assert_eq!(claims.exp - claims.iat, 120);
+}
+
+#[rstest]
+#[case::zero("0s")]
+#[case::sub_second("500ms")]
+fn private_key_jwt_rejects_assertion_ttl_below_one_second(#[case] assertion_ttl: &str) {
+	let err = serde_json::from_value::<OAuthTokenExchangeAuth>(json!({
+		"host": "localhost:8089",
+		"clientAuth": {
+			"clientId": "gateway-client",
+			"method": "privateKeyJwt",
+			"signingKey": TEST_EC_PRIVATE_KEY_PEM,
+			"alg": "ES256",
+			"assertionAudience": "https://issuer.example/token",
+			"assertionTtl": assertion_ttl,
+		},
+	}))
+	.expect_err("assertion_ttl below one second must fail during config load");
+	assert!(
+		err
+			.to_string()
+			.contains("assertion_ttl must be at least one second"),
+		"got: {err}"
+	);
+}
+
+#[rstest]
 #[case::missing_header(true, false, "certificate_header is required when certificate is set")]
 #[case::missing_certificate(false, true, "certificate is required when certificate_header is set")]
 fn private_key_jwt_requires_certificate_and_header_together(
@@ -868,6 +954,7 @@ fn private_key_jwt_requires_certificate_and_header_together(
 		alg: JwtSigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
+		assertion_ttl: None,
 	})
 	.expect_err("certificate and certificate_header must be configured together");
 	assert!(err.contains(expected), "got: {err}");
@@ -928,6 +1015,7 @@ fn private_key_jwt_rejects_invalid_certificate_in_chain() {
 		alg: JwtSigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
+		assertion_ttl: None,
 	})
 	.expect_err("every x5c entry must be a valid X.509 certificate");
 	assert!(
@@ -945,6 +1033,7 @@ fn private_key_jwt_warns_but_accepts_mismatched_certificate() {
 		alg: JwtSigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
+		assertion_ttl: None,
 	})
 	.expect("a certificate mismatch must remain non-fatal");
 }
@@ -1941,6 +2030,10 @@ fn private_key_jwt_client_auth_from_proto() {
 			alg: proto::JwtSigningAlg::Es256 as i32,
 			kid: Some("kid-1".to_string()),
 			assertion_audience: "https://issuer.example/token".to_string(),
+			assertion_ttl: Some(prost_types::Duration {
+				seconds: 120,
+				nanos: 0,
+			}),
 		}),
 		..Default::default()
 	})
@@ -1957,6 +2050,7 @@ fn private_key_jwt_client_auth_from_proto() {
 				serialized["assertionAudience"].as_str(),
 				Some("https://issuer.example/token")
 			);
+			assert_eq!(serialized["assertionTtl"].as_str(), Some("2m0s"));
 		},
 		other => panic!("expected privateKeyJwt client auth, got {other:?}"),
 	}
@@ -1971,6 +2065,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 		alg: JwtSigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
+		assertion_ttl: None,
 	})
 	.unwrap();
 
@@ -2098,6 +2193,45 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 		..Default::default()
 	},
 	"certificate_header is required when certificate is set"
+)]
+#[case::private_key_jwt_zero_assertion_ttl(
+	proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".to_string(),
+			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
+				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+				alg: proto::JwtSigningAlg::Es256 as i32,
+				assertion_audience: "https://issuer.example/token".to_string(),
+				assertion_ttl: Some(prost_types::Duration::default()),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+		..Default::default()
+	},
+	"assertion_ttl must be at least one second"
+)]
+#[case::private_key_jwt_negative_assertion_ttl(
+	proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".to_string(),
+			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
+				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+				alg: proto::JwtSigningAlg::Es256 as i32,
+				assertion_audience: "https://issuer.example/token".to_string(),
+				assertion_ttl: Some(prost_types::Duration {
+					seconds: -1,
+					nanos: 0,
+				}),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+		..Default::default()
+	},
+	"invalid oauth private_key_jwt assertion_ttl"
 )]
 #[case::jwt_bearer_actor_token(
 	proto::OAuthTokenExchange {

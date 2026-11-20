@@ -17885,6 +17885,7 @@ type OAuthClientAuth_PrivateKeyJwt struct {
 	// JWS certificate header. Required when certificate is set and must be
 	// unspecified otherwise.
 	CertificateHeader OAuthClientAuth_PrivateKeyJwt_CertificateHeader `protobuf:"varint,6,opt,name=certificate_header,json=certificateHeader,proto3,enum=agentgateway.dev.resource.OAuthClientAuth_PrivateKeyJwt_CertificateHeader" json:"certificate_header,omitempty"`
+	AssertionTtl      *durationpb.Duration                            `protobuf:"bytes,7,opt,name=assertion_ttl,json=assertionTtl,proto3,oneof" json:"assertion_ttl,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -17959,6 +17960,13 @@ func (x *OAuthClientAuth_PrivateKeyJwt) GetCertificateHeader() OAuthClientAuth_P
 		return x.CertificateHeader
 	}
 	return OAuthClientAuth_PrivateKeyJwt_CERTIFICATE_HEADER_UNSPECIFIED
+}
+
+func (x *OAuthClientAuth_PrivateKeyJwt) GetAssertionTtl() *durationpb.Duration {
+	if x != nil {
+		return x.AssertionTtl
+	}
+	return nil
 }
 
 type OAuthTokenExchange_TokenSpec struct {
@@ -20473,12 +20481,12 @@ const file_resource_proto_rawDesc = "" +
 	"\x04port\x18\x02 \x01(\rR\x04portB\x06\n" +
 	"\x04kind\"$\n" +
 	"\x04Alpn\x12\x1c\n" +
-	"\tprotocols\x18\x01 \x03(\tR\tprotocols\"\xa2\x06\n" +
+	"\tprotocols\x18\x01 \x03(\tR\tprotocols\"\xf9\x06\n" +
 	"\x0fOAuthClientAuth\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12(\n" +
 	"\rclient_secret\x18\x02 \x01(\tH\x00R\fclientSecret\x88\x01\x01\x12I\n" +
 	"\x06method\x18\x03 \x01(\x0e21.agentgateway.dev.resource.OAuthClientAuth.MethodR\x06method\x12`\n" +
-	"\x0fprivate_key_jwt\x18\x04 \x01(\v28.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwtR\rprivateKeyJwt\x1a\xa7\x03\n" +
+	"\x0fprivate_key_jwt\x18\x04 \x01(\v28.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwtR\rprivateKeyJwt\x1a\xfe\x03\n" +
 	"\rPrivateKeyJwt\x12\x1f\n" +
 	"\vsigning_key\x18\x01 \x01(\tR\n" +
 	"signingKey\x12:\n" +
@@ -20486,12 +20494,14 @@ const file_resource_proto_rawDesc = "" +
 	"\x03kid\x18\x03 \x01(\tH\x00R\x03kid\x88\x01\x01\x12-\n" +
 	"\x12assertion_audience\x18\x04 \x01(\tR\x11assertionAudience\x12 \n" +
 	"\vcertificate\x18\x05 \x01(\tR\vcertificate\x12y\n" +
-	"\x12certificate_header\x18\x06 \x01(\x0e2J.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.CertificateHeaderR\x11certificateHeader\"N\n" +
+	"\x12certificate_header\x18\x06 \x01(\x0e2J.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.CertificateHeaderR\x11certificateHeader\x12C\n" +
+	"\rassertion_ttl\x18\a \x01(\v2\x19.google.protobuf.DurationH\x01R\fassertionTtl\x88\x01\x01\"N\n" +
 	"\x11CertificateHeader\x12\"\n" +
 	"\x1eCERTIFICATE_HEADER_UNSPECIFIED\x10\x00\x12\a\n" +
 	"\x03X5C\x10\x01\x12\f\n" +
 	"\bX5T_S256\x10\x02B\x06\n" +
-	"\x04_kid\"_\n" +
+	"\x04_kidB\x10\n" +
+	"\x0e_assertion_ttl\"_\n" +
 	"\x06Method\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13CLIENT_SECRET_BASIC\x10\x01\x12\x16\n" +
@@ -21369,35 +21379,36 @@ var file_resource_proto_depIdxs = []int32{
 	53,  // 402: agentgateway.dev.resource.AIBackend.OpenAI.ModerationConfig.mode:type_name -> agentgateway.dev.resource.AIBackend.OpenAI.ModerationMode
 	1,   // 403: agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.alg:type_name -> agentgateway.dev.resource.JwtSigningAlg
 	59,  // 404: agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.certificate_header:type_name -> agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.CertificateHeader
-	84,  // 405: agentgateway.dev.resource.OAuthTokenExchange.TokenSpec.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	84,  // 406: agentgateway.dev.resource.OAuthTokenExchange.ActorToken.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	272, // 407: agentgateway.dev.resource.OAuthTokenExchange.TokenCache.in_memory:type_name -> agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemory
-	290, // 408: agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemory.default_ttl:type_name -> google.protobuf.Duration
-	128, // 409: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint.token_endpoint:type_name -> agentgateway.dev.resource.BackendReference
-	130, // 410: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint.client_auth:type_name -> agentgateway.dev.resource.OAuthClientAuth
-	120, // 411: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	84,  // 412: agentgateway.dev.resource.CrossAppAccessAuth.SubjectToken.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	279, // 413: agentgateway.dev.resource.ModelRoute.VirtualModel.weighted:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted
-	280, // 414: agentgateway.dev.resource.ModelRoute.VirtualModel.conditional:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional
-	281, // 415: agentgateway.dev.resource.ModelRoute.VirtualModel.failover:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Failover
-	282, // 416: agentgateway.dev.resource.ModelRoute.VirtualModel.callout:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout
-	61,  // 417: agentgateway.dev.resource.ModelRoute.ConcreteModel.model_visibility:type_name -> agentgateway.dev.resource.ModelRoute.ConcreteModel.ModelVisibility
-	128, // 418: agentgateway.dev.resource.ModelRoute.ConcreteModel.backend:type_name -> agentgateway.dev.resource.BackendReference
-	120, // 419: agentgateway.dev.resource.ModelRoute.ConcreteModel.backend_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	260, // 420: agentgateway.dev.resource.ModelRoute.ConcreteModel.discovery_provider_config:type_name -> agentgateway.dev.resource.AIBackend.Provider
-	283, // 421: agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.targets:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.Target
-	284, // 422: agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.targets:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.Target
-	128, // 423: agentgateway.dev.resource.ModelRoute.VirtualModel.Failover.backend:type_name -> agentgateway.dev.resource.BackendReference
-	128, // 424: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.target:type_name -> agentgateway.dev.resource.BackendReference
-	120, // 425: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	285, // 426: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.headers:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.HeadersEntry
-	286, // 427: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.transformation:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.TransformationEntry
-	186, // 428: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.cache:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.Cache
-	429, // [429:429] is the sub-list for method output_type
-	429, // [429:429] is the sub-list for method input_type
-	429, // [429:429] is the sub-list for extension type_name
-	429, // [429:429] is the sub-list for extension extendee
-	0,   // [0:429] is the sub-list for field type_name
+	290, // 405: agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.assertion_ttl:type_name -> google.protobuf.Duration
+	84,  // 406: agentgateway.dev.resource.OAuthTokenExchange.TokenSpec.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	84,  // 407: agentgateway.dev.resource.OAuthTokenExchange.ActorToken.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	272, // 408: agentgateway.dev.resource.OAuthTokenExchange.TokenCache.in_memory:type_name -> agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemory
+	290, // 409: agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemory.default_ttl:type_name -> google.protobuf.Duration
+	128, // 410: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint.token_endpoint:type_name -> agentgateway.dev.resource.BackendReference
+	130, // 411: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint.client_auth:type_name -> agentgateway.dev.resource.OAuthClientAuth
+	120, // 412: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	84,  // 413: agentgateway.dev.resource.CrossAppAccessAuth.SubjectToken.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	279, // 414: agentgateway.dev.resource.ModelRoute.VirtualModel.weighted:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted
+	280, // 415: agentgateway.dev.resource.ModelRoute.VirtualModel.conditional:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional
+	281, // 416: agentgateway.dev.resource.ModelRoute.VirtualModel.failover:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Failover
+	282, // 417: agentgateway.dev.resource.ModelRoute.VirtualModel.callout:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout
+	61,  // 418: agentgateway.dev.resource.ModelRoute.ConcreteModel.model_visibility:type_name -> agentgateway.dev.resource.ModelRoute.ConcreteModel.ModelVisibility
+	128, // 419: agentgateway.dev.resource.ModelRoute.ConcreteModel.backend:type_name -> agentgateway.dev.resource.BackendReference
+	120, // 420: agentgateway.dev.resource.ModelRoute.ConcreteModel.backend_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	260, // 421: agentgateway.dev.resource.ModelRoute.ConcreteModel.discovery_provider_config:type_name -> agentgateway.dev.resource.AIBackend.Provider
+	283, // 422: agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.targets:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.Target
+	284, // 423: agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.targets:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.Target
+	128, // 424: agentgateway.dev.resource.ModelRoute.VirtualModel.Failover.backend:type_name -> agentgateway.dev.resource.BackendReference
+	128, // 425: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.target:type_name -> agentgateway.dev.resource.BackendReference
+	120, // 426: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	285, // 427: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.headers:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.HeadersEntry
+	286, // 428: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.transformation:type_name -> agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.TransformationEntry
+	186, // 429: agentgateway.dev.resource.ModelRoute.VirtualModel.Callout.cache:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.Cache
+	430, // [430:430] is the sub-list for method output_type
+	430, // [430:430] is the sub-list for method input_type
+	430, // [430:430] is the sub-list for extension type_name
+	430, // [430:430] is the sub-list for extension extendee
+	0,   // [0:430] is the sub-list for field type_name
 }
 
 func init() { file_resource_proto_init() }

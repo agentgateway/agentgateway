@@ -5854,6 +5854,14 @@ spec:
                                           typically the token endpoint URL.
                                         minLength: 1
                                         type: string
+                                      assertionTtl:
+                                        maxLength: 32
+                                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                        type: string
+                                        x-kubernetes-validations:
+                                        - message: assertionTtl must be at least 1
+                                            second
+                                          rule: duration(self) >= duration('1s')
                                       certificateHeader:
                                         description: JWS certificate header. Required
                                           when certificateRef is set.
@@ -6111,6 +6119,14 @@ spec:
                                           typically the token endpoint URL.
                                         minLength: 1
                                         type: string
+                                      assertionTtl:
+                                        maxLength: 32
+                                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                        type: string
+                                        x-kubernetes-validations:
+                                        - message: assertionTtl must be at least 1
+                                            second
+                                          rule: duration(self) >= duration('1s')
                                       certificateHeader:
                                         description: JWS certificate header. Required
                                           when certificateRef is set.
@@ -6804,6 +6820,13 @@ spec:
                                       typically the token endpoint URL.
                                     minLength: 1
                                     type: string
+                                  assertionTtl:
+                                    maxLength: 32
+                                    pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                    type: string
+                                    x-kubernetes-validations:
+                                    - message: assertionTtl must be at least 1 second
+                                      rule: duration(self) >= duration('1s')
                                   certificateHeader:
                                     description: JWS certificate header. Required
                                       when certificateRef is set.
