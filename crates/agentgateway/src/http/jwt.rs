@@ -353,7 +353,7 @@ impl LocalJwtConfig {
 		for pc in providers_cfg {
 			let jwks: JwkSet = pc
 				.jwks
-				.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
+				.load_jwks(resources)
 				.await
 				.map_err(JwkError::JwkLoadError)?;
 			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
