@@ -28,6 +28,7 @@ http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
 itertools.workspace = true
+memchr.workspace = true
 mime_guess.workspace = true
 percent-encoding.workspace = true
 pin-project-lite.workspace = true
@@ -41,7 +42,6 @@ thiserror.workspace = true
 tiktoken.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
-tokio_sse_codec.workspace = true
 tracing.workspace = true
 vector-map.workspace = true
 

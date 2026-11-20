@@ -156,7 +156,6 @@ thiserror.workspace = true
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
-tokio_sse_codec.workspace = true
 tonic.workspace = true
 tonic-types.workspace = true
 tower-http.workspace = true

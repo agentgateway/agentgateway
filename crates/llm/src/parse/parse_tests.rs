@@ -7,10 +7,11 @@ use ::http::HeaderMap;
 use agent_http::Body;
 use bytes::{Bytes, BytesMut};
 use http_body_util::BodyExt;
+use rstest::rstest;
 use serde::{Deserialize, Serialize};
-use tokio_sse_codec::{Event, Frame, SseDecoder};
 use tokio_util::codec::Decoder;
 
+use super::sse_decoder::{SseDecoder, SseFrame};
 use super::{passthrough, sse};
 
 #[tokio::test]
@@ -29,16 +30,15 @@ async fn test_parser() {
 			Ok::<_, Infallible>(http_body::Frame::trailers(trailers.clone())),
 		],
 	)));
-	let decoder = SseDecoder::<Bytes>::new();
+	let decoder = SseDecoder::new(usize::MAX);
 
 	let events = Arc::new(Mutex::new(vec![]));
 	let ev_clone = events.clone();
-	let body = passthrough::parser(body, decoder, move |o| match o {
-		Frame::Comment(_) => {},
-		Frame::Event(Event::<Bytes> { data, .. }) => {
-			events.clone().lock().unwrap().push(data);
-		},
-		Frame::Retry(_) => {},
+	let body = passthrough::parser(body, decoder, move |frame| {
+		let SseFrame::Event(data) = frame else {
+			panic!("unexpected {frame:?}");
+		};
+		events.lock().unwrap().push(data);
 	});
 	let got = body.collect().await.unwrap();
 	assert_eq!(Some(&trailers), got.trailers());
@@ -78,16 +78,18 @@ async fn test_sse_json() {
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg2.as_bytes())),
 	]));
-	let decoder = SseDecoder::<Bytes>::new();
+	let decoder = SseDecoder::new(usize::MAX);
 
 	let events = Arc::new(Mutex::new(vec![]));
 	let ev_clone = events.clone();
-	let body = passthrough::parser(body, decoder, move |o| {
+	let body = passthrough::parser(body, decoder, move |frame| {
+		let SseFrame::Event(data) = frame else {
+			panic!("unexpected {frame:?}");
+		};
 		events
-			.clone()
 			.lock()
 			.unwrap()
-			.push(sse::unwrap_json::<Test>(o).unwrap().unwrap())
+			.push(serde_json::from_slice::<Test>(&data).unwrap());
 	});
 	let got = body.collect().await.map(|col| col.to_bytes()).unwrap();
 	assert_eq!(
@@ -429,7 +431,7 @@ async fn test_sse_json_transform_multi_propagates_decoder_error_after_output() {
 	let saw_error = Arc::new(Mutex::new(false));
 	let captured_error = saw_error.clone();
 	let mut transformed =
-		sse::json_transform_multi::<Test, StatusOutput, _>(body, 12, move |event| match event {
+		sse::json_transform_multi::<Test, StatusOutput, _>(body, 20, move |event| match event {
 			sse::SseJsonEvent::Data(Ok(_)) => vec![("delta", StatusOutput { status: "ok" })],
 			sse::SseJsonEvent::Error => {
 				*captured_error.lock().unwrap() = true;
@@ -478,4 +480,65 @@ async fn test_sse_json_passthrough_unterminated_final_event() {
 		.collect()
 		.await
 		.expect_err("an unterminated non-[DONE] event must still fail");
+}
+
+#[rstest]
+#[case::crlf_split_between_reads(
+	&["data: {\"msg\":1}\r\n\r", "\ndata: {\"msg\":2}\r\n\r\n"],
+	1024,
+	&[Some(Ok(1)), Some(Ok(2))]
+)]
+#[case::bare_cr(&["data: {\"msg\":1}\r\rdata: {\"msg\":2}\r\r"], 1024, &[Some(Ok(1)), Some(Ok(2))])]
+#[case::oversized_event_then_valid(
+	&["data: {\"msg\":1,\"pad\":\"xxxxxxxxxxxxxxxx\"}\n\n", "data: {\"msg\":2}\n\n"],
+	32,
+	&[Some(Err(())), Some(Ok(2))]
+)]
+#[tokio::test]
+async fn test_sse_json_passthrough_forwards_bytes_and_reports_events(
+	#[case] chunks: &[&str],
+	#[case] limit: usize,
+	#[case] expected: &[Option<Result<u8, ()>>],
+) {
+	let body = Body::from_stream(futures_util::stream::iter(
+		chunks
+			.iter()
+			.map(|c| Ok::<_, io::Error>(Bytes::copy_from_slice(c.as_bytes())))
+			.collect::<Vec<_>>(),
+	));
+	let observed = Arc::new(Mutex::new(vec![]));
+	let obs = observed.clone();
+	let body = sse::json_passthrough::<Test>(body, limit, move |o| {
+		obs
+			.lock()
+			.unwrap()
+			.push(o.map(|r| r.map(|t| t.msg).map_err(|_| ())));
+	});
+	let got = body.collect().await.unwrap().to_bytes();
+	assert_eq!(got, chunks.concat().as_bytes());
+	assert_eq!(*observed.lock().unwrap(), expected);
+}
+
+#[tokio::test]
+async fn test_sse_json_transform_multi_accepts_unterminated_final_done() {
+	let observed = Arc::new(Mutex::new(Vec::new()));
+	let captured = observed.clone();
+	let body = Body::from("data: {\"msg\":1}\n\ndata: [DONE]");
+	let transformed = sse::json_transform_multi::<Test, StatusOutput, _>(body, 1024, move |event| {
+		captured.lock().unwrap().push(event);
+		Vec::new()
+	});
+	transformed.collect().await.unwrap();
+	let observed = std::mem::take(&mut *observed.lock().unwrap());
+	assert!(
+		matches!(
+			observed[..],
+			[
+				sse::SseJsonEvent::Data(Ok(Test { msg: 1 })),
+				sse::SseJsonEvent::Done,
+				sse::SseJsonEvent::Eof
+			]
+		),
+		"{observed:?}"
+	);
 }
