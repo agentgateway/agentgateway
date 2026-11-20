@@ -6945,7 +6945,7 @@
 |`mcp.endpoints[].policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`mcp.endpoints[].policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`mcp.endpoints[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`mcp.endpoints[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`mcp.endpoints[].policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`mcp.endpoints[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.endpoints[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.endpoints[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
