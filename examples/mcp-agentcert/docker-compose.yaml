@@ -1,0 +1,35 @@
+services:
+  agentgateway:
+    image: ghcr.io/agentgateway/agentgateway:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.yaml:/etc/agentgateway/config.yaml:ro
+    depends_on:
+      tag-sidecar:
+        condition: service_healthy
+
+  tag-sidecar:
+    image: ghcr.io/pdxlab/agentcert-tag/sidecar:latest
+    ports:
+      - "8080:8080"
+    environment:
+      # shadow: decide + log, block nothing (default for safe rollout)
+      # enforce: block agents that fail cert/score checks
+      TAG_MODE: shadow
+      TAG_ANCHORS_PEM: /anchors/roots.pem
+      # Optional: minimum TrustScore to pass in enforce mode (0-100)
+      # TAG_MIN_SCORE: 65
+    volumes:
+      - ./anchors:/anchors:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Minimal MCP echo server for local testing
+  mcp-echo:
+    image: ghcr.io/pdxlab/agentcert-tag/demo-mcp-echo:latest
+    ports:
+      - "9000:9000"

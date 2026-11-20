@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# TAG × agentgateway — AgentCert + TrustScore verification via extAuthz.
+#
+# Verifies a calling agent's AgentCert and live TrustScore on every MCP
+# request. No plugin code in agentgateway: the extAuthz policy calls the
+# TAG sidecar over HTTP; the sidecar handles cert chain, revocation, and
+# score. Returns 200 (allow) / 403 (deny) + x-agentcert-* verdict headers.
+#
+# Shadow-mode by default — start with TAG_MODE=shadow; the sidecar returns
+# 200 on everything so this config blocks nothing until TAG_MODE=enforce.
+#
+# Run the sidecar alongside agentgateway:
+#   docker run --name tag-sidecar -p 8080:8080 \
+#     -e TAG_MODE=shadow \
+#     -e TAG_ANCHORS_PEM=/anchors/roots.pem \
+#     -v $PWD/anchors:/anchors:ro \
+#     ghcr.io/pdxlab/agentcert-tag/sidecar:latest
+#
+# See docker-compose.yaml for a full local setup.
+mcp:
+  port: 3000
+  policies:
+    extAuthz:
+      host: tag-sidecar:8080
+      protocol:
+        http:
+          # Exact path the TAG sidecar listens on.
+          path: '"/ext_authz"'
+          # Forward the AgentCert credential headers to the verifier.
+          includeRequestHeaders:
+            - x-agent-cert
+            - x-agent-cert-proof
+            - x-agent-cert-carriage
+            - x-agent-id
+          # Copy the verdict headers onto the upstream MCP request so your
+          # own backend and logs can act on the trust decision.
+          includeResponseHeaders:
+            - x-agentcert-verdict
+            - x-agentcert-agent-id
+            - x-agentcert-trustscore
+            - x-agentcert-tier
+            - x-agentcert-decision
+            - x-agentcert-shadow-would
+      # Sidecar unreachable: deny the request so an outage is never a free
+      # pass. In shadow mode the sidecar answers 200 regardless of this
+      # setting, so it only matters once you switch to enforce.
+      failureMode:
+        denyWithStatus: 503
+
+  targets:
+    - name: mcp-backend
+      host: your-mcp-server:9000
