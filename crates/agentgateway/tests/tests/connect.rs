@@ -1393,6 +1393,17 @@ async fn incoming_connect_requires_authority_port() {
 		"unexpected CONNECT response: {}",
 		String::from_utf8_lossy(&response),
 	);
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.method", "CONNECT"),
+		("http.host", "example.com"),
+		("http.status", "400"),
+	])
+	.await
+	.unwrap();
+	assert!(log.get("bytes_sent").is_none());
+	assert!(log.get("bytes_received").is_none());
 }
 
 #[tokio::test]
@@ -1551,4 +1562,127 @@ async fn incoming_connect_snapshots_request_for_cel_logging() {
 		log["backend"].is_object(),
 		"backend CEL context should be populated"
 	);
+	assert_eq!(log["bytes_sent"].as_u64(), Some(0));
+	assert_eq!(log["bytes_received"].as_u64(), Some(0));
+}
+
+#[tokio::test]
+async fn incoming_connect_logs_tunnel_bytes() {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = listener.local_addr().unwrap();
+	let upstream = tokio::spawn(async move {
+		let (mut stream, _) = listener.accept().await.unwrap();
+		let mut buf = [0; 1000];
+		stream.read_exact(&mut buf).await.unwrap();
+		stream.write_all(&[b'b'; 2500]).await.unwrap();
+	});
+
+	let config = serde_json::to_string(&json!({
+		"config": {
+			"logging": {
+				"fields": {
+					"add": {
+						"cel_bytes_sent": "proxy.bytesSent",
+						"cel_bytes_received": "proxy.bytesReceived",
+					},
+				},
+			},
+		},
+	}))
+	.unwrap();
+	let t = setup_dfp_bind_with_config(&config).with_connect_enabled();
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(&[b'a'; 1000]).await.unwrap();
+	let mut tunneled = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+		.await
+		.expect("timed out waiting for the tunnel to close")
+		.unwrap();
+	assert_eq!(tunneled.len(), 2500);
+	drop(io);
+	upstream.await.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("endpoint", &target_addr.to_string()),
+	])
+	.await
+	.unwrap();
+	assert_eq!(log["bytes_sent"].as_u64(), Some(2500));
+	assert_eq!(log["bytes_received"].as_u64(), Some(1000));
+	assert_eq!(log["cel_bytes_sent"].as_u64(), Some(2500));
+	assert_eq!(log["cel_bytes_received"].as_u64(), Some(1000));
+}
+
+#[test]
+fn incoming_connect_logs_tunnel_bytes_when_task_is_dropped() {
+	let rt = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.unwrap();
+	let (target_addr, open_tunnel) = rt.block_on(async {
+		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let target_addr = listener.local_addr().unwrap();
+		let t = setup_dfp_bind().with_connect_enabled();
+		let mut io = t.serve(BIND_KEY);
+		let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+		io.write_all(req.as_bytes()).await.unwrap();
+
+		let mut response = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = io.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT response unexpectedly closed");
+			response.extend_from_slice(&chunk[..n]);
+			if response.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		assert!(
+			String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+			"unexpected CONNECT response: {}",
+			String::from_utf8_lossy(&response),
+		);
+
+		let (mut upstream, _) = listener.accept().await.unwrap();
+		io.write_all(&[b'a'; 1000]).await.unwrap();
+		let mut buf = [0; 1000];
+		upstream.read_exact(&mut buf).await.unwrap();
+		upstream.write_all(&[b'b'; 2500]).await.unwrap();
+		let mut tunneled = [0; 2500];
+		io.read_exact(&mut tunneled).await.unwrap();
+		(target_addr, (t, io, upstream.into_std().unwrap()))
+	});
+	// Shutting down the runtime drops the tunnel task while both ends are still open.
+	drop(rt);
+	drop(open_tunnel);
+
+	let log = tokio::runtime::Runtime::new()
+		.unwrap()
+		.block_on(agent_core::telemetry::testing::eventually_find(&[
+			("scope", "request"),
+			("endpoint", &target_addr.to_string()),
+		]))
+		.unwrap();
+	assert_eq!(log["bytes_sent"].as_u64(), Some(2500));
+	assert_eq!(log["bytes_received"].as_u64(), Some(1000));
 }

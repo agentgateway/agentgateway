@@ -109,6 +109,8 @@ fn build_test_request() -> crate::http::Request {
 		request_processing_duration: None,
 		upstream_duration: None,
 		response_processing_duration: None,
+		bytes_sent: None,
+		bytes_received: None,
 	});
 	req.extensions_mut().insert(RequestTime(
 		chrono::DateTime::parse_from_rfc3339("2000-01-01T12:00:00Z").unwrap(),
@@ -418,6 +420,8 @@ fn test_proxy_timing_is_native_duration() {
 		request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
 		upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
 		response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
+		bytes_sent: None,
+		bytes_received: None,
 	};
 	let executor = Executor::new_logger(None, None, None, None, None, None, Some(&proxy));
 	let expr = Expression::new_strict(

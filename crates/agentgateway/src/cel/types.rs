@@ -127,6 +127,14 @@ pub struct ProxyContext {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub response_processing_duration: Option<CelDuration>,
+	/// Bytes sent to the downstream by a CONNECT tunnel in `route` mode.
+	/// Set when the tunnel is logged; unset otherwise.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub bytes_sent: Option<u64>,
+	/// Bytes received from the downstream by a CONNECT tunnel in `route` mode.
+	/// Set when the tunnel is logged; unset otherwise.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub bytes_received: Option<u64>,
 }
 
 impl ProxyContext {
@@ -154,6 +162,8 @@ impl ProxyContext {
 			request_processing_duration: request_processing_duration.and_then(CelDuration::from_std),
 			upstream_duration: upstream_duration.and_then(CelDuration::from_std),
 			response_processing_duration: response_processing_duration.and_then(CelDuration::from_std),
+			bytes_sent: None,
+			bytes_received: None,
 		}
 	}
 }
@@ -2542,6 +2552,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 			request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
 			upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
 			response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
+			bytes_sent: None,
+			bytes_received: None,
 		}),
 		env: Some(EnvContext {
 			pod_name: Some("pod-1".to_string()),

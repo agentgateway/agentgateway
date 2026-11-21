@@ -1108,6 +1108,8 @@ fn proxy_context(log: &RequestLog) -> cel::ProxyContext {
 		response_processing_duration: log
 			.response_processing_duration
 			.and_then(cel::CelDuration::from_std),
+		bytes_sent: log.bytes_sent,
+		bytes_received: log.bytes_received,
 	}
 }
 
@@ -1186,6 +1188,8 @@ impl RequestLog {
 			response_snapshot: None,
 			source_context: None,
 			response_bytes: 0,
+			bytes_sent: None,
+			bytes_received: None,
 		}
 	}
 
@@ -1384,6 +1388,10 @@ pub struct RequestLog {
 	pub source_context: Option<cel::SourceContext>,
 
 	pub response_bytes: u64,
+	/// Bytes sent to the downstream through a CONNECT tunnel.
+	pub bytes_sent: Option<u64>,
+	/// Bytes received from the downstream through a CONNECT tunnel.
+	pub bytes_received: Option<u64>,
 }
 
 fn request_log_level(error: Option<&str>) -> &'static str {
@@ -2109,6 +2117,8 @@ impl Drop for DropOnLog {
 				("retry.attempt", log.retry_attempt.display()),
 				("error", log.error.quoted()),
 				("reason", reason.display()),
+				("bytes_sent", log.bytes_sent.map(Into::into)),
+				("bytes_received", log.bytes_received.map(Into::into)),
 				("duration", Some(dur.as_str().into())),
 			];
 
