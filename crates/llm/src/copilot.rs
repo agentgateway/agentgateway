@@ -25,6 +25,10 @@ impl Provider {
 			header::CONTENT_TYPE,
 			HeaderValue::from_static("application/json"),
 		);
+		Self::set_client_headers(headers);
+	}
+
+	pub fn set_client_headers(headers: &mut HeaderMap) {
 		headers.insert(
 			"copilot-integration-id",
 			HeaderValue::from_static("vscode-chat"),
