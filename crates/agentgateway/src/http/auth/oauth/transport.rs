@@ -33,12 +33,13 @@ pub(super) struct TokenEndpointResponse {
 	pub(super) expires_in: Option<u64>,
 }
 
-/// Classifies token failures by the party responsible for correcting them.
+/// Distinguishes token-endpoint responses from gateway and backend failures.
 #[derive(Debug, thiserror::Error)]
-pub(in crate::http::auth) enum FetchError {
-	#[error("{source}")]
-	Client {
+pub(crate) enum FetchError {
+	#[error("token exchange returned status {status}")]
+	Response {
 		status: ::http::StatusCode,
+		oauth_error: Option<String>,
 		#[source]
 		source: anyhow::Error,
 	},
@@ -49,11 +50,15 @@ pub(in crate::http::auth) enum FetchError {
 impl FetchError {
 	pub(in crate::http::auth) fn into_proxy_error(self) -> ProxyError {
 		match self {
-			FetchError::Client { status, source } => {
-				// The authorization server rejected the request/subject token; surface
-				// as a client error (4xx), not a gateway fault
+			FetchError::Response { status, source, .. }
+				if status.is_client_error()
+					&& !matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) =>
+			{
 				debug!(%status, error = %source, "oauth token exchange rejected by authorization server");
 				ProxyError::InvalidRequest
+			},
+			FetchError::Response { status, source, .. } => {
+				ProxyError::BackendAuthenticationFailed(token_endpoint_backend_error(status, source))
 			},
 			FetchError::Backend(error) => ProxyError::BackendAuthenticationFailed(error),
 		}
@@ -61,15 +66,35 @@ impl FetchError {
 
 	pub(super) fn chained_exchange(self) -> Self {
 		match self {
-			FetchError::Client { status, source } => {
+			FetchError::Response { status, source, .. }
+				if status.is_client_error()
+					&& !matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) =>
+			{
 				debug!(%status, error = %source, "chained oauth token exchange rejected by authorization server");
 				BackendAuthError::credential_provider(anyhow!(
 					"chained token exchange returned status {status}"
 				))
 				.into()
 			},
+			FetchError::Response { status, source, .. } => {
+				token_endpoint_backend_error(status, source).into()
+			},
 			err => err,
 		}
+	}
+}
+
+fn token_endpoint_backend_error(status: StatusCode, source: anyhow::Error) -> BackendAuthError {
+	if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
+		debug!(%status, error = %source, "oauth token exchange rejected gateway credentials");
+		BackendAuthError::local(anyhow!("token exchange returned status {status}"))
+	} else {
+		if status.is_server_error() {
+			warn!(%status, error = %source, "oauth token exchange returned non-success status");
+		} else {
+			debug!(%status, error = %source, "oauth token exchange returned non-success status");
+		}
+		BackendAuthError::credential_provider(anyhow!("token exchange returned status {status}"))
 	}
 }
 
@@ -89,6 +114,7 @@ impl TokenResponse {
 	fn into_token(
 		self,
 		expected_issued_token_type: Option<OAuthTokenType>,
+		require_token_type: bool,
 	) -> Result<TokenEndpointResponse, FetchError> {
 		if expected_issued_token_type == Some(OAuthTokenType::IdJag) {
 			let issued = self.issued_token_type.as_deref().ok_or_else(|| {
@@ -121,7 +147,7 @@ impl TokenResponse {
 					.into(),
 				);
 			}
-		} else {
+		} else if require_token_type || self.token_type.is_some() {
 			// Only bearer-style tokens are forwarded
 			let Some(token_type) = self.token_type.as_deref() else {
 				return Err(
@@ -177,10 +203,14 @@ impl TokenResponse {
 	}
 }
 
-pub(super) struct TokenRequestSpec<'a> {
+pub(super) struct ConfiguredTokenEndpoint<'a> {
 	target: &'a SimpleBackendReference,
 	policies: &'a [BackendTrafficPolicy],
-	path: &'a str,
+	request: TokenRequestSpec<'a>,
+}
+
+pub(super) struct TokenRequestSpec<'a> {
+	uri: &'a str,
 	grant_type: OAuthGrantType,
 	client_auth: Option<&'a OAuthClientAuth>,
 	audiences: &'a [String],
@@ -188,48 +218,83 @@ pub(super) struct TokenRequestSpec<'a> {
 	resources: &'a [String],
 	requested_token_type: Option<OAuthTokenType>,
 	expected_issued_token_type: Option<OAuthTokenType>,
+	require_token_type: bool,
 }
 
-impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
+impl<'a> From<&'a OAuthTokenExchangeAuth> for ConfiguredTokenEndpoint<'a> {
 	fn from(auth: &'a OAuthTokenExchangeAuth) -> Self {
 		Self {
 			target: auth.target.target.as_ref(),
 			policies: &auth.target.policies,
-			path: &auth.path,
-			grant_type: auth.grant_type,
-			client_auth: auth.client_auth.as_ref(),
-			audiences: &auth.audiences,
-			scopes: &auth.scopes,
-			resources: &auth.resources,
-			requested_token_type: auth.requested_token_type_param(),
-			expected_issued_token_type: auth.expected_issued_token_type(),
+			request: TokenRequestSpec {
+				uri: if auth.path.is_empty() {
+					"/"
+				} else {
+					&auth.path
+				},
+				grant_type: auth.grant_type,
+				client_auth: auth.client_auth.as_ref(),
+				audiences: &auth.audiences,
+				scopes: &auth.scopes,
+				resources: &auth.resources,
+				requested_token_type: auth.requested_token_type_param(),
+				expected_issued_token_type: auth.expected_issued_token_type(),
+				require_token_type: true,
+			},
 		}
 	}
 }
 
-impl<'a> From<&'a ChainedExchange> for TokenRequestSpec<'a> {
+impl<'a> From<&'a ChainedExchange> for ConfiguredTokenEndpoint<'a> {
 	fn from(auth: &'a ChainedExchange) -> Self {
 		Self {
 			target: auth.target.target.as_ref(),
 			policies: &auth.target.policies,
-			path: &auth.path,
-			grant_type: OAuthGrantType::JwtBearer,
-			client_auth: auth.client_auth.as_ref(),
-			audiences: &auth.audiences,
-			scopes: &auth.scopes,
-			resources: &auth.resources,
-			requested_token_type: None,
-			expected_issued_token_type: None,
+			request: TokenRequestSpec {
+				uri: if auth.path.is_empty() {
+					"/"
+				} else {
+					&auth.path
+				},
+				grant_type: OAuthGrantType::JwtBearer,
+				client_auth: auth.client_auth.as_ref(),
+				audiences: &auth.audiences,
+				scopes: &auth.scopes,
+				resources: &auth.resources,
+				requested_token_type: None,
+				expected_issued_token_type: None,
+				require_token_type: true,
+			},
 		}
 	}
 }
 
-pub(super) async fn request_token(
+impl<'a> TokenRequestSpec<'a> {
+	pub(super) fn access_token_exchange(
+		uri: &'a str,
+		audiences: &'a [String],
+		scopes: &'a [String],
+	) -> Self {
+		Self {
+			uri,
+			grant_type: OAuthGrantType::TokenExchange,
+			client_auth: None,
+			audiences,
+			scopes,
+			resources: &[],
+			requested_token_type: Some(OAuthTokenType::AccessToken),
+			expected_issued_token_type: Some(OAuthTokenType::AccessToken),
+			require_token_type: false,
+		}
+	}
+}
+
+pub(super) async fn request_token_via_backend(
 	client: &PolicyClient,
-	spec: &TokenRequestSpec<'_>,
+	spec: &ConfiguredTokenEndpoint<'_>,
 	req: &ExchangeRequest,
 ) -> Result<TokenEndpointResponse, FetchError> {
-	let mut req = build_token_request(spec, req)?;
+	let mut req = build_token_request(&spec.request, req)?;
 	// Default timeout, overridable by backend request-timeout policy
 	req
 		.extensions_mut()
@@ -240,15 +305,44 @@ pub(super) async fn request_token(
 		.call_reference_with_policies(req, spec.target, spec.policies)
 		.await
 		.map_err(classify_token_endpoint_call_error)?;
+	decode_token_response(resp, &spec.request).await
+}
 
-	let status = resp.status();
+pub(super) async fn request_token_at_uri(
+	client: &PolicyClient,
+	spec: &TokenRequestSpec<'_>,
+	req: &ExchangeRequest,
+	timeout: Duration,
+	response_limit: usize,
+) -> Result<TokenEndpointResponse, FetchError> {
+	let mut req = build_token_request(spec, req)?;
+	req.extensions_mut().insert(BackendRequestTimeout(timeout));
+	let resp = client
+		.simple_call(req)
+		.await
+		.map_err(classify_token_endpoint_call_error)?;
+	decode_token_response_with_limit(resp, spec, response_limit).await
+}
+
+async fn decode_token_response(
+	resp: ::http::Response<Body>,
+	spec: &TokenRequestSpec<'_>,
+) -> Result<TokenEndpointResponse, FetchError> {
 	let limit = http::response_buffer_limit(&resp);
+	decode_token_response_with_limit(resp, spec, limit).await
+}
+
+async fn decode_token_response_with_limit(
+	resp: ::http::Response<Body>,
+	spec: &TokenRequestSpec<'_>,
+	limit: usize,
+) -> Result<TokenEndpointResponse, FetchError> {
+	let status = resp.status();
 	if !status.is_success() {
 		let body = http::read_body_with_limit(resp.into_body(), limit)
 			.await
 			.unwrap_or_default();
-		let body = format_token_endpoint_error_body(&body, 256);
-		return Err(classify_token_endpoint_error(status, body));
+		return Err(classify_token_endpoint_error(status, &body));
 	}
 
 	json::from_body_with_limit::<TokenResponse>(resp.into_body(), limit)
@@ -256,7 +350,10 @@ pub(super) async fn request_token(
 		.map_err(|e| {
 			BackendAuthError::credential_provider(anyhow!("token exchange response decode failed: {e}"))
 		})?
-		.into_token(spec.expected_issued_token_type.clone())
+		.into_token(
+			spec.expected_issued_token_type.clone(),
+			spec.require_token_type,
+		)
 }
 
 fn classify_token_endpoint_call_error(error: ProxyError) -> FetchError {
@@ -280,26 +377,20 @@ fn classify_token_endpoint_call_error(error: ProxyError) -> FetchError {
 	}
 }
 
-fn classify_token_endpoint_error(status: StatusCode, body: String) -> FetchError {
+fn classify_token_endpoint_error(status: StatusCode, body: &[u8]) -> FetchError {
+	#[derive(Deserialize)]
+	struct OAuthError {
+		error: Option<String>,
+	}
+	let oauth_error = serde_json::from_slice::<OAuthError>(body)
+		.ok()
+		.and_then(|error| error.error);
+	let body = format_token_endpoint_error_body(body, 256);
 	let detailed = anyhow!("token exchange returned status {status}: {body}");
-	// 401/403 usually mean gateway client auth or token-endpoint policy failed.
-	if status.is_client_error() && !matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
-	{
-		FetchError::Client {
-			status,
-			source: detailed,
-		}
-	} else if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
-		debug!(%status, error = %detailed, "oauth token exchange rejected gateway credentials");
-		BackendAuthError::local(anyhow!("token exchange returned status {status}")).into()
-	} else {
-		// Only authorization server failures warrant a warning.
-		if status.is_server_error() {
-			warn!(%status, error = %detailed, "oauth token exchange returned non-success status");
-		} else {
-			debug!(%status, error = %detailed, "oauth token exchange returned non-success status");
-		}
-		BackendAuthError::credential_provider(anyhow!("token exchange returned status {status}")).into()
+	FetchError::Response {
+		status,
+		oauth_error,
+		source: detailed,
 	}
 }
 
@@ -311,7 +402,7 @@ fn build_token_request(
 
 	let builder = ::http::Request::builder()
 		.method(::http::Method::POST)
-		.uri(if spec.path.is_empty() { "/" } else { spec.path })
+		.uri(spec.uri)
 		.header(CONTENT_TYPE, "application/x-www-form-urlencoded")
 		.header(ACCEPT, "application/json");
 

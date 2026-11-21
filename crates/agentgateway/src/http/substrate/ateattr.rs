@@ -54,6 +54,15 @@ impl Display for ResumeDisposition {
 pub enum RouteOutcome {
 	#[default]
 	Ok,
+	Cancelled,
+	Timeout,
+	NoCapacity,
+	FailedPrecondition,
+	LockConflict,
+	NotFound,
+	Unavailable,
+	RateLimited,
+	Denied,
 	ResumeError,
 }
 
@@ -61,6 +70,15 @@ impl RouteOutcome {
 	pub(crate) const fn as_str(self) -> &'static str {
 		match self {
 			Self::Ok => "ok",
+			Self::Cancelled => "cancelled",
+			Self::Timeout => "timeout",
+			Self::NoCapacity => "no_capacity",
+			Self::FailedPrecondition => "failed_precondition",
+			Self::LockConflict => "lock_conflict",
+			Self::NotFound => "not_found",
+			Self::Unavailable => "unavailable",
+			Self::RateLimited => "rate_limited",
+			Self::Denied => "denied",
 			Self::ResumeError => "resume_error",
 		}
 	}
@@ -74,7 +92,7 @@ impl Display for RouteOutcome {
 
 #[cfg(test)]
 mod tests {
-	use super::ResumeDisposition;
+	use super::{ResumeDisposition, RouteOutcome};
 
 	#[test]
 	fn disposition_values_match_upstream_ateattr() {
@@ -122,5 +140,24 @@ mod tests {
 			ResumeDisposition::None,
 			"an unresolved request must not read as an activation"
 		);
+	}
+
+	#[test]
+	fn route_outcomes_match_substrate() {
+		for (outcome, expected) in [
+			(RouteOutcome::Ok, "ok"),
+			(RouteOutcome::Cancelled, "cancelled"),
+			(RouteOutcome::Timeout, "timeout"),
+			(RouteOutcome::NoCapacity, "no_capacity"),
+			(RouteOutcome::FailedPrecondition, "failed_precondition"),
+			(RouteOutcome::LockConflict, "lock_conflict"),
+			(RouteOutcome::NotFound, "not_found"),
+			(RouteOutcome::Unavailable, "unavailable"),
+			(RouteOutcome::RateLimited, "rate_limited"),
+			(RouteOutcome::Denied, "denied"),
+			(RouteOutcome::ResumeError, "resume_error"),
+		] {
+			assert_eq!(outcome.as_str(), expected);
+		}
 	}
 }

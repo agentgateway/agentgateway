@@ -50,6 +50,47 @@ async fn mock_token_endpoint(body: ResponseTemplate) -> MockServer {
 	mock
 }
 
+#[tokio::test]
+async fn dynamic_exchange_caches_tokens_per_endpoint() {
+	let first = mock_token_endpoint(
+		ResponseTemplate::new(200).set_body_json(json!({"access_token": "first", "expires_in": 3600})),
+	)
+	.await;
+	let second = mock_token_endpoint(
+		ResponseTemplate::new(200).set_body_json(json!({"access_token": "second", "expires_in": 3600})),
+	)
+	.await;
+	let exchange =
+		DynamicTokenExchange::new(Duration::from_secs(60), Duration::from_secs(4), 1024 * 1024);
+	let client = policy_client();
+	let scopes = vec!["read".to_owned()];
+	let subject = SecretString::from("subject".to_owned());
+
+	let first_token = exchange
+		.exchange(
+			&client,
+			&format!("{}/token", first.uri()),
+			subject.clone(),
+			"api.example.com",
+			&scopes,
+		)
+		.await
+		.unwrap();
+	let second_token = exchange
+		.exchange(
+			&client,
+			&format!("{}/token", second.uri()),
+			subject,
+			"api.example.com",
+			&scopes,
+		)
+		.await
+		.unwrap();
+
+	assert_eq!(first_token.expose_secret(), "first");
+	assert_eq!(second_token.expose_secret(), "second");
+}
+
 fn endpoint(mock: &MockServer) -> Arc<SimpleBackendReference> {
 	Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
 		*mock.address(),
@@ -1738,6 +1779,7 @@ async fn appends_additional_params() {
 			("org".into(), "o2".into()),
 		],
 		chained_extra_params: vec![],
+		cache_context: vec![],
 	};
 
 	fetch_token(&policy_client(), &a, req).await.unwrap();
@@ -2259,6 +2301,7 @@ async fn sends_actor_token() {
 		actor: Some(("actor-tok".to_string().into(), OAuthTokenType::Jwt)),
 		extra_params: vec![],
 		chained_extra_params: vec![],
+		cache_context: vec![],
 	};
 
 	fetch_token(&policy_client(), &a, req).await.unwrap();
