@@ -38,6 +38,36 @@ pub mod from_responses {
 		})
 	}
 
+	fn user_content_part(
+		part: responses::InputContent,
+	) -> Option<completions::RequestUserMessageContentPart> {
+		match part {
+			responses::InputContent::InputText(text) => {
+				Some(completions::RequestUserMessageContentPart::Text(
+					completions::RequestMessageContentPartText {
+						text: text.text,
+						prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
+					},
+				))
+			},
+			responses::InputContent::InputImage(image) => {
+				let url = image.image_url?;
+				Some(completions::RequestUserMessageContentPart::ImageUrl(
+					completions::RequestMessageContentPartImage {
+						image_url: completions::ImageUrl {
+							url,
+							detail: Some(image.detail),
+						},
+						// OpenAI rejects cache breakpoints on image parts even though the
+						// Chat Completions schema exposes this field.
+						prompt_cache_breakpoint: None,
+					},
+				))
+			},
+			_ => None,
+		}
+	}
+
 	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
 		use responses::{
 			EasyInputContent, InputContent, InputItem, InputMessage, InputParam, InputRole,
@@ -77,20 +107,7 @@ pub mod from_responses {
 							EasyInputContent::Text(text) => completions::RequestUserMessageContent::Text(text),
 							EasyInputContent::ContentList(parts) => {
 								completions::RequestUserMessageContent::Array(
-									parts
-										.into_iter()
-										.filter_map(|part| match part {
-											InputContent::InputText(text) => {
-												Some(completions::RequestUserMessageContentPart::Text(
-													completions::RequestMessageContentPartText {
-														text: text.text,
-														prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
-													},
-												))
-											},
-											_ => None,
-										})
-										.collect(),
+									parts.into_iter().filter_map(user_content_part).collect(),
 								)
 							},
 						};
@@ -190,19 +207,7 @@ pub mod from_responses {
 											msg
 												.content
 												.into_iter()
-												.filter_map(|content| match content {
-													InputContent::InputText(text) => {
-														Some(completions::RequestUserMessageContentPart::Text(
-															completions::RequestMessageContentPartText {
-																text: text.text,
-																prompt_cache_breakpoint: cache_breakpoint(
-																	text.prompt_cache_breakpoint,
-																),
-															},
-														))
-													},
-													_ => None,
-												})
+												.filter_map(user_content_part)
 												.collect(),
 										),
 										name: None,
