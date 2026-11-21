@@ -8,9 +8,8 @@
         {
           "type": "document",
           "source": {
-            "type": "text",
-            "media_type": "text/plain",
-            "data": "omitted"
+            "type": "url",
+            "url": "https://example.com/omitted.pdf"
           },
           "cache_control": {
             "type": "ephemeral"
@@ -28,9 +27,8 @@
         {
           "type": "document",
           "source": {
-            "type": "text",
-            "media_type": "text/plain",
-            "data": "omitted"
+            "type": "url",
+            "url": "https://example.com/omitted.pdf"
           },
           "cache_control": {
             "type": "ephemeral"

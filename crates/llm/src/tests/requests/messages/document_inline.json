@@ -27,6 +27,32 @@
           "title": "report.pdf"
         },
         {
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "Q3 revenue grew 12%."
+          },
+          "title": "notes.txt"
+        },
+        {
+          "type": "document",
+          "source": {
+            "type": "content",
+            "content": [
+              {
+                "type": "text",
+                "text": "Section one."
+              },
+              {
+                "type": "text",
+                "text": "Section two."
+              }
+            ]
+          },
+          "title": "sections"
+        },
+        {
           "type": "text",
           "text": "What is this document about?"
         }

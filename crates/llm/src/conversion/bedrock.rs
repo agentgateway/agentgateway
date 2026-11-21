@@ -777,9 +777,7 @@ pub mod from_completions {
 							out.push(bedrock::ContentBlock::Document(bedrock::DocumentBlock {
 								format: format.to_string(),
 								name,
-								source: bedrock::DocumentSource {
-									bytes: data.to_string(),
-								},
+								source: bedrock::DocumentSource::Bytes(data.to_string()),
 							}));
 							helpers::maybe_insert_cache_point(
 								&mut out,
@@ -1941,16 +1939,9 @@ pub mod from_messages {
 						title,
 						..
 					}) => {
-						let base64_source = (source.get("type").and_then(|v| v.as_str()) == Some("base64"))
-							.then(|| {
-								let media_type = source.get("media_type").and_then(|v| v.as_str())?;
-								let data = source.get("data").and_then(|v| v.as_str())?;
-								Some((media_type, data))
-							})
-							.flatten();
-						let Some((media_type, data)) = base64_source else {
-							// Other document source types (text, url, content) aren't supported by
-							// Bedrock Converse. Keep the breakpoint on the retained prefix when dropping.
+						let Some((format, source)) = document_source(&source, title.as_deref())? else {
+							// Converse can't take URL or file sources inline, nor images in a content
+							// source. Keep the breakpoint on the retained prefix when dropping.
 							helpers::insert_cache_point_on_retained_prefix(
 								&mut content,
 								&mut messages,
@@ -1960,8 +1951,6 @@ pub mod from_messages {
 							);
 							continue;
 						};
-						let format =
-							super::from_responses::derive_doc_format(Some(media_type), title.as_deref())?;
 						// Bedrock requires document names to be unique within a request; track
 						// names already used so repeated titles (or missing ones) get a numeric
 						// suffix.
@@ -1983,9 +1972,7 @@ pub mod from_messages {
 							bedrock::ContentBlock::Document(bedrock::DocumentBlock {
 								format: format.to_string(),
 								name,
-								source: bedrock::DocumentSource {
-									bytes: data.to_string(),
-								},
+								source,
 							}),
 							cache_control,
 						)
@@ -2189,6 +2176,51 @@ pub mod from_messages {
 		};
 		helpers::ensure_tool_config_for_history(&mut bedrock_request);
 		Ok((bedrock_request, tool_name_map))
+	}
+
+	/// Maps an Anthropic document source onto a Converse one, with its document format.
+	/// Returns None for sources Converse can't take inline (url, file), and for content sources
+	/// holding images, since Converse document content only carries text.
+	fn document_source(
+		source: &serde_json::Value,
+		title: Option<&str>,
+	) -> Result<Option<(&'static str, bedrock::DocumentSource)>, AIError> {
+		let str_field = |key| source.get(key).and_then(|v| v.as_str());
+		match str_field("type") {
+			Some("base64") => {
+				let (Some(media_type), Some(data)) = (str_field("media_type"), str_field("data")) else {
+					return Ok(None);
+				};
+				let format = super::from_responses::derive_doc_format(Some(media_type), title)?;
+				Ok(Some((
+					format,
+					bedrock::DocumentSource::Bytes(data.to_string()),
+				)))
+			},
+			// Anthropic only accepts text/plain here.
+			Some("text") => {
+				Ok(str_field("data").map(|data| ("txt", bedrock::DocumentSource::Text(data.to_string()))))
+			},
+			Some("content") => {
+				let blocks = match source.get("content") {
+					Some(serde_json::Value::String(text)) => {
+						Some(vec![bedrock::DocumentContentBlock::Text(text.clone())])
+					},
+					Some(serde_json::Value::Array(blocks)) => blocks
+						.iter()
+						.map(|block| {
+							(block.get("type").and_then(|v| v.as_str()) == Some("text"))
+								.then(|| block.get("text").and_then(|v| v.as_str()))
+								.flatten()
+								.map(|text| bedrock::DocumentContentBlock::Text(text.to_string()))
+						})
+						.collect(),
+					_ => None,
+				};
+				Ok(blocks.map(|blocks| ("txt", bedrock::DocumentSource::Content(blocks))))
+			},
+			_ => Ok(None),
+		}
 	}
 
 	fn messages_output_format_to_bedrock_output_config(
@@ -2984,7 +3016,7 @@ pub mod from_responses {
 						blocks.push(bedrock::ContentBlock::Document(bedrock::DocumentBlock {
 							format: format.to_string(),
 							name,
-							source: bedrock::DocumentSource { bytes },
+							source: bedrock::DocumentSource::Bytes(bytes),
 						}));
 						maybe_insert_cache_point(
 							&mut blocks,

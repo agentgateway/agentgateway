@@ -21,6 +21,21 @@ info:
             media_type: application/pdf
             data: JVBERi0xLjQK
           title: report.pdf
+        - type: document
+          source:
+            type: text
+            media_type: text/plain
+            data: Q3 revenue grew 12%.
+          title: notes.txt
+        - type: document
+          source:
+            type: content
+            content:
+              - type: text
+                text: Section one.
+              - type: text
+                text: Section two.
+          title: sections
         - type: text
           text: What is this document about?
 ---
@@ -50,6 +65,31 @@ info:
               "name": "report [2]",
               "source": {
                 "bytes": "JVBERi0xLjQK"
+              }
+            }
+          },
+          {
+            "document": {
+              "format": "txt",
+              "name": "notes",
+              "source": {
+                "text": "Q3 revenue grew 12%."
+              }
+            }
+          },
+          {
+            "document": {
+              "format": "txt",
+              "name": "sections",
+              "source": {
+                "content": [
+                  {
+                    "text": "Section one."
+                  },
+                  {
+                    "text": "Section two."
+                  }
+                ]
               }
             }
           },
