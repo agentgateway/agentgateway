@@ -1891,6 +1891,8 @@ impl LocalBackend {
 								None => crate::mcp::openapi_server_prefix(&openapi_schema)
 									.map_err(|e| anyhow!("openapi MCP target '{}': {e}", t.name))?,
 							};
+							crate::mcp::parse_openapi_schema(&openapi_schema)
+								.map_err(|e| anyhow!("openapi MCP target '{}': {e}", t.name))?;
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
 								schema: openapi_schema.into(),

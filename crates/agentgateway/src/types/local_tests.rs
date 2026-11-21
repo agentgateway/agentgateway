@@ -2701,6 +2701,50 @@ async fn test_openapi_target_prefix(
 	assert_eq!(Ok(target.prefix.as_str()), expected);
 }
 
+#[rstest::rstest]
+#[case::missing_operation_id(
+	serde_json::json!({ "get": { "responses": {} } }),
+	"operation_id is required for /items"
+)]
+#[case::cookie_parameter(
+	serde_json::json!({ "get": {
+		"operationId": "listItems",
+		"parameters": [{ "name": "session", "in": "cookie", "schema": { "type": "string" } }],
+		"responses": {}
+	} }),
+	"parameter type COOKIE is not supported"
+)]
+#[tokio::test]
+async fn test_openapi_target_rejects_unsupported_operation(
+	#[case] path_item: serde_json::Value,
+	#[case] expected: &str,
+) {
+	let schema = serde_json::json!({
+		"openapi": "3.0.0",
+		"info": { "title": "Test", "version": "1.0.0" },
+		"paths": { "/items": path_item }
+	});
+	let local: super::LocalBackend = serde_json::from_value(serde_json::json!({
+		"mcp": { "targets": [{ "name": "example", "openapi": {
+			"host": "https://example.com",
+			"schema": schema.to_string()
+		} }] }
+	}))
+	.unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
+	let err = local
+		.as_backends(
+			ResourceName::new("test-mcp".into(), "".into()),
+			&resources,
+			crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+		)
+		.await
+		.expect_err("unsupported operation should be rejected at load")
+		.to_string();
+	assert!(err.contains("openapi MCP target 'example'"), "{err}");
+	assert!(err.contains(expected), "{err}");
+}
+
 #[tokio::test]
 async fn test_top_level_backend_targeted_transformations_are_backend_policies() {
 	let normalized = normalize_test_yaml(

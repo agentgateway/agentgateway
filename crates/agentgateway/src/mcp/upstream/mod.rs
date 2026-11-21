@@ -11,7 +11,7 @@ use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 use itertools::Itertools;
 pub use openapi::ParseError as OpenAPIParseError;
-pub(crate) use openapi::get_server_prefix as openapi_server_prefix;
+pub(crate) use openapi::{get_server_prefix as openapi_server_prefix, parse_openapi_schema};
 use opentelemetry::KeyValue;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, ExtensionCapabilities,
