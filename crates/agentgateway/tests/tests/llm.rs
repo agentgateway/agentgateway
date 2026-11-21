@@ -542,6 +542,92 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 	t
 }
 
+#[rstest::rstest]
+#[case::model("copilot/inline", "vscode/1.104.1", "vscode-insiders-chat")]
+#[case::provider("copilot/shared", "vscode/1.138.0", "copilot-developer-cli")]
+#[case::defaults(
+	"copilot/default",
+	concat!("agentgateway/", env!("CARGO_PKG_VERSION")),
+	"vscode-chat"
+)]
+#[tokio::test]
+async fn llm_copilot_request_headers(
+	#[case] model: &str,
+	#[case] editor_version: &str,
+	#[case] integration_id: &str,
+) {
+	let mock = body_mock(llm_body!("response/anthropic/basic.json")).await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  discovery: disabled
+  providers:
+  - name: shared
+    provider: copilot
+    params:
+      baseUrl: http://{0}
+      apiKey: configured-token
+    defaults:
+      requestHeaders:
+        set:
+          Editor-Version: vscode/1.138.0
+          Copilot-Integration-Id: copilot-developer-cli
+  models:
+  - name: copilot/inline
+    provider: copilot
+    params:
+      baseUrl: http://{0}
+      apiKey: configured-token
+      model: claude-sonnet-4
+    requestHeaders:
+      set:
+        Editor-Version: vscode/1.104.1
+        Copilot-Integration-Id: vscode-insiders-chat
+  - name: copilot/shared
+    provider:
+      reference: shared
+    params:
+      model: claude-sonnet-4
+  - name: copilot/default
+    provider: copilot
+    params:
+      baseUrl: http://{0}
+      apiKey: configured-token
+      model: claude-sonnet-4
+"#,
+		mock.address(),
+	);
+	let t = setup_local_llm_config(&config).await;
+	let mut body: Value = serde_json::from_slice(llm_body!("requests/messages/basic.json")).unwrap();
+	body["model"] = json!(model);
+	let response = RequestBuilder::new(Method::POST, "http://lo/v1/messages")
+		.header(header::CONTENT_TYPE, "application/json")
+		.header("editor-version", "incoming-editor")
+		.header("copilot-integration-id", "incoming-integration")
+		.body(Body::from(body.to_string()))
+		.send(t.serve_http(strng::literal!("bind/0")))
+		.await
+		.unwrap();
+	assert_eq!(response.status(), StatusCode::OK);
+
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(request.url.path(), "/v1/messages");
+	let upstream_body: Value = serde_json::from_slice(&request.body).unwrap();
+	assert_eq!(upstream_body["model"], "claude-sonnet-4");
+	assert_eq!(
+		request.headers[header::AUTHORIZATION],
+		"Bearer configured-token"
+	);
+	assert_eq!(
+		(
+			request.headers["editor-version"].to_str().unwrap(),
+			request.headers["copilot-integration-id"].to_str().unwrap(),
+		),
+		(editor_version, integration_id)
+	);
+}
+
 #[tokio::test]
 async fn llm_api_key_allowed_models_filters_discovery_and_requests() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
