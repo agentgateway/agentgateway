@@ -1758,6 +1758,30 @@ test('shows a banner when the last configuration reload failed', async ({ page }
 	await expect(banner).toContainText('still running the previous configuration');
 });
 
+test('duplicate model names warning says how to resolve it and links the docs', async ({
+	page
+}) => {
+	const config = populatedConfig();
+	const byOrg = (org: string) => ({
+		name: '*',
+		provider: 'openai',
+		params: { apiKey: '$OPENAI_API_KEY' },
+		matches: [{ headers: [{ name: 'x-org', value: { exact: org } }] }]
+	});
+	(config.llm as Record<string, unknown>).models = [byOrg('a'), byOrg('b')];
+	await mockGateway(page, config);
+
+	await page.goto('/');
+	const warning = page.locator('.banner-warning-list li').filter({
+		hasText: 'Duplicate model names: *.'
+	});
+	await expect(warning).toContainText('Set a unique id on each entry to clear this warning.');
+	await expect(warning.getByRole('link', { name: 'Docs' })).toHaveAttribute(
+		'href',
+		'https://agentgateway.dev/docs/standalone/latest/documentation/llm/about/#combine-patterns'
+	);
+});
+
 test('LLM playground waits for the listener after applying CORS', async ({ page }) => {
 	const config = populatedConfig();
 	(config.llm as { policies: { cors?: unknown } }).policies.cors = {
