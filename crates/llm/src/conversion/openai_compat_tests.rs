@@ -1,7 +1,29 @@
 use bytes::Bytes;
 use serde_json::{Value, json};
 
-use super::to_responses;
+use super::{from_responses, to_responses};
+
+#[test]
+fn responses_to_completions_rejects_image_file_ids() {
+	let request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"input": [{
+			"role": "user",
+			"content": [
+				{"type": "input_text", "text": "Describe this image."},
+				{"type": "input_image", "file_id": "file-image", "detail": "auto"}
+			]
+		}]
+	}))
+	.unwrap();
+
+	match from_responses::translate(&request) {
+		Err(crate::AIError::UnsupportedConversion(reason)) => {
+			assert!(reason.contains("image_url"));
+		},
+		other => panic!("expected an unsupported image error, got {other:?}"),
+	}
+}
 
 fn translate(input: &[u8]) -> Value {
 	let response =
