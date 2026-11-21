@@ -270,7 +270,11 @@ impl<'a> From<&'a ChainedExchange> for ConfiguredTokenEndpoint<'a> {
 }
 
 impl<'a> TokenRequestSpec<'a> {
-	pub(super) fn dynamic(uri: &'a str, audiences: &'a [String], scopes: &'a [String]) -> Self {
+	pub(super) fn access_token_exchange(
+		uri: &'a str,
+		audiences: &'a [String],
+		scopes: &'a [String],
+	) -> Self {
 		Self {
 			uri,
 			grant_type: OAuthGrantType::TokenExchange,
@@ -285,7 +289,7 @@ impl<'a> TokenRequestSpec<'a> {
 	}
 }
 
-pub(super) async fn request_token(
+pub(super) async fn request_token_via_backend(
 	client: &PolicyClient,
 	spec: &ConfiguredTokenEndpoint<'_>,
 	req: &ExchangeRequest,
@@ -304,7 +308,7 @@ pub(super) async fn request_token(
 	decode_token_response(resp, &spec.request).await
 }
 
-pub(super) async fn request_dynamic_token(
+pub(super) async fn request_token_at_uri(
 	client: &PolicyClient,
 	spec: &TokenRequestSpec<'_>,
 	req: &ExchangeRequest,

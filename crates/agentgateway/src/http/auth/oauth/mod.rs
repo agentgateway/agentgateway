@@ -783,11 +783,11 @@ impl DynamicTokenExchange {
 			cache_context,
 			..Default::default()
 		};
-		let spec = transport::TokenRequestSpec::dynamic(endpoint, &audiences, &scopes);
+		let spec = transport::TokenRequestSpec::access_token_exchange(endpoint, &audiences, &scopes);
 		self
 			.cache
 			.get_or_insert_with(&request, || {
-				transport::request_dynamic_token(client, &spec, &request, self.timeout, self.response_limit)
+				transport::request_token_at_uri(client, &spec, &request, self.timeout, self.response_limit)
 			})
 			.await
 	}
@@ -952,14 +952,18 @@ async fn fetch_token_uncached(
 	auth: &OAuthTokenExchangeAuth,
 	req: &ExchangeRequest,
 ) -> Result<transport::TokenEndpointResponse, FetchError> {
-	let first =
-		transport::request_token(client, &transport::ConfiguredTokenEndpoint::from(auth), req).await?;
+	let first = transport::request_token_via_backend(
+		client,
+		&transport::ConfiguredTokenEndpoint::from(auth),
+		req,
+	)
+	.await?;
 	let Some(chained_exchange) = &auth.chained_exchange else {
 		return Ok(first);
 	};
 	let chained_req =
 		ExchangeRequest::jwt_bearer_assertion(first.access_token, req.chained_extra_params.clone());
-	transport::request_token(
+	transport::request_token_via_backend(
 		client,
 		&transport::ConfiguredTokenEndpoint::from(chained_exchange),
 		&chained_req,
