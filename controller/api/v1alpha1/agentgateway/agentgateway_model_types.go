@@ -282,6 +282,7 @@ const (
 	ModelProviderTypesafe    ModelProvider = "Typesafe"
 	ModelProviderNebius      ModelProvider = "Nebius"
 	ModelProviderCoreWeave   ModelProvider = "CoreWeave"
+	ModelProviderLLMTR       ModelProvider = "LLMTR"
 	ModelProviderCustom      ModelProvider = "Custom"
 )
 

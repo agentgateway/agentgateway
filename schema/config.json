@@ -12987,7 +12987,8 @@
         "perplexity",
         "typesafe",
         "nebius",
-        "coreweave"
+        "coreweave",
+        "llmtr"
       ]
     },
     "LocalLLMProviderDefaults": {
