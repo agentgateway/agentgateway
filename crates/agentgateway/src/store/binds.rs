@@ -4649,6 +4649,178 @@ mod tests {
 		);
 	}
 
+	/// Regression test against a credential-crossing confused-deputy bug class: when
+	/// several backends are multiplexed as sibling "sections" under one logical backend
+	/// (the shape used for MCP targets grouped behind a single MCP backend --
+	/// `BackendTargetRef::Backend { section: Some(name), .. }`), each sibling's own
+	/// `backendAuth` policy must resolve and forward independently. The credential
+	/// actually placed on the outbound request to one sibling target must never be the
+	/// credential configured for a different sibling target, even when both calls
+	/// originate from the same incoming client identity.
+	///
+	/// This exercises the real policy-resolution path (`backend_policies()`) together
+	/// with the real credential-forwarding path (`apply_backend_auth`), rather than
+	/// asserting on the merge/attachment logic in isolation.
+	#[tokio::test]
+	async fn backend_auth_does_not_cross_sibling_targets() {
+		use secrecy::SecretString;
+
+		use crate::http::auth::{BackendAuthKind, BackendInfo, apply_backend_auth};
+		use crate::http::jwt::Claims;
+
+		let mut store = Store::default();
+
+		// Target A: static key credential "secret-A"
+		let policy_a: PolicyKey = strng::new("target-a-auth");
+		store.insert_policy(TargetedPolicy {
+			key: policy_a.clone(),
+			name: None,
+			creation_timestamp: 0,
+			target: PolicyTarget::Backend(BackendTarget::Backend {
+				name: strng::new("mcp-backend"),
+				namespace: strng::new("test-ns"),
+				section: Some(strng::new("target-a")),
+				kind: None,
+			}),
+			inheritance: Default::default(),
+			policy: PolicyType::Backend(BackendTrafficPolicy::BackendAuth(BackendAuth::new(
+				BackendAuthKind::Key {
+					value: SecretString::new("secret-A".into()).into(),
+					location: None,
+				},
+			))),
+		});
+
+		// Target B: static key credential "secret-B"
+		let policy_b: PolicyKey = strng::new("target-b-auth");
+		store.insert_policy(TargetedPolicy {
+			key: policy_b.clone(),
+			name: None,
+			creation_timestamp: 0,
+			target: PolicyTarget::Backend(BackendTarget::Backend {
+				name: strng::new("mcp-backend"),
+				namespace: strng::new("test-ns"),
+				section: Some(strng::new("target-b")),
+				kind: None,
+			}),
+			inheritance: Default::default(),
+			policy: PolicyType::Backend(BackendTrafficPolicy::BackendAuth(BackendAuth::new(
+				BackendAuthKind::Key {
+					value: SecretString::new("secret-B".into()).into(),
+					location: None,
+				},
+			))),
+		});
+
+		// Resolve each sibling's policy independently via the real attachment path.
+		let policies_a = store.backend_policies(
+			BackendTargetRef::Backend {
+				name: "mcp-backend",
+				namespace: "test-ns",
+				section: Some("target-a"),
+				kind: None,
+			},
+			&[],
+			None,
+		);
+		let policies_b = store.backend_policies(
+			BackendTargetRef::Backend {
+				name: "mcp-backend",
+				namespace: "test-ns",
+				section: Some("target-b"),
+				kind: None,
+			},
+			&[],
+			None,
+		);
+
+		let auth_a = policies_a
+			.backend_auth
+			.clone()
+			.expect("target A must resolve its own backend auth");
+		let auth_b = policies_b
+			.backend_auth
+			.clone()
+			.expect("target B must resolve its own backend auth");
+
+		// Build two outbound requests from the SAME incoming client identity, one
+		// routed (as the real proxy code does) through each target's own resolved
+		// auth policy, and confirm the actual header placed on the wire for A is
+		// never B's credential, and vice versa.
+		let t = crate::test_helpers::proxymock::setup_proxy_test("{}").expect("setup proxy inputs");
+		let inputs = t.inputs();
+		let make_claims = || Claims {
+			inner: serde_json::Map::new(),
+			jwt: SecretString::new("same-client-jwt".into()),
+		};
+
+		let backend_info = |section: &str| BackendInfo {
+			call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+			target: BackendTarget::Backend {
+				name: strng::new("mcp-backend"),
+				namespace: strng::new("test-ns"),
+				section: Some(strng::new(section)),
+				kind: None,
+			},
+			inputs: inputs.clone(),
+		};
+
+		let mut req_a = crate::http::Request::new(crate::http::Body::empty());
+		req_a.extensions_mut().insert(make_claims());
+		apply_backend_auth(&backend_info("target-a"), &auth_a, &mut req_a)
+			.await
+			.expect("apply backend auth for target A");
+
+		let mut req_b = crate::http::Request::new(crate::http::Body::empty());
+		req_b.extensions_mut().insert(make_claims());
+		apply_backend_auth(&backend_info("target-b"), &auth_b, &mut req_b)
+			.await
+			.expect("apply backend auth for target B");
+
+		let header_a = req_a
+			.headers()
+			.get(::http::header::AUTHORIZATION)
+			.expect("target A must have an Authorization header")
+			.to_str()
+			.unwrap()
+			.to_string();
+		let header_b = req_b
+			.headers()
+			.get(::http::header::AUTHORIZATION)
+			.expect("target B must have an Authorization header")
+			.to_str()
+			.unwrap()
+			.to_string();
+
+		assert_eq!(header_a, "Bearer secret-A");
+		assert_eq!(header_b, "Bearer secret-B");
+		assert_ne!(
+			header_a, header_b,
+			"credential forwarded to sibling target A must never match what would be forwarded to sibling target B"
+		);
+
+		// Cross-check: swapping which auth policy is applied to which request must
+		// also swap which credential appears -- i.e. the credential is a pure
+		// function of which target's resolved policy was applied, not of shared
+		// state (claims, backend name, call order).
+		let mut req_a_with_b_auth = crate::http::Request::new(crate::http::Body::empty());
+		req_a_with_b_auth.extensions_mut().insert(make_claims());
+		apply_backend_auth(&backend_info("target-a"), &auth_b, &mut req_a_with_b_auth)
+			.await
+			.expect("apply backend auth for target A using target B's resolved policy");
+		let header_a_with_b_auth = req_a_with_b_auth
+			.headers()
+			.get(::http::header::AUTHORIZATION)
+			.expect("must have an Authorization header")
+			.to_str()
+			.unwrap()
+			.to_string();
+		assert_eq!(
+			header_a_with_b_auth, "Bearer secret-B",
+			"the resolved BackendAuth passed in, not the BackendInfo/target metadata, determines the credential"
+		);
+	}
+
 	#[test]
 	fn backend_ai_policy_merge_preserves_routes_and_prompt_guard() {
 		use crate::llm::policy::{
