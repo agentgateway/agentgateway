@@ -201,9 +201,20 @@ pub(crate) fn reject_upgrade(req: &Request) -> Result<(), ProxyError> {
 			.flat_map(|value| value.split(','))
 			.any(|value| value.trim().eq_ignore_ascii_case(token))
 	};
+	let websocket = req
+		.headers()
+		.get_all(::http::header::UPGRADE)
+		.iter()
+		.all(|value| {
+			value.to_str().is_ok_and(|value| {
+				value
+					.split(',')
+					.all(|token| token.trim().eq_ignore_ascii_case("websocket"))
+			})
+		});
 	if req.method() == ::http::Method::GET
 		&& has_token(::http::header::CONNECTION, "upgrade")
-		&& has_token(::http::header::UPGRADE, "websocket")
+		&& websocket
 	{
 		return Ok(());
 	}

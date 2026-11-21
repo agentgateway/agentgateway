@@ -1940,6 +1940,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 				audiences: vec!["https://api.example.com".to_owned()],
 				expiration_seconds: jwt_expiration_seconds,
 			}),
+			..Default::default()
 		}],
 	});
 	let ports = Some(protos::ateapi::Ports {
@@ -2430,7 +2431,7 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 #[case(false, "custom-protocol")]
 #[case(true, "custom-protocol")]
 #[tokio::test]
-async fn substrate_egress_denies_http_upgrades_without_dialing(
+async fn substrate_egress_allows_websockets_and_denies_other_upgrades(
 	#[case] https: bool,
 	#[case] upgrade: &str,
 	#[values(false, true)] rejection_route: bool,
@@ -2540,6 +2541,7 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 		response
 	}
 
+	let websocket = upgrade.eq_ignore_ascii_case("websocket");
 	for upgrading in [false, true] {
 		let path = format!("/upgrade-{port}-{upgrading}");
 		let connect_host = format!("connect-{port}.example");
@@ -2597,44 +2599,44 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			assert!(upstream.received_requests().await.unwrap().is_empty());
 			continue;
 		}
-		let expected = if upgrading || !policy_allowed {
-			"HTTP/1.1 403 Forbidden\r\n"
-		} else {
+		let forwarded = policy_allowed && (!upgrading || (websocket && !rejection_route));
+		let expected = if forwarded {
 			"HTTP/1.1 200 OK\r\n"
+		} else {
+			"HTTP/1.1 403 Forbidden\r\n"
 		};
 		assert!(
 			response.starts_with(expected.as_bytes()),
 			"{}",
 			String::from_utf8_lossy(&response)
 		);
-		if upgrading || !policy_allowed {
+		if !forwarded {
 			let body = response
 				.split_at(response.windows(4).position(|b| b == b"\r\n\r\n").unwrap() + 4)
 				.1;
-			let expected = if !upgrading {
-				"actor egress policy denied"
-			} else if upgrade == "CONNECT" {
-				"CONNECT egress is not supported"
-			} else if upgrade.to_ascii_lowercase().contains("websocket") {
-				"WebSocket egress is not supported"
-			} else {
-				"HTTP upgrades, including CONNECT, are denied for actor egress"
-			};
+			let expected =
+				if (!upgrading && !policy_allowed) || (websocket && (!policy_allowed || rejection_route)) {
+					"actor egress policy denied"
+				} else if upgrade == "CONNECT" {
+					"CONNECT egress is not supported"
+				} else {
+					"Only WebSocket upgrades are supported for actor egress"
+				};
 			assert_eq!(body, expected.as_bytes());
 		}
-		if upgrading || !policy_allowed {
+		if !forwarded {
 			assert!(
 				tokio::time::timeout(Duration::from_millis(50), connections.recv())
 					.await
 					.is_err(),
 				"denied upgrade opened an upstream connection"
 			);
-		} else {
+		} else if !upgrading {
 			connections.recv().await.unwrap();
 		}
 		assert_eq!(
 			upstream.received_requests().await.unwrap().len(),
-			usize::from(policy_allowed)
+			usize::from(policy_allowed) + usize::from(upgrading && forwarded)
 		);
 	}
 	forwarder.abort();
@@ -3106,6 +3108,7 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 						prefix: "Bearer ".to_owned(),
 						credential_uri: "ate-secret://kubernetes.io/default/upstream-token".to_owned(),
 						actor_jwt: None,
+						..Default::default()
 					}],
 				}),
 			}),
