@@ -1193,6 +1193,9 @@ message TrafficPolicySpec {
       repeated string remove = 3;
       BodyTransformation body = 4;
       map<string, string> metadata = 5;
+      // CEL expression evaluating to a map that replaces the full header set.
+      // Applied before set/add/remove; on error the existing headers are kept.
+      optional string replace = 6;
     }
     Transform request = 1;
     Transform response = 2;

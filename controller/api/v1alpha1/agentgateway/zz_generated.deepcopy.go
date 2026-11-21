@@ -6256,6 +6256,11 @@ func (in *Transform) DeepCopyInto(out *Transform) {
 		*out = make([]HeaderName, len(*in))
 		copy(*out, *in)
 	}
+	if in.Replace != nil {
+		in, out := &in.Replace, &out.Replace
+		*out = new(CELExpression)
+		**out = **in
+	}
 	if in.Body != nil {
 		in, out := &in.Body, &out.Body
 		*out = new(CELExpression)

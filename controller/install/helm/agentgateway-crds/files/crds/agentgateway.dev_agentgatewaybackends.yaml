@@ -9550,6 +9550,13 @@ spec:
                                             minItems: 1
                                             type: array
                                             x-kubernetes-list-type: set
+                                          replace:
+                                            description: |-
+                                              CEL expression evaluating to a map that replaces the full header set.
+                                              Applied before set/add/remove; on evaluation error the existing headers are kept.
+                                            maxLength: 16384
+                                            minLength: 1
+                                            type: string
                                           set:
                                             description: Headers to set and the values
                                               to use.
@@ -9590,8 +9597,9 @@ spec:
                                         type: object
                                         x-kubernetes-validations:
                                         - message: at least one of the fields in [add
-                                            body metadata remove set] must be set
-                                          rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.set)].filter(x,x==true).size()
+                                            body metadata remove replace set] must
+                                            be set
+                                          rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.replace),has(self.set)].filter(x,x==true).size()
                                             >= 1'
                                       response:
                                         description: Response transformation settings.
@@ -9675,6 +9683,13 @@ spec:
                                             minItems: 1
                                             type: array
                                             x-kubernetes-list-type: set
+                                          replace:
+                                            description: |-
+                                              CEL expression evaluating to a map that replaces the full header set.
+                                              Applied before set/add/remove; on evaluation error the existing headers are kept.
+                                            maxLength: 16384
+                                            minLength: 1
+                                            type: string
                                           set:
                                             description: Headers to set and the values
                                               to use.
@@ -9715,8 +9730,9 @@ spec:
                                         type: object
                                         x-kubernetes-validations:
                                         - message: at least one of the fields in [add
-                                            body metadata remove set] must be set
-                                          rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.set)].filter(x,x==true).size()
+                                            body metadata remove replace set] must
+                                            be set
+                                          rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.replace),has(self.set)].filter(x,x==true).size()
                                             >= 1'
                                     type: object
                                     x-kubernetes-validations:
@@ -21706,6 +21722,13 @@ spec:
                             minItems: 1
                             type: array
                             x-kubernetes-list-type: set
+                          replace:
+                            description: |-
+                              CEL expression evaluating to a map that replaces the full header set.
+                              Applied before set/add/remove; on evaluation error the existing headers are kept.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           set:
                             description: Headers to set and the values to use.
                             items:
@@ -21741,8 +21764,8 @@ spec:
                         type: object
                         x-kubernetes-validations:
                         - message: at least one of the fields in [add body metadata
-                            remove set] must be set
-                          rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.set)].filter(x,x==true).size()
+                            remove replace set] must be set
+                          rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.replace),has(self.set)].filter(x,x==true).size()
                             >= 1'
                       response:
                         description: Response transformation settings.
@@ -21819,6 +21842,13 @@ spec:
                             minItems: 1
                             type: array
                             x-kubernetes-list-type: set
+                          replace:
+                            description: |-
+                              CEL expression evaluating to a map that replaces the full header set.
+                              Applied before set/add/remove; on evaluation error the existing headers are kept.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           set:
                             description: Headers to set and the values to use.
                             items:
@@ -21854,8 +21884,8 @@ spec:
                         type: object
                         x-kubernetes-validations:
                         - message: at least one of the fields in [add body metadata
-                            remove set] must be set
-                          rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.set)].filter(x,x==true).size()
+                            remove replace set] must be set
+                          rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.replace),has(self.set)].filter(x,x==true).size()
                             >= 1'
                     type: object
                     x-kubernetes-validations:

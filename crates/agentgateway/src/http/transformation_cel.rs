@@ -1,7 +1,7 @@
 use ::http::{HeaderName, HeaderValue};
 use agent_core::prelude::Strng;
 use serde_with::serde_as;
-use tracing::debug;
+use tracing::warn;
 
 use crate::cel::{Expression, RequestSnapshot};
 use crate::http::{
@@ -245,7 +245,9 @@ impl Transformation {
 				// On evaluation error (or a non-map result), leave headers untouched rather than
 				// dropping every header because of a transient failure.
 				Err(e) => {
-					debug!("transformation replace expression did not produce a header map: {e}");
+					warn!(
+						"transformation replace expression did not produce a header map; keeping original headers: {e}"
+					);
 				},
 			}
 		}
