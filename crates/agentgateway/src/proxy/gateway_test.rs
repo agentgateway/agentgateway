@@ -1,7 +1,7 @@
 use agent_core::strng;
 use assert_matches::assert_matches;
 
-use super::{HboneAddress, find_service_by_hostname};
+use super::{Extension, HboneAddress, TCPConnectionInfo, find_service_by_hostname};
 use crate::proxy::httpproxy;
 use crate::store::LocalWorkload;
 use crate::test_helpers::proxymock::{setup_proxy_test, simple_mock};
@@ -774,4 +774,46 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 			},
 		]
 	);
+}
+
+#[test]
+fn hbone_address_gateway_socket_addr() {
+	let mut stores = crate::store::DiscoveryStore::new();
+	stores.insert_service_internal(Service {
+		name: strng::new("gateway"),
+		namespace: strng::new("default"),
+		hostname: strng::new("gateway.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::new("default"),
+			address: "10.0.0.100".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, 8080), (81, 0)]),
+		..Default::default()
+	});
+	let mut ext = Extension::new();
+	ext.insert(TCPConnectionInfo {
+		peer_addr: "10.0.2.9:54321".parse().unwrap(),
+		local_addr: "10.0.1.5:15008".parse().unwrap(),
+		start: std::time::Instant::now(),
+		raw_peer_addr: None,
+	});
+	let target = |authority: &str, ext: &Extension| {
+		let uri = authority.parse::<http::Uri>().unwrap();
+		HboneAddress::try_from(&uri)
+			.unwrap()
+			.gateway_socket_addr(&stores, ext)
+	};
+
+	assert_eq!(
+		target("10.2.0.1:8080", &ext).unwrap(),
+		"10.2.0.1:8080".parse().unwrap()
+	);
+	assert_eq!(
+		target("gateway.default.svc.cluster.local:80", &ext).unwrap(),
+		"10.0.1.5:8080".parse().unwrap()
+	);
+	assert!(target("gateway.default.svc.cluster.local:8080", &ext).is_err());
+	assert!(target("gateway.default.svc.cluster.local:81", &ext).is_err());
+	assert!(target("other.default.svc.cluster.local:80", &ext).is_err());
+	assert!(target("gateway.default.svc.cluster.local:80", &Extension::new()).is_err());
 }
