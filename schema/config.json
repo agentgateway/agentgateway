@@ -3546,8 +3546,15 @@
           "properties": {
             "key": {
               "$ref": "#/$defs/FileOrInline"
+            },
+            "credentials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthCredential"
+              }
             }
           },
+          "additionalProperties": false,
           "required": [
             "key"
           ]
@@ -3562,6 +3569,7 @@
               }
             }
           },
+          "unevaluatedProperties": false,
           "oneOf": [
             {
               "description": "Forward the validated incoming JWT to the backend.",
@@ -3730,6 +3738,7 @@
               }
             }
           },
+          "additionalProperties": false,
           "required": [
             "credentials"
           ]
@@ -3756,6 +3765,55 @@
         {
           "type": "string"
         }
+      ]
+    },
+    "BackendAuthCredential": {
+      "description": "An additional credential to inject on the backend request.",
+      "type": "object",
+      "properties": {
+        "location": {
+          "description": "Where the credential is inserted on the backend request.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "key": {
+          "description": "Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against the request to produce the credential value.\nIf it fails or does not return a string, the credential location is cleared instead.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gcp": {
+          "description": "Fetch a Google Cloud access or ID token.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GcpAuth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "location"
       ]
     },
     "AuthorizationLocation": {
@@ -4897,55 +4955,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "BackendAuthCredential": {
-      "description": "An additional credential to inject on the backend request.",
-      "type": "object",
-      "properties": {
-        "location": {
-          "description": "Where the credential is inserted on the backend request.",
-          "$ref": "#/$defs/AuthorizationLocation"
-        },
-        "key": {
-          "description": "Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FileOrInline"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "expression": {
-          "description": "CEL expression evaluated against the request to produce the credential value.\nIf it fails or does not return a string, the credential location is cleared instead.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Expression"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "gcp": {
-          "description": "Fetch a Google Cloud access or ID token.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GcpAuth"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "location"
-      ]
     },
     "BackendAuth": {
       "oneOf": [

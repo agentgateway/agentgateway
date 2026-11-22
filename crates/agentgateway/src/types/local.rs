@@ -2468,13 +2468,13 @@ where
 
 	Option::<BackendAuthCompat>::deserialize(deserializer)?
 		.map(|auth| match auth {
-			BackendAuthCompat::PlainKey { key } => Ok(LocalBackendAuth {
+			BackendAuthCompat::PlainKey { key, credentials } => Ok(LocalBackendAuth {
 				kind: Some(LocalBackendAuthKind::Key {
 					value: Some(key),
 					expression: None,
 					location: None,
 				}),
-				credentials: Vec::new(),
+				credentials,
 			}),
 			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(LocalBackendAuth {
 				kind: Some(validate_auth::<D::Error>(auth)?),
@@ -2493,12 +2493,14 @@ where
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 enum BackendAuthCompat {
 	PlainKey {
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
 		key: FileOrInline,
+		#[serde(default)]
+		credentials: Vec<LocalBackendAuthCredential>,
 	},
 	FullWithCredentials {
 		#[serde(flatten)]
