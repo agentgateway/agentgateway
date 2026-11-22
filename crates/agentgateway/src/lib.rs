@@ -498,6 +498,11 @@ pub struct RawLogging {
 	/// Request log database. When omitted (or null), request logs are stored in `config.database`
 	/// if it is set. Set `enabled: false` to turn off request log storage.
 	database: Option<RawLoggingDatabase>,
+	/// How long request logs are kept in the database. Expired logs are pruned at startup
+	/// and then hourly. Unset means keep forever.
+	#[serde(default, with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	database_retention: Option<Duration>,
 }
 
 /// Request log database. Without a `url`, request logs are stored in `config.database`.

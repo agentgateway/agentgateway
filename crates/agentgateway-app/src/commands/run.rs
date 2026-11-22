@@ -92,7 +92,13 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 						.as_ref()
 						.filter(|database| cfg == *database)
 						.and(database_pool.clone());
-					match agentgateway::telemetry::log_store::setup_with_pool(cfg, pool).await {
+					match agentgateway::telemetry::log_store::setup_with_pool(
+						cfg,
+						pool,
+						config.logging.database_retention,
+					)
+					.await
+					{
 						Ok(store) => Some(store),
 						Err(err) => {
 							error!(?err, "failed to initialize request log database");

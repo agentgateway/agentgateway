@@ -48,17 +48,21 @@ impl RequestLogStore {
 	}
 }
 
-pub async fn setup(cfg: &DatabaseConfig) -> anyhow::Result<RequestLogStoreGuard> {
-	setup_with_pool(cfg, None).await
+pub async fn setup(
+	cfg: &DatabaseConfig,
+	retention: Option<std::time::Duration>,
+) -> anyhow::Result<RequestLogStoreGuard> {
+	setup_with_pool(cfg, None, retention).await
 }
 
 pub async fn setup_with_pool(
 	cfg: &DatabaseConfig,
 	pool: Option<crate::database::DatabasePool>,
+	retention: Option<std::time::Duration>,
 ) -> anyhow::Result<RequestLogStoreGuard> {
 	let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 	let (ready_tx, ready_rx) = oneshot::channel();
-	let writer = LogStoreWorker::new(rx, cfg.clone(), pool, ready_tx)
+	let writer = LogStoreWorker::new(rx, cfg.clone(), pool, retention, ready_tx)
 		.worker_thread("request-log-db-writer".to_string())?;
 	ready_rx
 		.await
@@ -151,6 +155,15 @@ impl Drop for RequestLogStoreGuard {
 const DEFAULT_LOG_STORE_BATCH_SIZE: usize = 16384;
 const LOG_STORE_BATCH_SIZE_ENV: &str = "REQUEST_LOG_STORE_BATCH_SIZE";
 
+// Retention pruning runs at startup, then hourly. Deletes are chunked with a short sleep
+// between chunks; a run budget and a consecutive-failure cap bound each round, and any
+// remaining rows are pruned in the next round.
+const LOG_STORE_PRUNE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3600);
+const LOG_STORE_PRUNE_BATCH_SIZE: i64 = 10_000;
+const LOG_STORE_PRUNE_BATCH_SLEEP: std::time::Duration = std::time::Duration::from_millis(100);
+const LOG_STORE_PRUNE_RUN_BUDGET: std::time::Duration = std::time::Duration::from_secs(300);
+const LOG_STORE_PRUNE_MAX_BATCH_FAILURES: u32 = 3;
+
 #[allow(clippy::large_enum_variant)] // The StoredRequestLog, which is used 99.9% of the time, is the large one
 enum LogStoreMsg {
 	Record(PendingRequestLog),
@@ -179,6 +192,7 @@ struct LogStoreWorker {
 	receiver: UnboundedReceiver<LogStoreMsg>,
 	cfg: DatabaseConfig,
 	pool: Option<crate::database::DatabasePool>,
+	retention: Option<std::time::Duration>,
 	ready_tx: Option<oneshot::Sender<anyhow::Result<()>>>,
 }
 
@@ -187,12 +201,14 @@ impl LogStoreWorker {
 		receiver: UnboundedReceiver<LogStoreMsg>,
 		cfg: DatabaseConfig,
 		pool: Option<crate::database::DatabasePool>,
+		retention: Option<std::time::Duration>,
 		ready_tx: oneshot::Sender<anyhow::Result<()>>,
 	) -> Self {
 		Self {
 			receiver,
 			cfg,
 			pool,
+			retention,
 			ready_tx: Some(ready_tx),
 		}
 	}
@@ -243,8 +259,25 @@ impl LogStoreWorker {
 		};
 		self.notify_ready(Ok(()));
 		let mut batch = Vec::with_capacity(batch_size);
+		// Prune immediately at startup, then once per interval. `None` keeps the plain
+		// blocking receive path, so behavior is unchanged when retention is unset.
+		let mut next_prune = self.retention.map(|_| tokio::time::Instant::now());
 		loop {
-			match self.receiver.recv().await {
+			if let (Some(retention), Some(at)) = (self.retention, next_prune)
+				&& tokio::time::Instant::now() >= at
+			{
+				flush_log_store_batch(&backend, &mut batch).await;
+				prune_log_store(&backend, retention).await;
+				next_prune = Some(tokio::time::Instant::now() + LOG_STORE_PRUNE_INTERVAL);
+			}
+			let received = match next_prune {
+				Some(at) => match tokio::time::timeout_at(at, self.receiver.recv()).await {
+					Err(_elapsed) => continue,
+					Ok(msg) => msg,
+				},
+				None => self.receiver.recv().await,
+			};
+			match received {
 				Some(msg) => {
 					if process_log_store_msg(&backend, &mut batch, msg).await {
 						self.drain_available_messages(&backend, &mut batch).await;
@@ -378,6 +411,46 @@ async fn flush_log_store_batch(backend: &Backend, batch: &mut Vec<StoredRequestL
 		"flushed request log database batch"
 	);
 	batch.clear();
+}
+
+async fn prune_log_store(backend: &Backend, retention: std::time::Duration) {
+	let Ok(retention) = Duration::from_std(retention) else {
+		return;
+	};
+	let Some(before) = Utc::now().checked_sub_signed(retention) else {
+		return;
+	};
+	let start = Instant::now();
+	let mut deleted = 0u64;
+	let mut failures = 0u32;
+	loop {
+		if start.elapsed() >= LOG_STORE_PRUNE_RUN_BUDGET {
+			warn!(target: "request", deleted, %before, "request log pruning hit the run budget; will resume next cycle");
+			break;
+		}
+		match backend
+			.delete_before_batch(before, LOG_STORE_PRUNE_BATCH_SIZE)
+			.await
+		{
+			Ok(rows) => {
+				failures = 0;
+				deleted += rows;
+				if rows < LOG_STORE_PRUNE_BATCH_SIZE as u64 {
+					break;
+				}
+				tokio::time::sleep(LOG_STORE_PRUNE_BATCH_SLEEP).await;
+			},
+			Err(err) => {
+				failures += 1;
+				warn!(target: "request", ?err, failures, "failed to prune request log database");
+				if failures >= LOG_STORE_PRUNE_MAX_BATCH_FAILURES {
+					break;
+				}
+				tokio::time::sleep(LOG_STORE_PRUNE_BATCH_SLEEP).await;
+			},
+		}
+	}
+	debug!(target: "request", deleted, %before, "pruned request log database");
 }
 
 // Keep captured content in its original form until it reaches the database worker.
@@ -1072,5 +1145,106 @@ impl Backend {
 			Self::Sqlite(store) => store.tail(request).await,
 			Self::Postgres(store) => store.tail(request).await,
 		}
+	}
+
+	async fn delete_before_batch(&self, before: DateTime<Utc>, limit: i64) -> anyhow::Result<u64> {
+		match self {
+			Self::Sqlite(store) => store.delete_before_batch(before, limit).await,
+			Self::Postgres(store) => store.delete_before_batch(before, limit).await,
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use serde_json::json;
+	use sqlx::sqlite::SqlitePoolOptions;
+
+	use super::*;
+
+	fn stored_log(id: &str, completed_at: DateTime<Utc>) -> StoredRequestLog {
+		StoredRequestLog {
+			id: id.into(),
+			started_at: completed_at,
+			completed_at,
+			duration_ms: 1,
+			trace_id: None,
+			span_id: None,
+			http_status: Some(200),
+			error: None,
+			gen_ai_operation_name: None,
+			gen_ai_provider_name: None,
+			gen_ai_request_model: None,
+			gen_ai_response_model: None,
+			input_tokens: None,
+			output_tokens: None,
+			total_tokens: None,
+			cache_read_input_tokens: None,
+			cache_creation_input_tokens: None,
+			reasoning_tokens: None,
+			time_to_first_token_ms: None,
+			time_per_output_token_ms: None,
+			cost: None,
+			agentgateway_user: None,
+			agentgateway_group: None,
+			user_agent_name: None,
+			has_payload: true,
+			attributes_json: "{}".into(),
+			payload: Some(StoredRequestLogPayload {
+				request_prompt_json: Some(json!("hi")),
+				response_completion_json: None,
+			}),
+		}
+	}
+
+	#[tokio::test]
+	async fn setup_prunes_expired_logs_at_startup() -> anyhow::Result<()> {
+		// A unique shared-cache in-memory database; the test's own pool keeps it alive.
+		let url = "sqlite:file:log_store_startup_prune?mode=memory&cache=shared";
+		let pool = SqlitePoolOptions::new()
+			.max_connections(1)
+			.connect(url)
+			.await?;
+		let store = sqlite::SqliteLogStore::from_pool(pool.clone()).await?;
+		let now = Utc::now();
+		store
+			.insert_batch(&[
+				stored_log("expired", now - Duration::hours(2)),
+				stored_log("fresh", now),
+			])
+			.await?;
+
+		let cfg = crate::database::DatabaseConfig {
+			url: url.into(),
+			max_connections: None,
+		};
+		let guard = setup(&cfg, Some(std::time::Duration::from_secs(3600)))
+			.await
+			.expect("setup");
+
+		// The worker prunes at startup: the log older than the retention is deleted
+		// while the fresh one is kept.
+		let deadline = Instant::now() + std::time::Duration::from_secs(30);
+		loop {
+			let expired: i64 =
+				sqlx::query_scalar("SELECT COUNT(*) FROM request_logs WHERE id = 'expired'")
+					.fetch_one(&pool)
+					.await?;
+			if expired == 0 {
+				break;
+			}
+			assert!(
+				Instant::now() < deadline,
+				"expired log was not pruned at startup"
+			);
+			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+		}
+		let fresh: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM request_logs WHERE id = 'fresh'")
+			.fetch_one(&pool)
+			.await?;
+		assert_eq!(fresh, 1);
+
+		guard.shutdown_and_wait().await;
+		Ok(())
 	}
 }
