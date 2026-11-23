@@ -126,6 +126,86 @@ fn test_extract_beta_headers_variants() {
 	assert!(helpers::extract_beta_headers(&headers).unwrap().is_none());
 }
 
+// The betas Claude Code sends to a first-party gateway. Bedrock rejects the last three: the gateway
+// maps advanced-tool-use to Bedrock's betas and, with an allowlist, drops the other two.
+const CLAUDE_CODE_BETAS: &str = "claude-code-20250219,context-1m-2025-08-07,\
+	interleaved-thinking-2025-05-14,advanced-tool-use-2025-11-20,extended-cache-ttl-2025-04-11,\
+	prompt-caching-scope-2026-01-05";
+
+fn native_beta_header(value: &str, allowlist: Option<&[String]>) -> Option<String> {
+	let mut headers = HeaderMap::new();
+	headers.insert("anthropic-beta", value.parse().unwrap());
+	helpers::filter_native_beta_header_with(&mut headers, allowlist).unwrap();
+	assert!(headers.get_all("anthropic-beta").iter().count() <= 1);
+	headers
+		.get("anthropic-beta")
+		.map(|v| v.to_str().unwrap().to_string())
+}
+
+#[test]
+fn test_native_beta_header_allowlist() {
+	let allowlist: Vec<String> = helpers::DEFAULT_ALLOWED_BETA_HEADERS
+		.iter()
+		.map(ToString::to_string)
+		.collect();
+	assert_eq!(
+		native_beta_header(CLAUDE_CODE_BETAS, Some(&allowlist)).as_deref(),
+		Some(
+			"claude-code-20250219,context-1m-2025-08-07,interleaved-thinking-2025-05-14,\
+			 tool-search-tool-2025-10-19,tool-examples-2025-10-29"
+		)
+	);
+	// The mapped betas collapse into the Bedrock ones the client also sent.
+	assert_eq!(
+		native_beta_header(
+			"tool-search-tool-2025-10-19,advanced-tool-use-2025-11-20",
+			Some(&allowlist)
+		)
+		.as_deref(),
+		Some("tool-search-tool-2025-10-19,tool-examples-2025-10-29")
+	);
+	assert_eq!(
+		native_beta_header(
+			"oauth-2025-04-20,prompt-caching-scope-2026-01-05",
+			Some(&allowlist)
+		),
+		None
+	);
+}
+
+#[test]
+fn test_native_beta_header_passthrough() {
+	assert_eq!(
+		native_beta_header(&format!("oauth-2025-04-20,{CLAUDE_CODE_BETAS}"), None).as_deref(),
+		Some(
+			"claude-code-20250219,context-1m-2025-08-07,interleaved-thinking-2025-05-14,\
+			 tool-search-tool-2025-10-19,tool-examples-2025-10-29,extended-cache-ttl-2025-04-11,\
+			 prompt-caching-scope-2026-01-05"
+		)
+	);
+}
+
+#[test]
+fn test_converse_drops_betas_it_rejects() {
+	let mut headers = HeaderMap::new();
+	headers.insert(
+		"anthropic-beta",
+		format!("{CLAUDE_CODE_BETAS},compact-2026-09-04,thinking-display-updates-2026-08-18")
+			.parse()
+			.unwrap(),
+	);
+	assert_eq!(
+		helpers::extract_beta_headers(&headers).unwrap().unwrap(),
+		vec![
+			json!("claude-code-20250219"),
+			json!("context-1m-2025-08-07"),
+			json!("interleaved-thinking-2025-05-14"),
+			json!("tool-examples-2025-10-29"),
+			json!("thinking-display-updates-2026-08-18"),
+		]
+	);
+}
+
 #[test]
 fn test_metadata_from_header() {
 	let provider = Provider {
