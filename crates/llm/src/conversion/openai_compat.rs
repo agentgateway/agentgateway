@@ -497,6 +497,7 @@ pub mod from_responses {
 			functions: None,
 			service_tier: None,
 			web_search_options: None,
+			prompt_cache_options: None,
 		}
 	}
 }

@@ -115,7 +115,10 @@ info:
           }
         }
       }
-    ]
+    ],
+    "prompt_cache_options": {
+      "mode": "explicit"
+    }
   },
   "parsed": {
     "input_format": "Messages",

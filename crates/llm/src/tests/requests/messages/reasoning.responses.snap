@@ -41,6 +41,9 @@ info:
     "stream": false,
     "reasoning": {
       "effort": "high"
+    },
+    "prompt_cache_options": {
+      "mode": "explicit"
     }
   },
   "parsed": {

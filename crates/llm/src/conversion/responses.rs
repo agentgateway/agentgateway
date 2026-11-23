@@ -272,6 +272,19 @@ pub mod from_messages {
 			translate_message(msg, &mut input, supports_cache)?;
 		}
 
+		// Messages caches only at the breakpoints the client marks. Without explicit mode OpenAI
+		// also adds its implicit breakpoint at the end of the prompt, so every request would write
+		// its whole prompt to the cache.
+		if input
+			.iter()
+			.any(types::responses::RawInputItem::has_prompt_cache_breakpoint)
+		{
+			rest.insert(
+				"prompt_cache_options".to_string(),
+				json!({"mode": "explicit"}),
+			);
+		}
+
 		let max_output_tokens = u32::try_from(max_tokens).map_err(|_| {
 			AIError::UnsupportedConversion(strng::literal!(
 				"messages max_tokens exceeds responses max_output_tokens range"

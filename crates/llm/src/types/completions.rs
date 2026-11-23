@@ -1442,6 +1442,10 @@ pub mod typed {
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub web_search_options: Option<WebSearchOptions>,
 
+		/// Prompt caching options (`mode`: `implicit` or `explicit`). Supported for `gpt-5.6` and later.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub prompt_cache_options: Option<serde_json::Value>,
+
 		/// Deprecated in favor of `tool_choice`.
 		///
 		/// Controls which (if any) function is called by the model.
