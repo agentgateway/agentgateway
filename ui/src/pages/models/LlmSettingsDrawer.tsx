@@ -2,6 +2,7 @@ import { Server } from 'lucide-react';
 import { useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { useChangedFields } from '@/components/EditorContracts';
 import { GatewayBindingEditor, type GatewayBindingValue } from '@/components/GatewayBindingEditor';
 import { Drawer, StatusBanner } from '@/components/Primitives';
 import { ensureLlm, llmSettingsFields } from '@/config';
@@ -34,17 +35,16 @@ export function LlmSettingsDrawer(props: {
 		gateways: binding.gateways ?? [],
 		port: usesGateway ? null : binding.port
 	};
-	// The llm.settings row is replaced wholesale: carry tls through (it can't sit beside gateways)
-	// and leave out file-owned fields.
-	const originalResourceValue = settingsResource(props.llm ?? {}, props.readOnlyFields);
-	const resourceValue = settingsResource(
-		{ ...patch, tls: usesGateway ? null : props.llm?.tls },
-		props.readOnlyFields
+	// The settings are replaced as a whole: carry tls through (it can't sit beside gateways) and
+	// leave out file-owned fields. Fields the form was not used to change keep their configured value.
+	const original = settingsResource(props.llm ?? {}, props.readOnlyFields);
+	const settings = useChangedFields(
+		original,
+		settingsResource({ ...patch, tls: usesGateway ? null : props.llm?.tls }, props.readOnlyFields)
 	);
 	const bindingReadOnly = Boolean(
 		props.readOnlyFields?.has('gateways') || props.readOnlyFields?.has('port')
 	);
-	const savedPatch = props.databaseBacked ? resourceValue : patch;
 
 	return (
 		<Drawer title="Settings" onClose={props.onClose}>
@@ -52,7 +52,7 @@ export function LlmSettingsDrawer(props: {
 				className="policy-editor-stack"
 				onSubmit={event => {
 					event.preventDefault();
-					props.onSave(savedPatch);
+					props.onSave(settings);
 				}}
 			>
 				<PolicySection
@@ -83,15 +83,9 @@ export function LlmSettingsDrawer(props: {
 					saveLabel="Save settings"
 					saving={props.saving}
 					saveDisabled={props.databaseBacked && bindingReadOnly}
-					onSave={() => props.onSave(savedPatch)}
-					resourceDiff={
-						props.databaseBacked
-							? { original: originalResourceValue, modified: resourceValue }
-							: undefined
-					}
-					applyDiff={next => {
-						Object.assign(ensureLlm(next), patch);
-					}}
+					onSave={() => props.onSave(settings)}
+					resourceDiff={props.databaseBacked ? { original, modified: settings } : undefined}
+					applyDiff={next => applyLlmSettings(next, settings, props.readOnlyFields)}
 				/>
 			</form>
 			{props.saveError ? (
@@ -101,6 +95,20 @@ export function LlmSettingsDrawer(props: {
 			) : null}
 		</Drawer>
 	);
+}
+
+/** Replaces the LLM settings in `config`, leaving file-owned fields as they are. */
+export function applyLlmSettings(
+	config: GatewayConfig,
+	settings: LlmSettingsPatch,
+	readOnlyFields?: ReadonlySet<string>
+) {
+	const llm = ensureLlm(config) as Record<string, unknown>;
+	for (const field of llmSettingsFields) {
+		if (readOnlyFields?.has(field)) continue;
+		if (field in settings) llm[field] = settings[field];
+		else delete llm[field];
+	}
 }
 
 function settingsResource(

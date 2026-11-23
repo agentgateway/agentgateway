@@ -588,3 +588,18 @@ impl OutputMessage {
 pub fn serialize_str<T: Serialize>(value: &T) -> Option<Strng> {
 	serde_json::to_value(value).ok()?.as_str().map(Into::into)
 }
+
+pub(crate) fn finish_reasons<S: AsRef<str>>(
+	reasons: impl IntoIterator<Item = Option<S>>,
+) -> Option<Vec<Strng>> {
+	let reasons: Vec<Option<S>> = reasons.into_iter().collect();
+	reasons.iter().any(Option::is_some).then(|| {
+		reasons
+			.iter()
+			.map(|r| match r {
+				Some(r) => strng::new(r),
+				None => strng::literal!("error"),
+			})
+			.collect()
+	})
+}

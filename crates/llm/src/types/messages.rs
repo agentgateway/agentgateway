@@ -963,6 +963,9 @@ impl ResponseType for Response {
 			pages: None,
 			audio_seconds: None,
 			provider_model: Some(strng::new(&self.model)),
+			served_model: None,
+			response_id: Some(strng::new(&self.id)),
+			finish_reasons: super::finish_reasons([self.stop_reason.as_deref()]),
 			count_tokens: None,
 			reasoning_tokens: None,
 			cache_creation_input_tokens: usage.cache_creation_input_tokens,
@@ -1868,6 +1871,12 @@ pub mod typed {
 				),
 				usage_lines: super::usage_lines(&self.usage.iterations),
 				provider_model: Some(agent_core::strng::new(&self.model)),
+				served_model: None,
+				response_id: Some(agent_core::strng::new(&self.id)),
+				finish_reasons: crate::types::finish_reasons([self
+					.stop_reason
+					.as_ref()
+					.and_then(crate::types::serialize_str)]),
 				count_tokens: None,
 				completion: if log_content.completion {
 					Some(

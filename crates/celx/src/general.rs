@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ::cel::extractors::{Argument, This};
-use ::cel::objects::{Key, MapValue, StringValue, ValueType};
+use ::cel::objects::{Key, KeyRef, ListValue, MapValue, StringValue, ValueType};
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
 use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
@@ -29,6 +29,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("mapValues", map_values);
 	ctx.add_function("filterKeys", filter_keys);
 	ctx.add_function("merge", map_merge);
+	ctx.add_function("recurse", recurse);
 	ctx.add_function("variables", variables);
 	ctx.add_function("random", random);
 	ctx.add_function("default", default);
@@ -319,6 +320,40 @@ fn must_map(v: Value) -> Result<MapValue, cel::ExecutionError> {
 		Value::Map(map) => Ok(map),
 		_ => Err(v.error_expected_type(ValueType::Map)),
 	}
+}
+
+/// Returns the receiver followed by each map reached by repeatedly following `field`.
+fn recurse<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	field: Argument,
+) -> ResolveResult<'a> {
+	let mut current: Value<'a> = this.load_unmaterialized(ftx)?;
+	let field: StringValue = field.load_value(ftx)?;
+	let key = KeyRef::String(field.clone());
+	let mut chain: Vec<Value<'a>> = Vec::new();
+	loop {
+		let next = match &current {
+			Value::Map(m) => m.get(&key).cloned(),
+			// Materialize only the last dynamic node, to check it is a map.
+			Value::Dynamic(d) => match d.field(field.as_ref()) {
+				Some(v) => Some(v),
+				None if matches!(d.materialize(), Value::Map(_)) => None,
+				None => return Err(not_map(&current)),
+			},
+			_ => return Err(not_map(&current)),
+		};
+		chain.push(current);
+		match next {
+			Some(v) => current = v,
+			None => break,
+		}
+	}
+	Ok(Value::List(ListValue::PartiallyOwned(chain.into())))
+}
+
+fn not_map(v: &Value) -> cel::ExecutionError {
+	v.always_materialize().error_expected_type(ValueType::Map)
 }
 
 fn fail<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {

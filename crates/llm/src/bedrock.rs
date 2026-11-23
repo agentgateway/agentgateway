@@ -31,10 +31,10 @@ pub enum BedrockEndpoint {
 // Mantle signs SigV4 under this name instead of the default "bedrock".
 const MANTLE_SIGNING_SERVICE_NAME: &str = "bedrock-mantle";
 
-// Runtime chat uses Converse unless AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE=false, in which case it
-// uses the native OpenAI/Anthropic APIs, like Mantle. Temporary until native becomes the default.
+// Runtime chat uses the native OpenAI/Anthropic APIs, like Mantle, falling back to Converse where
+// they fall short. AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE=true uses Converse for all Runtime chat.
 static RUNTIME_CONVERSE: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
-	std::env::var("AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE").map_or(true, |v| v != "false")
+	std::env::var("AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE").is_ok_and(|v| v == "true")
 });
 
 #[apply(schema!)]
@@ -480,7 +480,7 @@ mod tests {
 				p.native_chat(ep)
 			)
 			.as_str(),
-			"/model/anthropic.claude-3-5-haiku-20241022-v1:0/converse"
+			"/anthropic/v1/messages"
 		);
 	}
 

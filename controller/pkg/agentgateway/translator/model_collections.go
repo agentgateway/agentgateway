@@ -1001,6 +1001,8 @@ func modelProviderPreset(provider agentgateway.ModelProvider) (api.AIBackend_Pro
 		return api.AIBackend_PROVIDER_PRESET_TYPESAFE, true
 	case agentgateway.ModelProviderNebius:
 		return api.AIBackend_PROVIDER_PRESET_NEBIUS, true
+	case agentgateway.ModelProviderCoreWeave:
+		return api.AIBackend_PROVIDER_PRESET_COREWEAVE, true
 	default:
 		return api.AIBackend_PROVIDER_PRESET_UNSPECIFIED, false
 	}

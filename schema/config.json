@@ -182,6 +182,17 @@
             }
           ]
         },
+        "fileAccess": {
+          "description": "Restricts which resource files configuration API validation and xDS backend TLS may use.\nThe longest matching prefix wins. A tie goes to `deny`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileAccess"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caAddress": {
           "description": "Address of the Certificate Authority used to issue SPIFFE certificates.",
           "type": [
@@ -1037,6 +1048,29 @@
           "const": "readOnly"
         }
       ]
+    },
+    "FileAccess": {
+      "description": "Restricts which resource files configuration API validation and xDS backend TLS may use.\n\nThe longest matching prefix wins. A tie goes to `deny`.",
+      "type": "object",
+      "properties": {
+        "allow": {
+          "description": "Absolute path prefixes to allow. An empty list allows any path that passes the deny rules.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "deny": {
+          "description": "Absolute path prefixes to deny alongside the default prefixes `/dev`, `/proc`, and `/sys`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
     },
     "RawSpiffeConfig": {
       "type": "object",
@@ -2322,7 +2356,7 @@
           ]
         },
         "localRateLimit": {
-          "description": "Local rate limits for incoming requests.",
+          "description": "Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalRateLimitPolicy"
@@ -3512,8 +3546,15 @@
           "properties": {
             "key": {
               "$ref": "#/$defs/FileOrInline"
+            },
+            "credentials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthCredential"
+              }
             }
           },
+          "additionalProperties": false,
           "required": [
             "key"
           ]
@@ -3528,6 +3569,7 @@
               }
             }
           },
+          "unevaluatedProperties": false,
           "oneOf": [
             {
               "description": "Forward the validated incoming JWT to the backend.",
@@ -3696,6 +3738,7 @@
               }
             }
           },
+          "additionalProperties": false,
           "required": [
             "credentials"
           ]
@@ -3722,6 +3765,55 @@
         {
           "type": "string"
         }
+      ]
+    },
+    "BackendAuthCredential": {
+      "description": "An additional credential to inject on the backend request.",
+      "type": "object",
+      "properties": {
+        "location": {
+          "description": "Where the credential is inserted on the backend request.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "key": {
+          "description": "Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against the request to produce the credential value.\nIf it fails or does not return a string, the credential location is cleared instead.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gcp": {
+          "description": "Fetch a Google Cloud access or ID token.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GcpAuth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "location"
       ]
     },
     "AuthorizationLocation": {
@@ -4863,55 +4955,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "BackendAuthCredential": {
-      "description": "An additional credential to inject on the backend request.",
-      "type": "object",
-      "properties": {
-        "location": {
-          "description": "Where the credential is inserted on the backend request.",
-          "$ref": "#/$defs/AuthorizationLocation"
-        },
-        "key": {
-          "description": "Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FileOrInline"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "expression": {
-          "description": "CEL expression evaluated against the request to produce the credential value.\nIf it fails or does not return a string, the credential location is cleared instead.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Expression"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "gcp": {
-          "description": "Fetch a Google Cloud access or ID token.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GcpAuth"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "location"
-      ]
     },
     "BackendAuth": {
       "oneOf": [
@@ -6112,7 +6155,7 @@
           "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {
-          "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",
+          "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth).\nKey auth without a location uses the `Ocp-Apim-Subscription-Key` header.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -12952,7 +12995,8 @@
         "meta",
         "perplexity",
         "typesafe",
-        "nebius"
+        "nebius",
+        "coreweave"
       ]
     },
     "LocalLLMProviderDefaults": {
@@ -13806,7 +13850,7 @@
           ]
         },
         "localRateLimit": {
-          "description": "Local rate limits for incoming requests.",
+          "description": "Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/RateLimitSpec"

@@ -33,5 +33,9 @@ data: {"type":"message_stop"}
   "output_tokens": 233,
   "total_tokens": 246,
   "cached_input_tokens": 0,
-  "provider_model": "zai-glm-5-3"
+  "provider_model": "zai-glm-5-3",
+  "response_id": "80db9e9b223d4508bf239cb67b524ce4",
+  "finish_reasons": [
+    "stop"
+  ]
 }

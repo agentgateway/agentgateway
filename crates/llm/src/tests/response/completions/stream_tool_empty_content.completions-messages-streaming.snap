@@ -30,6 +30,10 @@ data: {"type":"message_stop"}
   "output_tokens": 8,
   "total_tokens": 20,
   "provider_model": "claude-opus-4-8",
+  "response_id": "chatcmpl-tool-empty-content",
+  "finish_reasons": [
+    "tool_calls"
+  ],
   "output_messages": [
     {
       "role": "assistant",

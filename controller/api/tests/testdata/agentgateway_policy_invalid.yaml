@@ -2042,3 +2042,257 @@ spec:
           policies:
             auth:
               gcp: {}
+---
+_err: 'kind File requires file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-kind-without-file
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+
+---
+_err: 'kind File requires file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-kind-with-name
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        name: client-cert
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+
+---
+_err: 'requires name and no file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-secret-with-file
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - name: client-cert
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+
+---
+_err: 'key'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-missing-key
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        file:
+          cert: /etc/certs/tls.crt
+---
+_err: 'use file.root instead'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-with-ca-refs
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+      caCertificateRefs:
+      - name: ca-bundle
+---
+_err: 'use file.root instead'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-root-with-ca-refs
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+          root: /etc/certs/ca.crt
+      caCertificateRefs:
+      - name: ca-bundle
+---
+_err: at least one of analyzeText or detectJailbreak must be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-no-checks
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+---
+_err: azureContentSafety.detectJailbreak is only supported on request guards
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-response-jailbreak
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        response:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            detectJailbreak: {}
+---
+_err: exactly one
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-and-model-armor
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            analyzeText: {}
+          googleModelArmor:
+            templateId: template
+            projectId: project
+---
+_err: location may only be set for key or secretRef auth
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-azure-location
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            analyzeText: {}
+          policies:
+            auth:
+              azure: {}
+              location:
+                header:
+                  name: Ocp-Apim-Subscription-Key
+---
+_err: should be less than or equal to 6
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-severity-too-high
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            analyzeText:
+              severityThreshold: 7
+---
+_err: azureContentSafety policies.auth supports only key, secretRef, or azure
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-content-safety-gcp-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            analyzeText: {}
+          policies:
+            auth:
+              gcp: {}
+---
+_err: googleModelArmor policies.auth supports only gcp
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: google-model-armor-guard-level-azure-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - googleModelArmor:
+            templateId: template
+            projectId: project
+          policies:
+            auth:
+              azure: {}

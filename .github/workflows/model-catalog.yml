@@ -65,14 +65,20 @@ jobs:
       run: |
         npx -y gron@4.4.0 < "$RUNNER_TEMP/model-catalog-old.json" > "$RUNNER_TEMP/model-catalog-old.gron"
         npx -y gron@4.4.0 < "$RUNNER_TEMP/model-catalog-new.json" > "$RUNNER_TEMP/model-catalog-new.gron"
+        body="$RUNNER_TEMP/model-catalog-pr.md"
+        summary='Automated refresh of the checked-in model catalog from models.dev.'
         {
-          echo 'Automated refresh of the checked-in model catalog from models.dev.'
+          echo "$summary"
           echo
           echo '```diff'
           diff -u --label a/catalog/model-catalog.json --label b/catalog/model-catalog.json \
             "$RUNNER_TEMP/model-catalog-old.gron" "$RUNNER_TEMP/model-catalog-new.gron" || [ "$?" -eq 1 ]
           echo '```'
-        } > "$RUNNER_TEMP/model-catalog-pr.md"
+        } > "$body"
+        if [ "$(wc -c < "$body")" -gt 65536 ]; then
+          printf '%s\n\n%s\n' "$summary" \
+            'The diff exceeds the pull request description limit. See the **Files changed** tab.' > "$body"
+        fi
 
     - name: Commit and open or update pull request
       if: steps.changes.outputs.changed == 'true'

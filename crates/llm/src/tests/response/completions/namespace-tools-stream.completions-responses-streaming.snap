@@ -57,6 +57,10 @@ data: {"type":"response.completed","sequence_number":17,"response":{"created_at"
 
 {
   "provider_model": "input-model",
+  "response_id": "chatcmpl-namespaces",
+  "finish_reasons": [
+    "tool_calls"
+  ],
   "completion": [
     ""
   ],

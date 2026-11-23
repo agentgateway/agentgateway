@@ -459,6 +459,13 @@ pub(crate) fn to_otel(v: &ValueBag) -> opentelemetry::Value {
 		opentelemetry::Value::I64(b)
 	} else if let Some(b) = v.to_f64() {
 		opentelemetry::Value::F64(b)
+	} else if let Some(seq) = v.to_str_seq::<Vec<Option<std::borrow::Cow<str>>>>()
+		&& let Some(seq) = seq
+			.into_iter()
+			.map(|s| s.map(|s| s.into_owned().into()))
+			.collect::<Option<Vec<_>>>()
+	{
+		opentelemetry::Value::Array(opentelemetry::Array::String(seq))
 	} else {
 		opentelemetry::Value::String(v.to_string().into())
 	}
@@ -808,6 +815,18 @@ mod tests {
 	};
 	use crate::telemetry::metrics::Metrics;
 	use crate::transport::stream::TCPConnectionInfo;
+
+	#[test]
+	fn to_otel_exports_string_sequences_as_arrays() {
+		let reasons = vec![strng::new("stop"), strng::new("length")];
+		assert_eq!(
+			to_otel(&ValueBag::capture_serde1(&reasons)),
+			opentelemetry::Value::Array(opentelemetry::Array::String(vec![
+				"stop".into(),
+				"length".into()
+			]))
+		);
+	}
 
 	#[test]
 	fn traceparent_parses_valid_and_rejects_malformed() {

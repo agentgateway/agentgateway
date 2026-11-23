@@ -17,6 +17,7 @@ use tokio::time::{Instant, sleep_until};
 use tracing::{trace, warn};
 
 use crate::client::Client;
+use crate::{apply, schema};
 
 const JWKS_TTL: Duration = Duration::from_mins(15);
 const OPENAPI_TTL: Duration = Duration::from_hours(24);
@@ -46,6 +47,66 @@ impl ResourceKind {
 pub enum ResourceRef {
 	File(PathBuf),
 	Http { url: http::Uri, kind: ResourceKind },
+}
+
+/// Restricts which resource files configuration API validation and xDS backend TLS may use.
+///
+/// The longest matching prefix wins. A tie goes to `deny`.
+#[apply(schema!)]
+#[derive(Default)]
+pub struct FileAccess {
+	/// Absolute path prefixes to allow. An empty list allows any path that passes the deny rules.
+	#[serde(default)]
+	pub allow: Vec<PathBuf>,
+	/// Absolute path prefixes to deny alongside the default prefixes `/dev`, `/proc`, and `/sys`.
+	#[serde(default)]
+	pub deny: Vec<PathBuf>,
+}
+
+impl FileAccess {
+	const BUILTIN_DENY: [&str; 3] = ["/dev", "/proc", "/sys"];
+
+	/// Checks the requested path and its resolved target against the prefix rules,
+	/// and that the target is a regular file.
+	pub fn check(&self, path: &Path) -> anyhow::Result<()> {
+		let resolved = fs_err::canonicalize(path)?;
+		let allowed = self.allowed(path, |prefix| prefix.to_path_buf())
+			&& self.allowed(&resolved, |prefix| {
+				fs_err::canonicalize(prefix).unwrap_or_else(|_| prefix.to_path_buf())
+			});
+		if !allowed {
+			anyhow::bail!(
+				"file {} is not allowed by config.fileAccess",
+				path.display()
+			);
+		}
+		if !fs_err::metadata(&resolved)?.is_file() {
+			anyhow::bail!("file {} is not a regular file", path.display());
+		}
+		Ok(())
+	}
+
+	fn allowed(&self, path: &Path, prefix: impl Fn(&Path) -> PathBuf) -> bool {
+		let longest = |prefixes: &mut dyn Iterator<Item = &Path>| {
+			prefixes
+				.map(&prefix)
+				.filter(|p| path.starts_with(p))
+				.map(|p| p.components().count())
+				.max()
+		};
+		let deny = longest(
+			&mut Self::BUILTIN_DENY
+				.iter()
+				.map(Path::new)
+				.chain(self.deny.iter().map(PathBuf::as_path)),
+		);
+		match (longest(&mut self.allow.iter().map(PathBuf::as_path)), deny) {
+			(Some(allow), Some(deny)) => allow > deny,
+			(Some(_), None) => true,
+			(None, Some(_)) => false,
+			(None, None) => self.allow.is_empty(),
+		}
+	}
 }
 
 #[derive(Clone, Debug, Default)]
@@ -81,7 +142,7 @@ pub struct ResourceFetchScope<'a> {
 #[derive(Clone, Debug)]
 enum ResourceFetcherMode {
 	Managed(ResourceManager),
-	CachedOrDirect(ResourceManager),
+	CachedOrDirect(ResourceManager, FileAccess),
 	Direct(Box<Client>),
 	FilesOnly,
 }
@@ -96,9 +157,10 @@ impl ResourceFetcher {
 	}
 
 	/// Reads from the manager cache when present, otherwise fetches once without retaining or watching.
-	pub fn cached_or_direct(manager: ResourceManager) -> Self {
+	/// Files must pass `file_access`, cached or not.
+	pub fn cached_or_direct(manager: ResourceManager, file_access: FileAccess) -> Self {
 		Self {
-			mode: ResourceFetcherMode::CachedOrDirect(manager),
+			mode: ResourceFetcherMode::CachedOrDirect(manager, file_access),
 			tracking: Default::default(),
 		}
 	}
@@ -127,8 +189,10 @@ impl ResourceFetcher {
 				self.track_resource(normalized.clone());
 				manager.fetch_and_wait_normalized(normalized).await
 			},
-			ResourceFetcherMode::CachedOrDirect(manager) => {
-				manager.fetch_cached_or_direct_normalized(normalized).await
+			ResourceFetcherMode::CachedOrDirect(manager, file_access) => {
+				manager
+					.fetch_cached_or_direct_normalized(normalized, file_access)
+					.await
 			},
 			ResourceFetcherMode::Direct(client) => fetch_direct(client.as_ref(), &normalized)
 				.await
@@ -403,7 +467,11 @@ impl ResourceManager {
 	async fn fetch_cached_or_direct_normalized(
 		&self,
 		resource: ResourceRef,
+		file_access: &FileAccess,
 	) -> anyhow::Result<Bytes> {
+		if let ResourceRef::File(path) = &resource {
+			file_access.check(path)?;
+		}
 		if let Some(content) = self.cached(&resource) {
 			return Ok(content);
 		}
@@ -830,6 +898,27 @@ mod tests {
 	use http::header::CACHE_CONTROL;
 
 	use super::*;
+
+	#[test]
+	fn file_access_longest_prefix_wins() {
+		let allowed = |fa: &FileAccess, path: &str| fa.allowed(Path::new(path), |p| p.to_path_buf());
+
+		let default = FileAccess::default();
+		assert!(allowed(&default, "/etc/certs/tls.crt"));
+		assert!(!allowed(&default, "/dev/fd/2"));
+		assert!(!allowed(&default, "/proc/self/environ"));
+		assert!(allowed(&default, "/developer/key"));
+
+		let restricted = FileAccess {
+			allow: vec!["/etc/certs".into(), "/dev/shm/certs".into()],
+			deny: vec!["/etc/certs/private".into()],
+		};
+		assert!(allowed(&restricted, "/etc/certs/tls.crt"));
+		assert!(allowed(&restricted, "/dev/shm/certs/tls.crt"));
+		assert!(!allowed(&restricted, "/dev/shm/other"));
+		assert!(!allowed(&restricted, "/etc/certs/private/tls.key"));
+		assert!(!allowed(&restricted, "/etc/passwd"));
+	}
 
 	fn test_client() -> Client {
 		Client::new(

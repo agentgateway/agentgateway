@@ -20,6 +20,10 @@ data:{"type":"message_stop"}
   "cache_creation_input_tokens": 0,
   "cached_input_tokens": 30464,
   "provider_model": "glm-5.2",
+  "response_id": "msg",
+  "finish_reasons": [
+    "end_turn"
+  ],
   "completion": [
     ""
   ]

@@ -51,12 +51,25 @@ type client struct {
 type resource struct {
 	Kind      string          `json:"kind" yaml:"kind"`
 	ID        string          `json:"id,omitempty" yaml:"id,omitempty"`
+	UID       string          `json:"uid,omitempty" yaml:"uid,omitempty"`
 	Value     json.RawMessage `json:"value" yaml:"value"`
+	Source    string          `json:"source,omitempty" yaml:"source,omitempty"`
 	Revision  *int64          `json:"revision,omitempty" yaml:"revision,omitempty"`
 	CreatedAt string          `json:"createdAt,omitempty" yaml:"createdAt,omitempty"`
 	UpdatedAt string          `json:"updatedAt,omitempty" yaml:"updatedAt,omitempty"`
 	// Result is set on write responses: created, updated, or unchanged.
 	Result string `json:"result,omitempty" yaml:"result,omitempty"`
+}
+
+func (r resource) configSource() string {
+	if r.Source != "" {
+		return r.Source
+	}
+	// Older gateways only include revisions on database resources.
+	if r.Revision != nil {
+		return "database"
+	}
+	return "file"
 }
 
 type resourceList struct {
@@ -134,7 +147,7 @@ authenticate with a kubectl credential plugin, using the kubeconfig exec schema:
 }
 
 func getCommand(c *client) *cobra.Command {
-	var output string
+	var output, source string
 	var noMetadata bool
 	cmd := &cobra.Command{
 		Use:          "get KIND [NAME]",
@@ -155,6 +168,11 @@ func getCommand(c *client) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			switch source {
+			case "", "file", "database":
+			default:
+				return fmt.Errorf("unsupported source %q, expected file or database", source)
+			}
 			var result resourceList
 			path := "/api/config/resources"
 			if kind != "all" {
@@ -162,6 +180,14 @@ func getCommand(c *client) *cobra.Command {
 			}
 			if err := c.do(cmd.Context(), http.MethodGet, path, nil, &result); err != nil {
 				return err
+			}
+			for i := range result.Resources {
+				result.Resources[i].Source = result.Resources[i].configSource()
+			}
+			if source != "" {
+				result.Resources = slices.DeleteFunc(result.Resources, func(r resource) bool {
+					return r.Source != source
+				})
 			}
 			if len(args) == 2 {
 				result.Resources = filterResources(result.Resources, args[1])
@@ -174,6 +200,8 @@ func getCommand(c *client) *cobra.Command {
 					if !identifiedByID(result.Resources[i].Kind) {
 						result.Resources[i].ID = ""
 					}
+					result.Resources[i].Source = ""
+					result.Resources[i].UID = ""
 					result.Resources[i].Revision = nil
 					result.Resources[i].CreatedAt = ""
 					result.Resources[i].UpdatedAt = ""
@@ -183,8 +211,10 @@ func getCommand(c *client) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&output, "output", "o", "table", "Output format: table, yaml, or json")
-	cmd.Flags().BoolVarP(&noMetadata, "no-metadata", "n", false, "Omit server-managed fields for use with apply")
+	cmd.Flags().StringVar(&source, "source", "", "Filter by resource source: file or database (default: all)")
+	cmd.Flags().BoolVarP(&noMetadata, "no-metadata", "n", false, "Omit server-managed fields for use with apply. In hybrid mode, also use --source database when exporting for apply.")
 	_ = cmd.RegisterFlagCompletionFunc("output", cobra.FixedCompletions([]string{"table", "yaml", "json"}, cobra.ShellCompDirectiveNoFileComp))
+	_ = cmd.RegisterFlagCompletionFunc("source", cobra.FixedCompletions([]string{"file", "database"}, cobra.ShellCompDirectiveNoFileComp))
 	return cmd
 }
 
@@ -298,6 +328,19 @@ func deleteCommand(c *client) *cobra.Command {
 			var result resourceList
 			if err := c.do(cmd.Context(), http.MethodGet, "/api/config/resources/"+url.PathEscape(kind), nil, &result); err != nil {
 				return err
+			}
+			var runtime struct {
+				UI struct {
+					ConfigStoreMode string `json:"configStoreMode"`
+				} `json:"ui"`
+			}
+			if err := c.do(cmd.Context(), http.MethodGet, "/api/runtime", nil, &runtime); err != nil {
+				return err
+			}
+			if runtime.UI.ConfigStoreMode == "hybrid" {
+				result.Resources = slices.DeleteFunc(result.Resources, func(r resource) bool {
+					return r.configSource() != "database"
+				})
 			}
 			matches := filterResources(result.Resources, args[1])
 			if len(matches) == 0 {
@@ -443,9 +486,13 @@ func printResources(w io.Writer, result resourceList, output string) error {
 		for _, r := range result.Resources {
 			allModels = allModels && r.Kind == "llm.model"
 		}
+		header := "KIND\tNAME\tID\tSOURCE"
 		if allModels {
-			fmt.Fprintln(tw, "NAME\tPROVIDER\tMODEL\tID")
-			for _, r := range result.Resources {
+			header = "NAME\tPROVIDER\tMODEL\tID\tSOURCE"
+		}
+		fmt.Fprintln(tw, header)
+		for _, r := range result.Resources {
+			if allModels {
 				var value struct {
 					Provider any `json:"provider"`
 					Params   struct {
@@ -461,12 +508,9 @@ func printResources(w io.Writer, result resourceList, output string) error {
 				if model == "" {
 					model = "<incoming>"
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", resourceName(r), provider, model, r.ID)
-			}
-		} else {
-			fmt.Fprintln(tw, "KIND\tNAME\tID")
-			for _, r := range result.Resources {
-				fmt.Fprintf(tw, "%s\t%s\t%s\n", r.Kind, resourceName(r), r.ID)
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", resourceName(r), provider, model, r.ID, r.Source)
+			} else {
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.Kind, resourceName(r), r.ID, r.Source)
 			}
 		}
 		return tw.Flush()

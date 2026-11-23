@@ -71,6 +71,9 @@
 |`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`, `readOnly`.|
+|`config.fileAccess`|object|Restricts which resource files configuration API validation and xDS backend TLS may use.<br>The longest matching prefix wins. A tie goes to `deny`.|
+|`config.fileAccess.allow`|[]string|Absolute path prefixes to allow. An empty list allows any path that passes the deny rules.|
+|`config.fileAccess.deny`|[]string|Absolute path prefixes to deny alongside the default prefixes `/dev`, `/proc`, and `/sys`.|
 |`config.caAddress`|string|Address of the Certificate Authority used to issue SPIFFE certificates.|
 |`config.caAuthToken`|string|Authentication token for communicating with the Certificate Authority.|
 |`config.xdsAddress`|string|Address of the xDS control plane used for dynamic configuration.|
@@ -346,7 +349,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`binds[].listeners[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`binds[].listeners[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -1913,7 +1916,7 @@
 |`policies[].policy.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`policies[].policy.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`policies[].policy.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`policies[].policy.localRateLimit`|object|Local rate limits for incoming requests.|
+|`policies[].policy.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`policies[].policy.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`policies[].policy.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -3056,7 +3059,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routeGroups[].routes[].policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`routeGroups[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`routeGroups[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -4690,7 +4693,7 @@
 |`routes[].policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routes[].policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`routes[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`routes[].policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routes[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -6185,7 +6188,7 @@
 |`llm.policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`llm.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails`|[`<Guardrails>`](#guardrails)|Guardrails to apply to every configured model.|
-|`llm.policies.localRateLimit`|[]object|Local rate limits for incoming requests.|
+|`llm.policies.localRateLimit`|[]object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`llm.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`llm.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
@@ -6419,7 +6422,7 @@
 |`mcp.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`mcp.policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`mcp.policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`mcp.policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`mcp.policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`mcp.policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -6948,6 +6951,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<BackendPolicies>.backendAuth.key`|object||
 |`<BackendPolicies>.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<BackendPolicies>.backendAuth.credentials`|[]object||
+|`<BackendPolicies>.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<BackendPolicies>.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<BackendPolicies>.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<BackendPolicies>.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<BackendPolicies>.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<BackendPolicies>.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<BackendPolicies>.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<BackendPolicies>.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<BackendPolicies>.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<BackendPolicies>.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<BackendPolicies>.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<BackendPolicies>.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<BackendPolicies>.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<BackendPolicies>.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -7157,25 +7179,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<BackendPolicies>.backendAuth.credentials`|[]object||
-|`<BackendPolicies>.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<BackendPolicies>.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<BackendPolicies>.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<BackendPolicies>.http`|object|HTTP protocol settings for this backend.|
 |`<BackendPolicies>.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<BackendPolicies>.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7203,6 +7206,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |-|-|-|
 |`<BackendAuth>.key`|object||
 |`<BackendAuth>.key.file`|string|Path to a file on disk to load the value from.|
+|`<BackendAuth>.credentials`|[]object||
+|`<BackendAuth>.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<BackendAuth>.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<BackendAuth>.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<BackendAuth>.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<BackendAuth>.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<BackendAuth>.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<BackendAuth>.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<BackendAuth>.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<BackendAuth>.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<BackendAuth>.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<BackendAuth>.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<BackendAuth>.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<BackendAuth>.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<BackendAuth>.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<BackendAuth>.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<BackendAuth>.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<BackendAuth>.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<BackendAuth>.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -7565,25 +7587,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<BackendAuth>.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<BackendAuth>.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<BackendAuth>.credentials`|[]object||
-|`<BackendAuth>.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<BackendAuth>.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<BackendAuth>.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<BackendAuth>.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendAuth>.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendAuth>.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendAuth>.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<BackendAuth>.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendAuth>.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<BackendAuth>.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<BackendAuth>.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<BackendAuth>.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<BackendAuth>.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<BackendAuth>.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<BackendAuth>.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<BackendAuth>.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 
 ### `<Guardrails>`
 
@@ -7637,6 +7640,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -7846,25 +7868,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7931,6 +7934,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -8140,25 +8162,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8219,6 +8222,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -8428,25 +8450,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8507,6 +8510,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -8716,25 +8738,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8759,7 +8762,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`<Guardrails>.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`<Guardrails>.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth).<br>Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.|
 |`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -8793,6 +8796,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -9002,25 +9024,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9103,6 +9106,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key`|object||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -9312,25 +9334,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9399,6 +9402,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -9608,25 +9630,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9687,6 +9690,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -9896,25 +9918,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9939,7 +9942,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`<Guardrails>.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`<Guardrails>.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth).<br>Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.|
 |`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -9973,6 +9976,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials`|[]object||
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
@@ -10182,25 +10204,6 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
 |`<Guardrails>.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|

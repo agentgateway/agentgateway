@@ -62,6 +62,10 @@ info:
     "reasoning_tokens": 0,
     "cached_input_tokens": 0,
     "provider_model": "input-model",
+    "response_id": "chatcmpl-truncated-tool-call",
+    "finish_reasons": [
+      "length"
+    ],
     "output_messages": [
       {
         "role": "assistant",

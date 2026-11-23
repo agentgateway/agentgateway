@@ -99,10 +99,14 @@ pub mod from_messages {
 				.and_then(|d| d.reasoning_tokens),
 			..Default::default()
 		});
+		let id = Some(strng::new(&resp.id));
+		let finish_reasons = resp.finish_reasons();
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
+		Ok(Box::new(super::super::ProviderResponse {
 			response: anthropic,
-			provider_usage,
+			usage: provider_usage,
+			id,
+			finish_reasons,
 		}))
 	}
 
@@ -589,7 +593,10 @@ pub mod from_messages {
 							},
 						);
 
-						log.update(|r| r.response.provider_model = Some(strng::new(&f.model)));
+						log.update(|r| {
+							r.response.provider_model = Some(strng::new(&f.model));
+							r.response.response_id = Some(strng::new(&f.id));
+						});
 					}
 
 					if let Some(usage) = f.usage {
@@ -697,6 +704,12 @@ pub mod from_messages {
 						}
 
 						if let Some(finish_reason) = &choice.finish_reason {
+							if let Some(reason) = crate::types::serialize_str(finish_reason) {
+								log.update(|r| {
+									r.response
+										.set_finish_reason(choice.index as usize, reason.clone())
+								});
+							}
 							let mut stop_reason = match finish_reason {
 								completions::FinishReason::Stop => messages::StopReason::EndTurn,
 								completions::FinishReason::Length => messages::StopReason::MaxTokens,
@@ -1365,6 +1378,18 @@ pub fn passthrough_stream(
 						{
 							finish_reason = crate::types::serialize_str(reason);
 						}
+						for choice in &f.choices {
+							if let Some(reason) = choice
+								.finish_reason
+								.as_ref()
+								.and_then(crate::types::serialize_str)
+							{
+								log.update(|r| {
+									r.response
+										.set_finish_reason(choice.index as usize, reason.clone())
+								});
+							}
+						}
 						if let Some(c) = completion.as_mut()
 							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
 						{
@@ -1403,6 +1428,7 @@ pub fn passthrough_stream(
 							seen_provider = true;
 							log.update(|r| {
 								r.response.provider_model = Some(strng::new(&f.model));
+								r.response.response_id = Some(strng::new(&f.id));
 								r.response.service_tier = f.service_tier.as_deref().map(Into::into);
 							});
 						}

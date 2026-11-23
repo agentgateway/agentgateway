@@ -57,6 +57,10 @@ info:
     "output_tokens": 23,
     "total_tokens": 40,
     "reasoning_tokens": 12,
-    "provider_model": "qwen3"
+    "provider_model": "qwen3",
+    "response_id": "chatcmpl-C3kBOLGARFj2WJrm5MRyuTiK4u6eG",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

@@ -71,6 +71,10 @@ info:
     "total_tokens": 40,
     "reasoning_tokens": 0,
     "cached_input_tokens": 0,
-    "provider_model": "input-model"
+    "provider_model": "input-model",
+    "response_id": "chatcmpl-C3kBOLGARFj2WJrm5MRyuTiK4u6eF",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

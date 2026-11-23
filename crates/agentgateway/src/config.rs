@@ -20,7 +20,7 @@ use crate::{
 	XDSConfig, cel, client, serdes, telemetry, types,
 };
 
-const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey["agentgateway.dev/owner"], apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
+const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(jwt.email, jwt.sub, apiKey["agentgateway.dev/owner"], apiKey.user, apiKey.owner, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
 const DEFAULT_UI_GROUP_ATTRIBUTE: &str = r#"coalesce(apiKey.group, jwt.groups[0], null)"#;
 
 #[derive(Default)]
@@ -652,6 +652,7 @@ pub fn parse_config(
 		},
 		database,
 		storage,
+		file_access: raw.file_access.clone().unwrap_or_default(),
 		sensitive_headers,
 		session_encoder,
 		session_key_unset,

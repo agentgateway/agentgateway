@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 
 import type { McpSettingsResource } from '@/api/configResourcesApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
-import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
+import { LostFieldsWarning, useChangedFields, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { GatewayBindingEditor, type GatewayBindingValue } from '@/components/GatewayBindingEditor';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
@@ -25,6 +25,7 @@ import {
 	fileOwnedMcpSettingFields,
 	isDatabaseConfigResource,
 	makeEmptyMcpTarget,
+	mcpSettingsFields,
 	upsertMcpTarget
 } from '@/config';
 import { useStickyQueryParam } from '@/drawerRouteState';
@@ -245,7 +246,7 @@ export function McpServersPage() {
 					}}
 				/>
 			) : null}
-			{settingsOpen ? (
+			{settingsOpen && !mcpData.isLoading && !mcpData.error ? (
 				<McpSettingsDrawer
 					config={effectiveConfig}
 					mcp={mcp}
@@ -255,10 +256,7 @@ export function McpServersPage() {
 					saving={saving}
 					saveError={saveError}
 					onClose={closeServerDrawer}
-					onSave={settings => {
-						const value = Object.fromEntries(
-							Object.entries(settings).filter(([, field]) => field != null)
-						) as McpSettingsResource;
+					onSave={value => {
 						upsertResource.mutate(
 							{ kind: 'mcp.settings', value },
 							{
@@ -302,7 +300,7 @@ export function McpSettingsDrawer(props: {
 	saving: boolean;
 	saveError?: string | null;
 	onClose: () => void;
-	onSave: (settings: McpSettingsPatch) => void;
+	onSave: (settings: McpSettingsResource) => void;
 }) {
 	return (
 		<Drawer title="Settings" onClose={props.onClose} error={props.saveError}>
@@ -326,17 +324,17 @@ function McpSettings(props: {
 	readOnlyFields?: ReadonlySet<string>;
 	help: SchemaHelp;
 	saving: boolean;
-	onSave: (settings: McpSettingsPatch) => void;
+	onSave: (settings: McpSettingsResource) => void;
 }) {
 	const [binding, setBinding] = useState<GatewayBindingValue>({
 		gateways: props.mcp?.gateways ?? null,
 		port: props.mcp?.port ?? null
 	});
 	const [statefulMode, setStatefulMode] = useState<McpStatefulMode>(
-		props.mcp?.statefulMode ?? 'stateless'
+		props.mcp?.statefulMode ?? 'stateful'
 	);
-	const [prefixMode, setPrefixMode] = useState<McpPrefixMode | 'none'>(
-		props.mcp?.prefixMode ?? 'none'
+	const [prefixMode, setPrefixMode] = useState<McpPrefixMode>(
+		props.mcp?.prefixMode ?? 'conditional'
 	);
 	const [failureMode, setFailureMode] = useState<McpFailureMode>(
 		props.mcp?.failureMode ?? 'failClosed'
@@ -356,32 +354,25 @@ function McpSettings(props: {
 		gateways: binding.gateways ?? [],
 		port: binding.gateways != null && binding.gateways.length > 0 ? null : binding.port,
 		statefulMode,
-		prefixMode: prefixMode === 'none' ? null : prefixMode,
+		prefixMode,
 		failureMode,
 		sseKeepAlive: sseKeepAlive.trim() || null,
-		dnsRebindingProtection: props.mcp?.dnsRebindingProtection || null,
+		dnsRebindingProtection: props.mcp?.dnsRebindingProtection ?? null,
 		server: Object.keys(serverOverrides).length > 0 ? serverOverrides : null
 	};
-	const originalResourceValue = Object.fromEntries(
-		Object.entries({
-			gateways: props.mcp?.gateways,
-			port: props.mcp?.port,
-			statefulMode: props.mcp?.statefulMode,
-			prefixMode: props.mcp?.prefixMode,
-			failureMode: props.mcp?.failureMode,
-			sseKeepAlive: props.mcp?.sseKeepAlive,
-			dnsRebindingProtection: props.mcp?.dnsRebindingProtection || null,
-			server: props.mcp?.server
-		}).filter(([field, value]) => value != null && !props.readOnlyFields?.has(field))
-	);
-	const resourceValue = Object.fromEntries(
-		Object.entries(patch).filter(
-			([field, value]) => value != null && !props.readOnlyFields?.has(field)
-		)
-	);
-	const writablePatch = Object.fromEntries(
-		Object.entries(patch).filter(([field]) => !props.readOnlyFields?.has(field))
-	) as McpSettingsPatch;
+	// The settings resource is replaced as a whole. Fields the form was not used to change keep
+	// their configured value, so defaults the form displays are not written.
+	const writable = (settings: object) =>
+		Object.fromEntries(
+			Object.entries(settings).filter(
+				([field, value]) =>
+					value != null &&
+					mcpSettingsFields.some(known => known === field) &&
+					!props.readOnlyFields?.has(field)
+			)
+		) as McpSettingsResource;
+	const original = writable(props.mcp ?? {});
+	const settings = useChangedFields(original, writable(patch));
 	const bindingReadOnly = Boolean(
 		props.readOnlyFields?.has('gateways') || props.readOnlyFields?.has('port')
 	);
@@ -391,7 +382,7 @@ function McpSettings(props: {
 			className="policy-editor-stack"
 			onSubmit={event => {
 				event.preventDefault();
-				props.onSave(writablePatch);
+				props.onSave(settings);
 			}}
 		>
 			{props.readOnlyFields?.size ? (
@@ -472,29 +463,7 @@ function McpSettings(props: {
 						<EnumSelector
 							ariaLabel="Prefix mode"
 							value={prefixMode}
-							options={[
-								{
-									value: 'none',
-									label: 'None',
-									description: 'Expose tool names without adding the target name.'
-								},
-								{
-									value: 'always',
-									label: 'Always',
-									description: 'Always prefix exposed tool names with the target name.'
-								},
-								{
-									value: 'conditional',
-									label: 'Conditional',
-									description: 'Prefix only when needed to avoid tool-name conflicts.'
-								},
-								{
-									value: 'never',
-									label: 'Never',
-									description:
-										'Never prefix; calls are routed by tool name, which must be unique across targets.'
-								}
-							]}
+							labels={{ always: 'Always', conditional: 'Conditional', never: 'Never' }}
 							schema={props.help.node([
 								'$defs',
 								'LocalSimpleMcpConfig',
@@ -600,18 +569,16 @@ function McpSettings(props: {
 				diffTitle="MCP settings config diff"
 				saveLabel="Save settings"
 				saving={props.saving}
-				saveDisabled={Object.keys(writablePatch).length === 0}
-				onSave={() => props.onSave(writablePatch)}
-				resourceDiff={
-					props.databaseBacked
-						? {
-								original: originalResourceValue,
-								modified: resourceValue
-							}
-						: undefined
-				}
+				saveDisabled={mcpSettingsFields.every(field => props.readOnlyFields?.has(field))}
+				onSave={() => props.onSave(settings)}
+				resourceDiff={props.databaseBacked ? { original, modified: settings } : undefined}
 				applyDiff={next => {
-					Object.assign(ensureMcp(next), patch);
+					const mcp: Record<string, unknown> = ensureMcp(next);
+					for (const field of mcpSettingsFields) {
+						if (props.readOnlyFields?.has(field)) continue;
+						if (field in settings) mcp[field] = settings[field];
+						else delete mcp[field];
+					}
 				}}
 			/>
 		</form>

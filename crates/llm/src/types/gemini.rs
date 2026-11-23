@@ -624,6 +624,8 @@ impl ResponseType for Response {
 				.and_then(|u| u.service_tier.as_deref().or(u.traffic_type.as_deref()))
 				.map(strng::new),
 			provider_model: self.0.model_version.as_deref().map(strng::new),
+			response_id: self.0.response_id.as_deref().map(strng::new),
+			finish_reasons: self.0.finish_reasons(),
 			completion: log_content.completion.then(|| {
 				self
 					.0

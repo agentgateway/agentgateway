@@ -65,7 +65,9 @@ export type ConfigResourceValue<K extends ConfigResourceKind> = K extends 'model
 export interface ConfigResource<K extends ConfigResourceKind = ConfigResourceKind> {
 	kind: K;
 	id: string;
+	uid?: string;
 	value: ConfigResourceValue<K>;
+	source: 'file' | 'database';
 	revision?: number;
 	createdAt?: string;
 	updatedAt?: string;
@@ -77,6 +79,12 @@ export interface ConfigResourcesResponse<K extends ConfigResourceKind = ConfigRe
 
 export function listConfigResources() {
 	return requestJson<ConfigResourcesResponse>('/api/config/resources');
+}
+
+export function listConfigResourcesByKind<K extends ConfigResourceKind>(kind: K) {
+	return requestJson<ConfigResourcesResponse<K>>(
+		`/api/config/resources/${encodeURIComponent(kind)}`
+	);
 }
 
 export function putConfigResources<K extends ConfigResourceKind>(

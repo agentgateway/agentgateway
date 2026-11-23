@@ -58,6 +58,8 @@
 |`llm.requestModel`|string|The model requested for the LLM request. Before LLM processing, this is extracted from<br>the incoming URL or body, before provider overrides. This may differ from the actual model used.|
 |`llm.originalModel`|string|The model the client asked for, before any virtual model, alias, provider override, or<br>request body rewrite. Equal to `requestModel` when the model was not rewritten.|
 |`llm.responseModel`|string|The model that actually served the LLM response.|
+|`llm.responseId`|string|The provider's identifier for the response.|
+|`llm.finishReasons`|[]string|The provider's reasons for ending generation, one per returned choice.|
 |`llm.provider`|string|The provider of the LLM.|
 |`llm.inputTokens`|integer|The total number of tokens in the input/prompt, including tokens read from or written to<br>cache. This has consistent semantics across providers.|
 |`llm.providerInputTokens`|integer|The provider-reported number of tokens in the input/prompt. This is inconsistent across<br>providers: some include cached tokens while others exclude them.|

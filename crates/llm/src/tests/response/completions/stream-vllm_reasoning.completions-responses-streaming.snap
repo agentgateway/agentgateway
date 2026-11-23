@@ -51,6 +51,10 @@ data: {"type":"response.completed","sequence_number":14,"response":{"created_at"
   "output_tokens": 23,
   "total_tokens": 40,
   "provider_model": "Qwen/Qwen3-8B",
+  "response_id": "chatcmpl-9f2c",
+  "finish_reasons": [
+    "stop"
+  ],
   "completion": [
     "2 + 2 = 4."
   ]

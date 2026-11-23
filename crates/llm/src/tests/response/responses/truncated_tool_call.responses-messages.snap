@@ -43,6 +43,10 @@ info:
     "output_tokens": 0,
     "total_tokens": 0,
     "provider_model": "gpt-x",
+    "response_id": "resp_truncated_tool_call",
+    "finish_reasons": [
+      "max_output_tokens"
+    ],
     "output_messages": [
       {
         "role": "assistant",

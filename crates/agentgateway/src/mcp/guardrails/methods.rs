@@ -2,8 +2,8 @@ use agent_core::strng::{self, Strng};
 use rmcp::model::{
 	CallToolRequestMethod, CompleteRequestMethod, ConstString, GetPromptRequestMethod,
 	ListPromptsRequestMethod, ListResourceTemplatesRequestMethod, ListResourcesRequestMethod,
-	ListToolsRequestMethod, ReadResourceRequestMethod, SubscribeRequestMethod,
-	UnsubscribeRequestMethod,
+	ListSkillsRequestMethod, ListToolsRequestMethod, ReadResourceDirectoryRequestMethod,
+	ReadResourceRequestMethod, SubscribeRequestMethod, UnsubscribeRequestMethod,
 };
 
 // Method names for the non-fanout requests that carry a mutable body. The
@@ -21,6 +21,10 @@ pub const PROMPTS_LIST: Strng = strng::literal!(ListPromptsRequestMethod::VALUE)
 pub const RESOURCES_LIST: Strng = strng::literal!(ListResourcesRequestMethod::VALUE);
 pub const RESOURCES_TEMPLATES_LIST: Strng =
 	strng::literal!(ListResourceTemplatesRequestMethod::VALUE);
+pub const SKILLS_LIST: Strng = strng::literal!(ListSkillsRequestMethod::VALUE);
+// A single-target read, but its result is a listing filtered per child like the lists above.
+pub const RESOURCES_DIRECTORY_READ: Strng =
+	strng::literal!(ReadResourceDirectoryRequestMethod::VALUE);
 
 // Single-target methods that don't run the request-phase hook yet; only the
 // response phase fires for them.

@@ -65,6 +65,10 @@ info:
     "reasoning_tokens": 15,
     "cached_input_tokens": 12,
     "service_tier": "default",
-    "provider_model": "gpt-4o-audio-preview"
+    "provider_model": "gpt-4o-audio-preview",
+    "response_id": "chatcmpl-audioTokens123",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }
