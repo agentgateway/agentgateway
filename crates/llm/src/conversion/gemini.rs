@@ -121,6 +121,9 @@ pub mod from_systemone {
 		let resp: google::Response = serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
 		let mut answers = IndexMap::new();
 		for ((name, question), answer) in take_answers(resp.answers, &state.questions) {
+			let Some(answer) = answer else {
+				continue;
+			};
 			let answer = match (answer, question) {
 				(google::Answer::Noul { noul }, QuestionState::Noul) => {
 					systemone::typed::Answer::Noul { noul }
@@ -301,73 +304,15 @@ pub mod from_decisions {
 		let resp: google::Response = serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
 		let mut answers = Vec::new();
 		for (question, answer) in take_answers(resp.answers, &state.questions) {
-			let name = question.name.clone();
-			let answer = match (answer, &question.kind) {
-				(google::Answer::Noul { noul }, QuestionKind::Predicate) => {
-					d::AnswerResource::Predicate(d::AnswerResourcePredicate {
-						name,
-						probability: noul,
+			// Google returns one answer per question. A missing or unusable answer is reported as a
+			// refusal so the answers after it keep their positions.
+			let answer = answer
+				.and_then(|answer| translate_answer(answer, question))
+				.unwrap_or_else(|| {
+					d::AnswerResource::Refusal(d::AnswerResourceRefusal {
+						name: question.name.clone(),
 					})
-				},
-				(
-					google::Answer::Choice {
-						choice,
-						probabilities,
-						..
-					},
-					QuestionKind::Choice(values),
-				) => {
-					let Some((choice, probabilities)) = map_choice(values, &choice, &probabilities) else {
-						continue;
-					};
-					let confidence =
-						choice_confidence(&probabilities.iter().map(|(_, p)| *p).collect::<Vec<_>>());
-					d::AnswerResource::Choice(d::AnswerResourceChoice {
-						name,
-						choice: response_choice_value(choice),
-						probabilities: probabilities
-							.into_iter()
-							.map(|(value, probability)| d::ChoiceProbabilityResource {
-								value: response_choice_value(value),
-								probability,
-							})
-							.collect(),
-						confidence,
-					})
-				},
-				(
-					google::Answer::Score {
-						score,
-						probabilities,
-						..
-					},
-					QuestionKind::Score(labels),
-				) => {
-					let Some(score) = score.as_f64() else {
-						continue;
-					};
-					let probabilities = level_probabilities(&probabilities, labels.len());
-					let confidence = score_confidence(&probabilities);
-					d::AnswerResource::Score(d::AnswerResourceScore {
-						name,
-						score,
-						probabilities: labels
-							.iter()
-							.zip(probabilities)
-							.enumerate()
-							.map(
-								|(index, (label, probability))| d::ScoreProbabilityResource {
-									value: index as i64,
-									label: label.clone(),
-									probability,
-								},
-							)
-							.collect(),
-						confidence,
-					})
-				},
-				_ => continue,
-			};
+				});
 			answers.push(answer);
 		}
 		let input_tokens = resp.usage.total_input_tokens;
@@ -387,6 +332,76 @@ pub mod from_decisions {
 			},
 		})
 		.map_err(AIError::ResponseMarshal)
+	}
+
+	fn translate_answer(
+		answer: google::Answer,
+		question: &QuestionState,
+	) -> Option<d::AnswerResource> {
+		let name = question.name.clone();
+		let answer = match (answer, &question.kind) {
+			(google::Answer::Noul { noul }, QuestionKind::Predicate) => {
+				d::AnswerResource::Predicate(d::AnswerResourcePredicate {
+					name,
+					probability: noul,
+				})
+			},
+			(
+				google::Answer::Choice {
+					choice,
+					probabilities,
+					..
+				},
+				QuestionKind::Choice(values),
+			) => {
+				let (choice, probabilities) = map_choice(values, &choice, &probabilities)?;
+				let confidence =
+					choice_confidence(&probabilities.iter().map(|(_, p)| *p).collect::<Vec<_>>());
+				d::AnswerResource::Choice(d::AnswerResourceChoice {
+					name,
+					choice: response_choice_value(choice),
+					probabilities: probabilities
+						.into_iter()
+						.map(|(value, probability)| d::ChoiceProbabilityResource {
+							value: response_choice_value(value),
+							probability,
+						})
+						.collect(),
+					confidence,
+				})
+			},
+			(
+				google::Answer::Score {
+					score,
+					probabilities,
+					..
+				},
+				QuestionKind::Score(labels),
+			) => {
+				let score = score.as_f64()?;
+				let probabilities = level_probabilities(&probabilities, labels.len());
+				let confidence = score_confidence(&probabilities);
+				d::AnswerResource::Score(d::AnswerResourceScore {
+					name,
+					score,
+					probabilities: labels
+						.iter()
+						.zip(probabilities)
+						.enumerate()
+						.map(
+							|(index, (label, probability))| d::ScoreProbabilityResource {
+								value: index as i64,
+								label: label.clone(),
+								probability,
+							},
+						)
+						.collect(),
+					confidence,
+				})
+			},
+			_ => return None,
+		};
+		Some(answer)
 	}
 
 	fn translate_input(input: d::DecisionInput) -> Result<google::Input, AIError> {
@@ -559,14 +574,14 @@ fn validate_option_count(count: usize, field: &str) -> Result<(), AIError> {
 }
 
 /// Pairs each requested question with its Google answer, in request order.
-/// Unanswered questions and answers to unknown keys are left out.
+/// Answers to unknown keys are left out.
 fn take_answers<Q>(
 	mut answers: IndexMap<String, google::Answer>,
 	questions: &IndexMap<String, Q>,
-) -> Vec<(&Q, google::Answer)> {
+) -> Vec<(&Q, Option<google::Answer>)> {
 	questions
 		.iter()
-		.filter_map(|(key, question)| Some((question, answers.shift_remove(key)?)))
+		.map(|(key, question)| (question, answers.shift_remove(key)))
 		.collect()
 }
 

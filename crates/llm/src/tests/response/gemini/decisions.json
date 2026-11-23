@@ -42,11 +42,6 @@
       },
       "confidence": 0.88
     },
-    "q_1": {
-      "type": "noul",
-      "noul": 0.81,
-      "confidence": 0.81
-    },
     "q_0": {
       "type": "noul",
       "noul": 0.93,

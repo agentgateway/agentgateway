@@ -1,5 +1,5 @@
 pub mod from_decisions {
-	use std::collections::{HashMap, HashSet};
+	use std::collections::HashSet;
 
 	use async_openai::types::decisions as d;
 	use indexmap::IndexMap;
@@ -12,7 +12,8 @@ pub mod from_decisions {
 	/// Keyed by SystemOne question key.
 	#[derive(Debug, Default)]
 	pub struct State {
-		questions: HashMap<String, QuestionState>,
+		/// Keyed by SystemOne question key, in request order.
+		questions: IndexMap<String, QuestionState>,
 	}
 
 	#[derive(Debug, Default)]
@@ -193,25 +194,25 @@ pub mod from_decisions {
 	pub fn translate_response(bytes: &[u8], state: &State) -> Result<Vec<u8>, AIError> {
 		let resp: systemone::Response =
 			serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
-		let answers = resp
-			.answers
-			.into_iter()
-			.map(|(key, answer)| {
-				let qs = state.questions.get(&key);
-				let choice_value = |value: String| match value.parse() {
-					Ok(b) if qs.is_some_and(|qs| qs.boolean_values.contains(&value)) => {
-						d::ChoiceValueResource::Boolean(b)
-					},
-					_ => d::ChoiceValueResource::Text(value),
+		let mut source = resp.answers;
+		let answers = state
+			.questions
+			.iter()
+			.map(|(key, qs)| {
+				let name = qs.name.clone();
+				// SystemOne answers every question. A missing answer is reported as a refusal so the
+				// answers after it keep their positions.
+				let Some(answer) = source.shift_remove(key) else {
+					return d::AnswerResource::Refusal(d::AnswerResourceRefusal { name });
 				};
-				let name = match qs {
-					Some(qs) => qs.name.clone(),
-					None => Some(key.clone()),
+				let choice_value = |value: String| match value.parse() {
+					Ok(b) if qs.boolean_values.contains(&value) => d::ChoiceValueResource::Boolean(b),
+					_ => d::ChoiceValueResource::Text(value),
 				};
 				match answer {
 					systemone::Answer::Noul { noul } => {
 						d::AnswerResource::Predicate(d::AnswerResourcePredicate {
-							name: name.clone(),
+							name,
 							probability: noul,
 						})
 					},
@@ -220,7 +221,7 @@ pub mod from_decisions {
 						probabilities,
 						confidence,
 					} => d::AnswerResource::Choice(d::AnswerResourceChoice {
-						name: name.clone(),
+						name,
 						choice: choice_value(choice),
 						probabilities: probabilities
 							.into_iter()
@@ -237,16 +238,14 @@ pub mod from_decisions {
 						confidence,
 						..
 					} => d::AnswerResource::Score(d::AnswerResourceScore {
-						name: name.clone(),
+						name,
 						score: score.as_f64().unwrap_or_default(),
 						probabilities: probabilities
 							.into_iter()
 							.map(|(level, probability)| {
 								let value: usize = level.parse().unwrap_or_default();
 								d::ScoreProbabilityResource {
-									label: qs
-										.and_then(|qs| qs.labels.get(value).cloned())
-										.unwrap_or_default(),
+									label: qs.labels.get(value).cloned().unwrap_or_default(),
 									value: value as _,
 									probability,
 								}

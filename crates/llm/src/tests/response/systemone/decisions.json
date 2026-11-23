@@ -5,10 +5,6 @@
       "type": "noul",
       "noul": 0.93
     },
-    "1_": {
-      "type": "noul",
-      "noul": 0.81
-    },
     "category": {
       "type": "choice",
       "choice": "damage",
