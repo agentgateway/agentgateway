@@ -1895,7 +1895,7 @@ function stripPrefixExpression(prefix: string | null) {
 
 function defaultIncomingModelMatch(provider: LlmModel['provider']) {
 	const providerName = providerReferenceName(provider) ?? providerLabel(provider);
-	return `${providerName === 'openAI' ? 'openai' : providerName || 'model'}/*`;
+	return `${providerName || 'model'}/*`;
 }
 
 function applyUpstreamMode(

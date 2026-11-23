@@ -121,7 +121,23 @@ Run the agentgateway binary:
 ```bash
 ./target/release/agentgateway
 ```
-Open your browser and navigate to `http://localhost:15000/ui` to see the agentgateway UI.
+
+With no arguments, it writes a starter config to `~/.config/agentgateway/config.yaml`. That config defines a gateway named `default` on port 4000 and serves the UI from it, at http://localhost:4000/ui.
+
+To run your own config, attach the UI to a gateway. `ui: {}` uses the gateway named `default`:
+
+```yaml
+gateways:
+  default:
+    port: 4000
+ui: {}
+```
+
+```bash
+./target/release/agentgateway -f config.yaml
+```
+
+For a gateway with another name, list it in `ui.gateways`, for example `ui: { gateways: [web] }`.
 
 ## Local Development with Tilt (Kubernetes)
 

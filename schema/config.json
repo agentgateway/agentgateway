@@ -109,7 +109,7 @@
       ]
     },
     "ui": {
-      "description": "ui defines settings for how the UI and UI backend is exposed. By default, the UI is exposed only\non the admin interface (typically localhost:15000). This setting allows attaching to `gateways`\nto serve externally, as well as attaching policies to UI traffic.\nIt is strongly recommended to utilize authentication (typically OIDC) when exposing the UI externally.",
+      "description": "ui serves the UI and its API on a gateway: the `default` gateway unless `gateways` is set.\nUse authentication, such as OIDC, when the UI is reachable from outside.",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalUIConfig"
