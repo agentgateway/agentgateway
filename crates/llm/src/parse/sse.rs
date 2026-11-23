@@ -37,6 +37,12 @@ pub fn append_done_on_success(body: Body) -> Body {
 /// it. Dispatch it rather than failing with `UnexpectedEof`; any other unterminated event still fails.
 struct DoneTolerantSseDecoder(SseDecoder<Bytes>);
 
+pub(crate) fn decoder(
+	buffer_limit: usize,
+) -> impl Decoder<Item = Frame<Bytes>, Error = SseDecodeError> {
+	DoneTolerantSseDecoder(SseDecoder::with_max_size(buffer_limit))
+}
+
 impl Decoder for DoneTolerantSseDecoder {
 	type Item = Frame<Bytes>;
 	type Error = SseDecodeError;
@@ -64,7 +70,7 @@ pub fn json_passthrough<F: DeserializeOwned>(
 	buffer_limit: usize,
 	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
 ) -> Body {
-	let decoder = DoneTolerantSseDecoder(SseDecoder::with_max_size(buffer_limit));
+	let decoder = decoder(buffer_limit);
 
 	passthrough_parser(b, decoder, move |o| {
 		let Some(data) = unwrap_sse_data(o) else {
@@ -84,7 +90,7 @@ pub fn permissive_json_passthrough<F: DeserializeOwned>(
 	buffer_limit: usize,
 	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
 ) -> Body {
-	let decoder = DoneTolerantSseDecoder(SseDecoder::with_max_size(buffer_limit));
+	let decoder = decoder(buffer_limit);
 
 	crate::parse::passthrough::full_passthrough_parser(b, decoder, move |o| {
 		let Some(data) = unwrap_sse_data(o) else {
