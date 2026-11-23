@@ -3991,7 +3991,7 @@ pub mod from_anthropic_token_count {
 pub use helpers::filter_native_beta_header;
 
 mod helpers {
-	use std::collections::HashMap;
+	use std::collections::{HashMap, HashSet};
 	use std::sync::LazyLock;
 
 	use crate::AIError;
@@ -4459,13 +4459,14 @@ mod helpers {
 		filter: impl Fn(&str) -> bool,
 	) -> Result<Vec<&str>, AIError> {
 		let mut features = Vec::new();
+		let mut seen = HashSet::new();
 		for value in headers.get_all("anthropic-beta") {
 			let header_str = value
 				.to_str()
 				.map_err(|_| AIError::MissingField("Invalid anthropic-beta header value".into()))?;
 			for feature in header_str.split(',').map(str::trim) {
 				for feature in bedrock_beta_header_names(feature) {
-					if filter(feature) && !features.contains(&feature) {
+					if filter(feature) && seen.insert(feature) {
 						features.push(feature);
 					}
 				}
