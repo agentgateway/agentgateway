@@ -17,7 +17,6 @@ pub use agent_llm::{
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
-use rand::RngExt;
 use serde::de::DeserializeOwned;
 
 use crate::http::auth::{
@@ -29,7 +28,7 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, GuardrailLog, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
-use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
+use crate::types::loadbalancer::ActiveHandle;
 use crate::*;
 pub mod model_list;
 pub mod model_router;
@@ -98,35 +97,20 @@ impl AIBackend {
 		}
 	}
 
+	/// Selects a provider the same way service endpoints are selected. `availability` scales a
+	/// provider's score; providers it returns `None` for are used only when no other provider is
+	/// available.
 	pub fn select_provider(
 		&self,
 		affinity_key: Option<u64>,
+		availability: impl Fn(&NamedAIProvider) -> Option<f64>,
 	) -> Option<(Arc<NamedAIProvider>, ActiveHandle)> {
-		if let Some(affinity_key) = affinity_key {
-			let (provider, info) = self.providers.select_by_affinity(affinity_key)?;
-			let handle = self.providers.start_request(provider.name.clone(), &info);
-			return Some((provider, handle));
-		}
-		let iter = self.providers.iter();
-		let index = iter.index();
-		if index.is_empty() {
-			return None;
-		}
-		// Intentionally allow `rand::seq::index::sample` so we can pick the same element twice
-		// This avoids starvation where the worst endpoint gets 0 traffic
-		let a = rand::rng().random_range(0..index.len());
-		let b = rand::rng().random_range(0..index.len());
-		let best = [a, b]
-			.into_iter()
-			.map(|idx| {
-				let (_, EndpointWithInfo { endpoint, info, .. }) =
-					index.get_index(idx).expect("index already checked");
-				(endpoint.clone(), info)
-			})
-			.max_by(|(_, a), (_, b)| a.score().total_cmp(&b.score()));
-		let (ep, ep_info) = best?;
-		let handle = self.providers.start_request(ep.name.clone(), ep_info);
-		Some((ep, handle))
+		let (provider, info, ()) = self.providers.select(affinity_key, |e, last_resort| {
+			let availability = availability(&e.endpoint).or(last_resort.then_some(1.0))?;
+			Some((e.info.score() * availability, ()))
+		})?;
+		let handle = self.providers.start_request(provider.name.clone(), &info);
+		Some((provider, handle))
 	}
 }
 
