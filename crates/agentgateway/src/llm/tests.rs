@@ -4749,3 +4749,95 @@ fn query_requests_sse_matches_alt_query_parameter() {
 		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?halt=sse"
 	)));
 }
+
+#[tokio::test]
+async fn provider_with_empty_service_fails_over_to_next_priority() {
+	use crate::test_helpers::proxymock::{
+		BIND_KEY, basic_named_route, body_mock, send_request_body, setup_proxy_test, simple_bind,
+	};
+	use crate::types::agent::{Backend, ResourceName};
+	use crate::types::discovery::{NamespacedHostname, Service};
+	use crate::types::loadbalancer::EndpointSet;
+
+	let upstream = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = |name: &str, provider_backend| NamedAIProvider {
+		name: name.into(),
+		provider: AIProvider::Custom(custom::Provider {
+			model_override: None,
+			provider_override: None,
+			formats: vec![custom::ProviderFormatConfig {
+				format: custom::ProviderFormat::Completions,
+				path: None,
+			}],
+		}),
+		provider_backend: Some(provider_backend),
+		host_override: None,
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		inline_policies: vec![],
+	};
+	let empty = NamespacedHostname {
+		namespace: "default".into(),
+		hostname: "empty.default.svc.cluster.local".into(),
+	};
+	let providers = EndpointSet::new(vec![
+		vec![(
+			"empty".into(),
+			provider(
+				"empty",
+				SimpleBackendReference::Service {
+					name: empty.clone(),
+					port: 80,
+				},
+			),
+		)],
+		vec![(
+			"backup".into(),
+			provider(
+				"backup",
+				SimpleBackendReference::Backend(strng::format!("/{}", upstream.address())),
+			),
+		)],
+	]);
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*upstream.address())
+		.with_bind(simple_bind())
+		.with_raw_backend(
+			Backend::AI(
+				ResourceName::new("llm".into(), "".into()),
+				AIBackend::new(providers),
+			)
+			.into(),
+		)
+		.with_route(basic_named_route(strng::literal!("/llm")));
+	t.pi
+		.stores
+		.discovery
+		.sync_local(
+			vec![Service {
+				name: "empty".into(),
+				namespace: empty.namespace.clone(),
+				hostname: empty.hostname.clone(),
+				ports: std::collections::HashMap::from([(80, 80)]),
+				..Default::default()
+			}],
+			vec![],
+			Default::default(),
+		)
+		.unwrap();
+
+	let res = send_request_body(
+		t.serve_http(BIND_KEY),
+		::http::Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+}

@@ -1268,6 +1268,36 @@ impl RequestLog {
 		);
 	}
 
+	fn finish_delegated_provider_handle_with_attempt(
+		&self,
+		rh: ActiveHandle,
+		end_time: Timestamp,
+		status: Option<crate::http::StatusCode>,
+		retry_after: Option<Duration>,
+		cel_exec: &CelLoggingExecutor<'_>,
+		endpoint_selected: bool,
+	) {
+		// Once an endpoint is selected, its failures feed the provider's aggregate
+		// Service health. Do not also penalize the provider for the same failure.
+		if endpoint_selected
+			&& DropOnLog::eviction_unhealthy(
+				self,
+				status,
+				cel_exec,
+				&self.delegated_provider_health_policy,
+			) {
+			return;
+		}
+		self.finish_request_handle_with_attempt(
+			rh,
+			end_time,
+			status,
+			retry_after,
+			cel_exec,
+			&self.delegated_provider_health_policy,
+		);
+	}
+
 	pub(crate) fn finalize_request_handle_for_attempt(
 		&mut self,
 		end_time: Timestamp,
@@ -1292,13 +1322,13 @@ impl RequestLog {
 			proxy: Some(&proxy_timing),
 		});
 		if let Some(rh) = self.delegated_provider_request_handle.take() {
-			self.finish_request_handle_with_attempt(
+			self.finish_delegated_provider_handle_with_attempt(
 				rh,
 				end_time,
 				status,
 				retry_after,
 				&cel_exec,
-				&self.delegated_provider_health_policy,
+				self.request_handle.is_some(),
 			);
 		}
 		if let Some(rh) = self.request_handle.take() {
@@ -1595,11 +1625,13 @@ impl Drop for DropOnLog {
 				upstream_calls: Some(&upstream_calls),
 			});
 			if let Some(rh) = delegated_provider_request_handle {
-				log.finish_request_handle(
+				log.finish_delegated_provider_handle_with_attempt(
 					rh,
 					end_time,
+					log.status,
+					log.retry_after,
 					&cel_exec,
-					&log.delegated_provider_health_policy,
+					request_handle.is_some(),
 				);
 			}
 			if let Some(rh) = request_handle {
@@ -3794,7 +3826,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn delegated_provider_and_endpoint_record_upstream_failure() {
+	async fn delegated_provider_does_not_double_count_endpoint_failure() {
 		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
 		let provider = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
 		let endpoint = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
@@ -3811,8 +3843,8 @@ mod tests {
 		log.request_handle = Some(endpoints.start_request("endpoint".into(), &endpoint));
 		log.status = Some(http::StatusCode::SERVICE_UNAVAILABLE);
 		drop(DropOnLog::from(log));
-		assert_eq!(provider.consecutive_failures(), 1);
-		assert_eq!(provider.times_ejected(), 1);
+		assert_eq!(provider.consecutive_failures(), 0);
+		assert_eq!(provider.times_ejected(), 0);
 		assert_eq!(endpoint.consecutive_failures(), 1);
 	}
 
@@ -3860,10 +3892,10 @@ mod tests {
 			None,
 			None,
 		);
-		assert_eq!(provider.consecutive_failures(), 1);
+		assert_eq!(provider.consecutive_failures(), 0);
 		assert_eq!(endpoint.consecutive_failures(), 1);
 		drop(DropOnLog::from(log));
-		assert_eq!(provider.consecutive_failures(), 1);
+		assert_eq!(provider.consecutive_failures(), 0);
 		assert_eq!(endpoint.consecutive_failures(), 1);
 	}
 

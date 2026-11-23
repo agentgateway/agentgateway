@@ -2678,9 +2678,19 @@ async fn make_backend_call(
 				.session_affinity
 				.as_ref()
 				.and_then(|policy| policy.affinity_key(&req));
-			let (provider, handle) = ai
-				.select_provider(affinity_key)
-				.ok_or(ProxyError::NoHealthyEndpoints)?;
+			// A provider backed by a Service is scaled by the mean health of the Service's endpoints,
+			// and is unavailable when all of them are evicted.
+			let (provider, handle) = {
+				let discovery = inputs.stores.read_discovery();
+				ai.select_provider(affinity_key, |p| match &p.provider_backend {
+					Some(SimpleBackendReference::Service { name, .. }) => discovery
+						.services
+						.get_by_namespaced_host(name)
+						.and_then(|svc| svc.endpoints.mean_health()),
+					_ => Some(1.0),
+				})
+			}
+			.ok_or(ProxyError::NoHealthyEndpoints)?;
 			if provider.provider_backend.is_some() {
 				log.add(move |l| l.delegated_provider_request_handle = Some(handle));
 			} else {
@@ -2703,8 +2713,6 @@ async fn make_backend_call(
 				..Default::default()
 			};
 			if let Some(provider_backend) = &provider.provider_backend {
-				// A delegated backend may fail before a Service endpoint is selected. Record
-				// its provider policy now so these failures can evict the provider.
 				let provider_policies = provider_defaults
 					.merge(policies.as_ref().clone())
 					.merge(sub_backend_policies);
