@@ -51,6 +51,39 @@ fn responses_to_completions_rejects_files_without_data_or_id(#[case] file: Value
 	);
 }
 
+// The typed `message` item form has no assistant input role.
+#[rstest::rstest]
+#[case::easy_system(None, "system")]
+#[case::easy_developer(None, "developer")]
+#[case::easy_assistant(None, "assistant")]
+#[case::typed_system(Some("message"), "system")]
+#[case::typed_developer(Some("message"), "developer")]
+fn responses_to_completions_rejects_media_outside_user_messages(
+	#[case] message_type: Option<&str>,
+	#[case] role: &str,
+	#[values("input_image", "input_file")] kind: &str,
+) {
+	let part = match kind {
+		"input_image" => json!({"type": kind, "image_url": "data:image/png;base64,AAAA"}),
+		"input_file" => json!({"type": kind, "file_data": "data:application/pdf;base64,JVBERi0="}),
+		_ => unreachable!("unknown media kind {kind}"),
+	};
+	let mut message = json!({
+		"role": role,
+		"content": [{"type": "input_text", "text": "Look at this."}, part]
+	});
+	if let Some(message_type) = message_type {
+		message["type"] = json!(message_type);
+	}
+	let request = serde_json::from_value(json!({"model": "gpt-4o", "input": [message]})).unwrap();
+
+	let result = from_responses::translate(&request);
+	assert!(
+		matches!(&result, Err(crate::AIError::UnsupportedConversion(reason)) if reason.contains("user messages")),
+		"{result:?}"
+	);
+}
+
 fn translate(input: &[u8]) -> Value {
 	let response =
 		to_responses::translate_response(&Bytes::copy_from_slice(input), "input-model", None)
