@@ -1426,6 +1426,7 @@ impl HTTPProxy {
 					max_connection_duration: None,
 					backend: Some(selected_backend.backend.backend.name()),
 				},
+				matches!(&selected_backend.backend.backend, Backend::Dynamic(_, _)),
 			)
 			.await?;
 		let mut resp = ::http::Response::builder()
