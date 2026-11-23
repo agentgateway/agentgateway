@@ -3586,7 +3586,7 @@ async fn convert(
 			all_policies.extend_from_slice(&mcp_policies);
 			all_backends.extend_from_slice(&mcp_backends);
 		} else {
-			Box::pin(convert_attached_mcp(
+			let mcp_backends = Box::pin(convert_attached_mcp(
 				resources,
 				config,
 				gateway.clone(),
@@ -3594,9 +3594,9 @@ async fn convert(
 				&gateway_refs,
 				&mcp_reserved_paths,
 				&mut all_listener_routes,
-				&mut all_backends,
 			))
 			.await?;
+			all_backends.extend(mcp_backends);
 		}
 	}
 	if let Some(ui_config) = ui {
@@ -4252,12 +4252,12 @@ async fn convert_attached_mcp(
 	gateway_refs: &LocalGatewayReferences,
 	reserved_paths: &[(Strng, &str)],
 	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
-	all_backends: &mut Vec<BackendWithPolicies>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<BackendWithPolicies>> {
 	let listeners =
 		resolve_gateway_references(gateway_refs, &mcp_config.gateways, GatewayRouteKind::Http)?;
 	let mut endpoints = std::mem::take(&mut mcp_config.endpoints);
 	let mut routes = Vec::new();
+	let mut mcp_backends = Vec::new();
 	// The top-level targets are the targets of the /mcp endpoint.
 	if !endpoints.is_empty() && !mcp_config.backend.targets.is_empty() {
 		let targets = std::mem::take(&mut mcp_config.backend.targets);
@@ -4289,7 +4289,7 @@ async fn convert_attached_mcp(
 			bail!("internal error: attached mcp generated targeted policies");
 		}
 		routes.extend(default_routes);
-		all_backends.extend(backends);
+		mcp_backends.extend(backends);
 	}
 
 	// Endpoint paths must not overlap each other or built-in paths; the longer prefix would win.
@@ -4398,7 +4398,7 @@ async fn convert_attached_mcp(
 				.unwrap_or(shared_backend.dns_rebinding_protection),
 			server: server.or_else(|| shared_backend.server.clone()),
 		};
-		all_backends.extend(
+		mcp_backends.extend(
 			LocalBackend::MCP(backend)
 				.as_backends(local_name(backend_name), resources, config.mcp.session_ttl)
 				.await?,
@@ -4412,7 +4412,7 @@ async fn convert_attached_mcp(
 			scoped_routes(&listener_key, routes.clone()),
 		);
 	}
-	Ok(())
+	Ok(mcp_backends)
 }
 
 async fn convert_attached_ui(
