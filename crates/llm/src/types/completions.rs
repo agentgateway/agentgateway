@@ -1551,6 +1551,27 @@ pub mod typed {
 			}
 		}
 
+		pub fn replace_original_image_detail_with_high(&mut self) {
+			use async_openai::types::chat::ImageDetail;
+
+			for message in &mut self.messages {
+				let RequestMessage::User(RequestUserMessage {
+					content: RequestUserMessageContent::Array(parts),
+					..
+				}) = message
+				else {
+					continue;
+				};
+				for part in parts {
+					if let RequestUserMessageContentPart::ImageUrl(image) = part
+						&& image.image_url.detail == Some(ImageDetail::Original)
+					{
+						image.image_url.detail = Some(ImageDetail::High);
+					}
+				}
+			}
+		}
+
 		/// Remove `extra_content` (Gemini thought signatures) from replayed tool calls,
 		/// for providers that would reject or mishandle the unknown field.
 		pub fn strip_tool_call_extra_content(&mut self) {

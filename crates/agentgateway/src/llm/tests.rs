@@ -4458,6 +4458,56 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 	);
 }
 
+#[test]
+fn responses_to_completions_image_detail_original_falls_back_to_high_on_vertex() {
+	let translation = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::OpenAICompletions,
+	};
+	let mut details = Vec::new();
+	for (name, provider) in [
+		("vertex", vertex_provider("google/gemini-2.5-flash")),
+		(
+			"custom",
+			custom_provider(custom::ProviderFormat::Completions),
+		),
+	] {
+		let request = serde_json::from_value(json!({
+			"model": "m",
+			"input": [{
+				"role": "user",
+				"content": [{
+					"type": "input_image",
+					"image_url": "data:image/png;base64,AAAA",
+					"detail": "original"
+				}]
+			}]
+		}))
+		.unwrap();
+		let rendered = translation
+			.render_request(
+				types::ChatRequest::Responses(request),
+				&ChatRequestContext {
+					provider: &provider,
+					headers: &HeaderMap::new(),
+					prompt_caching: None,
+					catalog: None,
+				},
+			)
+			.unwrap();
+		let body: Value = serde_json::from_slice(&rendered.body).unwrap();
+		details.push((
+			name,
+			body["messages"][0]["content"][0]["image_url"]["detail"].clone(),
+		));
+	}
+	assert_eq!(
+		details,
+		[("vertex", json!("high")), ("custom", json!("original"))],
+		"Vertex's OpenAI-compatible endpoint rejects `original`; other backends keep it"
+	);
+}
+
 fn vertex_provider(model: &str) -> AIProvider {
 	AIProvider::Vertex(vertex::Provider {
 		model_override: Some(strng::new(model)),

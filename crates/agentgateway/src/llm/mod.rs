@@ -411,6 +411,11 @@ fn render_openai_completions(
 			if !preserves_gemini_signatures(ctx.provider, req.model.as_deref()) {
 				request.strip_tool_call_extra_content();
 			}
+			// Vertex maps `detail` to Gemini media resolution, which has no `original`.
+			// https://docs.cloud.google.com/vertex-ai/generative-ai/docs/migrate/openai/overview
+			if matches!(ctx.provider, AIProvider::Vertex(_)) {
+				request.replace_original_image_detail_with_high();
+			}
 			let namespaces = translated.namespaces;
 			if !namespaces.is_empty() {
 				provider_state = Some(ProviderState::OpenAICompletions {

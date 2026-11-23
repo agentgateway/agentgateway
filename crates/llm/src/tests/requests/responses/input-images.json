@@ -19,7 +19,7 @@
         {
           "type": "input_image",
           "image_url": "data:image/png;base64,iVBORw0KGgo=",
-          "detail": "auto"
+          "detail": "original"
         },
         { "type": "input_text", "text": "Now compare it to this one." }
       ]
