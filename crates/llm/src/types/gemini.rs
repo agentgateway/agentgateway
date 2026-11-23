@@ -874,13 +874,7 @@ pub mod decisions {
 	#[serde(untagged)]
 	pub enum Input {
 		Text(String),
-		Steps(Vec<Step>),
-	}
-
-	#[derive(Debug, Serialize)]
-	#[serde(tag = "type", rename_all = "snake_case")]
-	pub enum Step {
-		UserInput { content: Vec<Content> },
+		Content(Vec<Content>),
 	}
 
 	#[derive(Debug, Serialize)]

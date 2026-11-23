@@ -40,17 +40,8 @@ info:
     "model": "gemini-decision-1",
     "input": [
       {
-        "type": "user_input",
-        "content": [
-          {
-            "type": "text",
-            "text": "{\"reset_worked\":true}"
-          },
-          {
-            "type": "text",
-            "text": "The user can log in now."
-          }
-        ]
+        "type": "text",
+        "text": "{\"reset_worked\":true}\nThe user can log in now."
       }
     ],
     "questions": {

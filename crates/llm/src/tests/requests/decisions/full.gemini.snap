@@ -51,26 +51,8 @@ info:
     "model": "gpt-6-luna",
     "input": [
       {
-        "type": "user_input",
-        "content": [
-          {
-            "type": "text",
-            "text": "My order arrived with a cracked screen."
-          }
-        ]
-      },
-      {
-        "type": "user_input",
-        "content": [
-          {
-            "type": "text",
-            "text": "I want my money back."
-          },
-          {
-            "type": "text",
-            "text": "This is the second time."
-          }
-        ]
+        "type": "text",
+        "text": "My order arrived with a cracked screen.\n\nI want my money back.\nThis is the second time."
       }
     ],
     "questions": {

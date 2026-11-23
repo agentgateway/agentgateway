@@ -390,34 +390,46 @@ pub mod from_decisions {
 	}
 
 	fn translate_input(input: d::DecisionInput) -> Result<google::Input, AIError> {
-		match input {
-			d::DecisionInput::Text(text) => Ok(google::Input::Text(text)),
-			d::DecisionInput::Items(items) => items
-				.into_iter()
-				.map(|item| {
-					let d::DecisionInputItem::Message(d::DecisionInputMessage::User(message)) = item else {
-						return Err(AIError::UnsupportedContent);
-					};
-					let content = match message.content {
-						d::DecisionInputContent::Text(text) => vec![google::Content::Text { text }],
-						d::DecisionInputContent::DecisionInputContentParts(parts) => parts
-							.into_iter()
-							.map(|part| match part {
-								d::DecisionInputContentPart::InputText(text) => {
-									Ok(google::Content::Text { text: text.text })
-								},
-								d::DecisionInputContentPart::InputImage(image) => translate_image(image),
-								d::DecisionInputContentPart::InputJson(json) => {
-									let text = serde_json::to_string(&json.data).map_err(AIError::RequestMarshal)?;
-									Ok(google::Content::Text { text })
-								},
-							})
-							.collect::<Result<_, _>>()?,
-					};
-					Ok(google::Step::UserInput { content })
-				})
-				.collect::<Result<Vec<_>, _>>()
-				.map(google::Input::Steps),
+		let items = match input {
+			d::DecisionInput::Text(text) => return Ok(google::Input::Text(text)),
+			d::DecisionInput::Items(items) => items,
+		};
+		let mut blocks = Vec::new();
+		for (i, item) in items.into_iter().enumerate() {
+			let d::DecisionInputItem::Message(d::DecisionInputMessage::User(message)) = item else {
+				return Err(AIError::UnsupportedContent);
+			};
+			let separator = if i == 0 { "" } else { "\n\n" };
+			match message.content {
+				d::DecisionInputContent::Text(text) => push_text(&mut blocks, format!("{separator}{text}")),
+				d::DecisionInputContent::DecisionInputContentParts(parts) => {
+					for (j, part) in parts.into_iter().enumerate() {
+						let separator = if j == 0 { separator } else { "\n" };
+						match part {
+							d::DecisionInputContentPart::InputText(text) => {
+								push_text(&mut blocks, format!("{separator}{}", text.text))
+							},
+							d::DecisionInputContentPart::InputImage(image) => {
+								blocks.push(translate_image(image)?)
+							},
+							d::DecisionInputContentPart::InputJson(json) => {
+								let json = serde_json::to_string(&json.data).map_err(AIError::RequestMarshal)?;
+								push_text(&mut blocks, format!("{separator}{json}"))
+							},
+						}
+					}
+				},
+			}
+		}
+		Ok(google::Input::Content(blocks))
+	}
+
+	/// Google joins adjacent text blocks with no separator, so separators are written into the text
+	/// and neighbouring text is kept in one block.
+	fn push_text(blocks: &mut Vec<google::Content>, text: String) {
+		match blocks.last_mut() {
+			Some(google::Content::Text { text: last }) => last.push_str(&text),
+			_ => blocks.push(google::Content::Text { text }),
 		}
 	}
 
