@@ -25,7 +25,7 @@ pub mod from_responses {
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		Ok(TranslatedRequest {
-			request: translate_internal(typed),
+			request: translate_internal(typed)?,
 			namespaces,
 		})
 	}
@@ -38,7 +38,7 @@ pub mod from_responses {
 		})
 	}
 
-	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
+	fn translate_internal(req: responses::CreateResponse) -> Result<completions::Request, AIError> {
 		use responses::{
 			EasyInputContent, InputContent, InputItem, InputMessage, InputParam, InputRole,
 			InputTextContent, Item, MessageItem, OutputMessageContent, Role as ResponsesRole,
@@ -75,24 +75,7 @@ pub mod from_responses {
 					ResponsesRole::User => {
 						let content = match msg.content {
 							EasyInputContent::Text(text) => completions::RequestUserMessageContent::Text(text),
-							EasyInputContent::ContentList(parts) => {
-								completions::RequestUserMessageContent::Array(
-									parts
-										.into_iter()
-										.filter_map(|part| match part {
-											InputContent::InputText(text) => {
-												Some(completions::RequestUserMessageContentPart::Text(
-													completions::RequestMessageContentPartText {
-														text: text.text,
-														prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
-													},
-												))
-											},
-											_ => None,
-										})
-										.collect(),
-								)
-							},
+							EasyInputContent::ContentList(parts) => translate_user_content(parts)?,
 						};
 						messages.push(completions::RequestMessage::User(
 							completions::RequestUserMessage {
@@ -186,25 +169,7 @@ pub mod from_responses {
 							InputRole::User => {
 								messages.push(completions::RequestMessage::User(
 									completions::RequestUserMessage {
-										content: completions::RequestUserMessageContent::Array(
-											msg
-												.content
-												.into_iter()
-												.filter_map(|content| match content {
-													InputContent::InputText(text) => {
-														Some(completions::RequestUserMessageContentPart::Text(
-															completions::RequestMessageContentPartText {
-																text: text.text,
-																prompt_cache_breakpoint: cache_breakpoint(
-																	text.prompt_cache_breakpoint,
-																),
-															},
-														))
-													},
-													_ => None,
-												})
-												.collect(),
-										),
+										content: translate_user_content(msg.content)?,
 										name: None,
 									},
 								));
@@ -463,7 +428,7 @@ pub mod from_responses {
 		};
 
 		#[allow(deprecated)]
-		completions::Request {
+		Ok(completions::Request {
 			messages,
 			tools,
 			tool_choice,
@@ -497,7 +462,44 @@ pub mod from_responses {
 			functions: None,
 			service_tier: None,
 			web_search_options: None,
+		})
+	}
+
+	fn translate_user_content(
+		content: Vec<responses::InputContent>,
+	) -> Result<completions::RequestUserMessageContent, AIError> {
+		use completions::RequestUserMessageContentPart;
+
+		let mut parts = Vec::with_capacity(content.len());
+		for part in content {
+			parts.push(match part {
+				responses::InputContent::InputText(text) => {
+					RequestUserMessageContentPart::Text(completions::RequestMessageContentPartText {
+						text: text.text,
+						prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
+					})
+				},
+				responses::InputContent::InputImage(image) => {
+					let url = image
+						.image_url
+						.filter(|url| !url.is_empty())
+						.ok_or_else(|| {
+							AIError::UnsupportedConversion(agent_core::strng::literal!(
+								"Responses input_image requires image_url for Chat Completions"
+							))
+						})?;
+					RequestUserMessageContentPart::ImageUrl(completions::RequestMessageContentPartImage {
+						image_url: completions::ImageUrl {
+							url,
+							detail: Some(image.detail),
+						},
+						prompt_cache_breakpoint: None,
+					})
+				},
+				_ => continue,
+			});
 		}
+		Ok(completions::RequestUserMessageContent::Array(parts))
 	}
 }
 

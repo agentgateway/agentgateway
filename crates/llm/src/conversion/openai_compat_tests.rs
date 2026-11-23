@@ -1,7 +1,38 @@
 use bytes::Bytes;
 use serde_json::{Value, json};
 
-use super::to_responses;
+use super::{from_responses, to_responses};
+
+#[rstest::rstest]
+fn responses_to_completions_rejects_images_without_a_url(
+	#[values(None, Some("message"))] message_type: Option<&str>,
+	#[values(None, Some(""))] image_url: Option<&str>,
+) {
+	let mut message = json!({
+		"role": "user",
+		"content": [
+			{"type": "input_text", "text": "Describe this image."},
+			{"type": "input_image", "file_id": "file-image"}
+		]
+	});
+	if let Some(message_type) = message_type {
+		message["type"] = json!(message_type);
+	}
+	if let Some(image_url) = image_url {
+		message["content"][1]["image_url"] = json!(image_url);
+	}
+	let request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"input": [message]
+	}))
+	.unwrap();
+
+	let result = from_responses::translate(&request);
+	assert!(
+		matches!(&result, Err(crate::AIError::UnsupportedConversion(reason)) if reason.contains("image_url")),
+		"{result:?}"
+	);
+}
 
 fn translate(input: &[u8]) -> Value {
 	let response =
