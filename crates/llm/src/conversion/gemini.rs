@@ -437,21 +437,24 @@ pub mod from_decisions {
 				Some(google::MediaResolution::High)
 			},
 		};
-		let source =
-			if image.image_url.starts_with("https://") || image.image_url.starts_with("http://") {
-				google::ImageSource::Uri {
-					uri: image.image_url,
-				}
-			} else {
-				let Some((mime_type, data)) = super::super::completions::parse_data_url(&image.image_url)
-				else {
-					return Err(AIError::UnsupportedContent);
-				};
-				google::ImageSource::Data {
-					data: data.to_string(),
-					mime_type: mime_type.to_string(),
-				}
+		if image.image_url.starts_with("https://") || image.image_url.starts_with("http://") {
+			let source = google::MediaSource::Uri {
+				uri: image.image_url,
 			};
+			return Ok(google::Content::Image { source, resolution });
+		}
+		let Some((mime_type, data)) = super::super::completions::parse_data_url(&image.image_url)
+		else {
+			return Err(AIError::UnsupportedContent);
+		};
+		let source = google::MediaSource::Data {
+			data: data.to_string(),
+			mime_type: mime_type.to_string(),
+		};
+		// OpenAI accepts PDFs as image inputs, but Google only takes them as document content.
+		if mime_type == "application/pdf" {
+			return Ok(google::Content::Document { source, resolution });
+		}
 		Ok(google::Content::Image { source, resolution })
 	}
 

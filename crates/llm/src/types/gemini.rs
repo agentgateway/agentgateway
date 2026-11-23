@@ -885,7 +885,13 @@ pub mod decisions {
 		},
 		Image {
 			#[serde(flatten)]
-			source: ImageSource,
+			source: MediaSource,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			resolution: Option<MediaResolution>,
+		},
+		Document {
+			#[serde(flatten)]
+			source: MediaSource,
 			#[serde(skip_serializing_if = "Option::is_none")]
 			resolution: Option<MediaResolution>,
 		},
@@ -893,7 +899,7 @@ pub mod decisions {
 
 	#[derive(Debug, Serialize)]
 	#[serde(untagged)]
-	pub enum ImageSource {
+	pub enum MediaSource {
 		Data { data: String, mime_type: String },
 		Uri { uri: String },
 	}

@@ -446,7 +446,7 @@ fn decisions_image_media_types_are_forwarded_to_gemini() {
 		json!([
 			{"type": "text", "text": "user:"},
 			{"type": "image", "data": "aGk=", "mime_type": "image/avif"},
-			{"type": "image", "data": "aGk=", "mime_type": "application/pdf", "resolution": "high"}
+			{"type": "document", "data": "aGk=", "mime_type": "application/pdf", "resolution": "high"}
 		])
 	);
 }
