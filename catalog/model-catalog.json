@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-20T08:24:57Z"
+    "generatedAt": "2026-11-23T08:28:00Z"
   },
   "providers": {
     "anthropic": {
@@ -11114,11 +11114,36 @@
           }
         },
         "writer.palmyra-vision-7b": {
+          "name": "Palmyra Vision 7B",
+          "released": "2026-03-26",
+          "rates": {
+            "input": "0.15",
+            "output": "0.6"
+          },
           "tags": [
             "mantle",
             "openai_completions",
             "runtime"
-          ]
+          ],
+          "limits": {
+            "context": 4096,
+            "output": 4096
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": false,
+            "structuredOutput": true,
+            "toolCall": false,
+            "temperature": true
+          }
         },
         "writer.palmyra-x4-v1:0": {
           "name": "Palmyra X4",
@@ -22902,6 +22927,41 @@
             "temperature": true
           }
         },
+        "tencent/Hy4": {
+          "name": "Hy4",
+          "released": "2026-11-04",
+          "rates": {
+            "input": "0.834",
+            "output": "2.501",
+            "cacheRead": "0.042"
+          },
+          "limits": {
+            "context": 1048576,
+            "input": 983010,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "high"
+            ]
+          }
+        },
         "tencent/Hy4-preview": {
           "name": "Hy4 preview",
           "released": "2026-08-28",
@@ -27159,6 +27219,34 @@
           },
           "reasoning": {
             "toggle": true
+          }
+        },
+        "genie-4": {
+          "name": "Genie 4",
+          "released": "2026-11-19",
+          "endpoints": [],
+          "rates": {
+            "input": "1.5",
+            "output": "9"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "video",
+              "audio"
+            ]
+          },
+          "capabilities": {
+            "reasoning": false,
+            "toolCall": false,
+            "temperature": false
           }
         },
         "lyria-3-clip-preview": {
@@ -33086,6 +33174,40 @@
             ]
           }
         },
+        "tencent/Hy4": {
+          "name": "Hy4",
+          "released": "2026-11-04",
+          "rates": {
+            "input": "0.417",
+            "output": "1.2505"
+          },
+          "limits": {
+            "context": 1048576,
+            "input": 983010,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "high"
+            ]
+          }
+        },
         "tencent/Hy4-flash": {
           "name": "Hy4 flash",
           "released": "2026-11-16",
@@ -35493,6 +35615,33 @@
               "high",
               "max"
             ]
+          }
+        },
+        "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": {
+          "name": "NVIDIA-Nemotron-3-Nano-30B-A3B",
+          "released": "2025-12-15",
+          "rates": {
+            "input": "0.06",
+            "output": "0.24",
+            "cacheRead": "0.012"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 262144
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
           }
         },
         "nvidia/Nemotron-3-Ultra-550b-a55b": {
