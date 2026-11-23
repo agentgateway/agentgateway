@@ -1,5 +1,6 @@
 import type { ConfigResource, ConfigResourceKind } from '@/api/configResourcesApi';
 import { keyValue } from '@/credentialDisplay';
+import { mcpResourceId, mcpServerEndpoints, splitMcpResourceId, trimTrailingSlash } from '@/mcp';
 import type {
 	GatewayConfig,
 	LlmApiKeyPolicy,
@@ -223,10 +224,13 @@ export function isDatabaseConfigResource(
 
 export function fileOwnedMcpSettingFields(
 	config: GatewayConfig | null | undefined,
-	hybrid: boolean
+	hybrid: boolean,
+	endpoint?: string
 ): ReadonlySet<string> {
 	if (!hybrid) return new Set();
-	const mcp = config?.mcp;
+	const mcp = endpoint
+		? config?.mcp?.endpoints?.find(item => trimTrailingSlash(item.path) === endpoint)
+		: config?.mcp;
 	return new Set(mcpSettingsFields.filter(field => Object.hasOwn(mcp ?? {}, field)));
 }
 
@@ -255,15 +259,63 @@ export function setLlmGuardrails(config: GatewayConfig, guardrails: LlmGuardrail
 	else delete policies.guardrails;
 }
 
-export function upsertMcpTarget(config: GatewayConfig, target: McpTarget, previousName?: string) {
+export function upsertMcpTarget(
+	config: GatewayConfig,
+	target: McpTarget,
+	endpoint?: string,
+	previousId?: string
+) {
 	const mcp = ensureMcp(config);
-	mcp.targets ??= [];
-	const index = mcp.targets.findIndex(item => item.name === (previousName ?? target.name));
-	if (index >= 0) {
-		mcp.targets[index] = target;
-	} else {
-		mcp.targets.push(target);
+	const previous = splitMcpResourceId(previousId ?? mcpResourceId(target.name, endpoint));
+	const source = mcpTargetList(mcp, previous.endpoint, false);
+	const index = source?.findIndex(item => item.name === previous.name) ?? -1;
+	const destination = mcpTargetList(mcp, endpoint, true) ?? [];
+	if (index >= 0 && source === destination) {
+		destination[index] = target;
+		return;
 	}
+	if (index >= 0) source?.splice(index, 1);
+	destination.push(target);
+}
+
+function mcpTargetList(mcp: McpConfig, endpoint: string | undefined, create: boolean) {
+	if (!endpoint) {
+		mcp.targets ??= [];
+		return mcp.targets;
+	}
+	mcp.endpoints ??= [];
+	let entry = mcp.endpoints.find(item => trimTrailingSlash(item.path) === endpoint);
+	if (!entry) {
+		if (!create) return undefined;
+		entry = { path: endpoint };
+		mcp.endpoints.push(entry);
+	}
+	entry.targets ??= [];
+	return entry.targets;
+}
+
+/** Returns the policies of the top-level MCP config, or of the endpoint at `endpoint`. */
+export function mcpPolicies(mcp: McpConfig | null | undefined, endpoint?: string) {
+	const scope = endpoint
+		? mcp?.endpoints?.find(item => trimTrailingSlash(item.path) === endpoint)
+		: mcp;
+	return scope?.policies as Record<string, unknown> | null | undefined;
+}
+
+export function ensureMcpPolicies(config: GatewayConfig, endpoint?: string) {
+	const mcp = ensureMcp(config);
+	let scope: { policies?: unknown } = mcp;
+	if (endpoint) {
+		mcp.endpoints ??= [];
+		let entry = mcp.endpoints.find(item => trimTrailingSlash(item.path) === endpoint);
+		if (!entry) {
+			entry = { path: endpoint };
+			mcp.endpoints.push(entry);
+		}
+		scope = entry;
+	}
+	scope.policies ??= {};
+	return scope.policies as Record<string, unknown>;
 }
 
 export function getApiKeyPolicy(config: GatewayConfig): LlmApiKeyPolicy {
@@ -372,7 +424,6 @@ export function configWarnings(
 ): string[] {
 	const warnings: string[] = [];
 	const models = effectiveLlm?.models ?? config.llm?.models ?? [];
-	const mcpTargets = config.mcp?.targets ?? [];
 	const duplicateNames = models
 		.filter(model => !model.id)
 		.map(model => model.name)
@@ -402,9 +453,12 @@ export function configWarnings(
 			warnings.push(`${model.name || 'Unnamed model'}: ${warning}`);
 		}
 	}
-	const duplicateMcpTargets = mcpTargets
-		.map(target => target.name)
-		.filter((name, index, names) => names.indexOf(name) !== index);
+	const duplicateMcpTargets = mcpServerEndpoints(config.mcp).flatMap(endpoint =>
+		endpoint.targets
+			.map(target => target.name)
+			.filter((name, index, names) => names.indexOf(name) !== index)
+			.map(name => mcpResourceId(name, endpoint.path))
+	);
 	if (duplicateMcpTargets.length > 0)
 		warnings.push(
 			`Duplicate MCP server names: ${Array.from(new Set(duplicateMcpTargets)).join(', ')}.`

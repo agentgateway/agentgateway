@@ -1,4 +1,5 @@
 import { sendMcpJsonRpc } from '@/api/playgroundApi';
+import type { McpConfig, McpTarget } from '@/types';
 
 export type McpTool = {
 	name: string;
@@ -74,4 +75,55 @@ function isMcpTool(value: unknown): value is McpTool {
 	return Boolean(
 		value && typeof value === 'object' && typeof (value as { name?: unknown }).name === 'string'
 	);
+}
+
+/** A set of MCP targets served together at one path. */
+export type McpServerEndpoint = {
+	/** The endpoint path, or undefined for the top-level targets when there are no endpoints. */
+	endpoint?: string;
+	/** Path clients connect to. */
+	path: string;
+	targets: McpTarget[];
+	/** Resource ID of each target. */
+	ids: string[];
+};
+
+export function mcpServerEndpoints(mcp: McpConfig | null | undefined): McpServerEndpoint[] {
+	const topLevel = mcp?.targets ?? [];
+	const topLevelIds = topLevel.map(t => t.name);
+	const endpoints = (mcp?.endpoints ?? []).map(endpoint => {
+		const path = trimTrailingSlash(endpoint.path);
+		const targets = endpoint.targets ?? [];
+		return { endpoint: path, path, targets, ids: targets.map(t => mcpResourceId(t.name, path)) };
+	});
+	if (endpoints.length === 0) return [{ path: '/mcp', targets: topLevel, ids: topLevelIds }];
+	// The top-level targets are the targets of the /mcp endpoint.
+	if (topLevel.length === 0) return endpoints;
+	const defaultEndpoint = endpoints.find(endpoint => endpoint.path === '/mcp');
+	if (defaultEndpoint) {
+		defaultEndpoint.targets = [...topLevel, ...defaultEndpoint.targets];
+		defaultEndpoint.ids = [...topLevelIds, ...defaultEndpoint.ids];
+		return endpoints;
+	}
+	return [{ endpoint: '/mcp', path: '/mcp', targets: topLevel, ids: topLevelIds }, ...endpoints];
+}
+
+export function mcpEndpointLabel(endpoint: McpServerEndpoint) {
+	return endpoint.endpoint ?? 'Default (/mcp)';
+}
+
+/** Resource ID of an MCP target or policy: `<endpoint path>:<name>` in an endpoint, otherwise the name. */
+export function mcpResourceId(name: string, endpoint?: string) {
+	return endpoint ? `${endpoint}:${name}` : name;
+}
+
+export function splitMcpResourceId(id: string): { endpoint?: string; name: string } {
+	const index = id.lastIndexOf(':');
+	return id.startsWith('/') && index > 0
+		? { endpoint: id.slice(0, index), name: id.slice(index + 1) }
+		: { name: id };
+}
+
+export function trimTrailingSlash(path: string) {
+	return path.replace(/\/+$/, '');
 }

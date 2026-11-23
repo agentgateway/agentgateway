@@ -1,5 +1,3 @@
-import { parseJsonOrText } from '@/api/base';
-
 export async function sendChatCompletion(args: {
 	baseUrl: string;
 	model: string;
@@ -31,6 +29,14 @@ export async function sendChatCompletion(args: {
 		throw new Error(text || `${response.status} ${response.statusText}`);
 	}
 	return parseJsonOrText(text);
+}
+
+function parseJsonOrText(text: string) {
+	try {
+		return JSON.parse(text) as unknown;
+	} catch {
+		return text;
+	}
 }
 
 export async function sendMcpJsonRpc(args: {

@@ -37,15 +37,16 @@ export function llmPlaygroundEndpoint(
 }
 
 export function mcpPlaygroundEndpoint(
-	config: GatewayConfig | null | undefined
+	config: GatewayConfig | null | undefined,
+	path = '/mcp'
 ): PlaygroundEndpoint {
 	return playgroundEndpoint(
 		config,
 		mcpGatewayRefs(config),
 		config?.mcp?.port ?? 3000,
 		'http',
-		'/mcp',
-		'/mcp'
+		path,
+		path
 	);
 }
 

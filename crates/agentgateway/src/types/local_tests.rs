@@ -1212,6 +1212,11 @@ async fn test_mcp_simple_config() {
 }
 
 #[tokio::test]
+async fn test_mcp_endpoints_config() {
+	test_config_parsing("mcp_endpoints").await;
+}
+
+#[tokio::test]
 async fn test_llm_mcp_same_port_is_rejected() {
 	let err = normalize_test_yaml(
 		r#"
