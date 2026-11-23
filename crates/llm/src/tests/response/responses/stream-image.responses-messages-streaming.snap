@@ -5,32 +5,15 @@ description: src/tests/response/responses/stream-image.json
 event: message_start
 data: {"type":"message_start","message":{"id":"","type":"message","role":"assistant","content":[],"model":"gpt-5-2025-08-07","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
 
-event: content_block_start
-data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
-
-event: content_block_stop
-data: {"type":"content_block_stop","index":0}
-
-event: message_delta
-data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1755,"output_tokens":1314}}
-
-event: message_stop
-data: {"type":"message_stop"}
+event: error
+data: {"type":"error","error":{"type":"api_error","message":"responses output item cannot be represented by messages"}}
 
 
 
 {
-  "input_tokens": 1755,
-  "output_tokens": 1314,
-  "total_tokens": 3069,
-  "reasoning_tokens": 1152,
-  "cached_input_tokens": 0,
-  "service_tier": "default",
+  "service_tier": "auto",
   "provider_model": "gpt-5-2025-08-07",
   "response_id": "resp_062bc30e2ee47b4c0069cbe41e31188190aff11955555346a5",
-  "finish_reasons": [
-    "stop"
-  ],
   "completion": [
     ""
   ]

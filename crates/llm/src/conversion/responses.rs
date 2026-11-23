@@ -945,10 +945,8 @@ pub mod from_messages {
 					}
 				},
 				responses::OutputItem::FunctionCall(call) => {
-					if call.namespace.is_some() || call.caller.is_some() {
-						return unsupported(
-							"responses namespaced/caller function calls cannot be represented by messages",
-						);
+					if is_namespaced(&call) {
+						return unsupported(NAMESPACED_CALL);
 					}
 					if matches!(call.status, Some(responses::OutputStatus::InProgress)) {
 						return unsupported(
@@ -970,7 +968,7 @@ pub mod from_messages {
 					);
 				},
 				_ => {
-					return unsupported("responses output item cannot be represented by messages");
+					return unsupported(UNREPRESENTABLE_ITEM);
 				},
 			}
 		}
@@ -1083,6 +1081,33 @@ pub mod from_messages {
 					messages::MessagesStreamEvent::ContentBlockStop { index: *index },
 				);
 			}
+		}
+
+		/// Ends the stream with an error, as the buffered handler refuses the same reply. Skipping
+		/// the item would hand the client a normal finish without it.
+		fn refuse_output_item(
+			state: &mut StreamState,
+			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+			output_index: u32,
+			item_type: &str,
+			reason: &'static str,
+		) {
+			tracing::warn!(
+				output_index,
+				item_type,
+				reason,
+				"Responses stream has an output item messages cannot represent; emitting error event"
+			);
+			state.failed = true;
+			push_event(
+				events,
+				messages::MessagesStreamEvent::Error {
+					error: messages::MessagesError {
+						r#type: error_type(None).to_string(),
+						message: reason.to_string(),
+					},
+				},
+			);
 		}
 
 		fn finish_refusal(
@@ -1370,6 +1395,8 @@ pub mod from_messages {
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			if state.failed {
+				// TODO(mk): this also drops the usage the provider reports at the end of the stream, so a
+				// reply that fails partway through may not be charged its full cost.
 				return events;
 			}
 			match evt {
@@ -1397,15 +1424,34 @@ pub mod from_messages {
 					},
 					responses::ResponseStreamEvent::ResponseOutputItemAdded(added) => {
 						ensure_message_start(&mut state, &mut events, &log);
-						if let responses::OutputItem::FunctionCall(call) = added.item {
-							open_tool_block(
+						match added.item {
+							responses::OutputItem::FunctionCall(call) if is_namespaced(&call) => {
+								refuse_output_item(
+									&mut state,
+									&mut events,
+									added.output_index,
+									"function_call",
+									NAMESPACED_CALL,
+								);
+							},
+							responses::OutputItem::FunctionCall(call) => {
+								open_tool_block(
+									&mut state,
+									&mut events,
+									added.output_index,
+									Some(call.call_id),
+									Some(call.name),
+								);
+								record_token(&mut state, &log);
+							},
+							responses::OutputItem::Message(_) | responses::OutputItem::Reasoning(_) => {},
+							item => refuse_output_item(
 								&mut state,
 								&mut events,
 								added.output_index,
-								Some(call.call_id),
-								Some(call.name),
-							);
-							record_token(&mut state, &log);
+								&output_item_type(&item),
+								UNREPRESENTABLE_ITEM,
+							),
 						}
 					},
 					responses::ResponseStreamEvent::ResponseContentPartAdded(added) => {
@@ -1547,6 +1593,15 @@ pub mod from_messages {
 						}
 					},
 					responses::ResponseStreamEvent::ResponseOutputItemDone(done) => match done.item {
+						responses::OutputItem::FunctionCall(call) if is_namespaced(&call) => {
+							refuse_output_item(
+								&mut state,
+								&mut events,
+								done.output_index,
+								"function_call",
+								NAMESPACED_CALL,
+							);
+						},
 						responses::OutputItem::FunctionCall(call) => {
 							state.saw_tool_call = true;
 							let index = open_tool_block(
@@ -1586,11 +1641,18 @@ pub mod from_messages {
 						responses::OutputItem::Message(_) => {
 							close_text_blocks_for_output(&mut state, &mut events, done.output_index);
 						},
-						_ => {
+						responses::OutputItem::Reasoning(_) => {
 							tracing::warn!(
-								"Skipping unsupported Responses output item during messages stream translation"
+								"Skipping unsupported Responses reasoning output during messages stream translation"
 							);
 						},
+						item => refuse_output_item(
+							&mut state,
+							&mut events,
+							done.output_index,
+							&output_item_type(&item),
+							UNREPRESENTABLE_ITEM,
+						),
 					},
 					responses::ResponseStreamEvent::ResponseCompleted(completed) => {
 						record_response_metadata(&mut state, &log, &completed.response);
@@ -1835,6 +1897,23 @@ pub mod from_messages {
 			}
 		}
 		Ok(())
+	}
+
+	const UNREPRESENTABLE_ITEM: &str = "responses output item cannot be represented by messages";
+	const NAMESPACED_CALL: &str =
+		"responses namespaced/caller function calls cannot be represented by messages";
+
+	/// Messages tool calls have only a name, so a namespace or caller would be lost.
+	fn is_namespaced(call: &responses::FunctionToolCall) -> bool {
+		call.namespace.is_some() || call.caller.is_some()
+	}
+
+	/// The item's wire `type`, for logging which item was refused.
+	fn output_item_type(item: &responses::OutputItem) -> String {
+		serde_json::to_value(item)
+			.ok()
+			.and_then(|item| item.get("type")?.as_str().map(str::to_string))
+			.unwrap_or_else(|| "unknown".to_string())
 	}
 
 	fn unsupported<T>(reason: &'static str) -> Result<T, AIError> {

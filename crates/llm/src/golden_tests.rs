@@ -894,21 +894,7 @@ mod responses {
 		let input_path = fixture_path(relative_path);
 		let input_bytes = fs::read(&input_path)
 			.unwrap_or_else(|e| panic!("{relative_path}: failed to read streaming input file: {e}"));
-		let info = Arc::new(Mutex::new(LLMInfo::new(
-			LLMRequest {
-				input_tokens: None,
-				input_format: InputFormat::Detect(None),
-				cache_convention: CacheTokenConvention::pending(),
-				request_model: strng::literal!("input-model"),
-				original_model: None,
-				provider: Default::default(),
-				streaming: true,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
-			},
-			LLMResponse::default(),
-		)));
+		let info = streaming_info();
 		let reporter = TestStreamingReporter { info: info.clone() };
 		let mut response = http::Response::new(agent_http::Body::from(input_bytes));
 		response
@@ -958,6 +944,81 @@ mod responses {
 		}, {
 			insta::assert_snapshot!(format!("{snapshot_name}-streaming"), report);
 		});
+	}
+
+	fn streaming_info() -> Arc<Mutex<LLMInfo>> {
+		Arc::new(Mutex::new(LLMInfo::new(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Detect(None),
+				cache_convention: CacheTokenConvention::pending(),
+				request_model: strng::literal!("input-model"),
+				original_model: None,
+				provider: Default::default(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponse::default(),
+		)))
+	}
+
+	/// Translates a Responses stream to Messages and returns the client's SSE event names and body.
+	async fn responses_stream_to_messages(
+		upstream: agent_http::Body,
+		info: &Arc<Mutex<LLMInfo>>,
+	) -> (Vec<String>, String) {
+		let body = conversion::responses::from_messages::translate_stream(
+			upstream,
+			1024 * 1024,
+			StreamingUsageGuard::new(Box::new(TestStreamingReporter { info: info.clone() })),
+			LogContentFields::default(),
+		);
+		let body = String::from_utf8(body.collect().await.unwrap().to_bytes().to_vec()).unwrap();
+		let events = body
+			.lines()
+			.filter_map(|line| line.strip_prefix("event: "))
+			.map(str::to_string)
+			.collect();
+		(events, body)
+	}
+
+	#[rstest::rstest]
+	#[case::namespaced(r#","namespace":"weather""#, false)]
+	#[case::caller(r#","caller":{"type":"direct"}"#, false)]
+	#[case::plain("", true)]
+	#[tokio::test]
+	async fn responses_function_call_stream_to_messages(
+		#[case] call_field: &str,
+		#[case] representable: bool,
+	) {
+		let input = fs::read_to_string(fixture_path(
+			"response/responses/stream-namespaced_tool_call.json",
+		))
+		.unwrap()
+		.replace(r#","namespace":"weather""#, call_field);
+		let info = streaming_info();
+		let (events, body) = responses_stream_to_messages(agent_http::Body::from(input), &info).await;
+
+		assert!(
+			body.contains("I will check that."),
+			"text sent before the call is kept: {body}"
+		);
+		if representable {
+			assert!(body.contains(r#""type":"tool_use""#), "{body}");
+			assert_eq!(events.last().map(String::as_str), Some("message_stop"));
+		} else {
+			assert!(!body.contains("tool_use"), "{body}");
+			assert_eq!(
+				events.last().map(String::as_str),
+				Some("error"),
+				"the error must be the last event"
+			);
+		}
+		// Usage arrives at the end of the stream, after a refusal has stopped reading.
+		let want_tokens = representable.then_some(35);
+		assert_eq!(info.lock().unwrap().response.total_tokens, want_tokens);
 	}
 
 	const COMPLETIONS_TO_COMPLETIONS: &str = "completions-completions";
@@ -1201,6 +1262,7 @@ mod responses {
 		("stream-content_filter", &[RESPONSES_TO_MESSAGES]),
 		("stream-context_window", &[RESPONSES_TO_MESSAGES]),
 		("stream-failed", &[RESPONSES_TO_MESSAGES]),
+		("stream-namespaced_tool_call", &[RESPONSES_TO_MESSAGES]),
 	];
 
 	#[tokio::test]

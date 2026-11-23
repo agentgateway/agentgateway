@@ -1,0 +1,39 @@
+event: response.created
+data: {"type":"response.created","sequence_number":1,"response":{"id":"resp_tool","object":"response","created_at":123,"status":"in_progress","model":"gpt-4.1-mini","output":[]}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","id":"msg_text","role":"assistant","status":"in_progress","content":[]}}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","sequence_number":3,"item_id":"msg_text","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"msg_text","output_index":0,"content_index":0,"delta":"I will check that."}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","sequence_number":5,"item_id":"msg_text","output_index":0,"content_index":0,"text":"I will check that."}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","sequence_number":6,"item_id":"msg_text","output_index":0,"content_index":0,"part":{"type":"output_text","text":"I will check that.","annotations":[]}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":7,"output_index":0,"item":{"type":"message","id":"msg_text","role":"assistant","status":"completed","content":[{"type":"output_text","text":"I will check that.","annotations":[]}]}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":8,"output_index":1,"item":{"type":"function_call","id":"fc_1","call_id":"call_weather","name":"get_weather","namespace":"weather","arguments":"","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":9,"item_id":"fc_1","output_index":1,"delta":"{\"location\":"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":10,"item_id":"fc_1","output_index":1,"delta":"\"San Francisco\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","sequence_number":11,"item_id":"fc_1","output_index":1,"name":"get_weather","arguments":"{\"location\":\"San Francisco\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":12,"output_index":1,"item":{"type":"function_call","id":"fc_1","call_id":"call_weather","name":"get_weather","namespace":"weather","arguments":"{\"location\":\"San Francisco\"}","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":13,"response":{"id":"resp_tool","object":"response","created_at":123,"status":"completed","model":"gpt-4.1-mini","service_tier":"default","output":[{"type":"message","id":"msg_text","role":"assistant","status":"completed","content":[{"type":"output_text","text":"I will check that.","annotations":[]}]},{"type":"function_call","id":"fc_1","call_id":"call_weather","name":"get_weather","namespace":"weather","arguments":"{\"location\":\"San Francisco\"}","status":"completed"}],"usage":{"input_tokens":30,"input_tokens_details":{"cached_tokens":4,"cache_write_tokens":6,"cache_write_tokens_details":{"ttl_30m_tokens":2,"ttl_12h_tokens":4}},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":35}}}
+
