@@ -4191,7 +4191,7 @@ mod helpers {
 
 	impl CachePoint for Option<&CacheControlEphemeral> {
 		fn cache_point(self) -> Option<bedrock::CachePointBlock> {
-			let CacheControlEphemeral::Ephemeral { ttl } = self?;
+			let CacheControlEphemeral::Ephemeral { ttl, .. } = self?;
 			Some(bedrock::CachePointBlock {
 				ttl: ttl.clone(),
 				..create_cache_point()

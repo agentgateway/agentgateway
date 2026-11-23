@@ -1,0 +1,271 @@
+---
+source: crates/llm/src/conversion/ir/request_tests.rs
+---
+{
+  "cache_control": [
+    {
+      "path": "system[1].cache_control.ttl",
+      "reason": "unsupported"
+    },
+    {
+      "path": "tools[0].cache_control",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[0].content[1].cache_control.ttl",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[1].content[0].cache_control.ttl",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[1].content[1].cache_control.ttl",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[2].content[3].cache_control",
+      "reason": "unsupported"
+    }
+  ],
+  "cache_control_dropped_blocks": [
+    {
+      "path": "messages[2].content[0]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[2].content[2]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[2].content[3]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[3].content[2]",
+      "reason": "unread"
+    },
+    {
+      "path": "tools[1]",
+      "reason": "unsupported"
+    },
+    {
+      "path": "tools[2].cache_control",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[1].content[0]",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[3].content[1]",
+      "reason": "unsupported"
+    }
+  ],
+  "cache_control_dropped_server_tools": [
+    {
+      "path": "messages[1].content[0]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[1].content[1]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[2].content[1]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[4].content[0].content[1]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[0].content[0].cache_control",
+      "reason": "unsupported"
+    }
+  ],
+  "cache_control_reasoning_prefix": [
+    {
+      "path": "cache_control",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[0].content[0].cache_control.ttl",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[0].content[1].cache_control.ttl",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[1].content[0]",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[1].content[1]",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[3].content[0]",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[4].content[0].cache_control.ttl",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[4].content[1].cache_control.ttl",
+      "reason": "unsupported"
+    }
+  ],
+  "cache_control_unsupported": [
+    {
+      "path": "system[1].cache_control",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[0].content[0].cache_control",
+      "reason": "unsupported"
+    }
+  ],
+  "citations": [
+    {
+      "path": "messages[0].content[0].citations",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[1].content[0].citations",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[2].content[0].citations",
+      "reason": "unsupported"
+    }
+  ],
+  "document": [
+    {
+      "path": "messages[0].content[0].cache_control",
+      "reason": "unsupported"
+    }
+  ],
+  "document_inline": [
+    {
+      "path": "messages[0].content[0].cache_control",
+      "reason": "unsupported"
+    }
+  ],
+  "document_unsupported_source": {
+    "error": "unsupported_conversion: unsupported conversion: messages document source cannot be represented by responses"
+  },
+  "reasoning": [
+    {
+      "path": "output_format",
+      "reason": "unread"
+    },
+    {
+      "path": "thinking.display",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[0].content[0].cache_control.scope",
+      "reason": "unread"
+    }
+  ],
+  "reasoning_replay": [
+    {
+      "path": "messages[1].content[0]",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[1].content[1]",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[3].content[0]",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[5].content[0]",
+      "reason": "unsupported"
+    }
+  ],
+  "reasoning_unsupported_model": [
+    {
+      "path": "thinking",
+      "reason": "unsupported"
+    }
+  ],
+  "server_tools": [
+    {
+      "path": "tools[0]",
+      "reason": "unsupported"
+    }
+  ],
+  "stop_sequences": [
+    {
+      "path": "stop_sequences",
+      "reason": "unsupported"
+    },
+    {
+      "path": "top_k",
+      "reason": "unsupported"
+    }
+  ],
+  "structured-output": [
+    {
+      "path": "top_k",
+      "reason": "unsupported"
+    }
+  ],
+  "system_message_mid_conversation": [
+    {
+      "path": "system[0].cache_control",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[6].content[0].cache_control",
+      "reason": "unsupported"
+    },
+    {
+      "path": "messages[7].content[0].cache_control",
+      "reason": "unsupported"
+    }
+  ],
+  "tool_reference": [
+    {
+      "path": "tools[1].defer_loading",
+      "reason": "unread"
+    }
+  ],
+  "tool_result_empty": {
+    "error": "request_parsing: failed to parse Messages request: missing field `content`"
+  },
+  "tool_result_unknown_part": [
+    {
+      "path": "tools[1].defer_loading",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[2].content[0].content[1]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[2].content[0].content[0].citations",
+      "reason": "unsupported"
+    }
+  ],
+  "unknown_content": [
+    {
+      "path": "messages[0].content[0]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[1].content[0]",
+      "reason": "unread"
+    },
+    {
+      "path": "messages[2].content[0]",
+      "reason": "unread"
+    }
+  ]
+}

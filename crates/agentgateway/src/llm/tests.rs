@@ -1056,6 +1056,42 @@ fn openai_inline_moderation_injected_after_messages_translation() {
 "#);
 }
 
+// The translated Messages request keeps the client's stream flag, with moderation applied.
+#[test]
+fn messages_to_responses_keeps_stream_flag() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	for stream in [false, true] {
+		let request = serde_json::from_value(json!({
+			"model": "gpt-5",
+			"max_tokens": 64,
+			"stream": stream,
+			"messages": [{"role": "user", "content": "hello"}]
+		}))
+		.unwrap();
+		let rendered = ChatTranslation {
+			input: InputFormat::Messages,
+			output: ChatFormat::OpenAIResponses,
+		}
+		.render_request(
+			types::ChatRequest::Messages(request),
+			&ChatRequestContext {
+				provider: &provider,
+				headers: &HeaderMap::new(),
+				prompt_caching: None,
+				catalog: None,
+			},
+		)
+		.unwrap();
+		let forwarded: Value = serde_json::from_slice(&rendered.body).unwrap();
+		assert_eq!(forwarded["stream"], json!(stream));
+		assert_eq!(forwarded["moderation"], openai_inline_moderation_value());
+		assert_eq!(forwarded["max_output_tokens"], json!(64));
+	}
+}
+
 #[test]
 fn openai_response_passthrough_preserves_moderation_fields() {
 	let completion_response: types::completions::Response = serde_json::from_value(json!({

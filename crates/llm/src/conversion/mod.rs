@@ -4,6 +4,7 @@ pub mod bedrock;
 pub mod completions;
 pub mod copilot;
 pub mod gemini;
+pub(crate) mod ir;
 pub mod messages;
 pub mod namespace_tools;
 pub mod openai_compat;
