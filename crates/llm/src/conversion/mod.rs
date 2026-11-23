@@ -39,6 +39,22 @@ fn typed_decisions_request(
 					.entry("role")
 					.or_insert(serde_json::Value::String("user".into()));
 			}
+			// The SDK requires a breakpoint mode that OpenAI defaults, and no translation keeps
+			// cache breakpoints, so they are removed before parsing.
+			for field in ["content", "output"] {
+				let Some(parts) = item
+					.get_mut(field)
+					.and_then(serde_json::Value::as_array_mut)
+				else {
+					continue;
+				};
+				for part in parts
+					.iter_mut()
+					.filter_map(serde_json::Value::as_object_mut)
+				{
+					part.remove("prompt_cache_breakpoint");
+				}
+			}
 		}
 	}
 	serde_json::from_value(request)

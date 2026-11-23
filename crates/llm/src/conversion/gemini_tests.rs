@@ -414,6 +414,33 @@ fn decisions_image_media_types_are_forwarded_to_gemini() {
 }
 
 #[test]
+fn decisions_cache_breakpoints_without_a_mode_are_accepted() {
+	// OpenAI defaults the breakpoint mode to explicit, so clients may send an empty object.
+	let request: crate::types::decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": [{"role": "user", "content": [
+			{"type": "input_text", "text": "text", "prompt_cache_breakpoint": {}}
+		]}],
+		"questions": [{"type": "predicate", "instructions": "yes?"}]
+	}))
+	.unwrap();
+	assert!(from_decisions::translate(&request).is_ok());
+	assert!(crate::conversion::systemone::from_decisions::translate(&request).is_ok());
+
+	let request: crate::types::decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": [{"role": "user", "content": [{
+			"type": "input_image",
+			"image_url": "data:image/png;base64,aGk=",
+			"prompt_cache_breakpoint": {}
+		}]}],
+		"questions": [{"type": "predicate", "instructions": "yes?"}]
+	}))
+	.unwrap();
+	assert!(from_decisions::translate(&request).is_ok());
+}
+
+#[test]
 fn decisions_prompt_cache_fields_are_dropped() {
 	let request = serde_json::from_value(json!({
 		"model": "gemini-decision-1",
