@@ -673,8 +673,8 @@ dependencies = [
 
 [[package]]
 name = "async-openai"
-version = "0.42.1"
-source = "git+https://github.com/howardjohn/async-openai?rev=fa0cf6c879b0ce30658df604d76d0b42f27b134c#fa0cf6c879b0ce30658df604d76d0b42f27b134c"
+version = "0.43.0"
+source = "git+https://github.com/howardjohn/async-openai?rev=fd85cd345c062fe082d27defc9fcc030019a3d03#fd85cd345c062fe082d27defc9fcc030019a3d03"
 dependencies = [
  "bytes",
  "derive_builder",

@@ -35,6 +35,7 @@ pub mod from_responses {
 	) -> Option<completions::PromptCacheBreakpointParam> {
 		breakpoint.map(|_| completions::PromptCacheBreakpointParam {
 			mode: completions::PromptCacheBreakpointParamMode::Explicit,
+			ttl: None,
 		})
 	}
 
@@ -649,6 +650,8 @@ pub mod to_responses {
 				code: responses::ResponseErrorCode::Other("content_filter".to_string()),
 				message: "Content filtered".to_string(),
 				misalignment: None,
+				param: None,
+				r#type: None,
 			}),
 			_ => None,
 		};
@@ -1336,6 +1339,8 @@ pub mod to_responses {
 					code: responses::ResponseErrorCode::Other("content_filter".to_string()),
 					message: "Content filtered".to_string(),
 					misalignment: None,
+					param: None,
+					r#type: None,
 				},
 			),
 		};

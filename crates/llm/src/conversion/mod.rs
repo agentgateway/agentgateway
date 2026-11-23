@@ -21,30 +21,40 @@ pub(crate) fn estimate_tokens<'a>(texts: impl IntoIterator<Item = &'a str>) -> u
 	(word_count * 13) / 10
 }
 
-pub(crate) fn decisions_input_value(
-	input: async_openai::types::decisions::DecisionInput,
-) -> Result<serde_json::Value, crate::AIError> {
-	use async_openai::types::decisions as d;
+fn typed_decisions_request(
+	request: &crate::types::decisions::Request,
+) -> Result<async_openai::types::decisions::DecisionRequest, crate::AIError> {
+	let mut request = serde_json::to_value(request).map_err(crate::AIError::RequestMarshal)?;
+	if let Some(items) = request
+		.get_mut("input")
+		.and_then(serde_json::Value::as_array_mut)
+	{
+		// Older Decisions clients could omit the user role on message items.
+		for item in items
+			.iter_mut()
+			.filter_map(serde_json::Value::as_object_mut)
+		{
+			if item.get("type").is_none_or(|kind| kind == "message") {
+				item
+					.entry("role")
+					.or_insert(serde_json::Value::String("user".into()));
+			}
+		}
+	}
+	serde_json::from_value(request)
+		.map_err(|err| crate::AIError::RequestParsing(crate::InputFormat::Decisions, err))
+}
 
-	match input {
-		d::DecisionInput::Text(text) => Ok(serde_json::Value::String(text)),
-		d::DecisionInput::Messages(items) => items
-			.into_iter()
-			.map(|d::DecisionInputItem::Message(message)| {
-				let content = match message.content {
-					d::DecisionInputContent::Text(text) => text,
-					d::DecisionInputContent::Parts(parts) => parts
-						.into_iter()
-						.map(|part| match part {
-							d::DecisionInputContentPart::InputText(text) => Ok(text.text),
-							d::DecisionInputContentPart::InputImage(_) => Err(crate::AIError::UnsupportedContent),
-						})
-						.collect::<Result<Vec<_>, _>>()?
-						.join("\n"),
-				};
-				Ok(serde_json::json!({"role": message.role, "content": content}))
-			})
-			.collect(),
+fn decisions_text_instructions(
+	instructions: async_openai::types::decisions::QuestionParamInstructions,
+) -> Result<String, crate::AIError> {
+	use async_openai::types::decisions::QuestionParamInstructions;
+
+	match instructions {
+		QuestionParamInstructions::Text(text) => Ok(text),
+		QuestionParamInstructions::Items(_) => Err(crate::AIError::UnsupportedConversion(
+			"typed Decisions question instructions are unsupported by this translation".into(),
+		)),
 	}
 }
 

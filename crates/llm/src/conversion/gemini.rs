@@ -209,22 +209,21 @@ pub mod from_decisions {
 	#[derive(Debug)]
 	enum QuestionKind {
 		Predicate,
-		Choice(IndexMap<String, d::ChoiceValue>),
+		Choice(IndexMap<String, d::ChoiceValueParam>),
 		Score(Vec<String>),
 	}
 
 	pub fn translate(req: &decisions::Request) -> Result<(Vec<u8>, State), AIError> {
-		let mut request = serde_json::to_value(req).map_err(AIError::RequestMarshal)?;
-		normalize_decisions_input(&mut request)?;
-		let req: d::DecisionRequest = serde_json::from_value(request)
-			.map_err(|err| AIError::RequestParsing(InputFormat::Decisions, err))?;
+		let req = super::super::typed_decisions_request(req)?;
 		let d::DecisionRequest {
 			model,
 			input,
 			questions: source_questions,
-			// Google has no equivalent. It identifies the caller for OpenAI safety systems and
-			// is not part of the evidence evaluated by the model.
+			// Google has no equivalent for these. The safety identifier is for OpenAI safety systems,
+			// and the Decisions API has no prompt caching controls.
 			safety_identifier: _,
+			prompt_cache_key: _,
+			prompt_cache_options: _,
 		} = req;
 		let input = translate_input(input)?;
 		let mut state = State {
@@ -238,7 +237,7 @@ pub mod from_decisions {
 					q.name,
 					QuestionKind::Predicate,
 					google::Question::Noul {
-						instructions: q.instructions,
+						instructions: super::super::decisions_text_instructions(q.instructions)?,
 						criteria: None,
 					},
 				),
@@ -256,7 +255,7 @@ pub mod from_decisions {
 						q.name,
 						QuestionKind::Choice(values),
 						google::Question::Choice {
-							instructions: q.instructions,
+							instructions: super::super::decisions_text_instructions(q.instructions)?,
 							criteria,
 						},
 					)
@@ -279,7 +278,7 @@ pub mod from_decisions {
 						q.name,
 						QuestionKind::Score(labels),
 						google::Question::Score {
-							instructions: q.instructions,
+							instructions: super::super::decisions_text_instructions(q.instructions)?,
 							criteria,
 						},
 					)
@@ -305,7 +304,7 @@ pub mod from_decisions {
 			let name = question.name.clone();
 			let answer = match (answer, &question.kind) {
 				(google::Answer::Noul { noul }, QuestionKind::Predicate) => {
-					d::AnswerResource::Predicate(d::PredicateAnswer {
+					d::AnswerResource::Predicate(d::AnswerResourcePredicate {
 						name,
 						probability: noul,
 					})
@@ -323,12 +322,15 @@ pub mod from_decisions {
 					};
 					let confidence =
 						choice_confidence(&probabilities.iter().map(|(_, p)| *p).collect::<Vec<_>>());
-					d::AnswerResource::Choice(d::ChoiceAnswer {
+					d::AnswerResource::Choice(d::AnswerResourceChoice {
 						name,
-						choice,
+						choice: response_choice_value(choice),
 						probabilities: probabilities
 							.into_iter()
-							.map(|(value, probability)| d::ChoiceProbability { value, probability })
+							.map(|(value, probability)| d::ChoiceProbabilityResource {
+								value: response_choice_value(value),
+								probability,
+							})
 							.collect(),
 						confidence,
 					})
@@ -346,18 +348,20 @@ pub mod from_decisions {
 					};
 					let probabilities = level_probabilities(&probabilities, labels.len());
 					let confidence = score_confidence(&probabilities);
-					d::AnswerResource::Score(d::ScoreAnswer {
+					d::AnswerResource::Score(d::AnswerResourceScore {
 						name,
 						score,
 						probabilities: labels
 							.iter()
 							.zip(probabilities)
 							.enumerate()
-							.map(|(index, (label, probability))| d::ScoreProbability {
-								value: index as i64,
-								label: label.clone(),
-								probability,
-							})
+							.map(
+								|(index, (label, probability))| d::ScoreProbabilityResource {
+									value: index as i64,
+									label: label.clone(),
+									probability,
+								},
+							)
 							.collect(),
 						confidence,
 					})
@@ -371,11 +375,14 @@ pub mod from_decisions {
 		serde_json::to_vec(&d::DecisionResponse {
 			model: state.model.clone(),
 			answers,
-			usage: d::DecisionUsage {
+			usage: d::ResponseUsage {
 				input_tokens,
 				output_tokens,
 				total_tokens: input_tokens + output_tokens,
-				input_tokens_details: Default::default(),
+				input_tokens_details: d::InputTokenDetails {
+					cache_write_tokens: Some(0),
+					..Default::default()
+				},
 				output_tokens_details: Default::default(),
 			},
 		})
@@ -385,21 +392,25 @@ pub mod from_decisions {
 	fn translate_input(input: d::DecisionInput) -> Result<google::Input, AIError> {
 		match input {
 			d::DecisionInput::Text(text) => Ok(google::Input::Text(text)),
-			d::DecisionInput::Messages(items) => items
+			d::DecisionInput::Items(items) => items
 				.into_iter()
-				.map(|d::DecisionInputItem::Message(message)| {
-					if message.role != "user" {
+				.map(|item| {
+					let d::DecisionInputItem::Message(d::DecisionInputMessage::User(message)) = item else {
 						return Err(AIError::UnsupportedContent);
-					}
+					};
 					let content = match message.content {
 						d::DecisionInputContent::Text(text) => vec![google::Content::Text { text }],
-						d::DecisionInputContent::Parts(parts) => parts
+						d::DecisionInputContent::DecisionInputContentParts(parts) => parts
 							.into_iter()
 							.map(|part| match part {
 								d::DecisionInputContentPart::InputText(text) => {
 									Ok(google::Content::Text { text: text.text })
 								},
 								d::DecisionInputContentPart::InputImage(image) => translate_image(image),
+								d::DecisionInputContentPart::InputJson(json) => {
+									let text = serde_json::to_string(&json.data).map_err(AIError::RequestMarshal)?;
+									Ok(google::Content::Text { text })
+								},
 							})
 							.collect::<Result<_, _>>()?,
 					};
@@ -412,10 +423,12 @@ pub mod from_decisions {
 
 	fn translate_image(image: d::DecisionInputImage) -> Result<google::Content, AIError> {
 		let resolution = match image.detail {
-			None | Some(d::ImageDetail::Auto) => None,
-			Some(d::ImageDetail::Low) => Some(google::MediaResolution::Low),
+			None | Some(d::ImageDetailParam::Auto) => None,
+			Some(d::ImageDetailParam::Low) => Some(google::MediaResolution::Low),
 			// Gemini's closest documented resolution to OpenAI's unscaled original.
-			Some(d::ImageDetail::High | d::ImageDetail::Original) => Some(google::MediaResolution::High),
+			Some(d::ImageDetailParam::High | d::ImageDetailParam::Original) => {
+				Some(google::MediaResolution::High)
+			},
 		};
 		let source =
 			if image.image_url.starts_with("https://") || image.image_url.starts_with("http://") {
@@ -435,10 +448,17 @@ pub mod from_decisions {
 		Ok(google::Content::Image { source, resolution })
 	}
 
-	fn choice_description(value: &d::ChoiceValue, description: Option<String>) -> String {
+	fn response_choice_value(value: d::ChoiceValueParam) -> d::ChoiceValueResource {
+		match value {
+			d::ChoiceValueParam::Text(value) => d::ChoiceValueResource::Text(value),
+			d::ChoiceValueParam::Boolean(value) => d::ChoiceValueResource::Boolean(value),
+		}
+	}
+
+	fn choice_description(value: &d::ChoiceValueParam, description: Option<String>) -> String {
 		let value = match value {
-			d::ChoiceValue::String(value) => value.clone(),
-			d::ChoiceValue::Boolean(value) => value.to_string(),
+			d::ChoiceValueParam::Text(value) => value.clone(),
+			d::ChoiceValueParam::Boolean(value) => value.to_string(),
 		};
 		match description.filter(|description| !description.trim().is_empty()) {
 			Some(description) => format!("{value}: {description}"),
@@ -530,46 +550,6 @@ fn error_type(error: &GoogleError, status: http::StatusCode) -> &'static str {
 		},
 		error_type => error_type,
 	}
-}
-
-fn normalize_decisions_input(request: &mut Value) -> Result<(), AIError> {
-	let request = request
-		.as_object_mut()
-		.ok_or_else(|| AIError::UnsupportedConversion("Decisions request must be an object".into()))?;
-	let Some(Value::Array(items)) = request.get_mut("input") else {
-		return Ok(());
-	};
-	for item in items {
-		let item = item.as_object_mut().ok_or(AIError::UnsupportedContent)?;
-		if item
-			.get("type")
-			.and_then(Value::as_str)
-			.is_some_and(|kind| kind != "message")
-		{
-			return Err(AIError::UnsupportedContent);
-		}
-		let user = item.get("role").and_then(Value::as_str).unwrap_or("user") == "user";
-		let Some(Value::Array(parts)) = item.get_mut("content") else {
-			continue;
-		};
-		for part in parts {
-			let Some(kind) = part.get("type").and_then(Value::as_str) else {
-				return Err(AIError::UnsupportedContent);
-			};
-			match kind {
-				"input_text" | "input_image" => {},
-				"input_json" if user => {
-					let data = part
-						.get("data")
-						.ok_or_else(|| AIError::UnsupportedConversion("input_json is missing data".into()))?;
-					let text = serde_json::to_string(data).map_err(AIError::RequestMarshal)?;
-					*part = serde_json::json!({"type": "input_text", "text": text});
-				},
-				_ => return Err(AIError::UnsupportedContent),
-			}
-		}
-	}
-	Ok(())
 }
 
 fn option_key(index: usize) -> String {

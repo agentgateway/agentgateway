@@ -75,6 +75,7 @@ info:
       },
       {
         "type": "predicate",
+        "name": null,
         "probability": 0.81
       },
       {

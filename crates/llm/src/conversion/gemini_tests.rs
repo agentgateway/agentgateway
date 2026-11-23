@@ -49,6 +49,24 @@ fn invalid_requests_are_rejected() {
 }
 
 #[test]
+fn typed_decisions_instructions_are_rejected() {
+	let request: crate::types::decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "text",
+		"questions": [{"type": "predicate", "instructions": [{"type": "input_text", "text": "yes?"}]}]
+	}))
+	.unwrap();
+	assert!(matches!(
+		from_decisions::translate(&request),
+		Err(AIError::UnsupportedConversion(_))
+	));
+	assert!(matches!(
+		crate::conversion::systemone::from_decisions::translate(&request),
+		Err(AIError::UnsupportedConversion(_))
+	));
+}
+
+#[test]
 fn gemini_request_limits_are_left_to_gemini() {
 	let many_choices = (0..256)
 		.map(|i| json!({"value": i.to_string()}))

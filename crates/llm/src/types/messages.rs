@@ -1279,6 +1279,7 @@ pub mod typed {
 		fn from(_: CacheControlEphemeral) -> Self {
 			PromptCacheBreakpointParam {
 				mode: super::super::completions::typed::PromptCacheBreakpointParamMode::Explicit,
+				ttl: None,
 			}
 		}
 	}

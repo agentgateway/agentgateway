@@ -1,0 +1,19 @@
+{
+  "model": "gemini-decision-1",
+  "input": [
+    {"type": "message", "role": "developer", "content": "You review support tickets."},
+    {
+      "role": "system",
+      "content": [
+        {"type": "input_text", "text": "Refunds are allowed within 30 days."},
+        {"type": "input_text", "text": "Escalate repeat issues."}
+      ]
+    },
+    {"type": "message", "content": "My order arrived with a cracked screen."},
+    {"role": "assistant", "content": "Sorry about that. When did it arrive?"},
+    {"role": "user", "content": "Yesterday. I want my money back."}
+  ],
+  "questions": [
+    {"type": "predicate", "name": "refund", "instructions": "Is the customer asking for a refund?"}
+  ]
+}
