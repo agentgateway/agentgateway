@@ -493,10 +493,29 @@ pub mod from_responses {
 							url,
 							detail: Some(image.detail),
 						},
-						prompt_cache_breakpoint: None,
+						prompt_cache_breakpoint: cache_breakpoint(image.prompt_cache_breakpoint),
 					})
 				},
-				_ => continue,
+				responses::InputContent::InputFile(file) => {
+					let file_data = file
+						.file_data
+						.filter(|data| !data.is_empty())
+						.or_else(|| file.file_url.filter(|url| url.starts_with("data:")));
+					let file_id = file.file_id.filter(|id| !id.is_empty());
+					if file_data.is_none() && file_id.is_none() {
+						return Err(AIError::UnsupportedConversion(agent_core::strng::literal!(
+							"Responses input_file requires file_data, file_id, or a data URL in file_url for Chat Completions"
+						)));
+					}
+					RequestUserMessageContentPart::File(completions::RequestMessageContentPartFile {
+						file: completions::FileObject {
+							file_data,
+							file_id,
+							filename: file.filename,
+						},
+						prompt_cache_breakpoint: cache_breakpoint(file.prompt_cache_breakpoint),
+					})
+				},
 			});
 		}
 		Ok(completions::RequestUserMessageContent::Array(parts))

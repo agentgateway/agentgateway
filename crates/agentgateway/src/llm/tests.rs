@@ -4459,53 +4459,138 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 }
 
 #[test]
-fn responses_to_completions_image_detail_original_falls_back_to_high_on_vertex() {
-	let translation = ChatTranslation {
-		input: InputFormat::Responses,
-		output: ChatFormat::OpenAICompletions,
-	};
-	let mut details = Vec::new();
-	for (name, provider) in [
+fn responses_to_completions_media_parts_per_provider() {
+	let image = json!({
+		"type": "input_image",
+		"image_url": "data:image/png;base64,AAAA",
+		"detail": "original"
+	});
+	let file = json!({
+		"type": "input_file",
+		"file_data": "data:application/pdf;base64,JVBERi0=",
+		"filename": "report.pdf",
+		"prompt_cache_breakpoint": {"mode": "explicit"}
+	});
+	let rendered: serde_json::Map<String, Value> = [
+		(
+			"gemini",
+			AIProvider::Gemini(gemini::Provider {
+				model_override: None,
+			}),
+		),
 		("vertex", vertex_provider("google/gemini-2.5-flash")),
 		(
 			"custom",
 			custom_provider(custom::ProviderFormat::Completions),
 		),
-	] {
-		let request = serde_json::from_value(json!({
-			"model": "m",
-			"input": [{
-				"role": "user",
-				"content": [{
-					"type": "input_image",
-					"image_url": "data:image/png;base64,AAAA",
-					"detail": "original"
-				}]
-			}]
-		}))
-		.unwrap();
-		let rendered = translation
-			.render_request(
-				types::ChatRequest::Responses(request),
-				&ChatRequestContext {
-					provider: &provider,
-					headers: &HeaderMap::new(),
-					prompt_caching: None,
-					catalog: None,
-				},
-			)
-			.unwrap();
-		let body: Value = serde_json::from_slice(&rendered.body).unwrap();
-		details.push((
-			name,
-			body["messages"][0]["content"][0]["image_url"]["detail"].clone(),
-		));
+	]
+	.into_iter()
+	.map(|(name, provider)| {
+		let parts = json!({
+			"image": render_as_completions_part(&provider, image.clone()).unwrap(),
+			"file": render_as_completions_part(&provider, file.clone()).unwrap(),
+		});
+		(name.to_string(), parts)
+	})
+	.collect();
+	insta::assert_json_snapshot!(rendered, @r#"
+	{
+	  "gemini": {
+	    "image": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:image/png;base64,AAAA",
+	        "detail": "original"
+	      }
+	    },
+	    "file": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:application/pdf;base64,JVBERi0="
+	      },
+	      "prompt_cache_breakpoint": {
+	        "mode": "explicit"
+	      }
+	    }
+	  },
+	  "vertex": {
+	    "image": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:image/png;base64,AAAA",
+	        "detail": "high"
+	      }
+	    },
+	    "file": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:application/pdf;base64,JVBERi0="
+	      },
+	      "prompt_cache_breakpoint": {
+	        "mode": "explicit"
+	      }
+	    }
+	  },
+	  "custom": {
+	    "image": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:image/png;base64,AAAA",
+	        "detail": "original"
+	      }
+	    },
+	    "file": {
+	      "type": "file",
+	      "file": {
+	        "file_data": "data:application/pdf;base64,JVBERi0=",
+	        "filename": "report.pdf"
+	      },
+	      "prompt_cache_breakpoint": {
+	        "mode": "explicit"
+	      }
+	    }
+	  }
 	}
-	assert_eq!(
-		details,
-		[("vertex", json!("high")), ("custom", json!("original"))],
-		"Vertex's OpenAI-compatible endpoint rejects `original`; other backends keep it"
+	"#);
+}
+
+#[rstest::rstest]
+#[case::file_id_only(json!({"type": "input_file", "file_id": "file-abc"}))]
+#[case::base64_without_data_url(
+	json!({"type": "input_file", "file_data": "JVBERi0=", "filename": "report.pdf"})
+)]
+fn responses_to_completions_rejects_files_google_cannot_read(#[case] file: Value) {
+	let gemini = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let result = render_as_completions_part(&gemini, file);
+	assert!(
+		matches!(&result, Err(AIError::UnsupportedConversion(reason)) if reason.contains("data URL")),
+		"{result:?}"
 	);
+}
+
+fn render_as_completions_part(provider: &AIProvider, part: Value) -> Result<Value, AIError> {
+	let request = serde_json::from_value(json!({
+		"model": "m",
+		"input": [{"role": "user", "content": [part]}]
+	}))
+	.unwrap();
+	let rendered = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::OpenAICompletions,
+	}
+	.render_request(
+		types::ChatRequest::Responses(request),
+		&ChatRequestContext {
+			provider,
+			headers: &HeaderMap::new(),
+			prompt_caching: None,
+			catalog: None,
+		},
+	)?;
+	let body: Value = serde_json::from_slice(&rendered.body).unwrap();
+	Ok(body["messages"][0]["content"][0].clone())
 }
 
 fn vertex_provider(model: &str) -> AIProvider {

@@ -34,6 +34,23 @@ fn responses_to_completions_rejects_images_without_a_url(
 	);
 }
 
+#[rstest::rstest]
+#[case::remote_file_url(json!({"type": "input_file", "file_url": "https://example.com/report.pdf"}))]
+#[case::empty_data_and_id(json!({"type": "input_file", "file_data": "", "file_id": ""}))]
+fn responses_to_completions_rejects_files_without_data_or_id(#[case] file: Value) {
+	let request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"input": [{"role": "user", "content": [file]}]
+	}))
+	.unwrap();
+
+	let result = from_responses::translate(&request);
+	assert!(
+		matches!(&result, Err(crate::AIError::UnsupportedConversion(reason)) if reason.contains("input_file")),
+		"{result:?}"
+	);
+}
+
 fn translate(input: &[u8]) -> Value {
 	let response =
 		to_responses::translate_response(&Bytes::copy_from_slice(input), "input-model", None)

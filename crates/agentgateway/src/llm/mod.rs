@@ -406,21 +406,28 @@ fn render_openai_completions(
 			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
 		types::ChatRequest::Responses(req) => {
-			let translated = conversion::openai_compat::from_responses::translate_request(&req)?;
-			let mut request = translated.request;
-			if !preserves_gemini_signatures(ctx.provider, req.model.as_deref()) {
-				request.strip_tool_call_extra_content();
-			}
-			// Vertex maps `detail` to Gemini media resolution, which has no `original`.
-			// https://docs.cloud.google.com/vertex-ai/generative-ai/docs/migrate/openai/overview
-			if matches!(ctx.provider, AIProvider::Vertex(_)) {
-				request.replace_original_image_detail_with_high();
-			}
-			let namespaces = translated.namespaces;
+			let conversion::openai_compat::from_responses::TranslatedRequest {
+				mut request,
+				namespaces,
+			} = conversion::openai_compat::from_responses::translate_request(&req)?;
 			if !namespaces.is_empty() {
 				provider_state = Some(ProviderState::OpenAICompletions {
 					namespaces: Arc::new(namespaces),
 				});
+			}
+			if !preserves_gemini_signatures(ctx.provider, req.model.as_deref()) {
+				request.strip_tool_call_extra_content();
+			}
+			// Google's OpenAI-compatible endpoints have no `file` part but read documents from `image_url`
+			// data URLs. Vertex maps `detail` to Gemini media resolution, which has no `original`.
+			// https://docs.cloud.google.com/vertex-ai/generative-ai/docs/migrate/openai/overview
+			match ctx.provider {
+				AIProvider::Gemini(_) => request.send_files_as_image_urls()?,
+				AIProvider::Vertex(_) => {
+					request.send_files_as_image_urls()?;
+					request.replace_original_image_detail_with_high();
+				},
+				_ => {},
 			}
 			apply_openai_moderation(&mut request.moderation, ctx)?;
 			serde_json::to_vec(&request).map_err(AIError::RequestMarshal)
