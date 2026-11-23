@@ -75,6 +75,153 @@ fn decisions_text_instructions(
 }
 
 /// Text for a JSON value: strings as-is, everything else as compact JSON.
+/// A piece of Decisions input history. Images are kept for providers that accept them.
+enum HistoryPart {
+	Text(String),
+	Image(async_openai::types::decisions::DecisionInputImage),
+}
+
+/// Google Decisions and SystemOne take no conversation history, tool calls or system instructions,
+/// and Google asks callers to serialize multi-turn context as text. Each item becomes a labelled
+/// section, with separators written into the text.
+fn decisions_history(
+	items: Vec<async_openai::types::decisions::DecisionInputItem>,
+) -> Result<Vec<HistoryPart>, crate::AIError> {
+	use async_openai::types::decisions::{
+		DecisionInputItem as Item, DecisionInputMessage as Message,
+	};
+
+	let mut history = Vec::new();
+	for (i, item) in items.into_iter().enumerate() {
+		let (label, parts) = match item {
+			Item::Message(Message::User(message)) => ("user:".to_string(), user_parts(message.content)?),
+			Item::Message(Message::Developer(message)) => {
+				("developer:".to_string(), instruction_parts(message.content))
+			},
+			Item::Message(Message::System(message)) => {
+				("system:".to_string(), instruction_parts(message.content))
+			},
+			Item::Message(Message::Assistant(message)) => {
+				("assistant:".to_string(), assistant_parts(message.content))
+			},
+			Item::FunctionCall(call) => (
+				format!(
+					"function call {} (call_id {}):",
+					tool_name(call.namespace, call.name),
+					call.call_id
+				),
+				vec![HistoryPart::Text(call.arguments)],
+			),
+			Item::FunctionCallOutput(output) => (
+				format!("function call output (call_id {}):", output.call_id),
+				tool_output_parts(output.output),
+			),
+			Item::CustomToolCall(call) => (
+				format!(
+					"custom tool call {} (call_id {}):",
+					tool_name(call.namespace, call.name),
+					call.call_id
+				),
+				vec![HistoryPart::Text(call.input)],
+			),
+			Item::CustomToolCallOutput(output) => (
+				format!("custom tool call output (call_id {}):", output.call_id),
+				tool_output_parts(output.output),
+			),
+		};
+		let separator = if i == 0 { "" } else { "\n\n" };
+		history.push(HistoryPart::Text(format!("{separator}{label}")));
+		history.extend(parts.into_iter().map(|part| match part {
+			HistoryPart::Text(text) => HistoryPart::Text(format!("\n{text}")),
+			image => image,
+		}));
+	}
+	Ok(history)
+}
+
+fn user_parts(
+	content: async_openai::types::decisions::DecisionInputContent,
+) -> Result<Vec<HistoryPart>, crate::AIError> {
+	use async_openai::types::decisions::{
+		DecisionInputContent as Content, DecisionInputContentPart as Part,
+	};
+
+	match content {
+		Content::Text(text) => Ok(vec![HistoryPart::Text(text)]),
+		Content::DecisionInputContentParts(parts) => parts
+			.into_iter()
+			.map(|part| match part {
+				Part::InputText(text) => Ok(HistoryPart::Text(text.text)),
+				Part::InputImage(image) => Ok(HistoryPart::Image(image)),
+				Part::InputJson(json) => serde_json::to_string(&json.data)
+					.map(HistoryPart::Text)
+					.map_err(crate::AIError::RequestMarshal),
+			})
+			.collect(),
+	}
+}
+
+fn instruction_parts(
+	content: async_openai::types::decisions::DecisionInputDeveloperContent,
+) -> Vec<HistoryPart> {
+	use async_openai::types::decisions::{
+		DecisionInputDeveloperContent as Content, DecisionInputDeveloperContentPart as Part,
+	};
+
+	match content {
+		Content::Text(text) => vec![HistoryPart::Text(text)],
+		Content::DecisionInputDeveloperContentParts(parts) => parts
+			.into_iter()
+			.map(|Part::InputText(text)| HistoryPart::Text(text.text))
+			.collect(),
+	}
+}
+
+fn assistant_parts(
+	content: async_openai::types::decisions::DecisionInputAssistantContent,
+) -> Vec<HistoryPart> {
+	use async_openai::types::decisions::{
+		DecisionInputAssistantContent as Content, DecisionInputAssistantContentPart as Part,
+	};
+
+	match content {
+		Content::Text(text) => vec![HistoryPart::Text(text)],
+		Content::DecisionInputAssistantContentParts(parts) => parts
+			.into_iter()
+			.map(|part| match part {
+				Part::OutputText(text) => HistoryPart::Text(text.text),
+				Part::Refusal(refusal) => HistoryPart::Text(format!("(refusal) {}", refusal.refusal)),
+			})
+			.collect(),
+	}
+}
+
+fn tool_output_parts(
+	output: async_openai::types::decisions::DecisionInputToolOutputContent,
+) -> Vec<HistoryPart> {
+	use async_openai::types::decisions::{
+		DecisionInputToolOutputContent as Content, DecisionInputToolOutputContentPart as Part,
+	};
+
+	match output {
+		Content::Text(text) => vec![HistoryPart::Text(text)],
+		Content::DecisionInputToolOutputContentParts(parts) => parts
+			.into_iter()
+			.map(|part| match part {
+				Part::InputText(text) => HistoryPart::Text(text.text),
+				Part::InputImage(image) => HistoryPart::Image(image),
+			})
+			.collect(),
+	}
+}
+
+fn tool_name(namespace: Option<String>, name: String) -> String {
+	match namespace {
+		Some(namespace) => format!("{namespace}.{name}"),
+		None => name,
+	}
+}
+
 pub(crate) fn value_text(value: serde_json::Value) -> String {
 	match value {
 		serde_json::Value::String(s) => s,

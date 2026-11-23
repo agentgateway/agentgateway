@@ -52,7 +52,7 @@ info:
     "input": [
       {
         "type": "text",
-        "text": "My order arrived with a cracked screen.\n\nI want my money back.\nThis is the second time."
+        "text": "user:\nMy order arrived with a cracked screen.\n\nuser:\nI want my money back.\nThis is the second time."
       }
     ],
     "questions": {

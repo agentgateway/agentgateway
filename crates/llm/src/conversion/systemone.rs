@@ -123,57 +123,71 @@ pub mod from_decisions {
 		Ok((body, response_state))
 	}
 
+	/// SystemOne state takes any JSON, so messages keep their roles and tool items stay objects.
 	fn decisions_input_value(input: d::DecisionInput) -> Result<serde_json::Value, AIError> {
-		match input {
-			d::DecisionInput::Text(text) => Ok(serde_json::Value::String(text)),
-			d::DecisionInput::Items(items) => items
-				.into_iter()
-				.map(|item| {
-					let d::DecisionInputItem::Message(message) = item else {
-						return Err(AIError::UnsupportedContent);
-					};
-					let (role, content) = match message {
-						d::DecisionInputMessage::User(message) => {
-							let content = match message.content {
-								d::DecisionInputContent::Text(text) => text,
-								d::DecisionInputContent::DecisionInputContentParts(parts) => parts
-									.into_iter()
-									.map(|part| match part {
-										d::DecisionInputContentPart::InputText(text) => Ok(text.text),
-										_ => Err(AIError::UnsupportedContent),
-									})
-									.collect::<Result<Vec<_>, _>>()?
-									.join("\n"),
-							};
-							("user", content)
-						},
-						d::DecisionInputMessage::Developer(message) => {
-							("developer", instruction_message_text(message.content))
-						},
-						d::DecisionInputMessage::System(message) => {
-							("system", instruction_message_text(message.content))
-						},
-						d::DecisionInputMessage::Assistant(d::DecisionInputAssistantMessage {
-							content: d::DecisionInputAssistantContent::Text(text),
-							phase: None,
-						}) => ("assistant", text),
-						d::DecisionInputMessage::Assistant(_) => return Err(AIError::UnsupportedContent),
-					};
-					Ok(serde_json::json!({"role": role, "content": content}))
+		use serde_json::json;
+
+		use super::super::{
+			assistant_parts, instruction_parts, tool_name, tool_output_parts, user_parts,
+		};
+
+		let items = match input {
+			d::DecisionInput::Text(text) => return Ok(serde_json::Value::String(text)),
+			d::DecisionInput::Items(items) => items,
+		};
+		items
+			.into_iter()
+			.map(|item| {
+				Ok(match item {
+					d::DecisionInputItem::Message(d::DecisionInputMessage::User(message)) => {
+						json!({"role": "user", "content": parts_text(user_parts(message.content)?)?})
+					},
+					d::DecisionInputItem::Message(d::DecisionInputMessage::Developer(message)) => {
+						json!({"role": "developer", "content": parts_text(instruction_parts(message.content))?})
+					},
+					d::DecisionInputItem::Message(d::DecisionInputMessage::System(message)) => {
+						json!({"role": "system", "content": parts_text(instruction_parts(message.content))?})
+					},
+					d::DecisionInputItem::Message(d::DecisionInputMessage::Assistant(message)) => {
+						json!({"role": "assistant", "content": parts_text(assistant_parts(message.content))?})
+					},
+					d::DecisionInputItem::FunctionCall(call) => json!({
+						"type": "function_call",
+						"call_id": call.call_id,
+						"name": tool_name(call.namespace, call.name),
+						"arguments": call.arguments,
+					}),
+					d::DecisionInputItem::FunctionCallOutput(output) => json!({
+						"type": "function_call_output",
+						"call_id": output.call_id,
+						"output": parts_text(tool_output_parts(output.output))?,
+					}),
+					d::DecisionInputItem::CustomToolCall(call) => json!({
+						"type": "custom_tool_call",
+						"call_id": call.call_id,
+						"name": tool_name(call.namespace, call.name),
+						"input": call.input,
+					}),
+					d::DecisionInputItem::CustomToolCallOutput(output) => json!({
+						"type": "custom_tool_call_output",
+						"call_id": output.call_id,
+						"output": parts_text(tool_output_parts(output.output))?,
+					}),
 				})
-				.collect(),
-		}
+			})
+			.collect()
 	}
 
-	fn instruction_message_text(content: d::DecisionInputDeveloperContent) -> String {
-		match content {
-			d::DecisionInputDeveloperContent::Text(text) => text,
-			d::DecisionInputDeveloperContent::DecisionInputDeveloperContentParts(parts) => parts
-				.into_iter()
-				.map(|d::DecisionInputDeveloperContentPart::InputText(text)| text.text)
-				.collect::<Vec<_>>()
-				.join("\n"),
-		}
+	/// SystemOne state takes no images here.
+	fn parts_text(parts: Vec<super::super::HistoryPart>) -> Result<String, AIError> {
+		parts
+			.into_iter()
+			.map(|part| match part {
+				super::super::HistoryPart::Text(text) => Ok(text),
+				super::super::HistoryPart::Image(_) => Err(AIError::UnsupportedContent),
+			})
+			.collect::<Result<Vec<_>, _>>()
+			.map(|texts| texts.join("\n"))
 	}
 
 	pub fn translate_response(bytes: &[u8], state: &State) -> Result<Vec<u8>, AIError> {

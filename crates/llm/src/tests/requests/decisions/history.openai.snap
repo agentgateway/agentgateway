@@ -18,7 +18,38 @@ info:
     - role: assistant
       content: Sorry about that. When did it arrive?
     - role: user
-      content: Yesterday. I want my money back.
+      content:
+        - type: input_text
+          text: Yesterday. I want my money back.
+        - type: input_json
+          data:
+            order_id: A-1001
+    - type: function_call
+      call_id: call_1
+      namespace: orders
+      name: lookup
+      arguments: "{\"order_id\":\"A-1001\"}"
+    - type: function_call_output
+      call_id: call_1
+      output:
+        - type: input_text
+          text: "{\"delivered\":\"yesterday\",\"previous_claims\":1}"
+        - type: input_text
+          text: Screen damage photo attached to the claim.
+    - type: custom_tool_call
+      call_id: call_2
+      name: policy_search
+      input: refund window
+    - type: custom_tool_call_output
+      call_id: call_2
+      output: 30 days from delivery
+    - role: assistant
+      phase: final_answer
+      content:
+        - type: output_text
+          text: A refund has been requested.
+        - type: refusal
+          refusal: "I can't share internal fraud scores."
   questions:
     - type: predicate
       name: refund
@@ -56,7 +87,64 @@ info:
       },
       {
         "role": "user",
-        "content": "Yesterday. I want my money back."
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Yesterday. I want my money back."
+          },
+          {
+            "type": "input_json",
+            "data": {
+              "order_id": "A-1001"
+            }
+          }
+        ]
+      },
+      {
+        "type": "function_call",
+        "call_id": "call_1",
+        "namespace": "orders",
+        "name": "lookup",
+        "arguments": "{\"order_id\":\"A-1001\"}"
+      },
+      {
+        "type": "function_call_output",
+        "call_id": "call_1",
+        "output": [
+          {
+            "type": "input_text",
+            "text": "{\"delivered\":\"yesterday\",\"previous_claims\":1}"
+          },
+          {
+            "type": "input_text",
+            "text": "Screen damage photo attached to the claim."
+          }
+        ]
+      },
+      {
+        "type": "custom_tool_call",
+        "call_id": "call_2",
+        "name": "policy_search",
+        "input": "refund window"
+      },
+      {
+        "type": "custom_tool_call_output",
+        "call_id": "call_2",
+        "output": "30 days from delivery"
+      },
+      {
+        "role": "assistant",
+        "phase": "final_answer",
+        "content": [
+          {
+            "type": "output_text",
+            "text": "A refund has been requested."
+          },
+          {
+            "type": "refusal",
+            "refusal": "I can't share internal fraud scores."
+          }
+        ]
       }
     ],
     "questions": [

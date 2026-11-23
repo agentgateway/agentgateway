@@ -355,11 +355,10 @@ fn decisions_public_image_urls_are_translated_to_typed_content() {
 	let body: Value = serde_json::from_slice(&body).unwrap();
 	assert_eq!(
 		body["input"],
-		json!([{
-			"type": "image",
-			"uri": "https://example.com/image.png",
-			"resolution": "low"
-		}])
+		json!([
+			{"type": "text", "text": "user:"},
+			{"type": "image", "uri": "https://example.com/image.png", "resolution": "low"}
+		])
 	);
 }
 
@@ -379,8 +378,30 @@ fn decisions_inline_images_are_translated_to_typed_content() {
 	assert_eq!(
 		body["input"],
 		json!([
-			{"type": "text", "text": "What is shown?"},
+			{"type": "text", "text": "user:\nWhat is shown?"},
 			{"type": "image", "data": "aGk=", "mime_type": "image/png", "resolution": "high"}
+		])
+	);
+}
+
+#[test]
+fn decisions_tool_output_images_are_translated_to_typed_content() {
+	let req: decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": [{"type": "function_call_output", "call_id": "call_1", "output": [
+			{"type": "input_text", "text": "Photo:"},
+			{"type": "input_image", "image_url": "data:image/png;base64,aGk="}
+		]}],
+		"questions": [{"type": "predicate", "instructions": "Is the screen cracked?"}]
+	}))
+	.unwrap();
+	let (body, _) = from_decisions::translate(&req).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		body["input"],
+		json!([
+			{"type": "text", "text": "function call output (call_id call_1):\nPhoto:"},
+			{"type": "image", "data": "aGk=", "mime_type": "image/png"}
 		])
 	);
 }
@@ -401,6 +422,7 @@ fn decisions_image_media_types_are_forwarded_to_gemini() {
 	assert_eq!(
 		body["input"],
 		json!([
+			{"type": "text", "text": "user:"},
 			{"type": "image", "data": "aGk=", "mime_type": "image/avif"},
 			{"type": "image", "data": "aGk=", "mime_type": "application/pdf", "resolution": "high"}
 		])
@@ -454,7 +476,7 @@ fn decisions_prompt_cache_fields_are_dropped() {
 		body,
 		json!({
 			"model": "gemini-decision-1",
-			"input": [{"type": "text", "text": "text"}],
+			"input": [{"type": "text", "text": "user:\ntext"}],
 			"questions": {"q_0": {"type": "noul", "instructions": "yes?"}}
 		})
 	);

@@ -19,7 +19,7 @@ info:
     "input": [
       {
         "type": "text",
-        "text": "The package was left in the rain and the box is soaked through."
+        "text": "user:\nThe package was left in the rain and the box is soaked through."
       }
     ],
     "questions": {

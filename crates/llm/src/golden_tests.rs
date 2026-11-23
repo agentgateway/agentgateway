@@ -592,6 +592,9 @@ mod requests {
 		test_request(SYSTEMONE, path, |i: &mut types::decisions::Request| {
 			conversion::systemone::from_decisions::translate(i).map(|(body, _)| body)
 		});
+		test_request(GEMINI, path, |i: &mut types::decisions::Request| {
+			conversion::gemini::from_decisions::translate(i).map(|(body, _)| body)
+		});
 	}
 
 	#[test]

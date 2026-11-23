@@ -395,30 +395,10 @@ pub mod from_decisions {
 			d::DecisionInput::Items(items) => items,
 		};
 		let mut blocks = Vec::new();
-		for (i, item) in items.into_iter().enumerate() {
-			let d::DecisionInputItem::Message(d::DecisionInputMessage::User(message)) = item else {
-				return Err(AIError::UnsupportedContent);
-			};
-			let separator = if i == 0 { "" } else { "\n\n" };
-			match message.content {
-				d::DecisionInputContent::Text(text) => push_text(&mut blocks, format!("{separator}{text}")),
-				d::DecisionInputContent::DecisionInputContentParts(parts) => {
-					for (j, part) in parts.into_iter().enumerate() {
-						let separator = if j == 0 { separator } else { "\n" };
-						match part {
-							d::DecisionInputContentPart::InputText(text) => {
-								push_text(&mut blocks, format!("{separator}{}", text.text))
-							},
-							d::DecisionInputContentPart::InputImage(image) => {
-								blocks.push(translate_image(image)?)
-							},
-							d::DecisionInputContentPart::InputJson(json) => {
-								let json = serde_json::to_string(&json.data).map_err(AIError::RequestMarshal)?;
-								push_text(&mut blocks, format!("{separator}{json}"))
-							},
-						}
-					}
-				},
+		for part in super::super::decisions_history(items)? {
+			match part {
+				super::super::HistoryPart::Text(text) => push_text(&mut blocks, text),
+				super::super::HistoryPart::Image(image) => blocks.push(translate_image(image)?),
 			}
 		}
 		Ok(google::Input::Content(blocks))

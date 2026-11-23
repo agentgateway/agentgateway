@@ -41,7 +41,7 @@ info:
     "input": [
       {
         "type": "text",
-        "text": "{\"reset_worked\":true}\nThe user can log in now."
+        "text": "user:\n{\"reset_worked\":true}\nThe user can log in now."
       }
     ],
     "questions": {
