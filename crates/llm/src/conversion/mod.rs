@@ -61,16 +61,28 @@ fn typed_decisions_request(
 		.map_err(|err| crate::AIError::RequestParsing(crate::InputFormat::Decisions, err))
 }
 
+/// Google and SystemOne take text-only question instructions, so JSON parts are rendered as text
+/// and image parts are rejected.
 fn decisions_text_instructions(
 	instructions: async_openai::types::decisions::QuestionParamInstructions,
 ) -> Result<String, crate::AIError> {
-	use async_openai::types::decisions::QuestionParamInstructions;
+	use async_openai::types::decisions::{DecisionQuestionInputPart, QuestionParamInstructions};
 
 	match instructions {
 		QuestionParamInstructions::Text(text) => Ok(text),
-		QuestionParamInstructions::Items(_) => Err(crate::AIError::UnsupportedConversion(
-			"typed Decisions question instructions are unsupported by this translation".into(),
-		)),
+		QuestionParamInstructions::Items(parts) => Ok(
+			parts
+				.into_iter()
+				.map(|part| match part {
+					DecisionQuestionInputPart::InputText(text) => Ok(text.text),
+					DecisionQuestionInputPart::InputJson(json) => {
+						serde_json::to_string(&json.data).map_err(crate::AIError::RequestMarshal)
+					},
+					DecisionQuestionInputPart::InputImage(_) => Err(crate::AIError::UnsupportedContent),
+				})
+				.collect::<Result<Vec<_>, _>>()?
+				.join("\n"),
+		),
 	}
 }
 

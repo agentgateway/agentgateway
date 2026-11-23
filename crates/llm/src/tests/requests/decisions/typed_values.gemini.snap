@@ -17,7 +17,12 @@ info:
       instructions: Can the user log in?
     - type: predicate
       name: same
-      instructions: Did the password reset work?
+      instructions:
+        - type: input_text
+          text: Did the password reset work?
+        - type: input_json
+          data:
+            field: reset_worked
     - type: choice
       instructions: Pick a typed outcome.
       choices:
@@ -51,7 +56,7 @@ info:
       },
       "q_1": {
         "type": "noul",
-        "instructions": "Did the password reset work?"
+        "instructions": "Did the password reset work?\n{\"field\":\"reset_worked\"}"
       },
       "q_2": {
         "type": "choice",

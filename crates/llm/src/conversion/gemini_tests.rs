@@ -49,20 +49,42 @@ fn invalid_requests_are_rejected() {
 }
 
 #[test]
-fn typed_decisions_instructions_are_rejected() {
+fn typed_decisions_instructions_are_sent_as_text() {
 	let request: crate::types::decisions::Request = serde_json::from_value(json!({
 		"model": "gemini-decision-1",
 		"input": "text",
-		"questions": [{"type": "predicate", "instructions": [{"type": "input_text", "text": "yes?"}]}]
+		"questions": [{"type": "predicate", "name": "q", "instructions": [
+			{"type": "input_text", "text": "Is this field set?"},
+			{"type": "input_json", "data": {"field": "reset_worked"}}
+		]}]
+	}))
+	.unwrap();
+	let expected = "Is this field set?\n{\"field\":\"reset_worked\"}";
+	let (body, _) = from_decisions::translate(&request).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["questions"]["q_0"]["instructions"], expected);
+	let (body, _) = crate::conversion::systemone::from_decisions::translate(&request).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["questions"]["q"]["instructions"], expected);
+}
+
+#[test]
+fn image_decisions_instructions_are_rejected() {
+	let request: crate::types::decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "text",
+		"questions": [{"type": "predicate", "instructions": [
+			{"type": "input_image", "image_url": "data:image/png;base64,aGk="}
+		]}]
 	}))
 	.unwrap();
 	assert!(matches!(
 		from_decisions::translate(&request),
-		Err(AIError::UnsupportedConversion(_))
+		Err(AIError::UnsupportedContent)
 	));
 	assert!(matches!(
 		crate::conversion::systemone::from_decisions::translate(&request),
-		Err(AIError::UnsupportedConversion(_))
+		Err(AIError::UnsupportedContent)
 	));
 }
 
