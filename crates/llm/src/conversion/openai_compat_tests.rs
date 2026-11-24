@@ -279,7 +279,8 @@ async fn streamed_text_and_tool_call_finish_in_output_order() {
 		.into_iter()
 		.map(|event| event["item"].clone())
 		.collect();
-	input.push(json!({"type": "function_call_output", "call_id": "call_1", "output": "hi"}));
+	let call_id = input[1]["call_id"].clone();
+	input.push(json!({"type": "function_call_output", "call_id": call_id, "output": "hi"}));
 	let request: crate::types::responses::Request = serde_json::from_value(json!({
 		"model": "gpt-5.1",
 		"input": input,
@@ -300,4 +301,6 @@ async fn streamed_text_and_tool_call_finish_in_output_order() {
 		"tool",
 		"tool result must follow its call: {roles:?}"
 	);
+	assert_eq!(messages[call]["tool_calls"][0]["id"], call_id);
+	assert_eq!(messages[call + 1]["tool_call_id"], call_id);
 }
