@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import type { LlmSettingsResource } from '@/api/configResourcesApi';
 import { ButtonLink, PageHeader, StatusBanner } from '@/components/Primitives';
 import { fileOwnedLlmSettingFields, fileOwnedMcpSettingFields } from '@/config';
+import { duplicateModelNamesDocsUrl, isDuplicateModelNamesWarning } from '@/duplicateModelNames';
 import {
 	useConfigDumpMode,
 	useEnableSurface,
@@ -202,7 +203,23 @@ export function HomePage() {
 				>
 					<ul className="banner-warning-list">
 						{warnings.map(warning => (
-							<li key={warning}>{warning}</li>
+							<li key={warning}>
+								{warning}
+								{isDuplicateModelNamesWarning(warning) ? (
+									<>
+										{' '}
+										<Button
+											type="link"
+											className="inline-link-button"
+											href={duplicateModelNamesDocsUrl}
+											rel="noreferrer"
+											target="_blank"
+										>
+											Docs
+										</Button>
+									</>
+								) : null}
+							</li>
 						))}
 					</ul>
 				</StatusBanner>
