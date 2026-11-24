@@ -672,15 +672,12 @@ impl UpstreamGroup {
 		fresh: &HashMap<Strng, ExtensionCapabilities>,
 	) -> Option<ExtensionCapabilities> {
 		let store = self.extensions.read().expect("read lock");
-		let mut merged = merge_extension_capabilities(self.by_name.keys().filter_map(|name| {
+		merge_extension_capabilities(self.by_name.keys().filter_map(|name| {
 			fresh
 				.get(name)
 				.or_else(|| store.get(name))
 				.map(|ext| (name.as_str(), ext))
-		}))?;
-		// Skills requests can only be routed to a single target.
-		merged.remove(rmcp::model::SKILLS_EXTENSION_ID);
-		(!merged.is_empty()).then_some(merged)
+		}))
 	}
 
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {
@@ -800,6 +797,16 @@ fn merge_extension_capabilities<'a>(
 		.map(|(k, advertisers)| {
 			let settings = if advertisers.iter().map(|(_, v)| v).all_equal() {
 				advertisers[0].1.clone()
+			} else if k == rmcp::model::SKILLS_EXTENSION_ID {
+				// Directory requests route by URI, so one target can provide this feature.
+				let mut settings = JsonObject::default();
+				if advertisers
+					.iter()
+					.any(|(_, v)| v.get("directoryRead").and_then(serde_json::Value::as_bool) == Some(true))
+				{
+					settings.insert("directoryRead".to_string(), true.into());
+				}
+				settings
 			} else {
 				warn!(
 					extension = %k,

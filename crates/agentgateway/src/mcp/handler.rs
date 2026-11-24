@@ -15,9 +15,9 @@ use rmcp::model::{
 	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, GetMeta, Implementation,
 	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
 	ListResourcesResult, ListSkillsRequestMethod, ListSkillsResult, ListToolsResult,
-	PaginatedRequestParams, ProtocolVersion, ReadResourceDirectoryRequestMethod, RequestId,
-	RequestMetaObject, ResultType, SKILLS_EXTENSION_ID, ServerCapabilities, ServerConfig,
-	ServerJsonRpcMessage, ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
+	PaginatedRequestParams, ProtocolVersion, RequestId, RequestMetaObject, ResultType,
+	ServerCapabilities, ServerConfig, ServerJsonRpcMessage, ServerNotification, ServerRequest,
+	ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
 
@@ -55,6 +55,7 @@ struct ListCursor {
 fn list_params_mut(request: &mut ClientRequest) -> Option<&mut Option<PaginatedRequestParams>> {
 	match request {
 		ClientRequest::ListToolsRequest(r) => Some(&mut r.params),
+		ClientRequest::ListSkillsRequest(r) => Some(&mut r.params),
 		ClientRequest::ListPromptsRequest(r) => Some(&mut r.params),
 		ClientRequest::ListResourcesRequest(r) => Some(&mut r.params),
 		ClientRequest::ListResourceTemplatesRequest(r) => Some(&mut r.params),
@@ -65,6 +66,7 @@ fn list_params_mut(request: &mut ClientRequest) -> Option<&mut Option<PaginatedR
 fn list_next_cursor_mut(result: &mut ServerResult) -> Option<&mut Option<String>> {
 	match result {
 		ServerResult::ListToolsResult(r) => Some(&mut r.next_cursor),
+		ServerResult::ListSkillsResult(r) => Some(&mut r.next_cursor),
 		ServerResult::ListPromptsResult(r) => Some(&mut r.next_cursor),
 		ServerResult::ListResourcesResult(r) => Some(&mut r.next_cursor),
 		ServerResult::ListResourceTemplatesResult(r) => Some(&mut r.next_cursor),
@@ -162,6 +164,11 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 		if let Some(rewritten) = apps::encode_ui_uri(target, uri) {
 			return rewritten;
 		}
+		// Keep the skill scheme and the path leading to SKILL.md intact for manifest
+		// verification and relative references.
+		if let Some(path) = uri.strip_prefix("skill://") {
+			return format!("skill://{target}/{path}");
+		}
 		// Prefix with `service+` for multiplexing whenever the URI has a scheme.
 		// e.g. "http://example.com" → "service+http://example.com"
 		//      "memo:insights"      → "service+memo:insights"
@@ -205,6 +212,26 @@ pub(super) fn rewrite_resource_messages(
 		}
 	}
 	message
+}
+
+/// Rewrites a skill's URIs for the client, keeping only the manifest files that
+/// `allowed` accepts by their upstream URI.
+fn rewrite_skill(
+	default_target_name: Option<&String>,
+	target: &str,
+	skill: &mut rmcp::model::Skill,
+	mut allowed: impl FnMut(&str) -> bool,
+) {
+	skill.uri = resource_uri(default_target_name, target, &skill.uri);
+	if let rmcp::model::SkillResources::Files(resources) = &mut skill.resources {
+		resources.retain_mut(|resource| {
+			if !allowed(&resource.uri) {
+				return false;
+			}
+			resource.uri = resource_uri(default_target_name, target, &resource.uri);
+			true
+		});
+	}
 }
 
 // Namespaces a task id as `<target>+<task id>`, mirroring `resource_uri`.
@@ -405,7 +432,23 @@ impl Relay {
 		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
 			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
-			let message = rewrite_task_messages(default_target_name.as_ref(), &target, message);
+			let mut message = rewrite_task_messages(default_target_name.as_ref(), &target, message);
+			if let ServerJsonRpcMessage::Response(resp) = &mut message
+				&& let ServerResult::GetSkillResult(get) = &mut resp.result
+			{
+				rewrite_skill(
+					default_target_name.as_ref(),
+					&target,
+					&mut get.skill,
+					|uri| {
+						policies.validate(
+							&rbac::ResourceType::Resource(rbac::ResourceId::new(target.clone(), uri.to_string())),
+							&crate::mcp::guardrails::methods::SKILLS_GET,
+							&cel,
+						)
+					},
+				);
+			}
 
 			let mut resource_allowed = |uri: &str| {
 				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against
@@ -597,10 +640,21 @@ impl Relay {
 
 	/// Reverse of `resource_uri`: extracts the service name and original URI from a
 	/// multiplexed URI of the form `service+<original-uri>` (hierarchical or opaque),
-	/// or `ui://service+rest` for Apps UI resources.
+	/// `ui://service+rest` for Apps UI resources, or `skill://service/rest` for skill files.
 	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
 		if let Some(default) = self.upstreams.default_target_name.as_ref() {
 			Ok((default.as_str(), uri.to_string()))
+		} else if let Some(path) = uri.strip_prefix("skill://") {
+			let invalid = || UpstreamError::InvalidRequest("invalid resource URI".to_string());
+			let (target, path) = path.split_once('/').ok_or_else(invalid)?;
+			if path.is_empty() {
+				return Err(invalid());
+			}
+			let validated_name = self
+				.upstreams
+				.get_name(target)
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {target}")))?;
+			Ok((validated_name, format!("skill://{path}")))
 		} else if apps::is_ui_uri(uri) {
 			let (service_name, original_uri) = apps::decode_ui_uri(uri)
 				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
@@ -858,7 +912,6 @@ impl Relay {
 		// backend is stateful. Compare `merge_discover`, where `stateful` does not apply.
 		let stateful = self.upstreams.stateful();
 		let upstreams = self.upstreams.clone();
-		let skills_routable = self.upstreams.default_target_name.is_some();
 		Box::new(move |s, _cel| {
 			if !multiplexing {
 				// Happy case: we can forward everything
@@ -869,9 +922,6 @@ impl Relay {
 					return Err(incompatible_upstream_result("initialize"));
 				};
 				upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
-				if !skills_routable && let Some(ext) = ir.capabilities.extensions.as_mut() {
-					ext.remove(SKILLS_EXTENSION_ID);
-				}
 				if !stateful {
 					let caps = &mut ir.capabilities;
 					if let Some(c) = caps.tools.as_mut() {
@@ -928,7 +978,6 @@ impl Relay {
 
 	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
 		let upstreams = self.upstreams.clone();
-		let skills_routable = self.upstreams.default_target_name.is_some();
 		Box::new(move |s, _cel| {
 			// Single server: forward the upstream's advertised versions untouched. The gateway
 			// does no version translation, so an old-only upstream must surface as-is and let
@@ -937,13 +986,9 @@ impl Relay {
 				let Some((_, result)) = s.into_iter().next() else {
 					return Err(incompatible_upstream_result("server/discover"));
 				};
-				let ServerResult::DiscoverResult(mut dr) = result else {
+				let ServerResult::DiscoverResult(dr) = result else {
 					return Err(incompatible_upstream_result("server/discover"));
 				};
-				// Skills requests are only routed when skill URIs pass through unprefixed.
-				if !skills_routable && let Some(ext) = dr.capabilities.extensions.as_mut() {
-					ext.remove(SKILLS_EXTENSION_ID);
-				}
 				// Cache hints describe the gateway's presented server, not the upstream.
 				// Gateway routing/backend config can change without client invalidation.
 				return Ok(
@@ -1039,49 +1084,52 @@ impl Relay {
 
 	pub fn merge_skills(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
+		let multiplex = self.is_multiplexing();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
-			let (server_name, mut list) = match streams.into_iter().next() {
-				Some((server_name, ServerResult::ListSkillsResult(list))) => (server_name, list),
-				Some(_) => return Err(incompatible_upstream_result(ListSkillsRequestMethod::VALUE)),
-				None => return Ok(ListSkillsResult::default().into()),
-			};
-			// Authorization is per skill. A listed skill's `resources` manifest is passed through
-			// whole, so it can name files that `resources/read` will deny.
-			list.skills.retain(|skill| {
-				policies.validate(
-					&rbac::ResourceType::Resource(rbac::ResourceId::new(
-						server_name.to_string(),
-						skill.uri.clone(),
-					)),
-					&crate::mcp::guardrails::methods::SKILLS_LIST,
-					cel,
-				)
-			});
-			Ok(list.into())
-		})
-	}
-
-	pub fn merge_resource_directory(&self) -> Box<MergeFn> {
-		let policies = self.policies.clone();
-		Box::new(move |streams, cel| {
-			let Some((server_name, ServerResult::ListResourcesResult(mut dir))) =
-				streams.into_iter().next()
-			else {
-				return Err(incompatible_upstream_result(
-					ReadResourceDirectoryRequestMethod::VALUE,
-				));
-			};
-			dir.resources.retain(|r| {
-				policies.validate(
-					&rbac::ResourceType::Resource(rbac::ResourceId::new(
-						server_name.to_string(),
-						r.uri.to_string(),
-					)),
-					&crate::mcp::guardrails::methods::RESOURCES_DIRECTORY_READ,
-					cel,
-				)
-			});
-			Ok(dir.into())
+			let mut merged = ListSkillsResult::default();
+			for (server_name, result) in streams {
+				let ServerResult::ListSkillsResult(mut list) = result else {
+					return Err(incompatible_upstream_result(ListSkillsRequestMethod::VALUE));
+				};
+				if !multiplex {
+					merged.meta = list.meta.take();
+					merged.result_type = list.result_type;
+				}
+				// Authorize against the originating target and the upstream's URI.
+				merged
+					.skills
+					.extend(list.skills.into_iter().filter_map(|mut skill| {
+						policies
+							.validate(
+								&rbac::ResourceType::Resource(rbac::ResourceId::new(
+									server_name.to_string(),
+									skill.uri.clone(),
+								)),
+								&crate::mcp::guardrails::methods::SKILLS_LIST,
+								cel,
+							)
+							.then(|| {
+								rewrite_skill(
+									default_target_name.as_ref(),
+									server_name.as_str(),
+									&mut skill,
+									|uri| {
+										policies.validate(
+											&rbac::ResourceType::Resource(rbac::ResourceId::new(
+												server_name.to_string(),
+												uri.to_string(),
+											)),
+											&crate::mcp::guardrails::methods::SKILLS_LIST,
+											cel,
+										)
+									},
+								);
+								skill
+							})
+					}));
+			}
+			Ok(merged.into())
 		})
 	}
 
@@ -1212,6 +1260,8 @@ impl Relay {
 			&r.request,
 			ClientRequest::DiscoverRequest(_) | ClientRequest::SubscriptionsListenRequest(_)
 		);
+		let skip_unsupported_skills =
+			self.is_multiplexing() && matches!(&r.request, ClientRequest::ListSkillsRequest(_));
 		let selected_upstreams = self
 			.upstreams
 			.iter_named()
@@ -1266,7 +1316,41 @@ impl Relay {
 				let r = request_for_target(name.as_str(), r);
 				let ctx = &*ctx;
 				async move {
-					let result = con.generic_stream(name.as_str(), r, ctx).await;
+					let id = r.id.clone();
+					let mut result = con.generic_stream(name.as_str(), r, ctx).await;
+					if skip_unsupported_skills {
+						// A non-skills target contributes an empty page. Preserve unrelated
+						// HTTP 404s, including a legacy upstream losing its session.
+						result = match result {
+							Err(UpstreamError::InvalidMethod(_)) => {
+								Ok(Messages::from_result(id, ListSkillsResult::default()))
+							},
+							Err(UpstreamError::Http(ClientError::Status(mut response)))
+								if response.status() == StatusCode::NOT_FOUND =>
+							{
+								if let Ok(agent_http::BodyInspection::Complete(body)) =
+									Box::pin(crate::http::inspect_response_body(&mut response)).await
+									&& let Ok(ServerJsonRpcMessage::Error(error)) = serde_json::from_slice(&body)
+									&& error.id.as_ref() == Some(&id)
+									&& error.error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND
+								{
+									Ok(Messages::from_result(id, ListSkillsResult::default()))
+								} else {
+									Err(UpstreamError::Http(ClientError::Status(response)))
+								}
+							},
+							Ok(stream) => Ok(stream.map_server_messages(move |message| match message {
+								ServerJsonRpcMessage::Error(error)
+									if error.id.as_ref() == Some(&id)
+										&& error.error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND =>
+								{
+									ServerJsonRpcMessage::response(ListSkillsResult::default().into(), id.clone())
+								},
+								other => other,
+							})),
+							other => other,
+						};
+					}
 					(name, result)
 				}
 			})
@@ -1445,15 +1529,40 @@ impl Relay {
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
 		let mcp_log = mcp_log.or_else(|| ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned());
 		let cel = CelExecWrapper::from(ctx.clone());
-		let stream = self.rewrite_outbound_server_messages(
+		let is_directory = matches!(&r.request, ClientRequest::ReadResourceDirectoryRequest(_));
+		let mut stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(
 				us.generic_stream(service_name, r, &ctx)
 					.assert_size::<{ GENERIC_STREAM_FUTURE_SIZE }>(),
 			)
 			.await?,
-			cel,
+			cel.clone(),
 		);
+		if is_directory {
+			// Authorize each entry against the upstream's URI.
+			let policies = self.policies.clone();
+			let default_target_name = self.upstreams.default_target_name.clone();
+			let target = service_name.to_string();
+			stream = stream.map_server_messages(move |mut message| {
+				if let ServerJsonRpcMessage::Response(resp) = &mut message
+					&& let ServerResult::ListResourcesResult(dir) = &mut resp.result
+				{
+					dir.resources.retain_mut(|r| {
+						if !policies.validate(
+							&rbac::ResourceType::Resource(rbac::ResourceId::new(target.clone(), r.uri.clone())),
+							&crate::mcp::guardrails::methods::RESOURCES_DIRECTORY_READ,
+							&cel,
+						) {
+							return false;
+						}
+						r.uri = resource_uri(default_target_name.as_ref(), &target, &r.uri);
+						true
+					});
+				}
+				message
+			});
+		}
 		let stream = track_outbound_server_requests_for_downstream(
 			service_name.into(),
 			stream,

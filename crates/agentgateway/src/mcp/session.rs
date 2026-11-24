@@ -105,26 +105,53 @@ impl Session {
 			)? {
 				client_info.protocol_version = protocol_version;
 			}
-			let init_request = rmcp::model::InitializeRequest::new(client_info);
-			let request_type = match &message {
+			let request = match &message {
 				ClientJsonRpcMessage::Request(r) => Some(&r.request),
 				_ => None,
 			};
-			match request_type {
-				// Initialize only the target named by a prefixed call. With prefixMode: never,
-				// the list request used to find that target requires every target to be initialized.
-				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_))
-					if !self.relay.needs_resolution() =>
-				{
-					let name = match request_type {
-						Some(ClientRequest::CallToolRequest(ctr)) => ctr.params.name.to_string(),
-						Some(ClientRequest::GetPromptRequest(gpr)) => gpr.params.name.clone(),
-						_ => unreachable!("match arm guarantees single-target request type"),
-					};
-					let (service_name, _) = match self.relay.parse_resource_name(&name) {
-						Ok(target) => target,
-						Err(err) => return Self::handle_error(req_id.clone(), Err(err), false).await,
-					};
+			if matches!(
+				request,
+				Some(
+					ClientRequest::ListSkillsRequest(_)
+						| ClientRequest::GetSkillRequest(_)
+						| ClientRequest::ReadResourceDirectoryRequest(_)
+				)
+			) {
+				client_info
+					.capabilities
+					.extensions
+					.get_or_insert_default()
+					.insert(
+						rmcp::model::SKILLS_EXTENSION_ID.to_string(),
+						Default::default(),
+					);
+			}
+			let init_request = rmcp::model::InitializeRequest::new(client_info);
+			// Initialize only the owner of a directly addressed request. Unprefixed
+			// tool and prompt lookups still need every target initialized.
+			let name = match request {
+				Some(ClientRequest::CallToolRequest(r)) => Some(&*r.params.name),
+				Some(ClientRequest::GetPromptRequest(r)) => Some(r.params.name.as_str()),
+				_ => None,
+			};
+			let uri = match request {
+				Some(ClientRequest::ReadResourceRequest(r)) => Some(&r.params.uri),
+				Some(ClientRequest::GetSkillRequest(r)) => Some(&r.params.uri),
+				Some(ClientRequest::ReadResourceDirectoryRequest(r)) => Some(&r.params.uri),
+				_ => None,
+			};
+			let target = if let Some(uri) = uri {
+				Some(self.relay.parse_resource_uri(uri).map(|(target, _)| target))
+			} else {
+				name.filter(|_| !self.relay.needs_resolution()).map(|name| {
+					self
+						.relay
+						.parse_resource_name(name)
+						.map(|(target, _)| target)
+				})
+			};
+			match target {
+				Some(Ok(service_name)) => {
 					let res = self
 						.send_init_single(ctx.clone(), init_request, service_name)
 						.await;
@@ -155,7 +182,8 @@ impl Session {
 					)
 					.await?;
 				},
-				_ => {
+				Some(Err(err)) => return Self::handle_error(req_id, Err(err), false).await,
+				None => {
 					// We should fan out the initialize request to all MCP servers
 					let _ = self
 						.send(
@@ -790,16 +818,17 @@ impl Session {
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::ListSkillsRequest(_) => {
-						if self.relay.upstreams.default_target_name.is_none() {
-							return Err(UpstreamError::InvalidMethod(method.to_string()));
-						}
-						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_skills())).await
+						Box::pin(
+							self
+								.relay
+								.send_list(r, ctx, self.relay.merge_skills(), self.encoder.clone()),
+						)
+						.await
 					},
 					ClientRequest::GetSkillRequest(req) => {
-						let Some(service_name) = self.relay.upstreams.default_target_name.as_deref() else {
-							return Err(UpstreamError::InvalidMethod(method.to_string()));
-						};
-						let uri = req.params.uri.clone();
+						let client_uri = req.params.uri.clone();
+						let (service_name, uri) = self.relay.parse_resource_uri(&client_uri)?;
+						req.params.uri = uri.clone();
 						log.non_atomic_mutate(|l| {
 							l.set_resource(service_name.to_string(), uri.clone());
 						});
@@ -814,16 +843,15 @@ impl Session {
 								uri.clone(),
 							)),
 							"resource",
-							&uri,
+							&client_uri,
 						))
 						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::ReadResourceDirectoryRequest(req) => {
-						let Some(service_name) = self.relay.upstreams.default_target_name.as_deref() else {
-							return Err(UpstreamError::InvalidMethod(method.to_string()));
-						};
-						let uri = req.params.uri.clone();
+						let client_uri = req.params.uri.clone();
+						let (service_name, uri) = self.relay.parse_resource_uri(&client_uri)?;
+						req.params.uri = uri.clone();
 						log.non_atomic_mutate(|l| {
 							l.set_resource(service_name.to_string(), uri.clone());
 						});
@@ -838,15 +866,10 @@ impl Session {
 								uri.clone(),
 							)),
 							"resource",
-							&uri,
+							&client_uri,
 						))
 						.await?;
-						Box::pin(
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resource_directory()),
-						)
-						.await
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::CustomRequest(_) => {
 						let method = r.request.method();
