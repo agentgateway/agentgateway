@@ -3721,10 +3721,16 @@ fn request_was_translated(
 	route_type != same_format
 }
 
-/// Remove `alt` from the request query, keeping any other parameters (e.g. `key`).
+/// Remove `alt` and its system-parameter spelling `$alt` from the request query, keeping any
+/// other parameters (e.g. `key`). `$alt` takes precedence over `alt` upstream, and
+/// `$alt=json;enum-encoding=int` selects a JSON body with numeric enums.
 fn strip_alt_query(req: &mut Request) {
 	// Removing a parameter from an already-valid URI cannot fail.
-	let _ = http::modify_query_parameters(req.uri_mut(), std::iter::empty::<(&str, &str)>(), ["alt"]);
+	let _ = http::modify_query_parameters(
+		req.uri_mut(),
+		std::iter::empty::<(&str, &str)>(),
+		["alt", "$alt"],
+	);
 }
 
 /// Whether a Bedrock chat request uses the native APIs on `endpoint`, rather than Converse. Runtime

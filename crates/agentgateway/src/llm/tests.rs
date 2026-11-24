@@ -569,7 +569,7 @@ fn gemini_error_passes_google_shape_through() {
 #[test]
 fn strip_alt_query_removes_only_alt() {
 	let mut req = crate::http::tests_common::request(
-		"https://example.com/v1beta/models/m:streamGenerateContent?alt=sse&key=abc",
+		"https://example.com/v1beta/models/m:streamGenerateContent?alt=sse&%24alt=json%3Benum-encoding%3Dint&key=abc",
 		http::Method::POST,
 		&[],
 	);
