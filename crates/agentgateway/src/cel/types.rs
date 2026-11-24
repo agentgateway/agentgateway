@@ -1729,8 +1729,8 @@ pub struct LLMContext {
 	/// Unset when the model is not in the catalog.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub model: Option<Arc<llm::catalog::ModelInfo>>,
-	#[serde(skip)]
-	#[dynamic(skip)]
+	#[dynamic(rename = "costStatus", with_value = "cost_status_to_value")]
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cost_status: Option<llm::catalog::CostLookupStatus>,
 }
 
@@ -1933,6 +1933,12 @@ impl DynamicType for SecretStringValue<'_> {
 pub fn secret_string_to_value(secret: &SecretString) -> Value<'_> {
 	Value::Dynamic(DynamicValue::new_owned(SecretStringValue(secret)))
 }
+fn cost_status_to_value(c: &Option<llm::catalog::CostLookupStatus>) -> Value<'_> {
+	c.map_or(Value::Null, |status| {
+		Value::String(llm::catalog::status_name(status).into())
+	})
+}
+
 fn service_tier_to_value(c: &Option<llm::catalog::PricingTier>) -> Value<'_> {
 	match c {
 		None => Value::Null,

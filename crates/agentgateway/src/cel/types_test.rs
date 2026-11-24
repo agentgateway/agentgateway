@@ -389,6 +389,22 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 }
 
 #[test]
+fn llm_cost_status_is_exposed_to_cel() {
+	let mut req = build_test_request();
+	assert!(
+		Executor::new_request(&req).eval_bool(&Expression::new_strict("!has(llm.costStatus)").unwrap())
+	);
+	req
+		.extensions_mut()
+		.get_mut::<LLMContext>()
+		.unwrap()
+		.cost_status = Some(llm::catalog::CostLookupStatus::NoCatalog);
+	let executor = Executor::new_request(&req);
+
+	assert!(executor.eval_bool(&Expression::new_strict("llm.costStatus == \"noCatalog\"").unwrap()));
+}
+
+#[test]
 fn test_route_metadata_context() {
 	let req = build_test_request();
 	let executor = Executor::new_request(&req);

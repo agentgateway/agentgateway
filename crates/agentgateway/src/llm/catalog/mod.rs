@@ -19,7 +19,7 @@ use super::{
 	CacheTokenConvention, LLMInfo, LLMResponse, Provider, anthropic, azure, bedrock, gemini, openai,
 	vertex,
 };
-use crate::{ModelCatalogSource, apply, schema};
+use crate::{ModelCatalogSource, apply, schema, schema_enum};
 
 mod model;
 pub mod refresh;
@@ -984,7 +984,8 @@ fn watch_catalog_files(
 	Ok(task.abort_handle())
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, EncodeLabelValue)]
+#[apply(schema_enum!)]
+#[derive(Default, EncodeLabelValue)]
 pub enum CostLookupStatus {
 	Exact,
 	Unpriced,
@@ -993,7 +994,7 @@ pub enum CostLookupStatus {
 	NoCatalog,
 }
 
-fn status_name(status: CostLookupStatus) -> &'static str {
+pub(crate) fn status_name(status: CostLookupStatus) -> &'static str {
 	match status {
 		CostLookupStatus::Exact => "exact",
 		CostLookupStatus::Unpriced => "unpriced",
