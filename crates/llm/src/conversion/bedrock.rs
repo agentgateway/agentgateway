@@ -1941,16 +1941,9 @@ pub mod from_messages {
 						title,
 						..
 					}) => {
-						let base64_source = (source.get("type").and_then(|v| v.as_str()) == Some("base64"))
-							.then(|| {
-								let media_type = source.get("media_type").and_then(|v| v.as_str())?;
-								let data = source.get("data").and_then(|v| v.as_str())?;
-								Some((media_type, data))
-							})
-							.flatten();
-						let Some((media_type, data)) = base64_source else {
-							// Other document source types (text, url, content) aren't supported by
-							// Bedrock Converse. Keep the breakpoint on the retained prefix when dropping.
+						let Some((format, source)) = document_source(&source, title.as_deref())? else {
+							// Converse can't take URL or file sources inline, nor images in a content
+							// source. Keep the breakpoint on the retained prefix when dropping.
 							helpers::insert_cache_point_on_retained_prefix(
 								&mut content,
 								&mut messages,
@@ -1960,8 +1953,6 @@ pub mod from_messages {
 							);
 							continue;
 						};
-						let format =
-							super::from_responses::derive_doc_format(Some(media_type), title.as_deref())?;
 						// Bedrock requires document names to be unique within a request; track
 						// names already used so repeated titles (or missing ones) get a numeric
 						// suffix.
@@ -1983,9 +1974,7 @@ pub mod from_messages {
 							bedrock::ContentBlock::Document(bedrock::DocumentBlock {
 								format: format.to_string(),
 								name,
-								source: bedrock::DocumentSource {
-									bytes: data.to_string(),
-								},
+								source,
 							}),
 							cache_control,
 						)
@@ -2189,6 +2178,60 @@ pub mod from_messages {
 		};
 		helpers::ensure_tool_config_for_history(&mut bedrock_request);
 		Ok((bedrock_request, tool_name_map))
+	}
+
+	/// Maps an Anthropic document source onto a Converse one, with its document format.
+	/// Converse only accepts `bytes` (or `s3Location`) for plain documents; its `text` and
+	/// `content` sources are rejected unless citations are enabled. Text and content sources are
+	/// therefore sent as base64-encoded `txt` bytes. Returns None for sources Converse can't take
+	/// inline (url, file), and for content sources holding images.
+	fn document_source(
+		source: &serde_json::Value,
+		title: Option<&str>,
+	) -> Result<Option<(&'static str, bedrock::DocumentSource)>, AIError> {
+		use base64::Engine;
+		let str_field = |key| source.get(key).and_then(|v| v.as_str());
+		let txt = |text: &str| {
+			(
+				"txt",
+				bedrock::DocumentSource {
+					bytes: base64::prelude::BASE64_STANDARD.encode(text),
+				},
+			)
+		};
+		match str_field("type") {
+			Some("base64") => {
+				let (Some(media_type), Some(data)) = (str_field("media_type"), str_field("data")) else {
+					return Ok(None);
+				};
+				let format = super::from_responses::derive_doc_format(Some(media_type), title)?;
+				Ok(Some((
+					format,
+					bedrock::DocumentSource {
+						bytes: data.to_string(),
+					},
+				)))
+			},
+			// Anthropic only accepts text/plain here.
+			Some("text") => Ok(str_field("data").map(txt)),
+			Some("content") => {
+				let text = match source.get("content") {
+					Some(serde_json::Value::String(text)) => Some(text.clone()),
+					Some(serde_json::Value::Array(blocks)) => blocks
+						.iter()
+						.map(|block| {
+							(block.get("type").and_then(|v| v.as_str()) == Some("text"))
+								.then(|| block.get("text").and_then(|v| v.as_str()))
+								.flatten()
+						})
+						.collect::<Option<Vec<_>>>()
+						.map(|texts| texts.join("\n\n")),
+					_ => None,
+				};
+				Ok(text.as_deref().map(txt))
+			},
+			_ => Ok(None),
+		}
 	}
 
 	fn messages_output_format_to_bedrock_output_config(
