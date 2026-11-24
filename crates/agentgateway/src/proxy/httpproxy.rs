@@ -97,7 +97,6 @@ fn classify_request_protocol(req: &Request, backend: &Backend) -> RequestProtoco
 		// continue through the ordinary HTTP path.
 		Backend::MCP(_, _)
 			if req.method() == ::http::Method::POST
-				&& req.uri().path() != "/sse"
 				&& !mcp::auth::is_well_known_endpoint(req.uri().path())
 				&& !req.uri().path().ends_with("client-registration")
 				&& !crate::http::is_grpc_request(req) =>
