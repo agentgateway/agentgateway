@@ -9,6 +9,7 @@ service Control {
   rpc ResumeActor(ResumeActorRequest) returns (ResumeActorResponse) {}
   rpc GetActorEgressPolicy(GetActorEgressPolicyRequest) returns (EgressPolicy) {}
   rpc MintActorJwt(MintActorJwtRequest) returns (MintActorJwtResponse) {}
+  rpc MintActorCertificate(MintActorCertificateRequest) returns (MintActorCertificateResponse) {}
 }
 
 message Actor {
@@ -88,7 +89,22 @@ message HTTPSRule {
   // Defaults to port 443 when absent.
   Ports ports = 2;
   HttpRuleEffects effects = 3;
+  UpstreamTls upstream_tls = 4;
 }
+
+message UpstreamTls {
+  ClientCertificateSource client_certificate = 1;
+}
+
+message ClientCertificateSource {
+  oneof source {
+    ActorClientCertificateSource actor_certificate = 1;
+    string credential_provider = 2;
+  }
+}
+
+// Reserved for the Substrate egress gateway's actor certificate issuer.
+message ActorClientCertificateSource {}
 
 message TLSPassthroughRule {
   repeated string hostnames = 1;
@@ -128,8 +144,19 @@ message MintActorJwtRequest {
   ObjectRef actor = 1;
   repeated string audiences = 2;
   int64 expiration_seconds = 3;
+  bytes client_certificate_sha256 = 4;
 }
 
 message MintActorJwtResponse {
   string actor_jwt = 1;
+}
+
+message MintActorCertificateRequest {
+  ObjectRef actor = 1;
+  string actor_uid = 2;
+  bytes certificate_signing_request = 3;
+}
+
+message MintActorCertificateResponse {
+  repeated bytes actor_certificates = 1;
 }

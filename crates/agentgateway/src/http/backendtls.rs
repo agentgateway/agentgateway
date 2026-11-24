@@ -5,9 +5,10 @@ use agent_core::strng;
 use agent_core::strng::Strng;
 use arc_swap::ArcSwap;
 use once_cell::sync::Lazy;
+use rustls::sign::{CertifiedKey, SingleCertAndKey};
 use rustls::{ClientConfig, RootCertStore};
 use rustls_pki_types::pem::PemObject;
-use rustls_pki_types::{CertificateDer, ServerName};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use serde::Serializer;
 use tracing::{info, trace, warn};
 
@@ -17,6 +18,97 @@ use crate::transport::tls;
 use crate::types::agent::{parse_cert, parse_key};
 use crate::types::discovery::Identity;
 use crate::{apply, transport};
+
+/// A client identity selected for authorized Substrate egress requests.
+#[derive(Clone, Debug)]
+pub(crate) struct ClientCertificate {
+	certified_key: Arc<CertifiedKey>,
+	validity: x509_parser::certificate::Validity,
+	pub(crate) fingerprint: [u8; 32],
+}
+
+impl ClientCertificate {
+	pub(crate) fn from_pem(certificate: &[u8], private_key: &[u8]) -> anyhow::Result<Self> {
+		Self::from_der(
+			crate::types::agent::parse_cert(certificate)?,
+			crate::types::agent::parse_key(private_key)?,
+		)
+	}
+
+	pub(crate) fn from_pem_bundle(pem: &[u8]) -> anyhow::Result<Self> {
+		Self::from_pem(pem, pem)
+	}
+
+	pub(crate) fn from_der(
+		chain: Vec<CertificateDer<'static>>,
+		private_key: PrivateKeyDer<'static>,
+	) -> anyhow::Result<Self> {
+        use crate::crypto::digest::Sha256;
+		use x509_parser::prelude::FromDer;
+
+		let leaf = chain
+			.first()
+			.ok_or_else(|| anyhow::anyhow!("no certificate"))?;
+		let (_, leaf) = x509_parser::certificate::X509Certificate::from_der(leaf.as_ref())
+			.map_err(|err| anyhow::anyhow!("invalid client certificate: {err}"))?;
+		if !leaf.validity().is_valid() {
+			anyhow::bail!("client certificate is expired or not yet valid");
+		}
+		if leaf
+			.basic_constraints()
+			.ok()
+			.flatten()
+			.is_some_and(|constraints| constraints.value.ca)
+		{
+			anyhow::bail!("client certificate leaf is a CA");
+		}
+		if leaf
+			.extended_key_usage()
+			.map_err(|err| anyhow::anyhow!("invalid extended key usage: {err}"))?
+			.is_some_and(|usage| !usage.value.client_auth)
+		{
+			anyhow::bail!("client certificate leaf does not permit client authentication");
+		}
+		let validity = leaf.validity().clone();
+		let mut hasher = Sha256::new();
+		for certificate in &chain {
+			hasher.update((certificate.as_ref().len() as u64).to_be_bytes());
+			hasher.update(certificate.as_ref());
+		}
+		let certified_key = Arc::new(CertifiedKey::from_der(
+			chain,
+			private_key,
+			&transport::tls::provider(),
+		)?);
+		Ok(Self {
+			certified_key,
+			validity,
+			fingerprint: hasher.finalize().into(),
+		})
+	}
+
+	pub(crate) fn is_valid_now(&self) -> bool {
+		self.validity.is_valid()
+	}
+
+	pub(crate) fn validity(&self) -> &x509_parser::certificate::Validity {
+		&self.validity
+	}
+
+	pub(crate) fn leaf_sha256(&self) -> [u8; 32] {
+		crate::crypto::digest::sha256(self.certified_key.cert[0].as_ref())
+	}
+
+	pub(crate) fn apply_to(&self, base: &VersionedBackendTLS) -> VersionedBackendTLS {
+		VersionedBackendTLS {
+			hostname_override: base.hostname_override.clone(),
+			config: base.config.clone(),
+			expected_identities: base.expected_identities.clone(),
+			peer_identity_mode: base.peer_identity_mode,
+			client_certificate: Some(self.clone()),
+		}
+	}
+}
 
 pub static SYSTEM_TRUST: Lazy<BackendTLS> =
 	Lazy::new(|| ResolvedBackendTLS::default().try_into().unwrap());
@@ -113,6 +205,15 @@ impl PerAlpnConfig {
 			_ => data.config.clone(),
 		}
 	}
+
+	fn has_client_identity(&self) -> bool {
+		self
+			.data
+			.load()
+			.config
+			.client_auth_cert_resolver
+			.has_certs()
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -145,6 +246,14 @@ pub struct SpiffeBackendTLS {
 }
 
 impl BackendTLS {
+	pub(crate) fn has_client_identity(&self) -> bool {
+		match &self.source {
+			BackendTLSSource::Static(config) => config.has_client_identity(),
+			BackendTLSSource::Spiffe(_) => true,
+			BackendTLSSource::Invalid(_) => false,
+		}
+	}
+
 	/// Returns the static config for the requested HTTP version. Only valid for
 	/// [`BackendTLSSource::Static`]; SPIFFE-sourced backends are resolved at connection time via
 	/// `proxy::httpproxy::resolve_backend_tls` and must not reach here.
@@ -154,11 +263,13 @@ impl BackendTLS {
 				"base_config is only valid for static backend TLS; SPIFFE backends resolve per connection"
 			)
 		};
+		let config = config.config_for(None);
 		VersionedBackendTLS {
 			hostname_override: self.hostname_override.clone(),
-			config: config.config_for(None),
+			config,
 			expected_identities: None,
 			peer_identity_mode: tls::PeerIdentityMode::Istio,
+			client_certificate: None,
 		}
 	}
 }
@@ -173,6 +284,9 @@ pub struct VersionedBackendTLS {
 	/// How to interpret the upstream server's SPIFFE identity when extracting peer TLS info.
 	/// `Spiffe` for SPIFFE-sourced backends so their non-Istio SVIDs are not parsed as Istio identities.
 	pub peer_identity_mode: tls::PeerIdentityMode,
+	/// Client certificate selected for this connection.
+	/// Dynamic client identity used for TLS and to partition pooled connections.
+	pub client_certificate: Option<ClientCertificate>,
 }
 
 #[derive(Debug, Clone)]
@@ -184,15 +298,22 @@ pub struct ExpectedIdentities {
 impl VersionedBackendTLS {
 	/// The config to establish a new connection with.
 	pub fn connect_config(&self) -> Arc<ClientConfig> {
-		let Some(expected) = &self.expected_identities else {
+		if self.expected_identities.is_none() && self.client_certificate.is_none() {
 			return self.config.clone();
-		};
+		}
 		let mut cc = ClientConfig::clone(&self.config);
-		cc.dangerous()
-			.set_certificate_verifier(Arc::new(tls::identity::IdentityVerifier {
-				roots: expected.roots.clone(),
-				identity: expected.identities.clone(),
-			}));
+		if let Some(expected) = &self.expected_identities {
+			cc.dangerous()
+				.set_certificate_verifier(Arc::new(tls::identity::IdentityVerifier {
+					roots: expected.roots.clone(),
+					identity: expected.identities.clone(),
+				}));
+		}
+		if let Some(client_certificate) = &self.client_certificate {
+			cc.client_auth_cert_resolver = Arc::new(SingleCertAndKey::from(
+				client_certificate.certified_key.clone(),
+			));
+		}
 		Arc::new(cc)
 	}
 }
@@ -205,6 +326,11 @@ impl std::hash::Hash for VersionedBackendTLS {
 		Arc::as_ptr(&self.config).hash(state);
 		self.hostname_override.hash(state);
 		self
+			.client_certificate
+			.as_ref()
+			.map(|certificate| certificate.fingerprint)
+			.hash(state);
+		self
 			.expected_identities
 			.as_ref()
 			.map(|e| &e.identities)
@@ -216,6 +342,14 @@ impl PartialEq for VersionedBackendTLS {
 	fn eq(&self, other: &Self) -> bool {
 		Arc::ptr_eq(&self.config, &other.config)
 			&& self.hostname_override == other.hostname_override
+			&& self
+				.client_certificate
+				.as_ref()
+				.map(|certificate| certificate.fingerprint)
+				== other
+					.client_certificate
+					.as_ref()
+					.map(|certificate| certificate.fingerprint)
 			&& self.expected_identities.as_ref().map(|e| &e.identities)
 				== other.expected_identities.as_ref().map(|e| &e.identities)
 	}
@@ -558,6 +692,9 @@ impl ResolvedBackendTLS {
 		let metadata = BackendTLSInfo::from_resolved(&self);
 		let hostname_override = self.hostname.map(|s| s.try_into()).transpose()?;
 
+		if self.cert.is_some() != self.key.is_some() {
+			anyhow::bail!("backend TLS requires both cert and key")
+		}
 		let source: BackendTLSSource = if self.spiffe {
 			if self.cert.is_some()
 				|| self.key.is_some()
@@ -897,6 +1034,7 @@ mod tests {
 	use super::*;
 
 	#[test]
+	#[cfg(feature = "fips")]
 	fn fips_config_backend_tls_rejects_non_approved_key_exchange_group() {
 		let result = ResolvedBackendTLS {
 			insecure: true,
@@ -912,5 +1050,86 @@ mod tests {
 			err.to_string().contains("X25519"),
 			"error should name the configured key exchange group, got: {err}"
 		);
+	}
+
+	#[test]
+	fn dynamic_client_certificate_validates_pem_and_key_pair() {
+		let key = rcgen::KeyPair::generate().unwrap();
+		let mut params = rcgen::CertificateParams::default();
+		params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+		let certificate = params.self_signed(&key).unwrap();
+		let pem = certificate.pem();
+		let key_pem = key.serialize_pem();
+
+		let bundle = format!("{pem}{key_pem}");
+		let dynamic = ClientCertificate::from_pem_bundle(bundle.as_bytes()).unwrap();
+		assert_ne!(dynamic.fingerprint, [0; 32]);
+
+		let other_key = rcgen::KeyPair::generate().unwrap().serialize_pem();
+		assert!(ClientCertificate::from_pem_bundle(format!("{pem}{other_key}").as_bytes()).is_err());
+		assert!(ClientCertificate::from_pem_bundle(pem.as_bytes()).is_err());
+		assert!(ClientCertificate::from_pem_bundle(format!("{bundle}{other_key}").as_bytes()).is_err());
+		assert!(ClientCertificate::from_pem(b"not PEM", key_pem.as_bytes()).is_err());
+	}
+
+	#[test]
+	fn dynamic_client_certificate_allows_absent_extended_key_usage() {
+		for (usages, accepted) in [
+			(vec![], true),
+			(vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth], true),
+			(vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth], false),
+		] {
+			let key = rcgen::KeyPair::generate().unwrap();
+			let mut params = rcgen::CertificateParams::default();
+			params.extended_key_usages = usages.clone();
+			let certificate = params.self_signed(&key).unwrap();
+			let result =
+				ClientCertificate::from_pem(certificate.pem().as_bytes(), key.serialize_pem().as_bytes());
+			assert_eq!(result.is_ok(), accepted, "usages: {usages:?}");
+		}
+	}
+
+	#[test]
+	fn dynamic_client_certificate_reuses_only_matching_backend_pool() {
+		use std::collections::hash_map::DefaultHasher;
+		use std::hash::{Hash, Hasher};
+
+		let key = rcgen::KeyPair::generate().unwrap();
+		let mut params = rcgen::CertificateParams::default();
+		params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+		let certificate = params.self_signed(&key).unwrap();
+		let dynamic =
+			ClientCertificate::from_pem(certificate.pem().as_bytes(), key.serialize_pem().as_bytes())
+				.unwrap();
+		let base = SYSTEM_TRUST.base_config();
+		let same_certificate = dynamic.apply_to(&base);
+		let same_certificate_again = dynamic.apply_to(&base);
+		let other_base = ResolvedBackendTLS::default()
+			.try_into()
+			.unwrap()
+			.base_config();
+		let other_key = rcgen::KeyPair::generate().unwrap();
+		let mut other_params = rcgen::CertificateParams::default();
+		other_params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+		let other_certificate = other_params.self_signed(&other_key).unwrap();
+		let other_dynamic = ClientCertificate::from_pem(
+			other_certificate.pem().as_bytes(),
+			other_key.serialize_pem().as_bytes(),
+		)
+		.unwrap();
+
+		assert!(Arc::ptr_eq(
+			&same_certificate.config,
+			&same_certificate_again.config
+		));
+		assert_eq!(same_certificate, same_certificate_again);
+		assert_ne!(same_certificate, other_dynamic.apply_to(&base));
+		assert_ne!(same_certificate, dynamic.apply_to(&other_base));
+
+		let mut first_hash = DefaultHasher::new();
+		same_certificate.hash(&mut first_hash);
+		let mut second_hash = DefaultHasher::new();
+		same_certificate_again.hash(&mut second_hash);
+		assert_eq!(first_hash.finish(), second_hash.finish());
 	}
 }

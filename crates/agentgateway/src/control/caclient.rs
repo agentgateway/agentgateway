@@ -197,6 +197,7 @@ impl WorkloadCertificate {
 				identities: identity,
 			}),
 			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
+			client_certificate: None,
 		}
 	}
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
