@@ -404,10 +404,6 @@ mod defaults {
 		Duration::from_secs(5)
 	}
 
-	pub fn max_buffer_size() -> usize {
-		2_097_152
-	}
-
 	/// Semi-trusted, controller-configured gRPC services that return body mutations do not impose
 	/// a message-size limit.
 	///
