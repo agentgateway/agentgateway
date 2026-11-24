@@ -258,7 +258,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -371,7 +371,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -386,7 +386,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -491,7 +491,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -519,7 +519,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.extAuthz.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`binds[].listeners[].routes[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -550,7 +550,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -568,7 +568,7 @@
 |`binds[].listeners[].routes[].policies.extProc.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.extProc.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -587,7 +587,7 @@
 |`binds[].listeners[].routes[].policies.substrateIngress.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.substrateIngress.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.substrateIngress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.substrateIngress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.substrateIngress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`binds[].listeners[].routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`binds[].listeners[].routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
@@ -601,7 +601,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.substrateEgress.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.substrateEgress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.substrateEgress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.substrateEgress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
@@ -610,7 +610,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`binds[].listeners[].routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`binds[].listeners[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -666,7 +666,7 @@
 |`binds[].listeners[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
 |`binds[].listeners[].routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`binds[].listeners[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
-|`binds[].listeners[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`binds[].listeners[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried. Defaults to none.|
 |`binds[].listeners[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
 |`binds[].listeners[].routes[].policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`binds[].listeners[].routes[].policies.delay`|object|Inject artificial latency before forwarding requests.|
@@ -847,7 +847,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -887,7 +887,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -1057,7 +1057,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -1097,7 +1097,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -1229,7 +1229,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -1269,7 +1269,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -1426,7 +1426,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`binds[].listeners[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`binds[].listeners[].policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -1454,7 +1454,7 @@
 |`binds[].listeners[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].policies.extAuthz.host`|string|Hostname or IP address|
 |`binds[].listeners[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`binds[].listeners[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -1485,7 +1485,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].host`|string|Hostname or IP address|
 |`binds[].listeners[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`binds[].listeners[].policies.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].policies.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -1503,7 +1503,7 @@
 |`binds[].listeners[].policies.extProc.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].policies.extProc.host`|string|Hostname or IP address|
 |`binds[].listeners[].policies.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].policies.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].policies.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`binds[].listeners[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -1634,7 +1634,7 @@
 |`frontendPolicies.networkExtAuthz.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.networkExtAuthz.host`|string|Hostname or IP address|
 |`frontendPolicies.networkExtAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`frontendPolicies.networkExtAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`frontendPolicies.networkExtAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`frontendPolicies.networkExtAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`frontendPolicies.networkExtAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`frontendPolicies.networkExtAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -1663,7 +1663,7 @@
 |`frontendPolicies.substrateEgressActorResolution.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.substrateEgressActorResolution.host`|string|Hostname or IP address|
 |`frontendPolicies.substrateEgressActorResolution.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`frontendPolicies.substrateEgressActorResolution.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`frontendPolicies.substrateEgressActorResolution.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`frontendPolicies.proxy`|object|Enable downstream PROXY protocol handling on this gateway or port, including<br>version matching and whether PROXY headers are required or optional.|
 |`frontendPolicies.proxy.version`|enum|PROXY protocol versions accepted from downstream clients.<br>Possible values: `v1`, `v2`, `all`.|
 |`frontendPolicies.proxy.mode`|enum|Whether downstream connections must include a PROXY protocol header.<br>Possible values: `strict`, `optional`.|
@@ -1683,7 +1683,7 @@
 |`frontendPolicies.accessLog.otlp.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.accessLog.otlp.host`|string|Hostname or IP address|
 |`frontendPolicies.accessLog.otlp.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`frontendPolicies.accessLog.otlp.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`frontendPolicies.accessLog.otlp.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`frontendPolicies.accessLog.otlp.filter`|string|CEL expression that decides whether a request is exported over OTLP.|
 |`frontendPolicies.accessLog.otlp.fields`|object|OTLP-specific access log fields. If unset, the parent access log fields are used.|
 |`frontendPolicies.accessLog.otlp.fields.remove`|[]string|Access log field names to remove.|
@@ -1704,7 +1704,7 @@
 |`frontendPolicies.logging.otlp.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.logging.otlp.host`|string|Hostname or IP address|
 |`frontendPolicies.logging.otlp.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`frontendPolicies.logging.otlp.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`frontendPolicies.logging.otlp.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`frontendPolicies.logging.otlp.filter`|string|CEL expression that decides whether a request is exported over OTLP.|
 |`frontendPolicies.logging.otlp.fields`|object|OTLP-specific access log fields. If unset, the parent access log fields are used.|
 |`frontendPolicies.logging.otlp.fields.remove`|[]string|Access log field names to remove.|
@@ -1720,7 +1720,7 @@
 |`frontendPolicies.tracing.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.tracing.host`|string|Hostname or IP address|
 |`frontendPolicies.tracing.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`frontendPolicies.tracing.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`frontendPolicies.tracing.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`frontendPolicies.tracing.attributes`|object|Span attributes to add, keyed by attribute name.|
 |`frontendPolicies.tracing.resources`|object|Resource attributes to add to the tracer provider (OTel `Resource`).<br>This can be used to set things like `service.name` dynamically.|
 |`frontendPolicies.tracing.remove`|[]string|Attribute keys to remove from the emitted span attributes.<br><br>This is applied before `attributes` are evaluated/added, so it can be used to drop<br>default attributes or avoid duplication.|
@@ -1825,7 +1825,7 @@
 |`policies[].policy.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`policies[].policy.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`policies[].policy.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -1938,7 +1938,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`policies[].policy.remoteRateLimit.conditional[].domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`policies[].policy.remoteRateLimit.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.remoteRateLimit.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`policies[].policy.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`policies[].policy.remoteRateLimit.conditional[].descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -1953,7 +1953,7 @@
 |`policies[].policy.remoteRateLimit.host`|string|Hostname or IP address|
 |`policies[].policy.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.remoteRateLimit.domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`policies[].policy.remoteRateLimit.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.remoteRateLimit.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`policies[].policy.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -2058,7 +2058,7 @@
 |`policies[].policy.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`policies[].policy.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`policies[].policy.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`policies[].policy.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`policies[].policy.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -2086,7 +2086,7 @@
 |`policies[].policy.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.extAuthz.host`|string|Hostname or IP address|
 |`policies[].policy.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`policies[].policy.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`policies[].policy.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -2117,7 +2117,7 @@
 |`policies[].policy.extProc.conditional[].host`|string|Hostname or IP address|
 |`policies[].policy.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`policies[].policy.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -2135,7 +2135,7 @@
 |`policies[].policy.extProc.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.extProc.host`|string|Hostname or IP address|
 |`policies[].policy.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -2154,7 +2154,7 @@
 |`policies[].policy.substrateIngress.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.substrateIngress.host`|string|Hostname or IP address|
 |`policies[].policy.substrateIngress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.substrateIngress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.substrateIngress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`policies[].policy.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`policies[].policy.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
@@ -2168,7 +2168,7 @@
 |`policies[].policy.substrateEgress.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.substrateEgress.host`|string|Hostname or IP address|
 |`policies[].policy.substrateEgress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.substrateEgress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.substrateEgress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`policies[].policy.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`policies[].policy.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
@@ -2177,7 +2177,7 @@
 |`policies[].policy.substrateEgress.credentialProviders[].target.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`policies[].policy.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.substrateEgress.credentialProviders[].target.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`policies[].policy.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`policies[].policy.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`policies[].policy.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -2233,7 +2233,7 @@
 |`policies[].policy.retry`|object|Retry matching failed upstream requests.|
 |`policies[].policy.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`policies[].policy.retry.backoff`|string|Delay between retry attempts.|
-|`policies[].policy.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`policies[].policy.retry.codes`|[]integer|HTTP response status codes that should be retried. Defaults to none.|
 |`policies[].policy.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
 |`policies[].policy.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`policies[].policy.delay`|object|Inject artificial latency before forwarding requests.|
@@ -2414,7 +2414,7 @@
 |`backends[].ai.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.extAuthz.host`|string|Hostname or IP address|
 |`backends[].ai.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`backends[].ai.policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`backends[].ai.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`backends[].ai.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`backends[].ai.policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -2454,7 +2454,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`backends[].ai.policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`backends[].ai.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`backends[].ai.policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -2624,7 +2624,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -2664,7 +2664,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -2794,7 +2794,7 @@
 |`backends[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.extAuthz.host`|string|Hostname or IP address|
 |`backends[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`backends[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`backends[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`backends[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`backends[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -2834,7 +2834,7 @@
 |`backends[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`backends[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`backends[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`backends[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`backends[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -2968,7 +2968,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -3081,7 +3081,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -3096,7 +3096,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.remoteRateLimit.domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`routeGroups[].routes[].policies.remoteRateLimit.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -3201,7 +3201,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -3229,7 +3229,7 @@
 |`routeGroups[].routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.extAuthz.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routeGroups[].routes[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -3260,7 +3260,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`routeGroups[].routes[].policies.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -3278,7 +3278,7 @@
 |`routeGroups[].routes[].policies.extProc.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.extProc.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -3297,7 +3297,7 @@
 |`routeGroups[].routes[].policies.substrateIngress.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.substrateIngress.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.substrateIngress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.substrateIngress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.substrateIngress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`routeGroups[].routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`routeGroups[].routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
@@ -3311,7 +3311,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.substrateEgress.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.substrateEgress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.substrateEgress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.substrateEgress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
@@ -3320,7 +3320,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`routeGroups[].routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`routeGroups[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -3376,7 +3376,7 @@
 |`routeGroups[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
 |`routeGroups[].routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`routeGroups[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
-|`routeGroups[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`routeGroups[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried. Defaults to none.|
 |`routeGroups[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
 |`routeGroups[].routes[].policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`routeGroups[].routes[].policies.delay`|object|Inject artificial latency before forwarding requests.|
@@ -3557,7 +3557,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -3597,7 +3597,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -3767,7 +3767,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -3807,7 +3807,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -3939,7 +3939,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -3979,7 +3979,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -4108,7 +4108,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].host`|string|Hostname or IP address|
 |`gateways.*.listeners[].extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`gateways.*.listeners[].extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`gateways.*.listeners[].extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`gateways.*.listeners[].extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`gateways.*.listeners[].extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`gateways.*.listeners[].extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`gateways.*.listeners[].extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -4136,7 +4136,7 @@
 |`gateways.*.listeners[].extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.listeners[].extAuthz.host`|string|Hostname or IP address|
 |`gateways.*.listeners[].extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`gateways.*.listeners[].extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`gateways.*.listeners[].extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`gateways.*.listeners[].extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`gateways.*.listeners[].extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`gateways.*.listeners[].extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -4167,7 +4167,7 @@
 |`gateways.*.listeners[].extProc.conditional[].host`|string|Hostname or IP address|
 |`gateways.*.listeners[].extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`gateways.*.listeners[].extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`gateways.*.listeners[].extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`gateways.*.listeners[].extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`gateways.*.listeners[].extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.listeners[].extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`gateways.*.listeners[].extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -4185,7 +4185,7 @@
 |`gateways.*.listeners[].extProc.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.listeners[].extProc.host`|string|Hostname or IP address|
 |`gateways.*.listeners[].extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`gateways.*.listeners[].extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`gateways.*.listeners[].extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`gateways.*.listeners[].extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.listeners[].extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`gateways.*.listeners[].extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -4349,7 +4349,7 @@
 |`gateways.*.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`gateways.*.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`gateways.*.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`gateways.*.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`gateways.*.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`gateways.*.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`gateways.*.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`gateways.*.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -4377,7 +4377,7 @@
 |`gateways.*.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.extAuthz.host`|string|Hostname or IP address|
 |`gateways.*.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`gateways.*.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`gateways.*.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`gateways.*.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`gateways.*.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`gateways.*.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -4408,7 +4408,7 @@
 |`gateways.*.extProc.conditional[].host`|string|Hostname or IP address|
 |`gateways.*.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`gateways.*.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`gateways.*.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`gateways.*.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`gateways.*.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`gateways.*.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -4426,7 +4426,7 @@
 |`gateways.*.extProc.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.extProc.host`|string|Hostname or IP address|
 |`gateways.*.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`gateways.*.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`gateways.*.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`gateways.*.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`gateways.*.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -4602,7 +4602,7 @@
 |`routes[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`routes[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routes[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -4715,7 +4715,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routes[].policies.remoteRateLimit.conditional[].domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`routes[].policies.remoteRateLimit.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.remoteRateLimit.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`routes[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`routes[].policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -4730,7 +4730,7 @@
 |`routes[].policies.remoteRateLimit.host`|string|Hostname or IP address|
 |`routes[].policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.remoteRateLimit.domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`routes[].policies.remoteRateLimit.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.remoteRateLimit.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`routes[].policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`routes[].policies.remoteRateLimit.descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -4835,7 +4835,7 @@
 |`routes[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`routes[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`routes[].policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routes[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -4863,7 +4863,7 @@
 |`routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.extAuthz.host`|string|Hostname or IP address|
 |`routes[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routes[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -4894,7 +4894,7 @@
 |`routes[].policies.extProc.conditional[].host`|string|Hostname or IP address|
 |`routes[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`routes[].policies.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -4912,7 +4912,7 @@
 |`routes[].policies.extProc.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.extProc.host`|string|Hostname or IP address|
 |`routes[].policies.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].policies.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -4931,7 +4931,7 @@
 |`routes[].policies.substrateIngress.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.substrateIngress.host`|string|Hostname or IP address|
 |`routes[].policies.substrateIngress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].policies.substrateIngress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.substrateIngress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
@@ -4945,7 +4945,7 @@
 |`routes[].policies.substrateEgress.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.substrateEgress.host`|string|Hostname or IP address|
 |`routes[].policies.substrateEgress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].policies.substrateEgress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.substrateEgress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`routes[].policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`routes[].policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
@@ -4954,7 +4954,7 @@
 |`routes[].policies.substrateEgress.credentialProviders[].target.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -5010,7 +5010,7 @@
 |`routes[].policies.retry`|object|Retry matching failed upstream requests.|
 |`routes[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`routes[].policies.retry.backoff`|string|Delay between retry attempts.|
-|`routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried. Defaults to none.|
 |`routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
 |`routes[].policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`routes[].policies.delay`|object|Inject artificial latency before forwarding requests.|
@@ -5191,7 +5191,7 @@
 |`routes[].backends[].ai.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.extAuthz.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].backends[].ai.policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].backends[].ai.policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].backends[].ai.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].backends[].ai.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routes[].backends[].ai.policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -5231,7 +5231,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -5401,7 +5401,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -5441,7 +5441,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -5573,7 +5573,7 @@
 |`routes[].backends[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.extAuthz.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].backends[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].backends[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].backends[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].backends[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`routes[].backends[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -5613,7 +5613,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`routes[].backends[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routes[].backends[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -5947,7 +5947,7 @@
 |`llm.virtualModels[].routing.callout.service.port`|integer|Port on the target Service to route to.|
 |`llm.virtualModels[].routing.callout.host`|string|Hostname or IP address|
 |`llm.virtualModels[].routing.callout.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.virtualModels[].routing.callout.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`llm.virtualModels[].routing.callout.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`llm.virtualModels[].routing.callout.headers`|object|Headers to set on the callout request, computed from CEL expressions.<br>Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers.|
 |`llm.virtualModels[].routing.callout.body`|string|CEL expression that computes the callout request body.<br>Strings and bytes are used directly; other values are JSON-encoded.<br>If unset, the original request body is forwarded.|
 |`llm.virtualModels[].routing.callout.transformation`|object|CEL expressions that compute request payload fields from the callout response, overriding existing values.<br>`callout.headers` holds the response headers and `callout.body` the decoded JSON response body.<br>`model` is required and selects the target from `llm.models`.|
@@ -6021,7 +6021,7 @@
 |`llm.policies.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`llm.policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`llm.policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`llm.policies.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`llm.policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`llm.policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`llm.policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -6049,7 +6049,7 @@
 |`llm.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.extAuthz.host`|string|Hostname or IP address|
 |`llm.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`llm.policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`llm.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`llm.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`llm.policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -6080,7 +6080,7 @@
 |`llm.policies.extProc.conditional[].host`|string|Hostname or IP address|
 |`llm.policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`llm.policies.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`llm.policies.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`llm.policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -6098,7 +6098,7 @@
 |`llm.policies.extProc.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.extProc.host`|string|Hostname or IP address|
 |`llm.policies.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.policies.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`llm.policies.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`llm.policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -6201,7 +6201,7 @@
 |`llm.policies.remoteRateLimit.host`|string|Hostname or IP address|
 |`llm.policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.policies.remoteRateLimit.domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`llm.policies.remoteRateLimit.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`llm.policies.remoteRateLimit.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`llm.policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`llm.policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`llm.policies.remoteRateLimit.descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -6217,7 +6217,7 @@
 |`llm.policies.retry`|object|Retry matching failed upstream requests.|
 |`llm.policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`llm.policies.retry.backoff`|string|Delay between retry attempts.|
-|`llm.policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`llm.policies.retry.codes`|[]integer|HTTP response status codes that should be retried. Defaults to none.|
 |`llm.policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
 |`llm.policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`mcp`|object|mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be<br>served under the attached `gateways` at /mcp and /sse.<br>All MCP servers listed will be served as a single virtual MCP server.|
@@ -6331,7 +6331,7 @@
 |`mcp.policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`mcp.policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`mcp.policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -6444,7 +6444,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.policies.remoteRateLimit.conditional[].domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`mcp.policies.remoteRateLimit.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.remoteRateLimit.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`mcp.policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`mcp.policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -6459,7 +6459,7 @@
 |`mcp.policies.remoteRateLimit.host`|string|Hostname or IP address|
 |`mcp.policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.remoteRateLimit.domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`mcp.policies.remoteRateLimit.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.remoteRateLimit.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`mcp.policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -6564,7 +6564,7 @@
 |`mcp.policies.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`mcp.policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`mcp.policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`mcp.policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`mcp.policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -6592,7 +6592,7 @@
 |`mcp.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.extAuthz.host`|string|Hostname or IP address|
 |`mcp.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`mcp.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`mcp.policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -6623,7 +6623,7 @@
 |`mcp.policies.extProc.conditional[].host`|string|Hostname or IP address|
 |`mcp.policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`mcp.policies.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -6641,7 +6641,7 @@
 |`mcp.policies.extProc.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.extProc.host`|string|Hostname or IP address|
 |`mcp.policies.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -6660,7 +6660,7 @@
 |`mcp.policies.substrateIngress.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.substrateIngress.host`|string|Hostname or IP address|
 |`mcp.policies.substrateIngress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.substrateIngress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.substrateIngress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`mcp.policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`mcp.policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
@@ -6674,7 +6674,7 @@
 |`mcp.policies.substrateEgress.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.substrateEgress.host`|string|Hostname or IP address|
 |`mcp.policies.substrateEgress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.substrateEgress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.substrateEgress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`mcp.policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`mcp.policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
@@ -6683,7 +6683,7 @@
 |`mcp.policies.substrateEgress.credentialProviders[].target.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`mcp.policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.substrateEgress.credentialProviders[].target.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`mcp.policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`mcp.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -6739,7 +6739,7 @@
 |`mcp.policies.retry`|object|Retry matching failed upstream requests.|
 |`mcp.policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`mcp.policies.retry.backoff`|string|Delay between retry attempts.|
-|`mcp.policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`mcp.policies.retry.codes`|[]integer|HTTP response status codes that should be retried. Defaults to none.|
 |`mcp.policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
 |`mcp.policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`mcp.policies.delay`|object|Inject artificial latency before forwarding requests.|
@@ -6854,7 +6854,7 @@
 |`mcp.endpoints[].policies.mcpGuardrails.processors[].service.port`|integer|Port on the target Service to route to.|
 |`mcp.endpoints[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.endpoints[].policies.mcpGuardrails.processors[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.mcpGuardrails.processors[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.endpoints[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`mcp.endpoints[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -6967,7 +6967,7 @@
 |`mcp.endpoints[].policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.endpoints[].policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.endpoints[].policies.remoteRateLimit.conditional[].domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`mcp.endpoints[].policies.remoteRateLimit.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.remoteRateLimit.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`mcp.endpoints[].policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -6982,7 +6982,7 @@
 |`mcp.endpoints[].policies.remoteRateLimit.host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.endpoints[].policies.remoteRateLimit.domain`|string|Rate limit domain sent to the remote rate limit service.|
-|`mcp.endpoints[].policies.remoteRateLimit.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.remoteRateLimit.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`mcp.endpoints[].policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
 |`mcp.endpoints[].policies.remoteRateLimit.descriptors[].entries[].key`|string|Descriptor entry key sent to the remote rate limit service.|
@@ -7087,7 +7087,7 @@
 |`mcp.endpoints[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.endpoints[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`mcp.endpoints[].policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`mcp.endpoints[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`mcp.endpoints[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -7115,7 +7115,7 @@
 |`mcp.endpoints[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`mcp.endpoints[].policies.extAuthz.host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.endpoints[].policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`mcp.endpoints[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`mcp.endpoints[].policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -7146,7 +7146,7 @@
 |`mcp.endpoints[].policies.extProc.conditional[].host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.endpoints[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`mcp.endpoints[].policies.extProc.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.extProc.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.endpoints[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.endpoints[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -7164,7 +7164,7 @@
 |`mcp.endpoints[].policies.extProc.service.port`|integer|Port on the target Service to route to.|
 |`mcp.endpoints[].policies.extProc.host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.extProc.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.endpoints[].policies.extProc.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.extProc.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.endpoints[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.endpoints[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -7183,7 +7183,7 @@
 |`mcp.endpoints[].policies.substrateIngress.service.port`|integer|Port on the target Service to route to.|
 |`mcp.endpoints[].policies.substrateIngress.host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.substrateIngress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.endpoints[].policies.substrateIngress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.substrateIngress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`mcp.endpoints[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`mcp.endpoints[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
@@ -7197,7 +7197,7 @@
 |`mcp.endpoints[].policies.substrateEgress.service.port`|integer|Port on the target Service to route to.|
 |`mcp.endpoints[].policies.substrateEgress.host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.substrateEgress.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.endpoints[].policies.substrateEgress.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.substrateEgress.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`mcp.endpoints[].policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
@@ -7206,7 +7206,7 @@
 |`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.service.port`|integer|Port on the target Service to route to.|
 |`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.endpoints[].policies.substrateEgress.credentialProviders[].target.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`mcp.endpoints[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`mcp.endpoints[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`mcp.endpoints[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -7262,7 +7262,7 @@
 |`mcp.endpoints[].policies.retry`|object|Retry matching failed upstream requests.|
 |`mcp.endpoints[].policies.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
 |`mcp.endpoints[].policies.retry.backoff`|string|Delay between retry attempts.|
-|`mcp.endpoints[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`mcp.endpoints[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried. Defaults to none.|
 |`mcp.endpoints[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
 |`mcp.endpoints[].policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`mcp.endpoints[].policies.delay`|object|Inject artificial latency before forwarding requests.|
@@ -7340,7 +7340,7 @@
 |`ui.policies.extAuthz.conditional[].host`|string|Hostname or IP address|
 |`ui.policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`ui.policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
-|`ui.policies.extAuthz.conditional[].policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`ui.policies.extAuthz.conditional[].policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`ui.policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`ui.policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`ui.policies.extAuthz.conditional[].protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -7368,7 +7368,7 @@
 |`ui.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
 |`ui.policies.extAuthz.host`|string|Hostname or IP address|
 |`ui.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`ui.policies.extAuthz.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`ui.policies.extAuthz.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`ui.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`ui.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
 |`ui.policies.extAuthz.protocol.grpc.context`|object|Static context values to send to the authorization service.<br>Maps to the `context_extensions` field in the request.|
@@ -7471,237 +7471,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<BackendPolicies>.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<BackendPolicies>.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<BackendPolicies>.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<BackendPolicies>.backendAuth.key`|object||
-|`<BackendPolicies>.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.credentials`|[]object||
-|`<BackendPolicies>.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<BackendPolicies>.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<BackendPolicies>.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<BackendPolicies>.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<BackendPolicies>.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<BackendPolicies>.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<BackendPolicies>.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<BackendPolicies>.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<BackendPolicies>.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<BackendPolicies>.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<BackendPolicies>.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<BackendPolicies>.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<BackendPolicies>.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<BackendPolicies>.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<BackendPolicies>.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<BackendPolicies>.backendAuth.aws.accessKeyId`|string||
-|`<BackendPolicies>.backendAuth.aws.secretAccessKey`|string||
-|`<BackendPolicies>.backendAuth.aws.region`|string||
-|`<BackendPolicies>.backendAuth.aws.sessionToken`|string||
-|`<BackendPolicies>.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<BackendPolicies>.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<BackendPolicies>.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<BackendPolicies>.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<BackendPolicies>.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<BackendPolicies>.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<BackendPolicies>.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<BackendPolicies>.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<BackendPolicies>.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<BackendPolicies>.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<BackendPolicies>.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<BackendPolicies>.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<BackendPolicies>.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<BackendPolicies>.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<BackendPolicies>.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<BackendPolicies>.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<BackendPolicies>.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<BackendPolicies>.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<BackendPolicies>.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<BackendPolicies>.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<BackendPolicies>.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<BackendPolicies>.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<BackendPolicies>.backendAuth.jwtSign.claims.*`|any||
-|`<BackendPolicies>.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<BackendPolicies>.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<BackendPolicies>.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<BackendPolicies>.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<BackendPolicies>.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<BackendPolicies>.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`<BackendPolicies>.http`|object|HTTP protocol settings for this backend.|
 |`<BackendPolicies>.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<BackendPolicies>.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7831,58 +7601,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
 |`<BackendAuth>.oauthTokenExchange.host`|string|Hostname or IP address|
 |`<BackendAuth>.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendAuth>.oauthTokenExchange.policies`|object|Backend policies used when connecting to the service.|
-|`<BackendAuth>.oauthTokenExchange.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<BackendAuth>.oauthTokenExchange.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<BackendAuth>.oauthTokenExchange.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations`|object|Modify request and response data for this backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<BackendAuth>.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<BackendAuth>.oauthTokenExchange.policies.backendAuth`|any|Authentication credentials sent to this backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<BackendAuth>.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<BackendAuth>.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<BackendAuth>.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<BackendAuth>.oauthTokenExchange.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<BackendAuth>.oauthTokenExchange.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<BackendAuth>.oauthTokenExchange.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<BackendAuth>.oauthTokenExchange.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<BackendAuth>.oauthTokenExchange.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`<BackendAuth>.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`<BackendAuth>.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
 |`<BackendAuth>.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
@@ -7948,58 +7667,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
 |`<BackendAuth>.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
 |`<BackendAuth>.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies`|object|Backend policies used when connecting to the service.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations`|object|Modify request and response data for this backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendAuth`|any|Authentication credentials sent to this backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<BackendAuth>.crossAppAccess.identityProvider.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`<BackendAuth>.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`<BackendAuth>.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
 |`<BackendAuth>.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
@@ -8023,58 +7691,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies`|object|Backend policies used when connecting to the service.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations`|object|Modify request and response data for this backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendAuth`|any|Authentication credentials sent to this backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
@@ -8129,288 +7746,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.service.port`|integer|Port on the target Service to route to.|
 |`<Guardrails>.request[].webhook.target.host`|string|Hostname or IP address|
 |`<Guardrails>.request[].webhook.target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].webhook.target.policies`|object|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].webhook.target.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.request[].webhook.target.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.request[].webhook.target.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.request[].webhook.target.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].webhook.target.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].webhook.target.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.request[].webhook.target.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key`|object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.request[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.request[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.request[].webhook.target.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.request[].webhook.target.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.request[].webhook.target.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.request[].webhook.target.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.request[].webhook.target.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.request[].webhook.target.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.request[].webhook.target.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.request[].webhook.target.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.request[].webhook.target.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.request[].webhook.target.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].webhook.headers`|object|Headers to set on the webhook request, computed from CEL expressions.<br>Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;<br>setting `:path` replaces the default `/request` / `/response` path.<br>Expressions are evaluated against the original incoming request (like the<br>`transformation` policy), so `request.*` and `jwt.*` refer to the client's request.|
 |`<Guardrails>.request[].webhook.forwardHeaderMatches`|[]object|Incoming request headers to forward to the webhook.|
 |`<Guardrails>.request[].webhook.forwardHeaderMatches[].name`|string|HTTP header or pseudo-header name (such as `:method`) to match.|
@@ -8423,1150 +7759,26 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`<Guardrails>.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
-|`<Guardrails>.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key`|object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.request[].openAIModeration.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.request[].openAIModeration.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.request[].openAIModeration.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.request[].openAIModeration.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.request[].openAIModeration.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when calling the moderation provider.|
 |`<Guardrails>.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`<Guardrails>.request[].bedrockGuardrails.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`<Guardrails>.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`<Guardrails>.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
 |`<Guardrails>.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
-|`<Guardrails>.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.request[].bedrockGuardrails.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`<Guardrails>.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`<Guardrails>.request[].googleModelArmor.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`<Guardrails>.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`<Guardrails>.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
 |`<Guardrails>.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
-|`<Guardrails>.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.request[].googleModelArmor.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.request[].googleModelArmor.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.request[].googleModelArmor.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.request[].googleModelArmor.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.request[].googleModelArmor.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.request[].googleModelArmor.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`<Guardrails>.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`<Guardrails>.request[].azureContentSafety.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`<Guardrails>.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth).<br>Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.|
-|`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key`|object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.request[].azureContentSafety.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.request[].azureContentSafety.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.request[].azureContentSafety.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.request[].azureContentSafety.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies for Azure authentication (optional, defaults to implicit Azure auth).<br>Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.|
 |`<Guardrails>.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`<Guardrails>.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
 |`<Guardrails>.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
@@ -9595,288 +7807,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.service.port`|integer|Port on the target Service to route to.|
 |`<Guardrails>.response[].webhook.target.host`|string|Hostname or IP address|
 |`<Guardrails>.response[].webhook.target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].webhook.target.policies`|object|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].webhook.target.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.response[].webhook.target.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.response[].webhook.target.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.response[].webhook.target.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].webhook.target.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.response[].webhook.target.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.response[].webhook.target.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key`|object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.response[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.response[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.response[].webhook.target.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.response[].webhook.target.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.response[].webhook.target.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.response[].webhook.target.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.response[].webhook.target.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.response[].webhook.target.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.response[].webhook.target.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.response[].webhook.target.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.response[].webhook.target.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.response[].webhook.target.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].webhook.headers`|object|Headers to set on the webhook request, computed from CEL expressions.<br>Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;<br>setting `:path` replaces the default `/request` / `/response` path.<br>Expressions are evaluated against the original incoming request (like the<br>`transformation` policy), so `request.*` and `jwt.*` refer to the client's request.|
 |`<Guardrails>.response[].webhook.forwardHeaderMatches`|[]object|Incoming request headers to forward to the webhook.|
 |`<Guardrails>.response[].webhook.forwardHeaderMatches[].name`|string|HTTP header or pseudo-header name (such as `:method`) to match.|
@@ -9891,862 +7822,19 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`<Guardrails>.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
 |`<Guardrails>.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
-|`<Guardrails>.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.response[].bedrockGuardrails.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`<Guardrails>.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`<Guardrails>.response[].googleModelArmor.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`<Guardrails>.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`<Guardrails>.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
 |`<Guardrails>.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
-|`<Guardrails>.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.response[].googleModelArmor.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.response[].googleModelArmor.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.response[].googleModelArmor.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.response[].googleModelArmor.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.response[].googleModelArmor.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.response[].googleModelArmor.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`<Guardrails>.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`<Guardrails>.response[].azureContentSafety.failureMode`|enum|Behavior when the provider is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`<Guardrails>.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`<Guardrails>.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
-|`<Guardrails>.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth).<br>Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.|
-|`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`<Guardrails>.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations`|object|Modify request and response data for this backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`<Guardrails>.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key`|object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials`|[]object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key`, `expression`, or `gcp` must be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp`|object|Fetch a Google Cloud access or ID token.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
-|`<Guardrails>.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`<Guardrails>.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
-|`<Guardrails>.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`<Guardrails>.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
-|`<Guardrails>.response[].azureContentSafety.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
-|`<Guardrails>.response[].azureContentSafety.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
-|`<Guardrails>.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`<Guardrails>.response[].azureContentSafety.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
+|`<Guardrails>.response[].azureContentSafety.policies`|[`<CalloutBackendPolicies>`](#calloutbackendpolicies)|Backend policies for Azure authentication (optional, defaults to implicit Azure auth).<br>Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.|
 |`<Guardrails>.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`<Guardrails>.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
 |`<Guardrails>.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
@@ -10762,6 +7850,68 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`<Guardrails>.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`<Guardrails>.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
+
+### `<CalloutBackendPolicies>`
+
+|Field|Type|Description|
+|-|-|-|
+|`<CalloutBackendPolicies>.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`<CalloutBackendPolicies>.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`<CalloutBackendPolicies>.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`<CalloutBackendPolicies>.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`<CalloutBackendPolicies>.transformations`|object|Modify request and response data for this backend.|
+|`<CalloutBackendPolicies>.transformations.request`|object|Transform the request before it is forwarded.|
+|`<CalloutBackendPolicies>.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`<CalloutBackendPolicies>.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`<CalloutBackendPolicies>.transformations.request.remove`|[]string|Header names to remove.|
+|`<CalloutBackendPolicies>.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`<CalloutBackendPolicies>.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`<CalloutBackendPolicies>.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`<CalloutBackendPolicies>.transformations.response`|object|Transform the response before it is returned.|
+|`<CalloutBackendPolicies>.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`<CalloutBackendPolicies>.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`<CalloutBackendPolicies>.transformations.response.remove`|[]string|Header names to remove.|
+|`<CalloutBackendPolicies>.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`<CalloutBackendPolicies>.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`<CalloutBackendPolicies>.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`<CalloutBackendPolicies>.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`<CalloutBackendPolicies>.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`<CalloutBackendPolicies>.backendTLS.key`|string|Private key file for the client certificate.|
+|`<CalloutBackendPolicies>.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`<CalloutBackendPolicies>.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`<CalloutBackendPolicies>.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`<CalloutBackendPolicies>.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`<CalloutBackendPolicies>.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`<CalloutBackendPolicies>.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`<CalloutBackendPolicies>.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`<CalloutBackendPolicies>.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<CalloutBackendPolicies>.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
+|`<CalloutBackendPolicies>.http`|object|HTTP protocol settings for this backend.|
+|`<CalloutBackendPolicies>.http.version`|string|HTTP version to use when connecting to the backend.|
+|`<CalloutBackendPolicies>.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`<CalloutBackendPolicies>.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`<CalloutBackendPolicies>.tcp`|object|TCP protocol settings for this backend.|
+|`<CalloutBackendPolicies>.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`<CalloutBackendPolicies>.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`<CalloutBackendPolicies>.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`<CalloutBackendPolicies>.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`<CalloutBackendPolicies>.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`<CalloutBackendPolicies>.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`<CalloutBackendPolicies>.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
+|`<CalloutBackendPolicies>.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`<CalloutBackendPolicies>.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`<CalloutBackendPolicies>.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`<CalloutBackendPolicies>.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`<CalloutBackendPolicies>.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`<CalloutBackendPolicies>.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`<CalloutBackendPolicies>.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`<CalloutBackendPolicies>.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
+|`<CalloutBackendPolicies>.retry`|object|Retry the callout. Only HTTP callouts with a request body of known size are retried;<br>gRPC and streaming callouts ignore this. The callout's request timeout (10s by default)<br>bounds all attempts and backoffs, so an attempt that times out is not retried. Retries<br>multiply with route retries, since each route attempt re-runs its callouts.|
+|`<CalloutBackendPolicies>.retry.attempts`|integer|Maximum number of retries after the original request. `0` disables retries.|
+|`<CalloutBackendPolicies>.retry.backoff`|string|Delay between retry attempts.|
+|`<CalloutBackendPolicies>.retry.codes`|[]integer|HTTP response status codes that should be retried. Defaults to none.|
+|`<CalloutBackendPolicies>.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
+|`<CalloutBackendPolicies>.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 
 ## Config resources
 

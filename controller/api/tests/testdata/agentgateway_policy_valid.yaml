@@ -1628,3 +1628,33 @@ spec:
             key: /etc/certs/tls.key
             root: /etc/certs/ca.crt
       sni: api.example.com
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-retry
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+          - openAIModeration: {}
+            policies:
+              http:
+                requestTimeout: 5s
+              retry:
+                attempts: 2
+                backoff: 250ms
+                codes: [429, 503]
+        response:
+          - googleModelArmor:
+              templateId: template
+              projectId: project
+            policies:
+              retry:
+                attempts: 1
+                condition: 'json(response.body).error.retryable'

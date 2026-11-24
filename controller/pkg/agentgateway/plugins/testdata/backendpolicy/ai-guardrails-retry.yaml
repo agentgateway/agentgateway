@@ -1,0 +1,116 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw-guard-retry
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    ai:
+      promptGuard:
+        request:
+          - openAIModeration: {}
+            policies:
+              http:
+                requestTimeout: 5s
+              retry:
+                attempts: 2
+                backoff: 250ms
+                codes: [429, 503]
+          - googleModelArmor:
+              templateId: model-armor-template-id
+              projectId: model-armor-project-id
+            policies:
+              retry:
+                attempts: 1
+                condition: 'json(response.body).error.retryable'
+        response:
+          - azureContentSafety:
+              endpoint: my-resource.cognitiveservices.azure.com
+              analyzeText: {}
+            policies:
+              retry:
+                attempts: 3
+                codes: [503]
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        ai:
+          promptGuard:
+            request:
+            - openaiModeration:
+                action: REJECT_AUDIT_ACTION_REJECT
+                inlinePolicies:
+                - backendHttp:
+                    requestTimeout: 5s
+                - retry:
+                    attempts: 2
+                    backoff: 0.250s
+                    retryStatusCodes:
+                    - 429
+                    - 503
+            - googleModelArmor:
+                action: REJECT_AUDIT_ACTION_REJECT
+                inlinePolicies:
+                - retry:
+                    attempts: 1
+                    condition: json(response.body).error.retryable
+                location: us-central1
+                projectId: model-armor-project-id
+                templateId: model-armor-template-id
+            response:
+            - azureContentSafety:
+                action: REJECT_AUDIT_ACTION_REJECT
+                analyzeText: {}
+                endpoint: my-resource.cognitiveservices.azure.com
+                inlinePolicies:
+                - retry:
+                    attempts: 3
+                    retryStatusCodes:
+                    - 503
+      key: backend/default/agw-guard-retry:ai:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw-guard-retry
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw-guard-retry
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

@@ -14,6 +14,7 @@ const SHARED_CONFIG_TYPES: &[(&str, &str)] = &[
 	("SimpleLocalBackendPolicies", "BackendPolicies"),
 	("BackendAuthCompat", "BackendAuth"),
 	("PromptGuard", "Guardrails"),
+	("CalloutLocalBackendPolicies", "CalloutBackendPolicies"),
 ];
 
 pub fn generate_schema() -> Result<()> {

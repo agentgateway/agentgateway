@@ -2708,6 +2708,17 @@ fn backend_policy_from_proto(
 			BackendTrafficPolicy::RequestMirror(mirrors)
 		},
 		Some(bps::Kind::Health(h)) => BackendTrafficPolicy::Health(convert_health(h, diagnostics)),
+		Some(bps::Kind::Retry(r)) => {
+			// Reuse the route retry conversion.
+			let spec = proto::agent::TrafficPolicySpec {
+				kind: Some(proto::agent::traffic_policy_spec::Kind::Retry(r.clone())),
+				..Default::default()
+			};
+			match traffic_policy_from_proto(&spec, diagnostics)? {
+				TrafficPolicy::Retry(p) => BackendTrafficPolicy::Retry(Arc::new(p)),
+				_ => unreachable!("retry spec converts to a retry policy"),
+			}
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }

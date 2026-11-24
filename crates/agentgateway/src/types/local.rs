@@ -6357,15 +6357,51 @@ where
 	D: Deserializer<'de>,
 {
 	let s = SimpleLocalBackendPolicies::deserialize(deserializer)?;
+	translate_simple_backend_policies(s).map_err(serde::de::Error::custom)
+}
+
+fn translate_simple_backend_policies(
+	simple: SimpleLocalBackendPolicies,
+) -> anyhow::Result<Vec<BackendTrafficPolicy>> {
 	// Serde hooks cannot take arguments; the fetcher comes from the enclosing parse.
 	// Not ideal but greatly simplifies the code
 	let resources = crate::resource_manager::parse_fetcher();
 	futures::executor::block_on(
 		LocalBackendPolicies {
-			simple: s,
+			simple,
 			..Default::default()
 		}
 		.translate(&resources),
 	)
-	.map_err(serde::de::Error::custom)
+}
+
+/// Backend policies for a policy callout (guardrails, ext_authz, webhooks, ...): the simple
+/// backend policies plus callout-only settings.
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct CalloutLocalBackendPolicies {
+	#[serde(flatten)]
+	pub simple: SimpleLocalBackendPolicies,
+	/// Retry the callout. Only HTTP callouts with a request body of known size are retried;
+	/// gRPC and streaming callouts ignore this. The callout's request timeout (10s by default)
+	/// bounds all attempts and backoffs, so an attempt that times out is not retried. Retries
+	/// multiply with route retries, since each route attempt re-runs its callouts.
+	#[serde(default)]
+	pub retry: Option<retry::Policy>,
+}
+
+/// Like `de_from_local_backend_policy`, for callouts: also accepts `retry`.
+pub fn de_from_local_callout_backend_policy<'de, D>(
+	deserializer: D,
+) -> Result<Vec<BackendTrafficPolicy>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let CalloutLocalBackendPolicies { simple, retry } =
+		CalloutLocalBackendPolicies::deserialize(deserializer)?;
+	let mut pols = translate_simple_backend_policies(simple).map_err(serde::de::Error::custom)?;
+	if let Some(retry) = retry {
+		pols.push(BackendTrafficPolicy::Retry(Arc::new(retry)));
+	}
+	Ok(pols)
 }

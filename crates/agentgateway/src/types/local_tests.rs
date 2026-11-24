@@ -3169,3 +3169,46 @@ frontendPolicies:
 		.expect("a rotation of the root certificate is published")
 		.unwrap();
 }
+
+#[test]
+fn callout_policies_accept_retry() {
+	let target: crate::types::agent::SimpleBackendReferenceWithPolicies =
+		crate::serdes::yaml::from_str(
+			r#"
+host: guard.example.com:443
+policies:
+  backendTLS: {}
+  retry:
+    attempts: 2
+    backoff: 100ms
+    codes: [429, 503]
+"#,
+		)
+		.unwrap();
+	let retry = target
+		.policies
+		.iter()
+		.find_map(|p| match p {
+			BackendTrafficPolicy::Retry(r) => Some(r),
+			_ => None,
+		})
+		.expect("retry policy");
+	assert_eq!(retry.attempts, 2);
+	assert_eq!(retry.codes.len(), 2);
+	assert!(
+		target
+			.policies
+			.iter()
+			.any(|p| matches!(p, BackendTrafficPolicy::BackendTLS(_)))
+	);
+}
+
+#[test]
+fn backend_policies_reject_retry() {
+	// Only callouts retry; regular backends and tunnels use the route `retry` policy.
+	let err = crate::serdes::yaml::from_str::<crate::types::local::LocalBackendPolicies>(
+		"retry: {attempts: 1, codes: [503]}",
+	)
+	.unwrap_err();
+	assert!(err.to_string().contains("unknown field"), "{err}");
+}

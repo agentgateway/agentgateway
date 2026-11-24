@@ -298,6 +298,9 @@ pub struct BackendPolicies {
 	/// Used for stateful MCP routing (session affinity).
 	/// Not exposed through config - set programmatically only.
 	pub override_dest: Option<std::net::SocketAddr>,
+
+	/// Retry policy for callouts made through `PolicyClient`. Ignored on the main request path.
+	pub retry: Option<Arc<retry::Policy>>,
 }
 
 impl BackendPolicies {
@@ -352,6 +355,7 @@ impl BackendPolicies {
 			session_affinity: other.session_affinity.or(self.session_affinity),
 			health: other.health.or(self.health),
 			override_dest: other.override_dest.or(self.override_dest),
+			retry: other.retry.or(self.retry),
 		}
 	}
 	pub fn build_inference(
@@ -1453,6 +1457,9 @@ impl Store {
 				},
 				BackendTrafficPolicy::McpGuardrails(p) => {
 					pol.mcp_guardrails.get_or_insert_with(|| p.clone());
+				},
+				BackendTrafficPolicy::Retry(p) => {
+					pol.retry.get_or_insert_with(|| p.clone());
 				},
 			}
 		}
