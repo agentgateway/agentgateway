@@ -727,6 +727,16 @@ where
 }
 
 impl HTTPProxy {
+	fn is_https(&self) -> bool {
+		matches!(
+			self
+				.selected_listener
+				.as_ref()
+				.map(|listener| &listener.protocol),
+			Some(ListenerProtocol::HTTPS(_))
+		)
+	}
+
 	pub async fn proxy(&self, connection: Arc<Extension>, mut req: Request) -> Response {
 		let start = agent_core::Timestamp::now();
 
@@ -742,13 +752,7 @@ impl HTTPProxy {
 			.is_some()
 		{
 			// Outer CONNECT TLS authenticates the actor but does not make inner HTTP HTTPS.
-			let protocol = if matches!(
-				self
-					.selected_listener
-					.as_ref()
-					.map(|listener| &listener.protocol),
-				Some(ListenerProtocol::HTTPS(_))
-			) {
+			let protocol = if self.is_https() {
 				EgressRequestProtocol::Https
 			} else {
 				EgressRequestProtocol::Http
@@ -857,7 +861,7 @@ impl HTTPProxy {
 		});
 
 		crate::http::mark_sensitive_headers(req, &self.inputs.cfg.sensitive_headers);
-		normalize_uri(log.tls_info.as_ref(), req)?;
+		normalize_uri(self.is_https(), req)?;
 		set_destination_hostname(req);
 		Ok(bind)
 	}
@@ -4809,7 +4813,7 @@ fn get_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
 
 // Normalize the Host header into the URI authority so the rest of the code doesn't need to care
 // whether the client supplied Host or :authority.
-fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> Result<(), ProxyError> {
+fn normalize_uri(is_https: bool, req: &mut Request) -> Result<(), ProxyError> {
 	debug!("request before normalization: {req:?}");
 	let host = match req.headers_mut().entry(http::header::HOST) {
 		http::header::Entry::Occupied(e) => {
@@ -4833,7 +4837,7 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> Result<(
 		parts.authority = Some(host);
 		if parts.path_and_query.is_some() && parts.scheme.is_none() {
 			// TODO: or always do this?
-			if tls.is_some() {
+			if is_https {
 				parts.scheme = Some(Scheme::HTTPS);
 			} else {
 				parts.scheme = Some(Scheme::HTTP);
@@ -4881,7 +4885,7 @@ mod destination_context_tests {
 			hostname: None,
 		});
 
-		normalize_uri(None, &mut req).unwrap();
+		normalize_uri(false, &mut req).unwrap();
 		set_destination_hostname(&mut req);
 
 		assert_eq!(
@@ -4895,6 +4899,26 @@ mod destination_context_tests {
 				.and_then(|destination| destination.hostname.as_deref()),
 			Some("api.example.com")
 		);
+	}
+
+	#[test]
+	fn normalize_uri_scheme_controls_default_dynamic_port() {
+		for (is_https, expected_scheme, expected_port) in
+			[(false, Scheme::HTTP, 80), (true, Scheme::HTTPS, 443)]
+		{
+			let mut req = ::http::Request::builder()
+				.version(::http::Version::HTTP_11)
+				.uri("/plain")
+				.header(::http::header::HOST, "example.internal")
+				.body(http::Body::empty())
+				.unwrap();
+			normalize_uri(is_https, &mut req).unwrap();
+			assert_eq!(req.uri().scheme(), Some(&expected_scheme));
+			assert_eq!(
+				target_from_request(&req).unwrap(),
+				Target::from(("example.internal", expected_port))
+			);
+		}
 	}
 }
 

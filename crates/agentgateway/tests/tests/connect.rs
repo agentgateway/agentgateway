@@ -697,6 +697,93 @@ async fn connect_tunnel_terminates_outer_tls() {
 	tls_connect_inner(Some("custom-value"), false).await;
 }
 
+#[tokio::test]
+async fn connect_tunnel_outer_tls_inner_http_keeps_http_scheme() {
+	const SNI: &str = "gw.example.com";
+	let mock = simple_mock().await;
+
+	let outer = BindSnapshot::new(
+		Bind {
+			key: strng::literal!("outer"),
+			address: "127.0.0.1:15013".parse().unwrap(),
+			protocol: BindProtocol::tls,
+			tunnel_protocol: TunnelProtocol::Connect,
+			mode: Default::default(),
+		},
+		ListenerSet::from_list([Listener {
+			key: strng::literal!("outer-listener"),
+			name: Default::default(),
+			hostname: strng::new("*.example.com"),
+			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
+			..Default::default()
+		}]),
+	);
+
+	let mut inner = simple_bind();
+	inner.address = "0.0.0.0:18084".parse().unwrap();
+
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_route(basic_route(*mock.address()));
+	t.attach_route_policy(json!({
+		"authorization": {
+			"rules": ["request.scheme == \"http\""],
+		},
+	}))
+	.await;
+
+	let raw = t.serve_tunnel(strng::literal!("outer"));
+	let client_tls: agentgateway::http::backendtls::BackendTLS =
+		agentgateway::http::backendtls::ResolvedBackendTLS {
+			root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
+			hostname: Some(SNI.to_string()),
+			insecure_host: true,
+			..Default::default()
+		}
+		.try_into()
+		.unwrap();
+	let mut io = TlsConnector::from(client_tls.base_config().config)
+		.connect(ServerName::try_from(SNI.to_string()).unwrap(), raw)
+		.await
+		.unwrap();
+
+	io.write_all(b"CONNECT inner.local:18084 HTTP/1.1\r\nHost: inner.local:18084\r\n\r\n")
+		.await
+		.unwrap();
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+		.await
+		.unwrap();
+	let mut tunneled = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+		.await
+		.expect("timed out waiting for tunneled HTTP response")
+		.unwrap();
+	let tunneled = String::from_utf8_lossy(&tunneled);
+	assert!(
+		tunneled.starts_with("HTTP/1.1 200 OK\r\n"),
+		"expected inner HTTP request to keep http scheme, got: {tunneled}",
+	);
+}
+
 /// End-to-end on-behalf-of (OBO) token exchange over a CONNECT tunnel.
 ///
 /// CONNECT (carrying `x-actor-token`, the actor token) -> Tunnel re-entry ->
