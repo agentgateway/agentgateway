@@ -1028,9 +1028,11 @@ impl SessionManager {
 		id: &str,
 		builder: RelayInputs,
 		ctx: &IncomingRequestContext,
-	) -> Option<Session> {
-		let mut sessions = self.sessions.write().ok()?;
-		let entry = sessions.get_mut(id)?;
+	) -> Result<Option<Session>, mcp::Error> {
+		let mut sessions = self.sessions.write().expect("poisoned");
+		let Some(entry) = sessions.get_mut(id) else {
+			return Ok(None);
+		};
 		if entry.backend_id != builder.backend_id
 			|| !entry
 				.session
@@ -1038,11 +1040,11 @@ impl SessionManager {
 				.upstreams
 				.conditions_match(&builder.backend, ctx)
 		{
-			return None;
+			return Ok(None);
 		}
 		entry.last_access = Instant::now();
-		entry.session = entry.session.clone().with_inputs(builder, ctx).ok()?;
-		Some(entry.session.clone())
+		entry.session = entry.session.clone().with_inputs(builder, ctx)?;
+		Ok(Some(entry.session.clone()))
 	}
 
 	pub fn get_or_resume_session(
@@ -1065,6 +1067,7 @@ impl SessionManager {
 			s.session = s.session.clone().with_inputs(builder, ctx)?;
 			return Ok(Some(s.session.clone()));
 		}
+		let idle_ttl = builder.backend.session_idle_ttl;
 		let backend_id = builder.backend_id.clone();
 		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder)
 			.map_err(|_| mcp::Error::UnknownSession)?;
@@ -1084,13 +1087,17 @@ impl SessionManager {
 			return Ok(None);
 		}
 
-		Ok(Some(Session {
+		let session = Session {
 			id: id.into(),
 			relay: Arc::new(relay),
 			tx: None,
 			synthetic: false,
 			encoder: self.encoder.clone(),
-		}))
+		};
+		if session.has_connection_teardown() {
+			self.insert_session(backend_id, session.clone(), idle_ttl);
+		}
+		Ok(Some(session))
 	}
 
 	/// create_session establishes an MCP session.
