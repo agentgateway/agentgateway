@@ -68,9 +68,17 @@ where
 	F: FnMut(Request) -> Fut,
 	Fut: Future<Output = Result<Response, ProxyError>>,
 {
-	tokio::time::timeout(deadline, retry_loop(pol, classifier, req, attempt))
+	let deadline = tokio::time::Instant::now() + deadline;
+	let mut res = tokio::time::timeout_at(deadline, retry_loop(pol, classifier, req, attempt))
 		.await
-		.unwrap_or(Err(ProxyError::UpstreamCallTimeout))
+		.unwrap_or(Err(ProxyError::UpstreamCallTimeout));
+	// Each attempt sets its own body deadline; keep the returned body within the shared one.
+	if let Ok(resp) = &mut res
+		&& resp.body().deadline().is_none_or(|d| d > deadline)
+	{
+		resp.body_mut().set_deadline(deadline);
+	}
+	res
 }
 
 async fn retry_loop<F, Fut>(
@@ -437,6 +445,74 @@ mod tests {
 		let received = server.received_requests().await.unwrap();
 		assert_eq!(received.len(), 2);
 		assert!(received.iter().all(|r| r.body == b"payload"));
+	}
+
+	#[tokio::test]
+	async fn primary_traffic_is_not_retried() {
+		use wiremock::matchers::method;
+		use wiremock::{Mock, MockServer, ResponseTemplate};
+
+		use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
+		use crate::types::agent::{BackendTrafficPolicy, ResourceName, Target};
+
+		let server = MockServer::start().await;
+		Mock::given(method("POST"))
+			.respond_with(ResponseTemplate::new(503))
+			.mount(&server)
+			.await;
+
+		let client = crate::test_helpers::policy_client()
+			.with_outbound(OutboundCallKind::Primary, OutboundCallSubtype::Mcp);
+		let backend = Backend::Opaque(
+			ResourceName::new(strng::literal!("mcp"), strng::literal!("")),
+			Target::Address(*server.address()),
+		);
+		let res = client
+			.call_with_explicit_policies_list(
+				request(),
+				backend,
+				vec![BackendTrafficPolicy::Retry(Arc::new(policy(
+					2,
+					&[503],
+					None,
+				)))],
+			)
+			.await;
+		assert_eq!(res.unwrap().status(), 503);
+		assert_eq!(server.received_requests().await.unwrap().len(), 1);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn returned_body_deadline_is_capped_at_shared_deadline() {
+		let start = tokio::time::Instant::now();
+		let attempts = std::sync::atomic::AtomicUsize::new(0);
+		let res = with_deadline(
+			DEFAULT_CALLOUT_DEADLINE,
+			&policy(1, &[503], None),
+			None,
+			request(),
+			|_req| {
+				let first = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0;
+				async move {
+					if first {
+						tokio::time::sleep(Duration::from_secs(8)).await;
+						return status(503);
+					}
+					// Like the HTTP client, the attempt's body deadline starts at the attempt.
+					let mut resp = status(200)?;
+					resp
+						.body_mut()
+						.set_deadline(tokio::time::Instant::now() + DEFAULT_CALLOUT_DEADLINE);
+					Ok(resp)
+				}
+			},
+		)
+		.await
+		.unwrap();
+		assert_eq!(
+			res.body().deadline(),
+			Some(start + DEFAULT_CALLOUT_DEADLINE)
+		);
 	}
 
 	#[tokio::test(start_paused = true)]

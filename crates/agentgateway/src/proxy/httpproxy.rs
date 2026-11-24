@@ -5488,7 +5488,8 @@ impl PolicyClient {
 		backend: Backend,
 		pols: BackendPolicies,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
-		if let Some(retry) = pols.retry.clone() {
+		let is_callout = self.is_callout();
+		if is_callout && let Some(retry) = pols.retry.clone() {
 			return Box::pin(callout_retry::call(self, req, backend, pols, retry));
 		}
 		// Preserve caller timeouts; backend policies can override this fallback.
@@ -5496,13 +5497,7 @@ impl PolicyClient {
 			.extensions_mut()
 			.get_or_insert(BackendRequestTimeout(Duration::from_secs(10)));
 		self.record_outbound(&mut req);
-		if !matches!(
-			self.outbound(),
-			Some(OutboundCallLabels {
-				kind: OutboundCallKind::Primary | OutboundCallKind::Mirror,
-				..
-			})
-		) {
+		if is_callout {
 			req.extensions_mut().insert(Callout);
 		}
 		let mut req = Some(req);
@@ -5527,6 +5522,18 @@ impl PolicyClient {
 			);
 			dtrace::scope_future(self.dtrace_scope(), call).await
 		})
+	}
+
+	/// Whether calls made by this client are policy callouts, as opposed to primary or mirrored
+	/// traffic (e.g. MCP upstream requests) that only uses `PolicyClient` as transport.
+	fn is_callout(&self) -> bool {
+		!matches!(
+			self.outbound(),
+			Some(OutboundCallLabels {
+				kind: OutboundCallKind::Primary | OutboundCallKind::Mirror,
+				..
+			})
+		)
 	}
 
 	pub fn simple_call(
