@@ -1,18 +1,19 @@
 pub mod from_decisions {
-	use std::collections::{HashMap, HashSet};
+	use std::collections::HashSet;
 
 	use async_openai::types::decisions as d;
 	use indexmap::IndexMap;
 
+	use crate::AIError;
 	use crate::types::decisions;
 	use crate::types::systemone::typed as systemone;
-	use crate::{AIError, json};
 
 	/// Request details SystemOne cannot represent, used to restore them on the response.
 	/// Keyed by SystemOne question key.
 	#[derive(Debug, Default)]
 	pub struct State {
-		questions: HashMap<String, QuestionState>,
+		/// Keyed by SystemOne question key, in request order.
+		questions: IndexMap<String, QuestionState>,
 	}
 
 	#[derive(Debug, Default)]
@@ -25,9 +26,8 @@ pub mod from_decisions {
 	}
 
 	pub fn translate(req: &decisions::Request) -> Result<(Vec<u8>, State), AIError> {
-		let req = json::convert::<_, d::DecisionRequest>(req)
-			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Decisions, err))?;
-		let state = super::super::decisions_input_value(req.input)?;
+		let req = super::super::typed_decisions_request(req)?;
+		let state = decisions_input_value(req.input)?;
 		let translated = req
 			.questions
 			.into_iter()
@@ -37,7 +37,7 @@ pub mod from_decisions {
 					d::QuestionParam::Predicate(q) => {
 						qs.name = q.name;
 						systemone::Question::Noul {
-							instructions: q.instructions.into(),
+							instructions: super::super::decisions_text_instructions(q.instructions)?.into(),
 							criteria: None,
 						}
 					},
@@ -46,8 +46,8 @@ pub mod from_decisions {
 						let mut criteria = IndexMap::new();
 						for c in q.choices {
 							let value = match c.value {
-								d::ChoiceValue::String(s) => s,
-								d::ChoiceValue::Boolean(b) => {
+								d::ChoiceValueParam::Text(s) => s,
+								d::ChoiceValueParam::Boolean(b) => {
 									qs.boolean_values.insert(b.to_string());
 									b.to_string()
 								},
@@ -62,7 +62,7 @@ pub mod from_decisions {
 							}
 						}
 						systemone::Question::Choice {
-							instructions: q.instructions.into(),
+							instructions: super::super::decisions_text_instructions(q.instructions)?.into(),
 							criteria,
 						}
 					},
@@ -82,7 +82,7 @@ pub mod from_decisions {
 							})
 							.collect();
 						systemone::Question::Score {
-							instructions: q.instructions.into(),
+							instructions: super::super::decisions_text_instructions(q.instructions)?.into(),
 							criteria,
 						}
 					},
@@ -124,39 +124,108 @@ pub mod from_decisions {
 		Ok((body, response_state))
 	}
 
+	/// SystemOne state takes any JSON, so messages keep their roles and tool items stay objects.
+	fn decisions_input_value(input: d::DecisionInput) -> Result<serde_json::Value, AIError> {
+		use serde_json::json;
+
+		use super::super::{
+			assistant_parts, instruction_parts, tool_name, tool_output_parts, user_parts,
+		};
+
+		let items = match input {
+			d::DecisionInput::Text(text) => return Ok(serde_json::Value::String(text)),
+			d::DecisionInput::Items(items) => items,
+		};
+		items
+			.into_iter()
+			.map(|item| {
+				Ok(match item {
+					d::DecisionInputItem::Message(d::DecisionInputMessage::User(message)) => {
+						json!({"role": "user", "content": parts_text(user_parts(message.content)?)?})
+					},
+					d::DecisionInputItem::Message(d::DecisionInputMessage::Developer(message)) => {
+						json!({"role": "developer", "content": parts_text(instruction_parts(message.content))?})
+					},
+					d::DecisionInputItem::Message(d::DecisionInputMessage::System(message)) => {
+						json!({"role": "system", "content": parts_text(instruction_parts(message.content))?})
+					},
+					d::DecisionInputItem::Message(d::DecisionInputMessage::Assistant(message)) => {
+						json!({"role": "assistant", "content": parts_text(assistant_parts(message.content))?})
+					},
+					d::DecisionInputItem::FunctionCall(call) => json!({
+						"type": "function_call",
+						"call_id": call.call_id,
+						"name": tool_name(call.namespace, call.name),
+						"arguments": call.arguments,
+					}),
+					d::DecisionInputItem::FunctionCallOutput(output) => json!({
+						"type": "function_call_output",
+						"call_id": output.call_id,
+						"output": parts_text(tool_output_parts(output.output))?,
+					}),
+					d::DecisionInputItem::CustomToolCall(call) => json!({
+						"type": "custom_tool_call",
+						"call_id": call.call_id,
+						"name": tool_name(call.namespace, call.name),
+						"input": call.input,
+					}),
+					d::DecisionInputItem::CustomToolCallOutput(output) => json!({
+						"type": "custom_tool_call_output",
+						"call_id": output.call_id,
+						"output": parts_text(tool_output_parts(output.output))?,
+					}),
+				})
+			})
+			.collect()
+	}
+
+	/// SystemOne state takes no images here.
+	fn parts_text(parts: Vec<super::super::HistoryPart>) -> Result<String, AIError> {
+		parts
+			.into_iter()
+			.map(|part| match part {
+				super::super::HistoryPart::Text(text) => Ok(text),
+				super::super::HistoryPart::Image(_) => Err(AIError::UnsupportedContent),
+			})
+			.collect::<Result<Vec<_>, _>>()
+			.map(|texts| texts.join("\n"))
+	}
+
 	pub fn translate_response(bytes: &[u8], state: &State) -> Result<Vec<u8>, AIError> {
 		let resp: systemone::Response =
 			serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
-		let answers = resp
-			.answers
-			.into_iter()
-			.map(|(key, answer)| {
-				let qs = state.questions.get(&key);
-				let choice_value = |value: String| match value.parse() {
-					Ok(b) if qs.is_some_and(|qs| qs.boolean_values.contains(&value)) => {
-						d::ChoiceValue::Boolean(b)
-					},
-					_ => d::ChoiceValue::String(value),
+		let mut source = resp.answers;
+		let answers = state
+			.questions
+			.iter()
+			.map(|(key, qs)| {
+				let name = qs.name.clone();
+				// SystemOne answers every question. A missing answer is reported as a refusal so the
+				// answers after it keep their positions.
+				let Some(answer) = source.shift_remove(key) else {
+					return d::AnswerResource::Refusal(d::AnswerResourceRefusal { name });
 				};
-				let name = match qs {
-					Some(qs) => qs.name.clone(),
-					None => Some(key.clone()),
+				let choice_value = |value: String| match value.parse() {
+					Ok(b) if qs.boolean_values.contains(&value) => d::ChoiceValueResource::Boolean(b),
+					_ => d::ChoiceValueResource::Text(value),
 				};
 				match answer {
-					systemone::Answer::Noul { noul } => d::AnswerResource::Predicate(d::PredicateAnswer {
-						name: name.clone(),
-						probability: noul,
-					}),
+					systemone::Answer::Noul { noul } => {
+						d::AnswerResource::Predicate(d::AnswerResourcePredicate {
+							name,
+							probability: noul,
+						})
+					},
 					systemone::Answer::Choice {
 						choice,
 						probabilities,
 						confidence,
-					} => d::AnswerResource::Choice(d::ChoiceAnswer {
-						name: name.clone(),
+					} => d::AnswerResource::Choice(d::AnswerResourceChoice {
+						name,
 						choice: choice_value(choice),
 						probabilities: probabilities
 							.into_iter()
-							.map(|(value, probability)| d::ChoiceProbability {
+							.map(|(value, probability)| d::ChoiceProbabilityResource {
 								value: choice_value(value),
 								probability,
 							})
@@ -168,17 +237,15 @@ pub mod from_decisions {
 						probabilities,
 						confidence,
 						..
-					} => d::AnswerResource::Score(d::ScoreAnswer {
-						name: name.clone(),
+					} => d::AnswerResource::Score(d::AnswerResourceScore {
+						name,
 						score: score.as_f64().unwrap_or_default(),
 						probabilities: probabilities
 							.into_iter()
 							.map(|(level, probability)| {
 								let value: usize = level.parse().unwrap_or_default();
-								d::ScoreProbability {
-									label: qs
-										.and_then(|qs| qs.labels.get(value).cloned())
-										.unwrap_or_default(),
+								d::ScoreProbabilityResource {
+									label: qs.labels.get(value).cloned().unwrap_or_default(),
 									value: value as _,
 									probability,
 								}
@@ -195,9 +262,12 @@ pub mod from_decisions {
 		let resp = d::DecisionResponse {
 			model: resp.model,
 			answers,
-			usage: d::DecisionUsage {
+			usage: d::ResponseUsage {
 				input_tokens,
-				input_tokens_details: Default::default(),
+				input_tokens_details: d::InputTokenDetails {
+					cache_write_tokens: Some(0),
+					..Default::default()
+				},
 				output_tokens,
 				output_tokens_details: Default::default(),
 				total_tokens: input_tokens + output_tokens,
@@ -246,21 +316,21 @@ pub mod from_systemone {
 							}
 						}
 					}
-					d::QuestionParam::Predicate(d::QuestionPredicate {
+					d::QuestionParam::Predicate(d::QuestionParamPredicate {
 						name: Some(name),
-						instructions,
+						instructions: d::QuestionParamInstructions::Text(instructions),
 					})
 				},
 				systemone::Question::Choice {
 					instructions,
 					criteria,
-				} => d::QuestionParam::Choice(d::QuestionChoice {
+				} => d::QuestionParam::Choice(d::QuestionParamChoice {
 					name: Some(name),
-					instructions: text(instructions),
+					instructions: d::QuestionParamInstructions::Text(text(instructions)),
 					choices: criteria
 						.into_iter()
-						.map(|(value, description)| d::ChoiceOption {
-							value: d::ChoiceValue::String(value),
+						.map(|(value, description)| d::ChoiceOptionParam {
+							value: d::ChoiceValueParam::Text(value),
 							description: description.map(text),
 						})
 						.collect(),
@@ -270,9 +340,9 @@ pub mod from_systemone {
 					criteria,
 				} => {
 					state.legends.insert(name.clone(), criteria.clone());
-					d::QuestionParam::Score(d::QuestionScore {
+					d::QuestionParam::Score(d::QuestionParamScore {
 						name: Some(name),
-						instructions: text(instructions),
+						instructions: d::QuestionParamInstructions::Text(text(instructions)),
 						levels: criteria
 							.into_iter()
 							.map(|c| match c {
@@ -285,9 +355,9 @@ pub mod from_systemone {
 										1 if o.contains_key("description") => o.remove("description").map(text),
 										_ => Some(serde_json::Value::Object(o).to_string()),
 									};
-									d::ScoreLevel { label, description }
+									d::ScoreLevelParam { label, description }
 								},
-								c => d::ScoreLevel {
+								c => d::ScoreLevelParam {
 									label: text(c),
 									description: None,
 								},
@@ -302,6 +372,8 @@ pub mod from_systemone {
 			input,
 			questions,
 			safety_identifier: None,
+			prompt_cache_key: None,
+			prompt_cache_options: None,
 		};
 		let body = serde_json::to_vec(&req).map_err(AIError::RequestMarshal)?;
 		Ok((body, state))
@@ -310,9 +382,9 @@ pub mod from_systemone {
 	pub fn translate_response(bytes: &[u8], state: &State) -> Result<Vec<u8>, AIError> {
 		let resp: d::DecisionResponse =
 			serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
-		let choice_value = |v: d::ChoiceValue| match v {
-			d::ChoiceValue::String(s) => s,
-			d::ChoiceValue::Boolean(b) => b.to_string(),
+		let choice_value = |v: d::ChoiceValueResource| match v {
+			d::ChoiceValueResource::Text(s) => s,
+			d::ChoiceValueResource::Boolean(b) => b.to_string(),
 		};
 		let mut answers = IndexMap::new();
 		// Questions are always sent named, so every answer maps back to its key.

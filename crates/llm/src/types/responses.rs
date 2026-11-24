@@ -369,7 +369,9 @@ fn visit_output_tool_item(item: &mut OutputItem, f: &mut dyn FnMut(ContentScope,
 				sdk::WebSearchToolCallAction::Find(action)
 				| sdk::WebSearchToolCallAction::FindInPage(action),
 			) => {
-				f(ToolInput, &mut action.url);
+				if let Some(url) = &mut action.url {
+					f(ToolInput, url);
+				}
 				f(ToolInput, &mut action.pattern);
 			},
 			None => {},
@@ -756,6 +758,7 @@ impl ResponseBuilder {
 		incomplete_details: Option<typed::IncompleteDetails>,
 	) -> typed::Response {
 		typed::Response {
+			access_programs: None,
 			background: None,
 			billing: None,
 			conversation: None,
@@ -784,6 +787,7 @@ impl ResponseBuilder {
 			temperature: None,
 			text: None,
 			tool_choice: None,
+			tool_usage: None,
 			tools: None,
 			top_logprobs: None,
 			top_p: None,

@@ -3936,6 +3936,8 @@ pub mod from_responses {
 								code: ResponseErrorCode::Other("content_filter".to_string()),
 								message: "Content filtered by guardrails".to_string(),
 								misalignment: None,
+								param: None,
+								r#type: None,
 							},
 						),
 						Some(bedrock::StopReason::ToolUse) => {
@@ -4814,6 +4816,8 @@ impl ConverseResponseAdapter {
 					code: responsest::ResponseErrorCode::Other("content_filter".to_string()),
 					message: "Content filtered by guardrails".to_string(),
 					misalignment: None,
+					param: None,
+					r#type: None,
 				})
 			},
 			_ => None,

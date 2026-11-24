@@ -7,9 +7,6 @@ info:
     refund:
       type: noul
       noul: 0.93
-    1_:
-      type: noul
-      noul: 0.81
     category:
       type: choice
       choice: damage
@@ -68,8 +65,8 @@ info:
         "probability": 0.93
       },
       {
-        "type": "predicate",
-        "probability": 0.81
+        "type": "refusal",
+        "name": null
       },
       {
         "type": "choice",

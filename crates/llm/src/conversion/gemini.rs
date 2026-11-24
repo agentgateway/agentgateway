@@ -121,6 +121,9 @@ pub mod from_systemone {
 		let resp: google::Response = serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
 		let mut answers = IndexMap::new();
 		for ((name, question), answer) in take_answers(resp.answers, &state.questions) {
+			let Some(answer) = answer else {
+				continue;
+			};
 			let answer = match (answer, question) {
 				(google::Answer::Noul { noul }, QuestionState::Noul) => {
 					systemone::typed::Answer::Noul { noul }
@@ -209,22 +212,21 @@ pub mod from_decisions {
 	#[derive(Debug)]
 	enum QuestionKind {
 		Predicate,
-		Choice(IndexMap<String, d::ChoiceValue>),
+		Choice(IndexMap<String, d::ChoiceValueParam>),
 		Score(Vec<String>),
 	}
 
 	pub fn translate(req: &decisions::Request) -> Result<(Vec<u8>, State), AIError> {
-		let mut request = serde_json::to_value(req).map_err(AIError::RequestMarshal)?;
-		normalize_decisions_input(&mut request)?;
-		let req: d::DecisionRequest = serde_json::from_value(request)
-			.map_err(|err| AIError::RequestParsing(InputFormat::Decisions, err))?;
+		let req = super::super::typed_decisions_request(req)?;
 		let d::DecisionRequest {
 			model,
 			input,
 			questions: source_questions,
-			// Google has no equivalent. It identifies the caller for OpenAI safety systems and
-			// is not part of the evidence evaluated by the model.
+			// Google has no equivalent for these. The safety identifier is for OpenAI safety systems,
+			// and the Decisions API has no prompt caching controls.
 			safety_identifier: _,
+			prompt_cache_key: _,
+			prompt_cache_options: _,
 		} = req;
 		let input = translate_input(input)?;
 		let mut state = State {
@@ -238,7 +240,7 @@ pub mod from_decisions {
 					q.name,
 					QuestionKind::Predicate,
 					google::Question::Noul {
-						instructions: q.instructions,
+						instructions: super::super::decisions_text_instructions(q.instructions)?,
 						criteria: None,
 					},
 				),
@@ -256,7 +258,7 @@ pub mod from_decisions {
 						q.name,
 						QuestionKind::Choice(values),
 						google::Question::Choice {
-							instructions: q.instructions,
+							instructions: super::super::decisions_text_instructions(q.instructions)?,
 							criteria,
 						},
 					)
@@ -279,7 +281,7 @@ pub mod from_decisions {
 						q.name,
 						QuestionKind::Score(labels),
 						google::Question::Score {
-							instructions: q.instructions,
+							instructions: super::super::decisions_text_instructions(q.instructions)?,
 							criteria,
 						},
 					)
@@ -302,68 +304,15 @@ pub mod from_decisions {
 		let resp: google::Response = serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
 		let mut answers = Vec::new();
 		for (question, answer) in take_answers(resp.answers, &state.questions) {
-			let name = question.name.clone();
-			let answer = match (answer, &question.kind) {
-				(google::Answer::Noul { noul }, QuestionKind::Predicate) => {
-					d::AnswerResource::Predicate(d::PredicateAnswer {
-						name,
-						probability: noul,
+			// Google returns one answer per question. A missing or unusable answer is reported as a
+			// refusal so the answers after it keep their positions.
+			let answer = answer
+				.and_then(|answer| translate_answer(answer, question))
+				.unwrap_or_else(|| {
+					d::AnswerResource::Refusal(d::AnswerResourceRefusal {
+						name: question.name.clone(),
 					})
-				},
-				(
-					google::Answer::Choice {
-						choice,
-						probabilities,
-						..
-					},
-					QuestionKind::Choice(values),
-				) => {
-					let Some((choice, probabilities)) = map_choice(values, &choice, &probabilities) else {
-						continue;
-					};
-					let confidence =
-						choice_confidence(&probabilities.iter().map(|(_, p)| *p).collect::<Vec<_>>());
-					d::AnswerResource::Choice(d::ChoiceAnswer {
-						name,
-						choice,
-						probabilities: probabilities
-							.into_iter()
-							.map(|(value, probability)| d::ChoiceProbability { value, probability })
-							.collect(),
-						confidence,
-					})
-				},
-				(
-					google::Answer::Score {
-						score,
-						probabilities,
-						..
-					},
-					QuestionKind::Score(labels),
-				) => {
-					let Some(score) = score.as_f64() else {
-						continue;
-					};
-					let probabilities = level_probabilities(&probabilities, labels.len());
-					let confidence = score_confidence(&probabilities);
-					d::AnswerResource::Score(d::ScoreAnswer {
-						name,
-						score,
-						probabilities: labels
-							.iter()
-							.zip(probabilities)
-							.enumerate()
-							.map(|(index, (label, probability))| d::ScoreProbability {
-								value: index as i64,
-								label: label.clone(),
-								probability,
-							})
-							.collect(),
-						confidence,
-					})
-				},
-				_ => continue,
-			};
+				});
 			answers.push(answer);
 		}
 		let input_tokens = resp.usage.total_input_tokens;
@@ -371,74 +320,155 @@ pub mod from_decisions {
 		serde_json::to_vec(&d::DecisionResponse {
 			model: state.model.clone(),
 			answers,
-			usage: d::DecisionUsage {
+			usage: d::ResponseUsage {
 				input_tokens,
 				output_tokens,
 				total_tokens: input_tokens + output_tokens,
-				input_tokens_details: Default::default(),
+				input_tokens_details: d::InputTokenDetails {
+					cache_write_tokens: Some(0),
+					..Default::default()
+				},
 				output_tokens_details: Default::default(),
 			},
 		})
 		.map_err(AIError::ResponseMarshal)
 	}
 
-	fn translate_input(input: d::DecisionInput) -> Result<google::Input, AIError> {
-		match input {
-			d::DecisionInput::Text(text) => Ok(google::Input::Text(text)),
-			d::DecisionInput::Messages(items) => items
-				.into_iter()
-				.map(|d::DecisionInputItem::Message(message)| {
-					if message.role != "user" {
-						return Err(AIError::UnsupportedContent);
-					}
-					let content = match message.content {
-						d::DecisionInputContent::Text(text) => vec![google::Content::Text { text }],
-						d::DecisionInputContent::Parts(parts) => parts
-							.into_iter()
-							.map(|part| match part {
-								d::DecisionInputContentPart::InputText(text) => {
-									Ok(google::Content::Text { text: text.text })
-								},
-								d::DecisionInputContentPart::InputImage(image) => translate_image(image),
-							})
-							.collect::<Result<_, _>>()?,
-					};
-					Ok(google::Step::UserInput { content })
+	fn translate_answer(
+		answer: google::Answer,
+		question: &QuestionState,
+	) -> Option<d::AnswerResource> {
+		let name = question.name.clone();
+		let answer = match (answer, &question.kind) {
+			(google::Answer::Noul { noul }, QuestionKind::Predicate) => {
+				d::AnswerResource::Predicate(d::AnswerResourcePredicate {
+					name,
+					probability: noul,
 				})
-				.collect::<Result<Vec<_>, _>>()
-				.map(google::Input::Steps),
+			},
+			(
+				google::Answer::Choice {
+					choice,
+					probabilities,
+					..
+				},
+				QuestionKind::Choice(values),
+			) => {
+				let (choice, probabilities) = map_choice(values, &choice, &probabilities)?;
+				let confidence =
+					choice_confidence(&probabilities.iter().map(|(_, p)| *p).collect::<Vec<_>>());
+				d::AnswerResource::Choice(d::AnswerResourceChoice {
+					name,
+					choice: response_choice_value(choice),
+					probabilities: probabilities
+						.into_iter()
+						.map(|(value, probability)| d::ChoiceProbabilityResource {
+							value: response_choice_value(value),
+							probability,
+						})
+						.collect(),
+					confidence,
+				})
+			},
+			(
+				google::Answer::Score {
+					score,
+					probabilities,
+					..
+				},
+				QuestionKind::Score(labels),
+			) => {
+				let score = score.as_f64()?;
+				let probabilities = level_probabilities(&probabilities, labels.len());
+				let confidence = score_confidence(&probabilities);
+				d::AnswerResource::Score(d::AnswerResourceScore {
+					name,
+					score,
+					probabilities: labels
+						.iter()
+						.zip(probabilities)
+						.enumerate()
+						.map(
+							|(index, (label, probability))| d::ScoreProbabilityResource {
+								value: index as i64,
+								label: label.clone(),
+								probability,
+							},
+						)
+						.collect(),
+					confidence,
+				})
+			},
+			_ => return None,
+		};
+		Some(answer)
+	}
+
+	fn translate_input(input: d::DecisionInput) -> Result<google::Input, AIError> {
+		let items = match input {
+			d::DecisionInput::Text(text) => return Ok(google::Input::Text(text)),
+			d::DecisionInput::Items(items) => items,
+		};
+		let mut blocks = Vec::new();
+		for part in super::super::decisions_history(items)? {
+			match part {
+				super::super::HistoryPart::Text(text) => push_text(&mut blocks, text),
+				super::super::HistoryPart::Image(image) => blocks.push(translate_image(image)?),
+			}
+		}
+		Ok(google::Input::Content(blocks))
+	}
+
+	/// Google joins adjacent text blocks with no separator, so separators are written into the text
+	/// and neighbouring text is kept in one block.
+	fn push_text(blocks: &mut Vec<google::Content>, text: String) {
+		match blocks.last_mut() {
+			Some(google::Content::Text { text: last }) => last.push_str(&text),
+			_ => blocks.push(google::Content::Text { text }),
 		}
 	}
 
 	fn translate_image(image: d::DecisionInputImage) -> Result<google::Content, AIError> {
 		let resolution = match image.detail {
-			None | Some(d::ImageDetail::Auto) => None,
-			Some(d::ImageDetail::Low) => Some(google::MediaResolution::Low),
+			None | Some(d::ImageDetailParam::Auto) => None,
+			Some(d::ImageDetailParam::Low) => Some(google::MediaResolution::Low),
 			// Gemini's closest documented resolution to OpenAI's unscaled original.
-			Some(d::ImageDetail::High | d::ImageDetail::Original) => Some(google::MediaResolution::High),
+			Some(d::ImageDetailParam::High | d::ImageDetailParam::Original) => {
+				Some(google::MediaResolution::High)
+			},
 		};
-		let source =
-			if image.image_url.starts_with("https://") || image.image_url.starts_with("http://") {
-				google::ImageSource::Uri {
-					uri: image.image_url,
-				}
-			} else {
-				let Some((mime_type, data)) = super::super::completions::parse_data_url(&image.image_url)
-				else {
-					return Err(AIError::UnsupportedContent);
-				};
-				google::ImageSource::Data {
-					data: data.to_string(),
-					mime_type: mime_type.to_string(),
-				}
+		if image.image_url.starts_with("https://") || image.image_url.starts_with("http://") {
+			let source = google::MediaSource::Uri {
+				uri: image.image_url,
 			};
+			return Ok(google::Content::Image { source, resolution });
+		}
+		let Some((mime_type, data)) = super::super::completions::parse_data_url(&image.image_url)
+		else {
+			return Err(AIError::UnsupportedContent);
+		};
+		let source = google::MediaSource::Data {
+			data: data.to_string(),
+			mime_type: mime_type.to_string(),
+		};
+		// OpenAI accepts PDFs as image inputs, but Google only takes them as document content.
+		if mime_type.eq_ignore_ascii_case("application/pdf") {
+			return Ok(google::Content::Document { source, resolution });
+		}
 		Ok(google::Content::Image { source, resolution })
 	}
 
-	fn choice_description(value: &d::ChoiceValue, description: Option<String>) -> String {
+	fn response_choice_value(value: d::ChoiceValueParam) -> d::ChoiceValueResource {
+		match value {
+			d::ChoiceValueParam::Text(value) => d::ChoiceValueResource::Text(value),
+			d::ChoiceValueParam::Boolean(value) => d::ChoiceValueResource::Boolean(value),
+		}
+	}
+
+	fn choice_description(value: &d::ChoiceValueParam, description: Option<String>) -> String {
 		let value = match value {
-			d::ChoiceValue::String(value) => value.clone(),
-			d::ChoiceValue::Boolean(value) => value.to_string(),
+			d::ChoiceValueParam::Text(value) => value.clone(),
+			d::ChoiceValueParam::Boolean(value) => value.to_string(),
 		};
 		match description.filter(|description| !description.trim().is_empty()) {
 			Some(description) => format!("{value}: {description}"),
@@ -532,46 +562,6 @@ fn error_type(error: &GoogleError, status: http::StatusCode) -> &'static str {
 	}
 }
 
-fn normalize_decisions_input(request: &mut Value) -> Result<(), AIError> {
-	let request = request
-		.as_object_mut()
-		.ok_or_else(|| AIError::UnsupportedConversion("Decisions request must be an object".into()))?;
-	let Some(Value::Array(items)) = request.get_mut("input") else {
-		return Ok(());
-	};
-	for item in items {
-		let item = item.as_object_mut().ok_or(AIError::UnsupportedContent)?;
-		if item
-			.get("type")
-			.and_then(Value::as_str)
-			.is_some_and(|kind| kind != "message")
-		{
-			return Err(AIError::UnsupportedContent);
-		}
-		let user = item.get("role").and_then(Value::as_str).unwrap_or("user") == "user";
-		let Some(Value::Array(parts)) = item.get_mut("content") else {
-			continue;
-		};
-		for part in parts {
-			let Some(kind) = part.get("type").and_then(Value::as_str) else {
-				return Err(AIError::UnsupportedContent);
-			};
-			match kind {
-				"input_text" | "input_image" => {},
-				"input_json" if user => {
-					let data = part
-						.get("data")
-						.ok_or_else(|| AIError::UnsupportedConversion("input_json is missing data".into()))?;
-					let text = serde_json::to_string(data).map_err(AIError::RequestMarshal)?;
-					*part = serde_json::json!({"type": "input_text", "text": text});
-				},
-				_ => return Err(AIError::UnsupportedContent),
-			}
-		}
-	}
-	Ok(())
-}
-
 fn option_key(index: usize) -> String {
 	format!("o_{index:03}")
 }
@@ -587,14 +577,14 @@ fn validate_option_count(count: usize, field: &str) -> Result<(), AIError> {
 }
 
 /// Pairs each requested question with its Google answer, in request order.
-/// Unanswered questions and answers to unknown keys are left out.
+/// Answers to unknown keys are left out.
 fn take_answers<Q>(
 	mut answers: IndexMap<String, google::Answer>,
 	questions: &IndexMap<String, Q>,
-) -> Vec<(&Q, google::Answer)> {
+) -> Vec<(&Q, Option<google::Answer>)> {
 	questions
 		.iter()
-		.filter_map(|(key, question)| Some((question, answers.shift_remove(key)?)))
+		.map(|(key, question)| (question, answers.shift_remove(key)))
 		.collect()
 }
 

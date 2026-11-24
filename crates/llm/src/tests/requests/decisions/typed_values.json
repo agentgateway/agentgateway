@@ -9,7 +9,14 @@
   }],
   "questions": [
     {"type": "predicate", "name": "same", "instructions": "Can the user log in?"},
-    {"type": "predicate", "name": "same", "instructions": "Did the password reset work?"},
+    {
+      "type": "predicate",
+      "name": "same",
+      "instructions": [
+        {"type": "input_text", "text": "Did the password reset work?"},
+        {"type": "input_json", "data": {"field": "reset_worked"}}
+      ]
+    },
     {
       "type": "choice",
       "instructions": "Pick a typed outcome.",

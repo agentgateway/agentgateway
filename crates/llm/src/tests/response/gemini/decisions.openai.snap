@@ -36,10 +36,6 @@ info:
         o_000: 0.88
         o_001: 0.12
       confidence: 0.88
-    q_1:
-      type: noul
-      noul: 0.81
-      confidence: 0.81
     q_0:
       type: noul
       noul: 0.93
@@ -74,8 +70,8 @@ info:
         "probability": 0.93
       },
       {
-        "type": "predicate",
-        "probability": 0.81
+        "type": "refusal",
+        "name": null
       },
       {
         "type": "choice",

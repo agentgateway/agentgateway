@@ -60,6 +60,7 @@ info:
       },
       {
         "type": "choice",
+        "name": null,
         "choice": "true_",
         "probabilities": [
           {

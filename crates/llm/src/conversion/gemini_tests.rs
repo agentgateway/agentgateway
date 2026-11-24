@@ -49,6 +49,46 @@ fn invalid_requests_are_rejected() {
 }
 
 #[test]
+fn typed_decisions_instructions_are_sent_as_text() {
+	let request: crate::types::decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "text",
+		"questions": [{"type": "predicate", "name": "q", "instructions": [
+			{"type": "input_text", "text": "Is this field set?"},
+			{"type": "input_json", "data": {"field": "reset_worked"}}
+		]}]
+	}))
+	.unwrap();
+	let expected = "Is this field set?\n{\"field\":\"reset_worked\"}";
+	let (body, _) = from_decisions::translate(&request).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["questions"]["q_0"]["instructions"], expected);
+	let (body, _) = crate::conversion::systemone::from_decisions::translate(&request).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["questions"]["q"]["instructions"], expected);
+}
+
+#[test]
+fn image_decisions_instructions_are_rejected() {
+	let request: crate::types::decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "text",
+		"questions": [{"type": "predicate", "instructions": [
+			{"type": "input_image", "image_url": "data:image/png;base64,aGk="}
+		]}]
+	}))
+	.unwrap();
+	assert!(matches!(
+		from_decisions::translate(&request),
+		Err(AIError::UnsupportedContent)
+	));
+	assert!(matches!(
+		crate::conversion::systemone::from_decisions::translate(&request),
+		Err(AIError::UnsupportedContent)
+	));
+}
+
+#[test]
 fn gemini_request_limits_are_left_to_gemini() {
 	let many_choices = (0..256)
 		.map(|i| json!({"value": i.to_string()}))
@@ -337,14 +377,10 @@ fn decisions_public_image_urls_are_translated_to_typed_content() {
 	let body: Value = serde_json::from_slice(&body).unwrap();
 	assert_eq!(
 		body["input"],
-		json!([{
-			"type": "user_input",
-			"content": [{
-				"type": "image",
-				"uri": "https://example.com/image.png",
-				"resolution": "low"
-			}]
-		}])
+		json!([
+			{"type": "text", "text": "user:"},
+			{"type": "image", "uri": "https://example.com/image.png", "resolution": "low"}
+		])
 	);
 }
 
@@ -363,13 +399,32 @@ fn decisions_inline_images_are_translated_to_typed_content() {
 	let body: Value = serde_json::from_slice(&body).unwrap();
 	assert_eq!(
 		body["input"],
-		json!([{
-			"type": "user_input",
-			"content": [
-				{"type": "text", "text": "What is shown?"},
-				{"type": "image", "data": "aGk=", "mime_type": "image/png", "resolution": "high"}
-			]
-		}])
+		json!([
+			{"type": "text", "text": "user:\nWhat is shown?"},
+			{"type": "image", "data": "aGk=", "mime_type": "image/png", "resolution": "high"}
+		])
+	);
+}
+
+#[test]
+fn decisions_tool_output_images_are_translated_to_typed_content() {
+	let req: decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": [{"type": "function_call_output", "call_id": "call_1", "output": [
+			{"type": "input_text", "text": "Photo:"},
+			{"type": "input_image", "image_url": "data:image/png;base64,aGk="}
+		]}],
+		"questions": [{"type": "predicate", "instructions": "Is the screen cracked?"}]
+	}))
+	.unwrap();
+	let (body, _) = from_decisions::translate(&req).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		body["input"],
+		json!([
+			{"type": "text", "text": "function call output (call_id call_1):\nPhoto:"},
+			{"type": "image", "data": "aGk=", "mime_type": "image/png"}
+		])
 	);
 }
 
@@ -379,7 +434,8 @@ fn decisions_image_media_types_are_forwarded_to_gemini() {
 		"model": "gemini-decision-1",
 		"input": [{"role": "user", "content": [
 			{"type": "input_image", "image_url": "data:image/avif;base64,aGk="},
-			{"type": "input_image", "image_url": "data:application/pdf;base64,aGk=", "detail": "original"}
+			{"type": "input_image", "image_url": "data:application/pdf;base64,aGk=", "detail": "original"},
+			{"type": "input_image", "image_url": "data:Application/PDF;base64,aGk="}
 		]}],
 		"questions": [{"type": "predicate", "instructions": "Is this a diagram?"}]
 	}))
@@ -387,12 +443,41 @@ fn decisions_image_media_types_are_forwarded_to_gemini() {
 	let (body, _) = from_decisions::translate(&req).unwrap();
 	let body: Value = serde_json::from_slice(&body).unwrap();
 	assert_eq!(
-		body["input"][0]["content"],
+		body["input"],
 		json!([
+			{"type": "text", "text": "user:"},
 			{"type": "image", "data": "aGk=", "mime_type": "image/avif"},
-			{"type": "image", "data": "aGk=", "mime_type": "application/pdf", "resolution": "high"}
+			{"type": "document", "data": "aGk=", "mime_type": "application/pdf", "resolution": "high"},
+			{"type": "document", "data": "aGk=", "mime_type": "Application/PDF"}
 		])
 	);
+}
+
+#[test]
+fn decisions_cache_breakpoints_without_a_mode_are_accepted() {
+	// OpenAI defaults the breakpoint mode to explicit, so clients may send an empty object.
+	let request: crate::types::decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": [{"role": "user", "content": [
+			{"type": "input_text", "text": "text", "prompt_cache_breakpoint": {}}
+		]}],
+		"questions": [{"type": "predicate", "instructions": "yes?"}]
+	}))
+	.unwrap();
+	assert!(from_decisions::translate(&request).is_ok());
+	assert!(crate::conversion::systemone::from_decisions::translate(&request).is_ok());
+
+	let request: crate::types::decisions::Request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": [{"role": "user", "content": [{
+			"type": "input_image",
+			"image_url": "data:image/png;base64,aGk=",
+			"prompt_cache_breakpoint": {}
+		}]}],
+		"questions": [{"type": "predicate", "instructions": "yes?"}]
+	}))
+	.unwrap();
+	assert!(from_decisions::translate(&request).is_ok());
 }
 
 #[test]
@@ -415,7 +500,7 @@ fn decisions_prompt_cache_fields_are_dropped() {
 		body,
 		json!({
 			"model": "gemini-decision-1",
-			"input": [{"type": "user_input", "content": [{"type": "text", "text": "text"}]}],
+			"input": [{"type": "text", "text": "user:\ntext"}],
 			"questions": {"q_0": {"type": "noul", "instructions": "yes?"}}
 		})
 	);

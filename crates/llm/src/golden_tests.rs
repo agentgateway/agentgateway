@@ -584,6 +584,20 @@ mod requests {
 	}
 
 	#[test]
+	fn decisions_history() {
+		let path = "requests/decisions/history.json";
+		test_request(OPENAI, path, |i: &mut types::decisions::Request| {
+			serde_json::to_vec(i).map_err(AIError::RequestMarshal)
+		});
+		test_request(SYSTEMONE, path, |i: &mut types::decisions::Request| {
+			conversion::systemone::from_decisions::translate(i).map(|(body, _)| body)
+		});
+		test_request(GEMINI, path, |i: &mut types::decisions::Request| {
+			conversion::gemini::from_decisions::translate(i).map(|(body, _)| body)
+		});
+	}
+
+	#[test]
 	fn gemini_decisions_typed_values() {
 		test_request(
 			GEMINI,

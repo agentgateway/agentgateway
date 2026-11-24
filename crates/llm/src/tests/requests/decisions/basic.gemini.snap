@@ -18,13 +18,8 @@ info:
     "model": "gpt-6-luna",
     "input": [
       {
-        "type": "user_input",
-        "content": [
-          {
-            "type": "text",
-            "text": "The package was left in the rain and the box is soaked through."
-          }
-        ]
+        "type": "text",
+        "text": "user:\nThe package was left in the rain and the box is soaked through."
       }
     ],
     "questions": {
