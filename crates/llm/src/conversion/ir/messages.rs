@@ -1,10 +1,11 @@
-//! Reads an Anthropic Messages request into the owned model.
+//! Anthropic Messages: reads requests and writes replies.
 
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 
 use super::{
-	CacheMark, Document, DropReason, Dropped, Effort, Message, OutputFormat, Part, Reasoning,
-	ReasoningMode, Request, Role, Source, TextPart, Tool, ToolChoice, ToolResultPart,
+	CacheMark, Citation, Document, DropReason, Dropped, Effort, Message, OutputFormat, Part,
+	Reasoning, ReasoningMode, Reply, ReplyPart, Request, Role, Source, StopReason, TextPart, Tool,
+	ToolChoice, ToolResultPart, Usage,
 };
 use crate::types::messages::typed as wire;
 use crate::{AIError, InputFormat, json as json_util, types};
@@ -505,5 +506,116 @@ fn take_field(
 	match source.remove(field) {
 		Some(Value::String(value)) => Ok(value),
 		_ => Err(missing),
+	}
+}
+
+/// Every reply part has a Messages form, so nothing is dropped.
+pub fn render_reply(reply: Reply) -> wire::MessagesResponse {
+	let Reply {
+		id,
+		model,
+		parts,
+		stop_reason,
+		usage,
+		service_tier,
+	} = reply;
+	let stop_reason = render_stop_reason(stop_reason, &parts);
+	wire::MessagesResponse {
+		content: parts.into_iter().map(render_part).collect(),
+		stop_reason: Some(stop_reason),
+		usage: wire::Usage {
+			service_tier,
+			..usage.map_or_default(render_usage)
+		},
+		..wire::MessagesResponse::start(id, model)
+	}
+}
+
+/// A completed turn with a tool call or refusal has its own stop reason.
+pub fn render_stop_reason(reason: StopReason, parts: &[ReplyPart]) -> wire::StopReason {
+	match reason {
+		StopReason::Completed
+			if parts
+				.iter()
+				.any(|part| matches!(part, ReplyPart::ToolCall { .. })) =>
+		{
+			wire::StopReason::ToolUse
+		},
+		StopReason::Completed
+			if parts
+				.iter()
+				.any(|part| matches!(part, ReplyPart::Refusal(_))) =>
+		{
+			wire::StopReason::Refusal
+		},
+		StopReason::Completed => wire::StopReason::EndTurn,
+		StopReason::Length => wire::StopReason::MaxTokens,
+		StopReason::ContentFilter => wire::StopReason::Refusal,
+		StopReason::ContextWindow => wire::StopReason::ModelContextWindowExceeded,
+	}
+}
+
+fn render_part(part: ReplyPart) -> wire::ContentBlock {
+	match part {
+		ReplyPart::Text { text, citations } => wire::ContentBlock::Text(wire::ContentTextBlock {
+			text,
+			citations: render_citations(citations),
+			cache_control: None,
+		}),
+		ReplyPart::Refusal(text) => wire::ContentBlock::text(text),
+		ReplyPart::ToolCall {
+			id,
+			name,
+			arguments,
+		} => wire::ContentBlock::ToolUse {
+			id,
+			name,
+			input: arguments,
+			cache_control: None,
+		},
+	}
+}
+
+fn render_citations(citations: Vec<Citation>) -> Option<Value> {
+	if citations.is_empty() {
+		return None;
+	}
+	// A URL citation has no cited text or replay index; leave them empty rather than invent them.
+	let citations = citations
+		.into_iter()
+		.map(|Citation { url, title }| {
+			json!({
+				"type": "web_search_result_location",
+				"url": url,
+				"title": title,
+				"cited_text": "",
+				"encrypted_index": "",
+			})
+		})
+		.collect();
+	Some(Value::Array(citations))
+}
+
+/// Messages counts cache reads and writes apart from `input_tokens`.
+pub fn render_usage(usage: Usage) -> wire::Usage {
+	let Usage {
+		input_tokens,
+		output_tokens,
+		cache_read_tokens,
+		cache_write_tokens,
+	} = usage;
+	let reported = |tokens: Option<u64>| {
+		tokens
+			.filter(|tokens| *tokens > 0)
+			.map(|tokens| tokens as usize)
+	};
+	wire::Usage {
+		input_tokens: input_tokens
+			.saturating_sub(cache_write_tokens.unwrap_or_default())
+			.saturating_sub(cache_read_tokens.unwrap_or_default()) as usize,
+		output_tokens: output_tokens as usize,
+		cache_creation_input_tokens: reported(cache_write_tokens),
+		cache_read_input_tokens: reported(cache_read_tokens),
+		..Default::default()
 	}
 }

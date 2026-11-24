@@ -182,7 +182,7 @@ pub mod from_messages {
 	use agent_http::Body;
 	use bytes::Bytes;
 	use rand::RngExt;
-	use serde_json::{Map, Value, json};
+	use serde_json::{Map, Value};
 	use types::messages::typed as messages;
 	use types::responses::typed as responses;
 
@@ -231,122 +231,21 @@ pub mod from_messages {
 		});
 		let id = Some(strng::new(&resp.id));
 		let finish_reasons = types::responses::typed_finish_reason(&resp).map(|r| vec![r]);
-		let anthropic = translate_response_internal(resp)?;
+		let mut dropped = Vec::new();
+		let reply = ir::responses::parse_reply(resp, &mut dropped)?;
+		if !dropped.is_empty() {
+			let dropped = dropped
+				.iter()
+				.map(|dropped| (dropped.redacted_path(), dropped.reason()))
+				.collect::<Vec<_>>();
+			tracing::debug!(?dropped, "responses reply fields not sent to messages");
+		}
 		Ok(Box::new(super::super::ProviderResponse {
-			response: anthropic,
+			response: ir::messages::render_reply(reply),
 			usage: provider_usage,
 			id,
 			finish_reasons,
 		}))
-	}
-
-	fn translate_response_internal(
-		resp: responses::Response,
-	) -> Result<messages::MessagesResponse, AIError> {
-		if resp.error.is_some() || matches!(resp.status, responses::Status::Failed) {
-			return unsupported("responses failed body cannot be represented by messages");
-		}
-		if matches!(
-			resp.status,
-			responses::Status::InProgress | responses::Status::Queued | responses::Status::Cancelled
-		) {
-			return unsupported("non-final responses body cannot be represented by messages");
-		}
-
-		let service_tier = resp
-			.service_tier
-			.as_ref()
-			.and_then(types::serialize_str)
-			.map(|tier| tier.to_string());
-		let usage = translate_usage(resp.usage.as_ref(), service_tier);
-		let mut content = Vec::new();
-		let mut saw_tool_call = false;
-		let mut saw_refusal = false;
-
-		for item in resp.output {
-			match item {
-				responses::OutputItem::Message(message) => {
-					if matches!(message.status, responses::OutputStatus::InProgress) {
-						return unsupported("in-progress responses message cannot be represented by messages");
-					}
-					for part in message.content {
-						match part {
-							responses::OutputMessageContent::OutputText(text) => {
-								let citations: Vec<_> = text
-									.annotations
-									.into_iter()
-									.filter_map(|annotation| {
-										let responses::Annotation::UrlCitation(citation) = annotation else {
-											return None;
-										};
-										// Responses provides a source link, not the source excerpt or
-										// Anthropic's opaque replay index. Do not fabricate either.
-										let citation = serde_json::to_value(citation).ok()?;
-										Some(json!({
-											"type": "web_search_result_location",
-											"url": citation["url"],
-											"title": citation["title"],
-											"cited_text": "",
-											"encrypted_index": "",
-										}))
-									})
-									.collect();
-								content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-									text: text.text,
-									citations: (!citations.is_empty()).then_some(Value::Array(citations)),
-									cache_control: None,
-								}));
-							},
-							responses::OutputMessageContent::Refusal(refusal) => {
-								saw_refusal = true;
-								content.push(messages::ContentBlock::text(refusal.refusal));
-							},
-						}
-					}
-				},
-				responses::OutputItem::FunctionCall(call) => {
-					if call.namespace.is_some() || call.caller.is_some() {
-						return unsupported(
-							"responses namespaced/caller function calls cannot be represented by messages",
-						);
-					}
-					if matches!(call.status, Some(responses::OutputStatus::InProgress)) {
-						return unsupported(
-							"in-progress responses function call cannot be represented by messages",
-						);
-					}
-					let input = crate::conversion::tool_arguments_to_input(&call.arguments);
-					saw_tool_call = true;
-					content.push(messages::ContentBlock::ToolUse {
-						id: call.call_id,
-						name: call.name,
-						input,
-						cache_control: None,
-					});
-				},
-				responses::OutputItem::Reasoning(_) => {
-					tracing::warn!(
-						"Skipping unsupported Responses reasoning output during messages translation"
-					);
-				},
-				_ => {
-					return unsupported("responses output item cannot be represented by messages");
-				},
-			}
-		}
-
-		let stop_reason = translate_stop_reason(
-			&resp.status,
-			resp.incomplete_details.as_ref(),
-			saw_tool_call,
-			saw_refusal,
-		)?;
-		Ok(messages::MessagesResponse {
-			content,
-			stop_reason: Some(stop_reason),
-			usage,
-			..messages::MessagesResponse::start(resp.id, resp.model)
-		})
 	}
 
 	pub fn translate_stream(
@@ -978,7 +877,9 @@ pub mod from_messages {
 							.response
 							.incomplete_details
 							.as_ref()
-							.and_then(|details| incomplete_reason_to_stop_reason(&details.reason).ok());
+							.and_then(|details| ir::responses::parse_incomplete_reason(&details.reason).ok())
+							// Only a completed turn looks at the parts.
+							.map(|reason| ir::messages::render_stop_reason(reason, &[]));
 						flush_message_end(
 							&mut state,
 							&mut events,
@@ -1076,40 +977,11 @@ pub mod from_messages {
 		crate::conversion::completions::from_messages::translate_error(bytes, status)
 	}
 
-	fn translate_usage(
-		usage: Option<&responses::ResponseUsage>,
-		service_tier: Option<String>,
-	) -> messages::Usage {
-		let Some(usage) = usage else {
-			return messages::Usage {
-				service_tier,
-				..Default::default()
-			};
-		};
-		let cache_creation_input_tokens = usage
-			.input_tokens_details
-			.cache_write_tokens
-			.map(|tokens| tokens as usize)
-			.filter(|tokens| *tokens > 0);
-		let cache_read_input_tokens = (usage.input_tokens_details.cached_tokens as usize)
-			.checked_sub(0)
-			.filter(|tokens| *tokens > 0);
-		messages::Usage {
-			input_tokens: (usage.input_tokens as usize)
-				.saturating_sub(cache_creation_input_tokens.unwrap_or_default())
-				.saturating_sub(cache_read_input_tokens.unwrap_or_default()),
-			output_tokens: usage.output_tokens as usize,
-			cache_creation_input_tokens,
-			cache_read_input_tokens,
-			service_tier,
-			..Default::default()
-		}
-	}
-
 	fn translate_delta_usage(
 		usage: Option<&responses::ResponseUsage>,
 	) -> messages::MessageDeltaUsage {
-		let usage = translate_usage(usage, None);
+		let usage =
+			usage.map_or_default(|usage| ir::messages::render_usage(ir::responses::parse_usage(usage)));
 		messages::MessageDeltaUsage {
 			input_tokens: Some(usage.input_tokens),
 			output_tokens: Some(usage.output_tokens),
@@ -1117,55 +989,5 @@ pub mod from_messages {
 			cache_read_input_tokens: usage.cache_read_input_tokens,
 			..Default::default()
 		}
-	}
-
-	fn translate_stop_reason(
-		status: &responses::Status,
-		incomplete_details: Option<&responses::IncompleteDetails>,
-		saw_tool_call: bool,
-		saw_refusal: bool,
-	) -> Result<messages::StopReason, AIError> {
-		match status {
-			responses::Status::Completed => {
-				if saw_tool_call {
-					Ok(messages::StopReason::ToolUse)
-				} else if saw_refusal {
-					Ok(messages::StopReason::Refusal)
-				} else {
-					Ok(messages::StopReason::EndTurn)
-				}
-			},
-			responses::Status::Incomplete => {
-				let Some(details) = incomplete_details else {
-					return Ok(messages::StopReason::MaxTokens);
-				};
-				incomplete_reason_to_stop_reason(&details.reason)
-			},
-			responses::Status::Failed => {
-				unsupported("responses failed status cannot be represented by messages")
-			},
-			responses::Status::InProgress | responses::Status::Queued | responses::Status::Cancelled => {
-				unsupported("non-final responses status cannot be represented by messages")
-			},
-		}
-	}
-
-	fn incomplete_reason_to_stop_reason(reason: &str) -> Result<messages::StopReason, AIError> {
-		let reason = reason.to_ascii_lowercase();
-		if reason == "content_filter" {
-			Ok(messages::StopReason::Refusal)
-		} else if reason.contains("max") || reason.contains("token") {
-			Ok(messages::StopReason::MaxTokens)
-		} else if reason.contains("context") {
-			Ok(messages::StopReason::ModelContextWindowExceeded)
-		} else {
-			Err(AIError::UnsupportedConversion(strng::format!(
-				"responses incomplete reason {reason:?} cannot be represented by messages"
-			)))
-		}
-	}
-
-	fn unsupported<T>(reason: &'static str) -> Result<T, AIError> {
-		Err(AIError::UnsupportedConversion(strng::new(reason)))
 	}
 }

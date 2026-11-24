@@ -1,14 +1,16 @@
-//! Writes the owned model as an OpenAI Responses request.
+//! OpenAI Responses: writes requests and reads buffered replies.
 
 use agent_core::strng;
 use rand::RngExt;
+use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use super::{
-	CacheMark, Document, DropReason, Dropped, Effort, Message, OutputFormat, Part, Reasoning,
-	ReasoningMode, Request, Role, Source, TextPart, Tool, ToolChoice, ToolResultPart,
+	CacheMark, Citation, Document, DropReason, Dropped, Effort, Message, OutputFormat, Part,
+	Reasoning, ReasoningMode, Reply, ReplyPart, Request, Role, Source, StopReason, TextPart, Tool,
+	ToolChoice, ToolResultPart, Usage,
 };
-use crate::types::responses::{RawInputItem, RequestInput, RequestReasoning};
+use crate::types::responses::{RawInputItem, RequestInput, RequestReasoning, typed as wire};
 use crate::{AIError, conversion, types};
 
 /// Writes a Responses request. Refuses parts the destination would misread.
@@ -628,6 +630,144 @@ fn push_output_message(content: Vec<Value>, out: &mut Vec<RawInputItem>) {
 	item.insert("content".to_string(), Value::Array(content));
 	item.insert("status".to_string(), Value::String("completed".to_string()));
 	out.push(RawInputItem::from_value(Value::Object(item)));
+}
+
+/// Refuses a failed or unfinished reply rather than pass it on as finished.
+pub fn parse_reply(reply: wire::Response, dropped: &mut Vec<Dropped>) -> Result<Reply, AIError> {
+	if reply.error.is_some() {
+		return unsupported("responses failed body cannot be represented by messages");
+	}
+	let stop_reason = match reply.status {
+		wire::Status::Completed => StopReason::Completed,
+		wire::Status::Incomplete => match &reply.incomplete_details {
+			None => StopReason::Length,
+			Some(details) => parse_incomplete_reason(&details.reason)?,
+		},
+		wire::Status::Failed => {
+			return unsupported("responses failed body cannot be represented by messages");
+		},
+		wire::Status::InProgress | wire::Status::Queued | wire::Status::Cancelled => {
+			return unsupported("non-final responses body cannot be represented by messages");
+		},
+	};
+
+	let mut parts = Vec::new();
+	for (index, item) in reply.output.into_iter().enumerate() {
+		match item {
+			wire::OutputItem::Message(message) => {
+				if matches!(message.status, wire::OutputStatus::InProgress) {
+					return unsupported("in-progress responses message cannot be represented by messages");
+				}
+				for (part_index, part) in message.content.into_iter().enumerate() {
+					match part {
+						wire::OutputMessageContent::OutputText(text) => {
+							let path = format!("output[{index}].content[{part_index}]");
+							parts.push(ReplyPart::Text {
+								citations: parse_citations(text.annotations, &path, dropped),
+								text: text.text,
+							});
+						},
+						wire::OutputMessageContent::Refusal(refusal) => {
+							parts.push(ReplyPart::Refusal(refusal.refusal));
+						},
+					}
+				}
+			},
+			wire::OutputItem::FunctionCall(call) => {
+				if call.namespace.is_some() || call.caller.is_some() {
+					return unsupported(
+						"responses namespaced/caller function calls cannot be represented by messages",
+					);
+				}
+				if matches!(call.status, Some(wire::OutputStatus::InProgress)) {
+					return unsupported(
+						"in-progress responses function call cannot be represented by messages",
+					);
+				}
+				parts.push(ReplyPart::ToolCall {
+					arguments: conversion::tool_arguments_to_input(&call.arguments),
+					id: call.call_id,
+					name: call.name,
+				});
+			},
+			// TODO: Carry reasoning summaries and encrypted reasoning, matching the request side.
+			wire::OutputItem::Reasoning(_) => {
+				dropped.push(Dropped::new(format!("output[{index}]"), DropReason::Unread));
+			},
+			_ => return unsupported("responses output item cannot be represented by messages"),
+		}
+	}
+
+	Ok(Reply {
+		id: reply.id,
+		model: reply.model,
+		parts,
+		stop_reason,
+		usage: reply.usage.as_ref().map(parse_usage),
+		service_tier: reply
+			.service_tier
+			.as_ref()
+			.and_then(types::serialize_str)
+			.map(|tier| tier.to_string()),
+	})
+}
+
+/// Providers word incomplete reasons differently, so these match loosely.
+pub fn parse_incomplete_reason(reason: &str) -> Result<StopReason, AIError> {
+	let reason = reason.to_ascii_lowercase();
+	if reason == "content_filter" {
+		Ok(StopReason::ContentFilter)
+	} else if reason.contains("max") || reason.contains("token") {
+		Ok(StopReason::Length)
+	} else if reason.contains("context") {
+		Ok(StopReason::ContextWindow)
+	} else {
+		Err(AIError::UnsupportedConversion(strng::format!(
+			"responses incomplete reason {reason:?} cannot be represented by messages"
+		)))
+	}
+}
+
+fn parse_citations(
+	annotations: Vec<wire::Annotation>,
+	path: &str,
+	dropped: &mut Vec<Dropped>,
+) -> Vec<Citation> {
+	let mut citations = Vec::new();
+	for (index, annotation) in annotations.into_iter().enumerate() {
+		match annotation {
+			wire::Annotation::UrlCitation(citation) => {
+				// async-openai keeps these fields private, so read them back through JSON.
+				#[derive(Deserialize)]
+				struct Fields {
+					url: String,
+					title: String,
+				}
+				let Fields { url, title } = serde_json::to_value(citation)
+					.and_then(serde_json::from_value)
+					.expect("a URL citation round-trips through JSON");
+				citations.push(Citation { url, title });
+			},
+			_ => dropped.push(Dropped::new(
+				format!("{path}.annotations[{index}]"),
+				DropReason::Unread,
+			)),
+		}
+	}
+	citations
+}
+
+/// Token usage, with cached tokens still counted in `input_tokens`.
+pub fn parse_usage(usage: &wire::ResponseUsage) -> Usage {
+	Usage {
+		input_tokens: u64::from(usage.input_tokens),
+		output_tokens: u64::from(usage.output_tokens),
+		cache_read_tokens: Some(u64::from(usage.input_tokens_details.cached_tokens)),
+		cache_write_tokens: usage
+			.input_tokens_details
+			.cache_write_tokens
+			.and_then(|tokens| u64::try_from(tokens).ok()),
+	}
 }
 
 fn unsupported<T>(reason: &'static str) -> Result<T, AIError> {

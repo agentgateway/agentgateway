@@ -1,12 +1,7 @@
-//! Owned request model for typed-first translation.
+//! Owned request and reply models for typed-first translation.
 //!
-//! A source adapter reads a wire request into [`Request`], deciding what each part means. A
-//! destination adapter writes [`Request`] to its wire format, deciding how to encode each part
-//! and recording anything it leaves out. Both sides append omissions to one ordered list of
-//! [`Dropped`] entries.
-//!
-//! The Messages -> Responses request route, `conversion::responses::from_messages`, translates
-//! through this model.
+//! A reader decides what each wire part means; a writer decides how to encode it. Both record
+//! what they leave out as [`Dropped`] entries. Streamed replies do not use these models yet.
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
@@ -17,6 +12,8 @@ use serde_json::Value;
 pub mod messages;
 pub mod responses;
 
+#[cfg(test)]
+mod reply_tests;
 #[cfg(test)]
 mod request_tests;
 
@@ -280,4 +277,59 @@ pub enum Source {
 	Other(String),
 	/// A known type missing a required field, with the error to give if it is sent.
 	Incomplete(&'static str),
+}
+
+/// A finished, non-streamed model reply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reply {
+	pub id: String,
+	pub model: String,
+	pub parts: Vec<ReplyPart>,
+	pub stop_reason: StopReason,
+	/// `None` when the provider reported no usage.
+	pub usage: Option<Usage>,
+	pub service_tier: Option<String>,
+}
+
+/// One piece of a reply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReplyPart {
+	Text {
+		text: String,
+		citations: Vec<Citation>,
+	},
+	Refusal(String),
+	ToolCall {
+		id: String,
+		name: String,
+		arguments: Value,
+	},
+}
+
+/// A web page the reply text cites.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Citation {
+	pub url: String,
+	pub title: String,
+}
+
+/// Why the model stopped. Tool-call and refusal stops are left to the writer, which sees the parts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopReason {
+	Completed,
+	/// The output reached a token limit.
+	Length,
+	ContentFilter,
+	ContextWindow,
+}
+
+/// Token counts for one reply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Usage {
+	/// All input tokens, including those read from or written to the cache.
+	pub input_tokens: u64,
+	pub output_tokens: u64,
+	/// `None` when the provider did not say, which is not the same as zero.
+	pub cache_read_tokens: Option<u64>,
+	pub cache_write_tokens: Option<u64>,
 }
