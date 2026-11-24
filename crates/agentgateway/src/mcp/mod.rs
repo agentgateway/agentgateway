@@ -34,7 +34,7 @@ use rmcp::model::{
 };
 pub use router::App;
 use thiserror::Error;
-pub(crate) use upstream::{openapi_server_prefix, parse_openapi_schema};
+pub(crate) use upstream::{OpenAPITools, openapi_server_prefix, parse_openapi_schema};
 
 use crate::http::SyncResponse;
 use crate::proxy::ProxyError;
