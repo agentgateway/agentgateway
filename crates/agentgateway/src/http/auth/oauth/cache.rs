@@ -87,6 +87,7 @@ impl From<&ExchangeRequest> for TokenCacheKey {
 			actor,
 			extra_params,
 			chained_extra_params,
+			cache_context,
 		} = req;
 
 		digest.field(subject_token.expose_secret());
@@ -97,6 +98,7 @@ impl From<&ExchangeRequest> for TokenCacheKey {
 		});
 		digest.params(extra_params);
 		digest.params(chained_extra_params);
+		digest.fields(cache_context);
 
 		digest.finish()
 	}
@@ -120,6 +122,13 @@ impl CacheKeyDigest {
 		for (key, value) in params {
 			self.field(key);
 			self.field(value);
+		}
+	}
+
+	fn fields(&mut self, fields: &[String]) {
+		self.0.update((fields.len() as u64).to_le_bytes());
+		for field in fields {
+			self.field(field);
 		}
 	}
 

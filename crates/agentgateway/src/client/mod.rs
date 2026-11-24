@@ -6,6 +6,7 @@ mod dns;
 mod hbone_tunnel;
 mod tls;
 
+use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::task;
 
@@ -41,6 +42,9 @@ impl Debug for Client {
 /// Overrides the connect timeout of a `Client::simple_call` request.
 #[derive(Debug, Clone, Copy)]
 pub struct ConnectTimeout(pub Duration);
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DynamicBackendAddressValidation;
 
 pub struct Call {
 	pub req: http::Request,
@@ -319,6 +323,21 @@ struct Connector {
 	resolver: Arc<dns::CachedResolver>,
 }
 
+#[derive(Clone, Copy)]
+enum TargetResolution {
+	Resolved(SocketAddr),
+	Deferred,
+}
+
+impl TargetResolution {
+	fn socket_addr(self) -> SocketAddr {
+		match self {
+			Self::Resolved(address) => address,
+			Self::Deferred => SocketAddr::from(([0, 0, 0, 0], 0)),
+		}
+	}
+}
+
 async fn dial(
 	target: &Target,
 	ep: SocketAddr,
@@ -370,11 +389,12 @@ impl Connector {
 			},
 			Transport::Tunnel(_, tcfg) if tcfg.connect || tls.is_some() || !http => {
 				// Use CONNECT when required by the transport or explicitly configured.
-				let proxy_dst: SocketAddr = self
+				let proxy_dst = self
 					// Never skip resolution for the actually proxy itself
 					.resolve_target(false, &tcfg.target)
 					.await
-					.map_err(crate::http::Error::new)?;
+					.map_err(crate::http::Error::new)?
+					.socket_addr();
 				let dest = target.to_string();
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
 				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.connection, false)).await?;
@@ -393,11 +413,12 @@ impl Connector {
 			},
 			Transport::Tunnel(_, tcfg) => {
 				// Tunnel case two: use absolute form for plaintext HTTP
-				let proxy_dst: SocketAddr = self
+				let proxy_dst = self
 					// Never skip resolution for the actually proxy itself
 					.resolve_target(false, &tcfg.target)
 					.await
-					.map_err(crate::http::Error::new)?;
+					.map_err(crate::http::Error::new)?
+					.socket_addr();
 				debug!("connected to tunnel proxy (HTTP)");
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
 				let mut socket =
@@ -506,27 +527,21 @@ impl Connector {
 		&self,
 		skip_resolution: bool,
 		target: &Target,
-	) -> Result<SocketAddr, ProxyError> {
+	) -> Result<TargetResolution, ProxyError> {
 		let dest = match &target {
-			Target::Address(addr) => *addr,
+			Target::Address(addr) => TargetResolution::Resolved(*addr),
 			Target::Hostname(hostname, port) => {
 				if skip_resolution {
-					// For double HBONE, we don't need to resolve the hostname locally
-					// The gateway will resolve it. Use a placeholder dest (won't be used).
-					return Ok(SocketAddr::from(([0, 0, 0, 0], 0)));
+					return Ok(TargetResolution::Deferred);
 				}
 				let ip = self
 					.resolver
 					.resolve(hostname.clone())
 					.await
 					.map_err(|_| ProxyError::DnsResolution)?;
-				SocketAddr::from((ip, *port))
+				TargetResolution::Resolved(SocketAddr::from((ip, *port)))
 			},
-			Target::UnixSocket(_) => {
-				// Placeholder address for Unix sockets - the actual connection
-				// uses the path from the Target, not this address
-				SocketAddr::from(([0, 0, 0, 0], 0))
-			},
+			Target::UnixSocket(_) => TargetResolution::Deferred,
 		};
 		Ok(dest)
 	}
@@ -564,17 +579,37 @@ pub struct Config {
 	pub max_ttl: Option<Duration>,
 }
 
-/// Rejects loopback and link-local destinations, checked after DNS resolution.
-fn check_not_loopback(dest: SocketAddr) -> Result<(), ProxyError> {
+const GCE_METADATA_IPV6: Ipv6Addr = Ipv6Addr::new(0xfd20, 0xce, 0, 0, 0, 0, 0, 0x254);
+const EC2_METADATA_IPV6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0xec2, 0, 0, 0, 0, 0, 0x254);
+const EKS_POD_IDENTITY_IPV6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0xec2, 0, 0, 0, 0, 0, 0x23);
+
+fn check_dynamic_backend_address(dest: SocketAddr) -> Result<(), ProxyError> {
 	let ip = dest.ip().to_canonical();
-	let link_local = match ip {
-		std::net::IpAddr::V4(ip) => ip.is_link_local(),
-		std::net::IpAddr::V6(ip) => ip.is_unicast_link_local(),
+	let denied = match ip {
+		// IANA reserves 0.0.0.0/8 as "This network"; a proxy connection there is an SSRF risk.
+		std::net::IpAddr::V4(ip) => ip.octets()[0] == 0 || ip.is_loopback() || ip.is_link_local(),
+		std::net::IpAddr::V6(ip) => {
+			ip.is_unspecified()
+				|| ip.is_loopback()
+				|| ip.is_unicast_link_local()
+				// Cloud metadata and pod-identity endpoints expose workload credentials.
+				|| matches!(
+					ip,
+					GCE_METADATA_IPV6 | EC2_METADATA_IPV6 | EKS_POD_IDENTITY_IPV6
+				)
+		},
 	};
-	if ip.is_loopback() || link_local || (ip.is_unspecified() && dest.port() != 0) {
-		return Err(ProxyError::DynamicBackendLoopback);
+	if denied {
+		return Err(ProxyError::DynamicBackendAddressDenied);
 	}
 	Ok(())
+}
+
+fn check_dynamic_backend_resolution(resolution: TargetResolution) -> Result<(), ProxyError> {
+	match resolution {
+		TargetResolution::Resolved(address) => check_dynamic_backend_address(address),
+		TargetResolution::Deferred => Ok(()),
+	}
 }
 
 impl Client {
@@ -636,6 +671,10 @@ impl Client {
 	}
 
 	pub async fn simple_call(&self, req: http::Request) -> Result<http::Response, ProxyError> {
+		let dynamic_backend = req
+			.extensions()
+			.get::<DynamicBackendAddressValidation>()
+			.is_some();
 		let host = req
 			.uri()
 			.host()
@@ -656,6 +695,9 @@ impl Client {
 		};
 		let target = Target::from((host.trim_start_matches('[').trim_end_matches(']'), port));
 		let transport = self.callout_transport(Transport::Plain(app), &target);
+		if dynamic_backend && transport.skip_dns_resolution() {
+			return Err(ProxyError::DynamicBackendAddressDenied);
+		}
 		let tcp = req
 			.extensions()
 			.get::<ConnectTimeout>()
@@ -673,7 +715,7 @@ impl Client {
 					max_connection_duration: None,
 					backend: None,
 				},
-				dynamic_backend: false,
+				dynamic_backend,
 			})
 			.await
 	}
@@ -687,13 +729,14 @@ impl Client {
 			dynamic_backend,
 		} = call;
 
-		let dest = self
+		let resolution = self
 			.connector
 			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
 		if dynamic_backend && !self.allow_dynamic_loopback {
-			check_not_loopback(dest)?;
+			check_dynamic_backend_resolution(resolution)?;
 		}
+		let dest = resolution.socket_addr();
 
 		let transport_name = connection.transport.name();
 		let target_name = target.to_string();
@@ -743,13 +786,14 @@ impl Client {
 		connection: ConnectionConfig,
 		dynamic_backend: bool,
 	) -> Result<Socket, ProxyError> {
-		let dest = self
+		let resolution = self
 			.connector
 			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
 		if dynamic_backend && !self.allow_dynamic_loopback {
-			check_not_loopback(dest)?;
+			check_dynamic_backend_resolution(resolution)?;
 		}
+		let dest = resolution.socket_addr();
 		self
 			.connector
 			.clone()
@@ -764,7 +808,7 @@ impl Client {
 	) -> impl std::future::Future<Output = Result<http::Response, ProxyError>> + '_ {
 		let client = &self.client;
 		let connector = &self.connector;
-		let deny_loopback = call.dynamic_backend && !self.allow_dynamic_loopback;
+		let validate_dynamic_backend_address = call.dynamic_backend && !self.allow_dynamic_loopback;
 		let start = std::time::Instant::now();
 		let Call {
 			mut req,
@@ -774,20 +818,21 @@ impl Client {
 		} = call;
 		async move {
 			let mut upstream_call = crate::telemetry::upstream::PendingCall::from_request(&req, &target);
-			let dest = connector
+			let resolution = connector
 				.resolve_target(connection.transport.skip_dns_resolution(), &target)
 				.await
-				.and_then(|dest| {
-					if deny_loopback {
-						check_not_loopback(dest)?;
+				.and_then(|resolution| {
+					if validate_dynamic_backend_address {
+						check_dynamic_backend_resolution(resolution)?;
 					}
-					Ok(dest)
+					Ok(resolution)
 				})
 				.inspect_err(|error| {
 					if let Some(call) = upstream_call.as_mut() {
 						call.set_error(error.to_string());
 					}
 				})?;
+			let dest = resolution.socket_addr();
 			http::modify_req_uri(&mut req, |uri| {
 				let scheme = connection.transport.scheme();
 				// Strip the port from the hostname if its the default already
@@ -1004,6 +1049,39 @@ mod tests {
 			.expect("deadline should be set");
 		assert!(deadline >= before + max_age - max_age / 10);
 		assert!(deadline <= std::time::Instant::now() + max_age);
+	}
+
+	#[test]
+	fn dynamic_backend_address_filter_rejects_unsafe_destinations() {
+		for address in [
+			"0.0.0.0:0",
+			"0.1.2.3:80",
+			"127.0.0.1:80",
+			"169.254.169.254:80",
+			"[::]:80",
+			"[::1]:80",
+			"[fe80::1]:80",
+			"[fd20:ce::254]:80",
+			"[fd00:ec2::254]:80",
+			"[fd00:ec2::23]:80",
+			"[::ffff:127.0.0.1]:80",
+		] {
+			assert!(
+				check_dynamic_backend_address(address.parse().unwrap()).is_err(),
+				"{address} should be denied"
+			);
+		}
+		for address in [
+			"10.0.0.1:80",
+			"192.168.1.1:80",
+			"[fd00::1]:80",
+			"1.1.1.1:80",
+		] {
+			assert!(
+				check_dynamic_backend_address(address.parse().unwrap()).is_ok(),
+				"{address} should be allowed"
+			);
+		}
 	}
 
 	#[test]

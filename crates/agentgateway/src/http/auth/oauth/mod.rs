@@ -33,7 +33,7 @@ use cache::InMemoryTokenCache;
 use client_auth::sign_client_assertion;
 pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt};
 pub use cross_app_access::CrossAppAccessAuth;
-pub(super) use transport::FetchError;
+pub(crate) use transport::FetchError;
 
 #[apply(schema!)]
 pub struct OAuthTokenExchangeAuth {
@@ -391,6 +391,7 @@ impl OAuthTokenExchangeAuth {
 			actor,
 			extra_params,
 			chained_extra_params,
+			cache_context: vec![],
 		})
 	}
 
@@ -732,6 +733,7 @@ struct ExchangeRequest {
 	actor: Option<(SecretString, OAuthTokenType)>,
 	extra_params: Vec<(String, String)>,
 	chained_extra_params: Vec<(String, String)>,
+	cache_context: Vec<String>,
 }
 
 impl ExchangeRequest {
@@ -741,6 +743,53 @@ impl ExchangeRequest {
 			extra_params,
 			..Default::default()
 		}
+	}
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct DynamicTokenExchange {
+	cache: InMemoryTokenCache,
+	timeout: Duration,
+	response_limit: usize,
+}
+
+impl DynamicTokenExchange {
+	pub(crate) fn new(default_ttl: Duration, timeout: Duration, response_limit: usize) -> Self {
+		Self {
+			cache: InMemoryTokenCache::new(cache::DEFAULT_CACHE_CAPACITY, default_ttl),
+			timeout,
+			response_limit,
+		}
+	}
+
+	pub(crate) async fn exchange(
+		&self,
+		client: &PolicyClient,
+		endpoint: &str,
+		subject_token: SecretString,
+		audience: &str,
+		scopes: &[String],
+	) -> Result<SecretString, FetchError> {
+		let audiences = [audience.to_owned()];
+		let mut scopes = scopes.to_vec();
+		scopes.sort_unstable();
+		let mut cache_context = Vec::with_capacity(scopes.len() + 2);
+		cache_context.push(endpoint.to_owned());
+		cache_context.push(audience.to_owned());
+		cache_context.extend(scopes.iter().cloned());
+		let request = ExchangeRequest {
+			subject_token,
+			subject_token_type: OAuthTokenType::Jwt,
+			cache_context,
+			..Default::default()
+		};
+		let spec = transport::TokenRequestSpec::access_token_exchange(endpoint, &audiences, &scopes);
+		self
+			.cache
+			.get_or_insert_with(&request, || {
+				transport::request_token_at_uri(client, &spec, &request, self.timeout, self.response_limit)
+			})
+			.await
 	}
 }
 
@@ -903,16 +952,20 @@ async fn fetch_token_uncached(
 	auth: &OAuthTokenExchangeAuth,
 	req: &ExchangeRequest,
 ) -> Result<transport::TokenEndpointResponse, FetchError> {
-	let first =
-		transport::request_token(client, &transport::TokenRequestSpec::from(auth), req).await?;
+	let first = transport::request_token_via_backend(
+		client,
+		&transport::ConfiguredTokenEndpoint::from(auth),
+		req,
+	)
+	.await?;
 	let Some(chained_exchange) = &auth.chained_exchange else {
 		return Ok(first);
 	};
 	let chained_req =
 		ExchangeRequest::jwt_bearer_assertion(first.access_token, req.chained_extra_params.clone());
-	transport::request_token(
+	transport::request_token_via_backend(
 		client,
-		&transport::TokenRequestSpec::from(chained_exchange),
+		&transport::ConfiguredTokenEndpoint::from(chained_exchange),
 		&chained_req,
 	)
 	.await

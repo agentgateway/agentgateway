@@ -31,6 +31,28 @@ fn policy_client() -> PolicyClient {
 	)
 }
 
+fn policy_client_with_dynamic_address_filter(proxy: Option<&MockServer>) -> PolicyClient {
+	let mut inputs = Arc::unwrap_or_clone(
+		crate::test_helpers::proxymock::setup_proxy_test("{}")
+			.unwrap()
+			.inputs(),
+	);
+	let upstream =
+		crate::client::Client::new(&inputs.cfg.dns, None, crate::BackendConfig::default(), None);
+	inputs.upstream = match proxy {
+		Some(proxy) => upstream
+			.with_callouts(&crate::CalloutConfig {
+				tunnel: Some(crate::CalloutTunnel {
+					url: format!("http://{}", proxy.address()).parse().unwrap(),
+					no_proxy: vec![],
+				}),
+			})
+			.unwrap(),
+		None => upstream,
+	};
+	PolicyClient::new(Arc::new(inputs))
+}
+
 fn token_body() -> serde_json::Value {
 	json!({
 		"access_token": "upstream-token",
@@ -48,6 +70,106 @@ async fn mock_token_endpoint(body: ResponseTemplate) -> MockServer {
 		.mount(&mock)
 		.await;
 	mock
+}
+
+#[tokio::test]
+async fn dynamic_exchange_caches_tokens_per_endpoint() {
+	let first = mock_token_endpoint(
+		ResponseTemplate::new(200).set_body_json(json!({"access_token": "first", "expires_in": 3600})),
+	)
+	.await;
+	let second = mock_token_endpoint(
+		ResponseTemplate::new(200).set_body_json(json!({"access_token": "second", "expires_in": 3600})),
+	)
+	.await;
+	let exchange =
+		DynamicTokenExchange::new(Duration::from_secs(60), Duration::from_secs(4), 1024 * 1024);
+	let client = policy_client();
+	let scopes = vec!["read".to_owned()];
+	let subject = SecretString::from("subject".to_owned());
+
+	let first_token = exchange
+		.exchange(
+			&client,
+			&format!("{}/token", first.uri()),
+			subject.clone(),
+			"api.example.com",
+			&scopes,
+		)
+		.await
+		.unwrap();
+	let second_token = exchange
+		.exchange(
+			&client,
+			&format!("{}/token", second.uri()),
+			subject,
+			"api.example.com",
+			&scopes,
+		)
+		.await
+		.unwrap();
+
+	assert_eq!(first_token.expose_secret(), "first");
+	assert_eq!(second_token.expose_secret(), "second");
+}
+
+#[tokio::test]
+async fn dynamic_exchange_rejects_unsafe_endpoint_address() {
+	let mock = mock_token_endpoint(
+		ResponseTemplate::new(200).set_body_json(json!({"access_token": "leaked"})),
+	)
+	.await;
+	let proxy = MockServer::start().await;
+	for callout_proxy in [None, Some(&proxy)] {
+		let exchange =
+			DynamicTokenExchange::new(Duration::from_secs(60), Duration::from_secs(4), 1024 * 1024);
+		let error = exchange
+			.exchange(
+				&policy_client_with_dynamic_address_filter(callout_proxy),
+				&format!("https://localhost:{}/token", mock.address().port()),
+				SecretString::from("actor-jwt".to_owned()),
+				"api.example.com",
+				&[],
+			)
+			.await
+			.unwrap_err();
+
+		assert!(matches!(
+			error,
+			FetchError::Backend(BackendAuthError::CredentialProvider(_))
+		));
+	}
+	assert!(mock.received_requests().await.unwrap().is_empty());
+	assert!(proxy.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn dynamic_exchange_rejects_mismatched_issued_token_type_without_token_type() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "id-jag",
+		"issued_token_type": TOKEN_TYPE_ID_JAG,
+	})))
+	.await;
+	let exchange =
+		DynamicTokenExchange::new(Duration::from_secs(60), Duration::from_secs(4), 1024 * 1024);
+
+	let error = exchange
+		.exchange(
+			&policy_client(),
+			&format!("{}/token", mock.uri()),
+			SecretString::from("actor-jwt".to_owned()),
+			"api.example.com",
+			&[],
+		)
+		.await
+		.unwrap_err();
+
+	assert!(
+		error
+			.to_string()
+			.contains(&format!("expected {TOKEN_TYPE_ACCESS}")),
+		"got: {error}"
+	);
 }
 
 fn endpoint(mock: &MockServer) -> Arc<SimpleBackendReference> {
@@ -1738,6 +1860,7 @@ async fn appends_additional_params() {
 			("org".into(), "o2".into()),
 		],
 		chained_extra_params: vec![],
+		cache_context: vec![],
 	};
 
 	fetch_token(&policy_client(), &a, req).await.unwrap();
@@ -2259,6 +2382,7 @@ async fn sends_actor_token() {
 		actor: Some(("actor-tok".to_string().into(), OAuthTokenType::Jwt)),
 		extra_params: vec![],
 		chained_extra_params: vec![],
+		cache_context: vec![],
 	};
 
 	fetch_token(&policy_client(), &a, req).await.unwrap();
