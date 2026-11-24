@@ -69,11 +69,7 @@ pub fn passthrough_stream(
 				r.response.total_tokens = Some(total);
 				r.response.cached_input_tokens = um.cached_content_token_count;
 				r.response.reasoning_tokens = um.thoughts_token_count;
-				r.response.service_tier = um
-					.service_tier
-					.as_deref()
-					.or(um.traffic_type.as_deref())
-					.map(strng::new);
+				r.response.service_tier = um.service_tier().map(strng::new);
 			});
 		}
 		if log_content.completion {
@@ -113,7 +109,10 @@ fn record_provider_chunk(log: &crate::StreamingUsageGuard, chunk: &vg::GenerateC
 	for (i, candidate) in chunk.candidates.iter().enumerate() {
 		if let Some(reason) = &candidate.finish_reason {
 			let index = candidate.index.map_or(i, |index| index as usize);
-			log.update(|r| r.response.set_finish_reason(index, strng::new(reason)));
+			log.update(|r| {
+				r.response
+					.set_finish_reason(index, strng::new(reason.raw()))
+			});
 		}
 	}
 }
@@ -1345,7 +1344,10 @@ pub mod to_completions {
 			.collect();
 
 		let has_tool_calls = !tool_calls.is_empty();
-		let finish = finish_with_tool_override(cand.finish_reason.as_deref(), has_tool_calls);
+		let finish = finish_with_tool_override(
+			cand.finish_reason.as_ref().map(|r| r.raw()).as_deref(),
+			has_tool_calls,
+		);
 		let content = if decoded.content.is_empty() && (has_tool_calls || !decoded.reasoning.is_empty())
 		{
 			None
@@ -1483,9 +1485,9 @@ pub mod to_completions {
 
 			// `saw_function_call` carries across chunks, so a finish reason in a later chunk still
 			// upgrades to `tool_calls` when an earlier chunk emitted the call.
-			let finish = match cand.and_then(|c| c.finish_reason.as_deref()) {
+			let finish = match cand.and_then(|c| c.finish_reason.as_ref()) {
 				Some(reason) => Some(finish_with_tool_override(
-					Some(reason),
+					Some(&reason.raw()),
 					self.saw_function_call,
 				)),
 				None
@@ -1607,11 +1609,7 @@ pub mod to_completions {
 					r.response.total_tokens = Some(total);
 					r.response.cached_input_tokens = um.cached_content_token_count;
 					r.response.reasoning_tokens = um.thoughts_token_count;
-					r.response.service_tier = um
-						.service_tier
-						.as_deref()
-						.or(um.traffic_type.as_deref())
-						.map(strng::new);
+					r.response.service_tier = um.service_tier().map(strng::new);
 				});
 			}
 
@@ -1681,7 +1679,7 @@ pub mod to_completions {
 
 	/// Maps Gemini service tiers and Vertex traffic types to OpenAI service tiers.
 	fn openai_service_tier(um: &vg::UsageMetadata) -> Option<String> {
-		let tier = match um.service_tier.as_deref().or(um.traffic_type.as_deref())? {
+		let tier = match um.service_tier()? {
 			"standard" | "ON_DEMAND" => "default",
 			"flex" | "ON_DEMAND_FLEX" => "flex",
 			"priority" | "ON_DEMAND_PRIORITY" => "priority",

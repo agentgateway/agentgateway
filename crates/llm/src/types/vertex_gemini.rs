@@ -10,6 +10,8 @@
 //! Deserialized types tolerate unknown fields (flattened into `rest`, no `deny_unknown_fields`)
 //! so Google's additive changes don't break parsing.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 // ---------- Request ----------
@@ -343,6 +345,23 @@ pub struct SafetySetting {
 
 // ---------- Response ----------
 
+/// A ProtoJSON enum that retains its wire representation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ProtoEnum {
+	Name(String),
+	Number(i32),
+}
+
+impl ProtoEnum {
+	pub fn raw(&self) -> Cow<'_, str> {
+		match self {
+			Self::Name(name) => Cow::Borrowed(name),
+			Self::Number(number) => Cow::Owned(number.to_string()),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateContentResponse {
@@ -362,7 +381,12 @@ pub struct GenerateContentResponse {
 
 impl GenerateContentResponse {
 	pub fn finish_reasons(&self) -> Option<Vec<agent_core::strng::Strng>> {
-		super::finish_reasons(self.candidates.iter().map(|c| c.finish_reason.as_deref()))
+		super::finish_reasons(
+			self
+				.candidates
+				.iter()
+				.map(|c| c.finish_reason.as_ref().map(ProtoEnum::raw)),
+		)
 	}
 }
 
@@ -372,7 +396,7 @@ pub struct Candidate {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub content: Option<Content>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub finish_reason: Option<String>,
+	pub finish_reason: Option<ProtoEnum>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub index: Option<u32>,
 	#[serde(flatten, default)]
@@ -384,7 +408,7 @@ pub struct Candidate {
 pub struct PromptFeedback {
 	/// Set when the prompt is blocked before any candidate is produced.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub block_reason: Option<String>,
+	pub block_reason: Option<ProtoEnum>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -393,9 +417,9 @@ pub struct PromptFeedback {
 #[serde(rename_all = "camelCase")]
 pub struct UsageMetadata {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub traffic_type: Option<String>,
+	pub traffic_type: Option<ProtoEnum>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub service_tier: Option<String>,
+	pub service_tier: Option<ProtoEnum>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_token_count: Option<u64>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -411,6 +435,21 @@ pub struct UsageMetadata {
 }
 
 impl UsageMetadata {
+	pub fn service_tier(&self) -> Option<&str> {
+		Some(match (&self.service_tier, &self.traffic_type) {
+			(Some(ProtoEnum::Name(name)), _) | (None, Some(ProtoEnum::Name(name))) => name,
+			(Some(ProtoEnum::Number(1)), _) => "standard",
+			(Some(ProtoEnum::Number(2)), _) => "flex",
+			(Some(ProtoEnum::Number(3)), _) => "priority",
+			(None, Some(ProtoEnum::Number(0))) => "TRAFFIC_TYPE_UNSPECIFIED",
+			(None, Some(ProtoEnum::Number(1))) => "ON_DEMAND",
+			(None, Some(ProtoEnum::Number(2))) => "PROVISIONED_THROUGHPUT",
+			(None, Some(ProtoEnum::Number(3))) => "ON_DEMAND_PRIORITY",
+			(None, Some(ProtoEnum::Number(4))) => "ON_DEMAND_FLEX",
+			_ => return None,
+		})
+	}
+
 	/// Prompt, completion, and total token counts (total falls back to prompt + completion
 	/// when absent).
 	///
@@ -662,7 +701,13 @@ mod tests {
 		});
 		let resp: GenerateContentResponse = serde_json::from_value(raw).unwrap();
 		assert_eq!(
-			resp.prompt_feedback.unwrap().block_reason.as_deref(),
+			resp
+				.prompt_feedback
+				.unwrap()
+				.block_reason
+				.as_ref()
+				.map(ProtoEnum::raw)
+				.as_deref(),
 			Some("SAFETY")
 		);
 		assert!(resp.candidates.is_empty());

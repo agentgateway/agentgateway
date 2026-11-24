@@ -617,9 +617,7 @@ impl ResponseType for Response {
 			total_tokens: counts.map(|c| c.2),
 			reasoning_tokens: um.and_then(|u| u.thoughts_token_count),
 			cached_input_tokens: um.and_then(|u| u.cached_content_token_count),
-			service_tier: um
-				.and_then(|u| u.service_tier.as_deref().or(u.traffic_type.as_deref()))
-				.map(strng::new),
+			service_tier: um.and_then(vg::UsageMetadata::service_tier).map(strng::new),
 			provider_model: self.0.model_version.as_deref().map(strng::new),
 			response_id: self.0.response_id.as_deref().map(strng::new),
 			finish_reasons: self.0.finish_reasons(),
@@ -747,7 +745,7 @@ fn extract_output_messages(resp: &vg::GenerateContentResponse) -> Option<Vec<Out
 			Some(OutputMessage {
 				role: strng::literal!("assistant"),
 				content: calls,
-				finish_reason: cand.finish_reason.as_deref().map(strng::new),
+				finish_reason: cand.finish_reason.as_ref().map(|r| strng::new(r.raw())),
 			})
 		})
 		.collect();

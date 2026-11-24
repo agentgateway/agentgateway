@@ -967,31 +967,36 @@ fn native_translation() -> &'static crate::llm::ChatTranslation {
 
 #[test]
 fn non_streaming_response_is_forwarded_and_usage_extracted() {
-	let body = bytes::Bytes::from_static(
-		br#"{"candidates":[{"content":{"role":"model","parts":[{"text":"hi","someNewPartField":1}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":8,"candidatesTokenCount":2,"totalTokenCount":10},"modelVersion":"gemini-2.5-flash-001","someNewTopLevelField":true}"#,
-	);
-	let resp = native_translation()
-		.render_response(
-			&body,
-			&crate::llm::ChatResponseContext {
-				model: "gemini-2.5-flash",
-				tool_name_map: None,
-				namespaces: None,
-			},
-		)
-		.expect("response should parse");
+	let replies: &[&[u8]] = &[
+		br#"{"candidates":[{"content":{"role":"model","parts":[{"text":"hi","someNewPartField":1}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":8,"candidatesTokenCount":2,"totalTokenCount":10,"trafficType":"ON_DEMAND"},"modelVersion":"gemini-2.5-flash-001","someNewTopLevelField":true}"#,
+		br#"{"candidates":[{"content":{"role":"model","parts":[{"text":"hi"}]},"finishReason":1}],"promptFeedback":{"blockReason":0},"usageMetadata":{"promptTokenCount":8,"candidatesTokenCount":2,"totalTokenCount":10,"trafficType":1,"promptTokensDetails":[{"modality":1,"tokenCount":8}]},"modelVersion":"gemini-2.5-flash-001"}"#,
+	];
+	for &json in replies {
+		let body = bytes::Bytes::from_static(json);
+		let resp = native_translation()
+			.render_response(
+				&body,
+				&crate::llm::ChatResponseContext {
+					model: "gemini-2.5-flash",
+					tool_name_map: None,
+					namespaces: None,
+				},
+			)
+			.expect("response should parse");
 
-	let llm = resp.to_llm_response(Default::default());
-	assert_eq!(llm.input_tokens, Some(8));
-	assert_eq!(llm.total_tokens, Some(10));
-	assert_eq!(llm.provider_model.as_deref(), Some("gemini-2.5-flash-001"));
+		let llm = resp.to_llm_response(Default::default());
+		assert_eq!(llm.input_tokens, Some(8));
+		assert_eq!(llm.total_tokens, Some(10));
+		assert_eq!(llm.service_tier.as_deref(), Some("ON_DEMAND"));
+		assert_eq!(llm.provider_model.as_deref(), Some("gemini-2.5-flash-001"));
 
-	let out: Value = serde_json::from_slice(&resp.serialize().expect("serialize")).expect("JSON");
-	let expected: Value = serde_json::from_slice(&body).expect("JSON");
-	assert_eq!(
-		out, expected,
-		"the response body must reach the client as-is"
-	);
+		let out: Value = serde_json::from_slice(&resp.serialize().expect("serialize")).expect("JSON");
+		let expected: Value = serde_json::from_slice(&body).expect("JSON");
+		assert_eq!(
+			out, expected,
+			"the response body must reach the client as-is"
+		);
+	}
 }
 
 #[tokio::test]
