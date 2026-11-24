@@ -741,11 +741,15 @@ impl Client {
 		&self,
 		target: Target,
 		connection: ConnectionConfig,
+		dynamic_backend: bool,
 	) -> Result<Socket, ProxyError> {
 		let dest = self
 			.connector
 			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
+		if dynamic_backend && !self.allow_dynamic_loopback {
+			check_not_loopback(dest)?;
+		}
 		self
 			.connector
 			.clone()
@@ -991,6 +995,7 @@ mod tests {
 					max_connection_duration: Some(max_age),
 					backend: None,
 				},
+				false,
 			)
 			.await
 			.expect("connect to loopback listener");
@@ -1044,6 +1049,7 @@ mod tests {
 			.connect_raw(
 				Target::Address(addr),
 				Transport::Plain(ApplicationTransport::Plaintext).into(),
+				false,
 			)
 			.await
 			.expect("connect to loopback listener");
