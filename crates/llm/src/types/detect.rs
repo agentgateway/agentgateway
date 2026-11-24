@@ -152,10 +152,13 @@ pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
 
 pub fn extract_model_from_path(path: &str) -> Option<Strng> {
 	let model = if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
+		// Vertex's Anthropic count-tokens endpoint is `models/count-tokens:rawPredict`, with the
+		// model in the body.
 		path
 			.split_once("/publishers/")
 			.and_then(|(_, rest)| rest.split_once("/models/"))
 			.and_then(|(_, rest)| rest.split_once(':').map(|(model, _)| model))
+			.filter(|model| *model != "count-tokens")
 	} else if path.ends_with(":streamGenerateContent")
 		|| path.ends_with(":generateContent")
 		|| path.ends_with(":countTokens")
@@ -338,6 +341,12 @@ mod tests {
 			)
 			.as_deref(),
 			Some("gemini-2.5-flash")
+		);
+		assert_eq!(
+			extract_model_from_path(
+				"/v1/projects/p/locations/us-east5/publishers/anthropic/models/count-tokens:rawPredict"
+			),
+			None
 		);
 	}
 
