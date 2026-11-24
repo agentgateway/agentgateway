@@ -1,79 +1,15 @@
 //! Owned request and reply models for typed-first translation.
 //!
 //! A reader decides what each wire part means; a writer decides how to encode it. Both record
-//! what they leave out as [`Dropped`] entries. Streamed replies do not use these models yet.
+//! what they leave out in one [`Drops`]. Streamed replies do not use these models yet.
 
-use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
+use std::mem::DropGuard;
 
-use serde::Serialize;
 use serde_json::Value;
 
 pub mod messages;
 pub mod responses;
-
-#[cfg(test)]
-mod reply_tests;
-#[cfg(test)]
-mod request_tests;
-
-/// A supplied field or part that did not reach the destination. Holds no content.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct Dropped {
-	path: String,
-	reason: DropReason,
-	/// Byte offset in `path` where a client-chosen key starts.
-	#[serde(skip)]
-	client_key_at: Option<usize>,
-}
-
-impl Dropped {
-	/// A drop at `path` with no client-chosen keys in it.
-	pub fn new(path: String, reason: DropReason) -> Self {
-		Self {
-			path,
-			reason,
-			client_key_at: None,
-		}
-	}
-
-	/// An object key the reader does not model, under `parent` (empty at the top level).
-	pub fn unread_key(parent: &str, key: &str) -> Self {
-		let path = if parent.is_empty() {
-			key.to_string()
-		} else {
-			format!("{parent}.{key}")
-		};
-		Self {
-			client_key_at: Some(path.len() - key.len()),
-			path,
-			reason: DropReason::Unread,
-		}
-	}
-
-	/// Why the field or part was left out.
-	pub fn reason(&self) -> DropReason {
-		self.reason
-	}
-
-	/// The path with any client-chosen key replaced by `*`, for logs.
-	pub fn redacted_path(&self) -> Cow<'_, str> {
-		match self.client_key_at {
-			None => Cow::Borrowed(&self.path),
-			Some(at) => Cow::Owned(format!("{}*", &self.path[..at])),
-		}
-	}
-}
-
-/// Why a field or part did not reach the destination.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DropReason {
-	/// The source adapter does not model this field or part.
-	Unread,
-	/// The model holds it, but the destination cannot express it.
-	Unsupported,
-}
 
 /// A chat request, as the client asked for it.
 #[derive(Debug, Clone, PartialEq)]
@@ -99,80 +35,14 @@ pub struct Request {
 	pub cache: Option<CacheMark>,
 }
 
-/// Reasoning controls as the client gave them.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Reasoning {
-	pub mode: Option<ReasoningMode>,
-	/// Never derived from a budget.
-	pub effort: Option<Effort>,
-	/// How the client wants reasoning shown, such as `summarized`.
-	pub display: Option<String>,
-}
-
-/// Whether and how the model may reason before it answers.
+/// One turn of the conversation history.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReasoningMode {
-	Off,
-	/// The model decides how much to reason.
-	Adaptive,
-	Budget {
-		tokens: u64,
-		/// For destinations that take an effort instead of a budget.
-		fallback_effort: Effort,
-	},
-}
-
-/// How hard the model should reason.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Effort {
-	Low,
-	Medium,
-	High,
-	Xhigh,
-	Max,
-}
-
-/// A required shape for the model's answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OutputFormat {
-	JsonSchema { schema: Value },
-}
-
-/// A tool the model may call.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Tool {
-	Function {
-		name: String,
-		description: Option<String>,
-		parameters: Value,
-		strict: Option<bool>,
-		cache: Option<CacheMark>,
-	},
-	/// A tool the source provider runs itself, such as Anthropic web search.
-	Server {
-		kind: String,
-		name: String,
-		cache: Option<CacheMark>,
-		config: HashMap<String, Value>,
-	},
-}
-
-/// Whether and which tool the model must call.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ToolChoice {
-	Auto,
-	/// The model must call some tool.
-	Required,
-	None,
-	Tool(String),
-}
-
-/// A prompt cache breakpoint on a part, tool or the whole request.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct CacheMark {
-	pub ttl: Option<String>,
-	/// Keys of the source mark the reader does not model, such as `scope`.
-	pub unread: Vec<String>,
+pub struct Message {
+	// TODO(mk): history is grouped by role, as Messages sends it. If a Responses reader needs
+	// synthetic messages or loses item identity, switch to ordered items for messages, calls and results.
+	pub role: Role,
+	/// Indexes match the source content array.
+	pub parts: Vec<Part>,
 }
 
 /// Who wrote a message in the history.
@@ -182,16 +52,6 @@ pub enum Role {
 	Assistant,
 	/// A system turn inside the history, not the leading instructions.
 	System,
-}
-
-// TODO(mk): history is grouped by role, as Messages sends it. If a Responses reader needs
-// synthetic messages or loses item identity, switch to ordered items for messages, calls and results.
-/// One turn of the conversation history.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Message {
-	pub role: Role,
-	/// Indexes match the source content array.
-	pub parts: Vec<Part>,
 }
 
 /// One piece of a message.
@@ -279,6 +139,80 @@ pub enum Source {
 	Incomplete(&'static str),
 }
 
+/// Reasoning controls as the client gave them.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Reasoning {
+	pub mode: Option<ReasoningMode>,
+	/// Never derived from a budget.
+	pub effort: Option<Effort>,
+	/// How the client wants reasoning shown, such as `summarized`.
+	pub display: Option<String>,
+}
+
+/// Whether and how the model may reason before it answers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReasoningMode {
+	Off,
+	/// The model decides how much to reason.
+	Adaptive,
+	Budget {
+		tokens: u64,
+		/// For destinations that take an effort instead of a budget.
+		fallback_effort: Effort,
+	},
+}
+
+/// How hard the model should reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Effort {
+	Low,
+	Medium,
+	High,
+	Xhigh,
+	Max,
+}
+
+/// A required shape for the model's answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OutputFormat {
+	JsonSchema { schema: Value },
+}
+
+/// A tool the model may call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Tool {
+	Function {
+		name: String,
+		description: Option<String>,
+		parameters: Value,
+		strict: Option<bool>,
+		cache: Option<CacheMark>,
+	},
+	/// A tool the source provider runs itself, such as Anthropic web search.
+	Server {
+		kind: String,
+		name: String,
+		cache: Option<CacheMark>,
+		config: HashMap<String, Value>,
+	},
+}
+
+/// Whether and which tool the model must call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolChoice {
+	Auto,
+	/// The model must call some tool.
+	Required,
+	None,
+	Tool(String),
+}
+
+/// A prompt cache breakpoint on a part, tool or the whole request.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CacheMark {
+	pub ttl: Option<String>,
+}
+
 /// A finished, non-streamed model reply.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reply {
@@ -333,3 +267,62 @@ pub struct Usage {
 	pub cache_read_tokens: Option<u64>,
 	pub cache_write_tokens: Option<u64>,
 }
+
+/// The fields and parts one translation left out, kept only while `recording`.
+#[derive(Debug)]
+pub struct Drops {
+	recording: bool,
+	list: Vec<Dropped>,
+}
+
+impl Drops {
+	/// When not `recording`, marks are ignored and their paths are never built.
+	pub const fn new(recording: bool) -> Self {
+		Self {
+			recording,
+			list: Vec::new(),
+		}
+	}
+
+	/// Records only when debug logging is on, and logs the drops under `message` when the guard
+	/// goes out of scope, including when the translation fails.
+	pub fn logged(message: &'static str) -> DropGuard<Self, impl FnOnce(Self)> {
+		DropGuard::new(
+			Self::new(tracing::enabled!(tracing::Level::DEBUG)),
+			move |drops| {
+				if !drops.list.is_empty() {
+					tracing::debug!(dropped = ?drops.list, "{message}");
+				}
+			},
+		)
+	}
+
+	/// Notes a drop at the path `path` builds.
+	pub fn record(&mut self, reason: DropReason, path: impl FnOnce() -> String) {
+		if self.recording {
+			self.list.push(Dropped {
+				path: path(),
+				reason,
+			});
+		}
+	}
+}
+
+/// A supplied field or part that did not reach the destination. Holds no content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dropped {
+	path: String,
+	reason: DropReason,
+}
+
+/// Why a field or part did not reach the destination.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropReason {
+	/// The source adapter does not model this field or part.
+	Unread,
+	/// The model holds it, but the destination cannot express it.
+	Unsupported,
+}
+
+#[cfg(test)]
+mod tests;

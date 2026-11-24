@@ -1217,9 +1217,6 @@ pub mod typed {
 			#[serde(default)]
 			#[serde(skip_serializing_if = "Option::is_none")]
 			ttl: Option<String>,
-			/// Fields not modeled here, such as `scope`, so a translation can report them.
-			#[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
-			extra: serde_json::Map<String, serde_json::Value>,
 		},
 	}
 

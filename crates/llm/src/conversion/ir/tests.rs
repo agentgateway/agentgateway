@@ -1,62 +1,31 @@
-//! Messages -> Responses request drop records and refusals. Translated requests are covered by the
-//! request goldens.
+//! Drop records, refusals and reasoning for Messages -> Responses requests, and drops and usage for
+//! Responses -> Messages buffered replies. Translated requests and replies are covered by the goldens.
 
 use std::fs;
-use std::path::Path;
 
 use rstest::rstest;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use crate::conversion::ir::{self, DropReason, Dropped, Effort, Reasoning, ReasoningMode};
 use crate::conversion::responses::from_messages;
+use crate::types::messages::typed::MessagesResponse;
+use crate::types::responses::typed as responses;
 use crate::{AIError, types};
 
-const MESSAGES_FIXTURES: &str = "src/tests/requests/messages";
-
-/// Fixtures that keep everything are omitted.
 #[test]
-fn fixture_drops() {
-	let mut drops = Map::new();
-	for name in fixture_names(MESSAGES_FIXTURES) {
-		let path = Path::new(MESSAGES_FIXTURES).join(format!("{name}.json"));
-		let input = fs::read_to_string(&path).expect("failed to read fixture");
-		let request: types::messages::Request =
-			serde_json::from_str(&input).expect("failed to parse fixture");
-		match translate(&request) {
-			Ok((_, dropped)) if dropped.is_empty() => {},
-			Ok((_, dropped)) => {
-				drops.insert(name, json!(dropped));
-			},
-			Err(error) => {
-				drops.insert(name, json!({"error": error_text(&error)}));
-			},
-		}
-	}
-	insta::with_settings!({
-		omit_expression => true,
-		prepend_module_to_snapshot => false,
-		snapshot_path => "../../tests/requests/messages",
-	}, {
-		insta::assert_json_snapshot!("dropped.responses", Value::Object(drops));
-	});
-}
-
-#[test]
-fn records_drops() {
+fn records_request_drops() {
 	let request: types::messages::Request = serde_json::from_value(json!({
 		"model": "gpt-5.6-terra",
 		"max_tokens": 1024,
 		"context_management": {"edits": [{"type": "clear_thinking_20251015"}]},
-		"tools": [{"name": "lookup", "input_schema": {"type": "object"}, "x-trace-id": "abc"}],
 		"stop_sequences": ["</end>"],
 		"top_k": 40,
 		"cache_control": {"type": "ephemeral"},
 		"thinking": {"type": "enabled", "budget_tokens": 2048, "display": "summarized"},
-		"output_config": {"effort": "low", "x-mode": "fast"},
-		"system": [{"type": "text", "text": "cached", "cache_control": {"type": "ephemeral", "ttl": "1h", "scope": "turn"}}],
+		"output_config": {"effort": "low"},
+		"system": [{"type": "text", "text": "cached", "cache_control": {"type": "ephemeral", "ttl": "1h"}}],
 		"messages": [{
 			"role": "user",
-			"x-note": "kept by client",
 			"content": [
 				{"type": "text", "text": "hello", "citations": []},
 				{"type": "mystery"},
@@ -66,27 +35,22 @@ fn records_drops() {
 		}]
 	}))
 	.expect("failed to parse request");
-	let (_, dropped) = translate(&request).expect("translates");
+	let (_, dropped) = translate_request(&request).expect("translates");
 	let dropped = dropped
 		.iter()
-		.map(|dropped| (dropped.path.as_str(), dropped.reason()))
+		.map(|dropped| (dropped.path.as_str(), dropped.reason))
 		.collect::<Vec<_>>();
 	let unread = |path| (path, DropReason::Unread);
 	let unsupported = |path| (path, DropReason::Unsupported);
 	assert_eq!(
 		dropped,
 		vec![
-			unread("context_management"),
-			unread("output_config.x-mode"),
-			unread("messages[0].x-note"),
-			unread("tools[0].x-trace-id"),
 			unread("messages[0].content[1]"),
 			unread("messages[0].content[3].content[1]"),
 			unsupported("stop_sequences"),
 			unsupported("top_k"),
 			unsupported("cache_control"),
 			unsupported("system[0].cache_control.ttl"),
-			unread("system[0].cache_control.scope"),
 			unsupported("thinking.display"),
 			unsupported("thinking.budget_tokens"),
 			unsupported("messages[0].content[0].citations"),
@@ -97,38 +61,12 @@ fn records_drops() {
 }
 
 #[test]
-fn redacts_client_keys() {
-	let request: types::messages::Request = serde_json::from_value(json!({
-		"model": "gpt-5.6-terra",
-		"max_tokens": 1024,
-		"x-user.42": true,
-		"tools": [{"name": "lookup", "input_schema": {"type": "object"}, "x-trace.abc": "1"}],
-		"messages": [{"role": "user", "content": [
-			{"type": "text", "text": "hi", "cache_control": {"type": "ephemeral", "tenant-7": "a"}},
-			{"type": "mystery"}
-		]}]
-	}))
-	.expect("failed to parse request");
-	let (_, dropped) = translate(&request).expect("translates");
-	let logged = dropped
-		.iter()
-		.map(|dropped| (dropped.path.as_str(), dropped.redacted_path().into_owned()))
-		.collect::<Vec<_>>();
-	assert_eq!(
-		logged,
-		vec![
-			("x-user.42", "*".to_string()),
-			("tools[0].x-trace.abc", "tools[0].*".to_string()),
-			(
-				"messages[0].content[1]",
-				"messages[0].content[1]".to_string()
-			),
-			(
-				"messages[0].content[0].cache_control.tenant-7",
-				"messages[0].content[0].cache_control.*".to_string()
-			),
-		]
-	);
+fn records_nothing_when_off() {
+	let request = request_with(json!({"top_k": 40, "stop_sequences": ["</end>"]}));
+	let mut dropped = ir::Drops::new(false);
+	let request = ir::messages::request::parse(&request, &mut dropped).expect("parses");
+	ir::responses::request::render(request, &mut dropped).expect("renders");
+	assert_eq!(dropped.list, []);
 }
 
 #[rstest]
@@ -153,7 +91,7 @@ fn redacts_client_keys() {
 )]
 fn refuses_image(#[case] source: Value, #[case] error: &str) {
 	let image = json!({"type": "image", "source": source});
-	assert_eq!(refusal(user_content(image)), error);
+	assert_eq!(refusal(user_content(&image)), error);
 }
 
 #[rstest]
@@ -175,12 +113,12 @@ fn refuses_document(
 	if in_tool_result {
 		part = json!({"type": "tool_result", "tool_use_id": "call_1", "content": [part]});
 	}
-	assert_eq!(refusal(user_content(part)), error);
+	assert_eq!(refusal(user_content(&part)), error);
 }
 
 #[test]
 fn refuses_max_tokens_over_u32() {
-	let mut request = user_content(json!({"type": "text", "text": "hello"}));
+	let mut request = user_content(&json!({"type": "text", "text": "hello"}));
 	request["max_tokens"] = json!(u64::from(u32::MAX) + 1);
 	assert_eq!(
 		refusal(request),
@@ -196,7 +134,7 @@ fn requires_max_tokens() {
 	}))
 	.expect("failed to parse request");
 	assert!(matches!(
-		translate(&request),
+		translate_request(&request),
 		Err(AIError::RequestParsing(..))
 	));
 }
@@ -244,7 +182,7 @@ fn parallel_tool_calls(#[case] disable: Option<bool>, #[case] expected: Option<b
 	}))
 	.expect("failed to parse request");
 
-	let read = ir::messages::parse_request(&request, &mut Vec::new()).expect("reads");
+	let read = ir::messages::request::parse(&request, &mut ir::Drops::new(false)).expect("reads");
 	assert_eq!(read.parallel_tool_calls, expected);
 	let wire = serde_json::to_value(from_messages::translate_request(&request).expect("translates"))
 		.expect("responses request serializes");
@@ -271,7 +209,8 @@ fn parallel_tool_calls(#[case] disable: Option<bool>, #[case] expected: Option<b
 	Reasoning { mode: None, effort: Some(Effort::Medium), display: None }
 )]
 fn reads_reasoning(#[case] fields: Value, #[case] expected: Reasoning) {
-	let read = ir::messages::parse_request(&request_with(fields), &mut Vec::new()).expect("reads");
+	let read =
+		ir::messages::request::parse(&request_with(fields), &mut ir::Drops::new(false)).expect("reads");
 	assert_eq!(read.reasoning, expected);
 }
 
@@ -294,7 +233,7 @@ const BUDGET: ReasoningMode = ReasoningMode::Budget {
 	&["thinking.budget_tokens"]
 )]
 fn sends_reasoning(#[case] fields: Value, #[case] reasoning: Value, #[case] dropped: &[&str]) {
-	let (request, dropped_fields) = translate(&request_with(fields)).expect("translates");
+	let (request, dropped_fields) = translate_request(&request_with(fields)).expect("translates");
 	let paths = dropped_fields
 		.iter()
 		.map(|dropped| dropped.path.as_str())
@@ -305,19 +244,19 @@ fn sends_reasoning(#[case] fields: Value, #[case] reasoning: Value, #[case] drop
 }
 
 /// The request sent upstream and what was left out of it.
-fn translate(
+fn translate_request(
 	request: &types::messages::Request,
 ) -> Result<(types::responses::Request, Vec<Dropped>), AIError> {
-	let mut dropped = Vec::new();
-	let request = ir::messages::parse_request(request, &mut dropped)?;
-	let request = ir::responses::render_request(request, &mut dropped)?;
-	Ok((request, dropped))
+	let mut dropped = ir::Drops::new(true);
+	let request = ir::messages::request::parse(request, &mut dropped)?;
+	let request = ir::responses::request::render(request, &mut dropped)?;
+	Ok((request, dropped.list))
 }
 
 fn refusal(request: Value) -> String {
 	let request: types::messages::Request =
 		serde_json::from_value(request).expect("failed to parse request");
-	match translate(&request) {
+	match translate_request(&request) {
 		Err(AIError::UnsupportedConversion(reason)) => reason.to_string(),
 		other => panic!("expected a refusal, got {other:?}"),
 	}
@@ -325,14 +264,17 @@ fn refusal(request: Value) -> String {
 
 /// A one-message request with `fields` added at the top level.
 fn request_with(fields: Value) -> types::messages::Request {
-	let mut request = user_content(json!({"type": "text", "text": "hello"}));
-	for (key, value) in fields.as_object().expect("fields are an object") {
-		request[key] = value.clone();
+	let mut request = user_content(&json!({"type": "text", "text": "hello"}));
+	let Value::Object(fields) = fields else {
+		panic!("fields are an object");
+	};
+	for (key, value) in fields {
+		request[&key] = value;
 	}
 	serde_json::from_value(request).expect("failed to parse request")
 }
 
-fn user_content(part: Value) -> Value {
+fn user_content(part: &Value) -> Value {
 	json!({
 		"model": "gpt-5.6-luna",
 		"max_tokens": 1024,
@@ -340,33 +282,95 @@ fn user_content(part: Value) -> Value {
 	})
 }
 
-fn error_text(error: &AIError) -> String {
-	format!("{}: {error}", error_kind(error))
-}
+#[test]
+fn records_reply_drops() {
+	let reply = reply(
+		json!([
+			{"type": "reasoning", "id": "rs_1", "summary": []},
+			{"type": "message", "id": "msg_1", "role": "assistant", "status": "completed", "content": [{
+				"type": "output_text",
+				"text": "See the docs.",
+				"annotations": [
+					{"type": "url_citation", "url": "https://example.com", "title": "Example", "start_index": 0, "end_index": 3},
+					{"type": "file_citation", "file_id": "file_1", "filename": "notes.txt", "index": 0},
+				],
+			}]},
+			{"type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": "{\"q\":\"docs\"}", "status": "completed"},
+		]),
+		Value::Null,
+	);
 
-fn error_kind(error: &AIError) -> &'static str {
-	match error {
-		AIError::UnsupportedConversion(_) => "unsupported_conversion",
-		AIError::RequestParsing(..) => "request_parsing",
-		AIError::RequestMarshal(_) => "request_marshal",
-		_ => "other",
-	}
-}
-
-/// Sorted, so the snapshot is stable.
-fn fixture_names(dir: &str) -> Vec<String> {
-	let mut names = fs::read_dir(dir)
-		.expect("failed to read fixture directory")
-		.map(|entry| entry.expect("failed to read fixture entry").path())
-		.filter(|path| path.extension().is_some_and(|ext| ext == "json"))
-		.map(|path| {
-			path
-				.file_stem()
-				.expect("fixture has a name")
-				.to_string_lossy()
-				.to_string()
-		})
+	let (output, dropped) = translate_reply(reply);
+	let dropped = dropped
+		.iter()
+		.map(|dropped| (dropped.path.as_str(), dropped.reason))
 		.collect::<Vec<_>>();
-	names.sort();
-	names
+	assert_eq!(
+		dropped,
+		vec![
+			("output[0]", DropReason::Unread),
+			("output[1].content[0].annotations[1]", DropReason::Unread),
+		]
+	);
+
+	let wire = serde_json::to_value(output).expect("messages reply serializes");
+	assert_eq!(
+		wire["content"],
+		json!([
+			{"type": "text", "text": "See the docs.", "citations": [{
+				"type": "web_search_result_location",
+				"url": "https://example.com",
+				"title": "Example",
+				"cited_text": "",
+				"encrypted_index": "",
+			}]},
+			{"type": "tool_use", "id": "call_1", "name": "lookup", "input": {"q": "docs"}},
+		])
+	);
+	assert_eq!(wire["stop_reason"], "tool_use");
+}
+
+/// Responses counts cached tokens inside `input_tokens`; Messages counts them apart.
+#[test]
+fn splits_cache_from_input() {
+	let reply = reply(
+		json!([]),
+		json!({
+			"input_tokens": 100,
+			"input_tokens_details": {"cached_tokens": 30, "cache_write_tokens": 20},
+			"output_tokens": 7,
+			"output_tokens_details": {"reasoning_tokens": 0},
+			"total_tokens": 107,
+		}),
+	);
+
+	let (output, _) = translate_reply(reply);
+	let wire = serde_json::to_value(output).expect("messages reply serializes");
+	assert_eq!(
+		wire["usage"],
+		json!({
+			"input_tokens": 50,
+			"output_tokens": 7,
+			"cache_read_input_tokens": 30,
+			"cache_creation_input_tokens": 20,
+			"service_tier": "default",
+		})
+	);
+}
+
+/// The client's reply and what was left out of it.
+fn translate_reply(reply: responses::Response) -> (MessagesResponse, Vec<Dropped>) {
+	let mut dropped = ir::Drops::new(true);
+	let reply = ir::responses::reply::parse(reply, &mut dropped).expect("parses");
+	(ir::messages::reply::render(reply), dropped.list)
+}
+
+/// The reasoning fixture with its output and usage replaced.
+fn reply(output: Value, usage: Value) -> responses::Response {
+	let fixture = fs::read_to_string("src/tests/response/responses/reasoning.json")
+		.expect("failed to read fixture");
+	let mut reply: Value = serde_json::from_str(&fixture).expect("fixture is JSON");
+	reply["output"] = output;
+	reply["usage"] = usage;
+	serde_json::from_value(reply).expect("failed to parse reply")
 }

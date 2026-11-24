@@ -352,10 +352,7 @@ pub mod from_completions {
 	) -> Option<messages::CacheControlEphemeral> {
 		breakpoint
 			.as_ref()
-			.map(|_| messages::CacheControlEphemeral::Ephemeral {
-				ttl: None,
-				extra: Default::default(),
-			})
+			.map(|_| messages::CacheControlEphemeral::Ephemeral { ttl: None })
 	}
 
 	fn user_content_to_messages(
@@ -551,12 +548,7 @@ pub mod from_completions {
 		if has_cache_control(req) {
 			return;
 		}
-		let mark = || {
-			Some(messages::CacheControlEphemeral::Ephemeral {
-				ttl: None,
-				extra: Default::default(),
-			})
-		};
+		let mark = || Some(messages::CacheControlEphemeral::Ephemeral { ttl: None });
 		if caching.cache_system
 			&& let Some(messages::SystemPrompt::Text(text)) = &mut req.system
 			&& caching

@@ -201,16 +201,9 @@ pub mod from_messages {
 	pub fn translate_request(
 		req: &types::messages::Request,
 	) -> Result<types::responses::Request, AIError> {
-		let mut dropped = Vec::new();
-		let request = ir::messages::parse_request(req, &mut dropped)?;
-		let request = ir::responses::render_request(request, &mut dropped)?;
-		if !dropped.is_empty() {
-			let dropped = dropped
-				.iter()
-				.map(|dropped| (dropped.redacted_path(), dropped.reason()))
-				.collect::<Vec<_>>();
-			tracing::debug!(?dropped, "messages request fields not sent to responses");
-		}
+		let mut dropped = ir::Drops::logged("messages request fields not sent to responses");
+		let request = ir::messages::request::parse(req, &mut dropped)?;
+		let request = ir::responses::request::render(request, &mut dropped)?;
 		Ok(request)
 	}
 
@@ -231,17 +224,10 @@ pub mod from_messages {
 		});
 		let id = Some(strng::new(&resp.id));
 		let finish_reasons = types::responses::typed_finish_reason(&resp).map(|r| vec![r]);
-		let mut dropped = Vec::new();
-		let reply = ir::responses::parse_reply(resp, &mut dropped)?;
-		if !dropped.is_empty() {
-			let dropped = dropped
-				.iter()
-				.map(|dropped| (dropped.redacted_path(), dropped.reason()))
-				.collect::<Vec<_>>();
-			tracing::debug!(?dropped, "responses reply fields not sent to messages");
-		}
+		let mut dropped = ir::Drops::logged("responses reply fields not sent to messages");
+		let reply = ir::responses::reply::parse(resp, &mut dropped)?;
 		Ok(Box::new(super::super::ProviderResponse {
-			response: ir::messages::render_reply(reply),
+			response: ir::messages::reply::render(reply),
 			usage: provider_usage,
 			id,
 			finish_reasons,
@@ -877,9 +863,11 @@ pub mod from_messages {
 							.response
 							.incomplete_details
 							.as_ref()
-							.and_then(|details| ir::responses::parse_incomplete_reason(&details.reason).ok())
+							.and_then(|details| {
+								ir::responses::reply::parse_incomplete_reason(&details.reason).ok()
+							})
 							// Only a completed turn looks at the parts.
-							.map(|reason| ir::messages::render_stop_reason(reason, &[]));
+							.map(|reason| ir::messages::reply::render_stop_reason(reason, &[]));
 						flush_message_end(
 							&mut state,
 							&mut events,
@@ -980,8 +968,9 @@ pub mod from_messages {
 	fn translate_delta_usage(
 		usage: Option<&responses::ResponseUsage>,
 	) -> messages::MessageDeltaUsage {
-		let usage =
-			usage.map_or_default(|usage| ir::messages::render_usage(ir::responses::parse_usage(usage)));
+		let usage = usage.map_or_default(|usage| {
+			ir::messages::reply::render_usage(ir::responses::reply::parse_usage(usage))
+		});
 		messages::MessageDeltaUsage {
 			input_tokens: Some(usage.input_tokens),
 			output_tokens: Some(usage.output_tokens),
