@@ -11,7 +11,9 @@ use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 use itertools::Itertools;
 pub use openapi::ParseError as OpenAPIParseError;
-pub(crate) use openapi::{get_server_prefix as openapi_server_prefix, parse_openapi_schema};
+pub(crate) use openapi::{
+	OpenAPITools, get_server_prefix as openapi_server_prefix, parse_openapi_schema,
+};
 use opentelemetry::KeyValue;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, ExtensionCapabilities,
@@ -760,8 +762,6 @@ impl UpstreamGroup {
 				// Renamed for clarity
 				debug!("starting OpenAPI transport for target: {}", target.name);
 
-				let tools = openapi::parse_openapi_schema(&open.schema).map_err(mcp::Error::OpenAPI)?;
-
 				let http_client = McpHttpClient::new(
 					self.client.clone(),
 					target
@@ -774,7 +774,7 @@ impl UpstreamGroup {
 				);
 				upstream::Upstream::OpenAPI(Box::new(openapi::Handler::new(
 					http_client,
-					tools, // From parse_openapi_schema
+					open.tools.clone(),
 					open.prefix.clone(),
 				)))
 			},

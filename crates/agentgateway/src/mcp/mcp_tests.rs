@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use agent_core::strng;
 use itertools::Itertools;
-use openapiv3::OpenAPI;
 use rmcp::RoleClient;
 use rmcp::model::{ClientJsonRpcMessage, InitializeRequestParams, RequestId};
 use rmcp::service::RunningService;
@@ -7089,16 +7088,6 @@ fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 }
 
 fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
-	let schema: OpenAPI = serde_json::from_value(serde_json::json!({
-		"openapi": "3.0.0",
-		"info": {
-			"title": "Test API",
-			"version": "1.0.0"
-		},
-		"paths": {}
-	}))
-	.expect("valid OpenAPI schema");
-
 	Arc::new(McpTarget {
 		name: name.into(),
 		condition: None,
@@ -7106,7 +7095,7 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
 				"/unused-{name}"
 			)),
-			schema: Arc::new(schema),
+			tools: Vec::new().into(),
 			prefix: String::new(),
 		}),
 		backend_policies: Default::default(),
