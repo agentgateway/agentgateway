@@ -2045,7 +2045,7 @@ func BuildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 		Group: string(group),
 		Kind:  string(kind),
 	}
-	if err := checkBackendRefGrant(ctx, ref, defaultNS, gk); err != nil {
+	if err := CheckBackendRefGrant(ctx, ref, defaultNS, gk); err != nil {
 		return nil, err
 	}
 	if ctx.RouteBackend != nil {
@@ -2054,7 +2054,9 @@ func BuildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
 }
 
-func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string, gk schema.GroupKind) error {
+// CheckBackendRefGrant returns an error if a cross-namespace backendRef from the
+// policy source in ctx is not permitted by ReferenceGrants under the configured mode.
+func CheckBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string, gk schema.GroupKind) error {
 	// Route-like sources follow the route grant mode, which BackendAllowed applies.
 	if ref.Namespace != nil &&
 		string(*ref.Namespace) != defaultNS &&
@@ -2462,7 +2464,7 @@ func referencedBackendsFromPolicy(ctx krt.HandlerContext, policy *agentgateway.A
 		kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
 		group := ptr.OrDefault(ref.Group, "")
 		gk := schema.GroupKind{Group: string(group), Kind: string(kind)}
-		if err := checkBackendRefGrant(PolicyCtx{Krt: ctx, Collections: agw, Grants: grants, SourceGVK: sourceGVK}, ref, policy.Namespace, gk); err != nil {
+		if err := CheckBackendRefGrant(PolicyCtx{Krt: ctx, Collections: agw, Grants: grants, SourceGVK: sourceGVK}, ref, policy.Namespace, gk); err != nil {
 			continue
 		}
 		backends = append(backends, utils.TypedNamespacedName{

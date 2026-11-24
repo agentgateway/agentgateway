@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
-	fileLlmResources,
+	fileResources,
 	mockGateway,
 	mockXdsGateway,
 	populatedConfig,
@@ -1025,7 +1025,7 @@ test('hybrid model edits use the unified resource API', async ({ page }) => {
 		if (route.request().method() === 'GET') {
 			const kind = new URL(route.request().url()).pathname.split('/').at(-1);
 			const filter = kind === 'resources' ? undefined : kind;
-			const resources = fileLlmResources(config, filter);
+			const resources = fileResources(config, filter);
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
@@ -1102,7 +1102,9 @@ test('hybrid model edits use the unified resource API', async ({ page }) => {
 
 test('database-backed MCP servers are available across hybrid UI pages', async ({ page }) => {
 	const config = emptyConfig();
-	delete config.mcp;
+	const fileTarget = { name: 'db-weather', mcp: { host: 'http://file-weather.example/mcp' } };
+	const endpoints = [{ path: '/ops/mcp', targets: [fileTarget] }];
+	config.mcp = { endpoints };
 	const gateway = await mockGateway(page, config);
 	const resources = [
 		{
@@ -1125,6 +1127,12 @@ test('database-backed MCP servers are available across hybrid UI pages', async (
 			revision: 1,
 			createdAt: '2026-07-23T00:00:00Z',
 			updatedAt: '2026-07-23T00:00:00Z'
+		},
+		{
+			kind: 'mcp.policy',
+			id: '/policy/mcp:cors',
+			value: { allowOrigins: ['*'] },
+			source: 'database'
 		}
 	];
 	const writes: Array<Record<string, unknown>> = [];
@@ -1148,24 +1156,33 @@ test('database-backed MCP servers are available across hybrid UI pages', async (
 				mcp: {
 					port: 3000,
 					targets: [resources[0].value],
-					policies: {}
+					policies: {},
+					endpoints
 				}
 			})
 		})
 	);
 	await page.route('**/api/config/resources**', async route => {
+		const pathname = new URL(route.request().url()).pathname;
 		if (route.request().method() === 'GET') {
+			const kind = pathname.split('/api/config/resources/')[1];
+			const listed = [
+				{
+					kind: 'mcp.target',
+					id: '/ops/mcp:db-weather',
+					source: 'file',
+					value: { ...fileTarget, endpoint: '/ops/mcp' }
+				},
+				...resources
+			].filter(resource => !kind || resource.kind === kind);
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
-				body: JSON.stringify({ resources })
+				body: JSON.stringify({ resources: listed })
 			});
 			return;
 		}
-		if (
-			route.request().method() === 'PUT' &&
-			new URL(route.request().url()).pathname.endsWith('/mcp.target')
-		) {
+		if (route.request().method() === 'PUT' && pathname.endsWith('/mcp.target')) {
 			const request = route.request().postDataJSON() as {
 				resources: Array<{ value: Record<string, unknown> }>;
 			};
@@ -1184,11 +1201,22 @@ test('database-backed MCP servers are available across hybrid UI pages', async (
 	await expect(page.getByText('No MCP servers', { exact: true })).toHaveCount(0);
 
 	await page.goto('/');
-	await expect(page.getByText('1 configured server')).toBeVisible();
+	await expect(page.getByText('2 configured servers')).toBeVisible();
 
 	await page.goto('/mcp/servers');
-	await expect(page.getByRole('row', { name: /db-weather/ })).toBeVisible();
-	await page.getByRole('button', { name: 'Add server' }).click();
+	const defaultGroup = page.locator('.mcp-endpoint-panel').filter({
+		has: page.getByRole('heading', { name: '/mcp', exact: true })
+	});
+	const fileGroup = page.locator('.mcp-endpoint-panel').filter({
+		has: page.getByRole('heading', { name: '/ops/mcp', exact: true })
+	});
+	await expect(defaultGroup.getByRole('button', { name: 'Delete server' })).toBeEnabled();
+	await expect(fileGroup.getByRole('button', { name: 'Delete server' })).toBeDisabled();
+	const policyGroup = page.locator('.mcp-endpoint-panel').filter({
+		has: page.getByRole('heading', { name: '/policy/mcp' })
+	});
+	await expect(policyGroup.getByText('1 override')).toBeVisible();
+	await defaultGroup.getByRole('button', { name: 'Add server' }).click();
 	await page.getByLabel('Server name').fill('db-search');
 	await expect(page.getByRole('button', { name: 'Save server' })).toBeEnabled();
 	await page.getByRole('button', { name: 'Save server' }).click();
@@ -1290,26 +1318,39 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 			})
 		})
 	);
-	await page.route('**/api/config/effective', route =>
-		route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify(config)
-		})
-	);
+	const legacyRequests: string[] = [];
+	await page.route(/\/api\/config(?:\/(?:raw|effective))?$/, route => {
+		legacyRequests.push(new URL(route.request().url()).pathname);
+		return route.fulfill({ status: 503 });
+	});
 	await page.route('**/api/config/resources**', async route => {
+		const pathname = new URL(route.request().url()).pathname;
 		if (route.request().method() === 'GET') {
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
-				body: JSON.stringify({ resources: [] })
+				body: JSON.stringify({
+					resources: pathname.endsWith('/mcp.settings')
+						? [
+								{
+									kind: 'mcp.settings',
+									id: 'default',
+									source: 'file',
+									value: { port: 3000 }
+								},
+								{
+									kind: 'mcp.settings',
+									id: 'default',
+									source: 'database',
+									value: { statefulMode: 'stateful' }
+								}
+							]
+						: []
+				})
 			});
 			return;
 		}
-		if (
-			route.request().method() === 'PUT' &&
-			new URL(route.request().url()).pathname.endsWith('/mcp.settings')
-		) {
+		if (route.request().method() === 'PUT' && pathname.endsWith('/mcp.settings')) {
 			const request = route.request().postDataJSON() as {
 				resources: Array<{ value: Record<string, unknown> }>;
 			};
@@ -1329,14 +1370,15 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	await expect(page.getByRole('textbox', { name: /Port/ })).toBeDisabled();
 	await page.getByRole('button', { name: /MCP behavior/ }).click();
 	await expect(page.getByRole('combobox', { name: 'State mode' })).toBeEnabled();
+	await expect(page.getByText('Stateful', { exact: true })).toBeVisible();
 	await page.getByRole('combobox', { name: 'State mode' }).click();
 	await page.getByRole('option', { name: 'Stateless' }).click();
 	await page.getByRole('button', { name: 'Save settings' }).click();
 
 	await expect.poll(() => writes.length).toBe(1);
 	expect(writes[0]).toEqual({ statefulMode: 'stateless' });
-	expect(writes[0]).not.toHaveProperty('port');
 	expect(gateway.postedConfigs).toHaveLength(0);
+	expect(legacyRequests).toEqual([]);
 });
 
 for (const filePort of [false, true]) {

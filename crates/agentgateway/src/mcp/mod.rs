@@ -409,7 +409,9 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 	) {
 		return Err(err);
 	}
-	if request_protocol != crate::proxy::httpproxy::RequestProtocol::Mcp {
+	// Legacy SSE delivers JSON-RPC replies on the GET stream and reports POST failures via HTTP.
+	if request_protocol != crate::proxy::httpproxy::RequestProtocol::Mcp || req.uri().path() == "/sse"
+	{
 		return Err(err);
 	}
 	let limit = crate::http::buffer_limit(req);

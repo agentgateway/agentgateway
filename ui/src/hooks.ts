@@ -115,10 +115,14 @@ export function useConfigResources(options?: { enabled?: boolean }) {
 	});
 }
 
-export function useConfigResourcesByKind<K extends ConfigResourceKind>(kind: K) {
+export function useConfigResourcesByKind<K extends ConfigResourceKind>(
+	kind: K,
+	options?: { enabled?: boolean }
+) {
 	return useQuery({
 		queryKey: ['configResources', kind],
 		queryFn: () => listConfigResourcesByKind(kind),
+		enabled: options?.enabled ?? true,
 		retry: false
 	});
 }

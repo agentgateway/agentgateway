@@ -17,6 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	apiannotations "github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -933,7 +934,7 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 	}
 
 	var got []string
-	for _, ref := range agentgatewaybackend.BuildAgwBackendReferences(backend) {
+	for _, ref := range agentgatewaybackend.BuildAgwBackendReferences(plugins.PolicyCtx{}, backend) {
 		got = append(got, ref.ResourceName())
 	}
 	slices.Sort(got)

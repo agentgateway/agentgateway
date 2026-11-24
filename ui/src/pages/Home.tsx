@@ -330,7 +330,6 @@ export function HomePage() {
 				<McpSettingsDrawer
 					config={mcpData.data}
 					mcp={mcpData.data?.mcp}
-					databaseBacked={hybrid}
 					readOnlyFields={fileOwnedMcpSettings}
 					help={help}
 					saving={update.isPending || upsertResource.isPending}

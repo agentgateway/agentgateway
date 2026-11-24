@@ -97,7 +97,6 @@ fn classify_request_protocol(req: &Request, backend: &Backend) -> RequestProtoco
 		// continue through the ordinary HTTP path.
 		Backend::MCP(_, _)
 			if req.method() == ::http::Method::POST
-				&& req.uri().path() != "/sse"
 				&& !mcp::auth::is_well_known_endpoint(req.uri().path())
 				&& !req.uri().path().ends_with("client-registration")
 				&& !crate::http::is_grpc_request(req) =>
@@ -1430,6 +1429,7 @@ impl HTTPProxy {
 					max_connection_duration: None,
 					backend: Some(selected_backend.backend.backend.name()),
 				},
+				matches!(&selected_backend.backend.backend, Backend::Dynamic(_, _)),
 			)
 			.await?;
 		let mut resp = ::http::Response::builder()
@@ -1740,6 +1740,7 @@ async fn handle_upgrade(
 		upgrade_type,
 		upgrade,
 	} = req_upgrade_type;
+	let buffer_limit = http::response_buffer_limit(&resp);
 	let resp_upgrade_type = get_upgrade_type(resp.headers());
 	// Case insensitive: https://www.rfc-editor.org/rfc/rfc6455.html#section-4.2.1
 	if !resp_upgrade_type
@@ -1777,6 +1778,7 @@ async fn handle_upgrade(
 				parse::websocket::guarded_realtime_proxy(
 					TokioIo::new(req),
 					server,
+					buffer_limit,
 					guard_context.prompt_guard,
 					guard_context.policy_client,
 					llm,
@@ -1787,7 +1789,7 @@ async fn handle_upgrade(
 				.await;
 				return;
 			}
-			let mut server = parse::websocket::parser(server, llm).await;
+			let mut server = parse::websocket::parser(server, llm, buffer_limit).await;
 			let _ = agent_core::copy::copy_bidirectional(
 				&mut TokioIo::new(req),
 				&mut server,
@@ -4431,6 +4433,39 @@ mod tests {
 		assert!(!req.headers().contains_key("x-original-url"));
 	}
 
+	#[test]
+	fn hop_by_hop_headers_strips_http2_upgrades() {
+		let mut req = ::http::Request::builder()
+			.uri("http://app/")
+			.header("connection", "upgrade")
+			.header("upgrade", "H2C, HTTP/2.0")
+			.header("http2-settings", "AAMAAABkAAQAAP__")
+			.body(http::Body::empty())
+			.expect("request should build");
+		assert!(hop_by_hop_headers(&mut req).is_none());
+		assert!(!req.headers().contains_key("connection"));
+		assert!(!req.headers().contains_key("upgrade"));
+		assert!(!req.headers().contains_key("http2-settings"));
+
+		let mut req = ::http::Request::builder()
+			.uri("http://app/")
+			.header("connection", "upgrade")
+			.header("upgrade", "websocket")
+			.header("upgrade", "h2c")
+			.body(http::Body::empty())
+			.expect("request should build");
+		hop_by_hop_headers(&mut req);
+		assert_eq!(
+			req
+				.headers()
+				.get_all("upgrade")
+				.iter()
+				.map(|v| v.to_str().unwrap())
+				.collect::<Vec<_>>(),
+			vec!["websocket"]
+		);
+	}
+
 	#[tokio::test]
 	async fn llm_session_affinity_pins_provider() {
 		let first = wiremock::MockServer::start().await;
@@ -4717,7 +4752,7 @@ async fn send_mirror(
 // that request policies such as `basicAuth` can read it when the
 // gateway acts as an authenticated forward proxy.
 // Preserve Trailer so Hyper's HTTP/1 encoder can forward the declared trailer fields.
-static HOP_HEADERS: [HeaderName; 7] = [
+static HOP_HEADERS: [HeaderName; 8] = [
 	header::CONNECTION,
 	// non-standard but still sent by libcurl and rejected by e.g. google
 	HeaderName::from_static("proxy-connection"),
@@ -4726,6 +4761,7 @@ static HOP_HEADERS: [HeaderName; 7] = [
 	header::TE,
 	header::TRANSFER_ENCODING,
 	header::UPGRADE,
+	HeaderName::from_static("http2-settings"),
 ];
 
 fn connection_header_tokens(headers: &HeaderMap) -> Vec<HeaderName> {
@@ -4768,7 +4804,7 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 		.map(|s| s.contains("trailers"))
 		.unwrap_or(false);
 	let connection_headers = connection_header_tokens(req.headers());
-	let upgrade_type = get_upgrade_type(req.headers());
+	let upgrade_type = get_request_upgrade_type(req.headers());
 	for h in connection_headers {
 		req.headers_mut().remove(h);
 	}
@@ -4798,6 +4834,36 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 	} else {
 		None
 	}
+}
+
+// Collects the requested upgrade protocols across all Upgrade headers, dropping HTTP/2 upgrades.
+// Once a backend accepts an upgrade the connection becomes an opaque tunnel; for HTTP/2 that would
+// let the client send arbitrary requests to the backend that bypass routing and policies.
+// Ignoring the upgrade is always safe: the client continues with HTTP/1.1.
+fn get_request_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
+	if !headers
+		.typed_get::<headers::Connection>()
+		.is_some_and(|con| con.contains(http::header::UPGRADE))
+	{
+		return None;
+	}
+	let protocols = headers
+		.get_all(http::header::UPGRADE)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.map(str::trim)
+		.filter(|p| {
+			!p.is_empty()
+				&& !p.eq_ignore_ascii_case("h2c")
+				&& !p.eq_ignore_ascii_case("h2")
+				&& !p.get(..6).is_some_and(|v| v.eq_ignore_ascii_case("http/2"))
+		})
+		.collect::<Vec<_>>();
+	if protocols.is_empty() {
+		return None;
+	}
+	HeaderValue::from_str(&protocols.join(", ")).ok()
 }
 
 fn get_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
