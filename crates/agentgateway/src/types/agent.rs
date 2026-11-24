@@ -736,6 +736,10 @@ pub enum ListenerProtocol {
 }
 
 impl ListenerProtocol {
+	pub fn is_https(&self) -> bool {
+		matches!(self, ListenerProtocol::HTTPS(_))
+	}
+
 	pub async fn tls(
 		&self,
 		tls: Option<&frontend::TLS>,
