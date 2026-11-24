@@ -856,6 +856,7 @@ pub mod typed {
 		ChatCompletionRequestDeveloperMessageContent as RequestDeveloperMessageContent,
 		ChatCompletionRequestDeveloperMessageContentPart as RequestDeveloperMessageContentPart,
 		ChatCompletionRequestFunctionMessage as RequestFunctionMessage,
+		ChatCompletionRequestMessageContentPartFile as RequestMessageContentPartFile,
 		ChatCompletionRequestMessageContentPartImage as RequestMessageContentPartImage,
 		ChatCompletionRequestMessageContentPartText as RequestMessageContentPartText,
 		ChatCompletionRequestSystemMessage as RequestSystemMessage,
@@ -869,11 +870,11 @@ pub mod typed {
 		ChatCompletionRequestUserMessageContentPart as RequestUserMessageContentPart,
 		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool as FunctionTool,
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
-		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
-		FunctionObject, FunctionType, ImageUrl, PredictionContent, PromptCacheBreakpointParam,
-		PromptCacheBreakpointParamMode, ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
-		ResponseModalities as ChatCompletionModalities, Role, StopConfiguration as Stop,
-		ToolChoiceOptions, WebSearchOptions,
+		ChatCompletionTools as Tool, FileObject, FinishReason, FunctionCall, FunctionCallStream,
+		FunctionName, FunctionObject, FunctionType, ImageUrl, PredictionContent,
+		PromptCacheBreakpointParam, PromptCacheBreakpointParamMode, ReasoningEffort, ResponseFormat,
+		ResponseFormatJsonSchema, ResponseModalities as ChatCompletionModalities, Role,
+		StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
 
@@ -1549,6 +1550,59 @@ pub mod typed {
 				Some(Stop::StringArray(s)) => s.clone(),
 				_ => vec![],
 			}
+		}
+
+		pub fn replace_original_image_detail_with_high(&mut self) {
+			use async_openai::types::chat::ImageDetail;
+
+			for message in &mut self.messages {
+				let RequestMessage::User(RequestUserMessage {
+					content: RequestUserMessageContent::Array(parts),
+					..
+				}) = message
+				else {
+					continue;
+				};
+				for part in parts {
+					if let RequestUserMessageContentPart::ImageUrl(image) = part
+						&& image.image_url.detail == Some(ImageDetail::Original)
+					{
+						image.image_url.detail = Some(ImageDetail::High);
+					}
+				}
+			}
+		}
+
+		pub fn send_files_as_image_urls(&mut self) -> Result<(), crate::AIError> {
+			for message in &mut self.messages {
+				let RequestMessage::User(RequestUserMessage {
+					content: RequestUserMessageContent::Array(parts),
+					..
+				}) = message
+				else {
+					continue;
+				};
+				for part in parts {
+					let RequestUserMessageContentPart::File(file) = part else {
+						continue;
+					};
+					let url = file
+						.file
+						.file_data
+						.take()
+						.filter(|data| data.starts_with("data:"))
+						.ok_or_else(|| {
+							crate::AIError::UnsupportedConversion(agent_core::strng::literal!(
+								"this provider reads files only from a data URL in file_data"
+							))
+						})?;
+					*part = RequestUserMessageContentPart::ImageUrl(RequestMessageContentPartImage {
+						image_url: ImageUrl { url, detail: None },
+						prompt_cache_breakpoint: file.prompt_cache_breakpoint.take(),
+					});
+				}
+			}
+			Ok(())
 		}
 
 		/// Remove `extra_content` (Gemini thought signatures) from replayed tool calls,

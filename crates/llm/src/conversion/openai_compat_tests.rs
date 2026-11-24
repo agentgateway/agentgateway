@@ -1,7 +1,88 @@
 use bytes::Bytes;
 use serde_json::{Value, json};
 
-use super::to_responses;
+use super::{from_responses, to_responses};
+
+#[rstest::rstest]
+fn responses_to_completions_rejects_images_without_a_url(
+	#[values(None, Some("message"))] message_type: Option<&str>,
+	#[values(None, Some(""))] image_url: Option<&str>,
+) {
+	let mut message = json!({
+		"role": "user",
+		"content": [
+			{"type": "input_text", "text": "Describe this image."},
+			{"type": "input_image", "file_id": "file-image"}
+		]
+	});
+	if let Some(message_type) = message_type {
+		message["type"] = json!(message_type);
+	}
+	if let Some(image_url) = image_url {
+		message["content"][1]["image_url"] = json!(image_url);
+	}
+	let request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"input": [message]
+	}))
+	.unwrap();
+
+	let result = from_responses::translate(&request);
+	assert!(
+		matches!(&result, Err(crate::AIError::UnsupportedConversion(reason)) if reason.contains("image_url")),
+		"{result:?}"
+	);
+}
+
+#[rstest::rstest]
+#[case::remote_file_url(json!({"type": "input_file", "file_url": "https://example.com/report.pdf"}))]
+#[case::empty_data_and_id(json!({"type": "input_file", "file_data": "", "file_id": ""}))]
+fn responses_to_completions_rejects_files_without_data_or_id(#[case] file: Value) {
+	let request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"input": [{"role": "user", "content": [file]}]
+	}))
+	.unwrap();
+
+	let result = from_responses::translate(&request);
+	assert!(
+		matches!(&result, Err(crate::AIError::UnsupportedConversion(reason)) if reason.contains("input_file")),
+		"{result:?}"
+	);
+}
+
+// The typed `message` item form has no assistant input role.
+#[rstest::rstest]
+#[case::easy_system(None, "system")]
+#[case::easy_developer(None, "developer")]
+#[case::easy_assistant(None, "assistant")]
+#[case::typed_system(Some("message"), "system")]
+#[case::typed_developer(Some("message"), "developer")]
+fn responses_to_completions_rejects_media_outside_user_messages(
+	#[case] message_type: Option<&str>,
+	#[case] role: &str,
+	#[values("input_image", "input_file")] kind: &str,
+) {
+	let part = match kind {
+		"input_image" => json!({"type": kind, "image_url": "data:image/png;base64,AAAA"}),
+		"input_file" => json!({"type": kind, "file_data": "data:application/pdf;base64,JVBERi0="}),
+		_ => unreachable!("unknown media kind {kind}"),
+	};
+	let mut message = json!({
+		"role": role,
+		"content": [{"type": "input_text", "text": "Look at this."}, part]
+	});
+	if let Some(message_type) = message_type {
+		message["type"] = json!(message_type);
+	}
+	let request = serde_json::from_value(json!({"model": "gpt-4o", "input": [message]})).unwrap();
+
+	let result = from_responses::translate(&request);
+	assert!(
+		matches!(&result, Err(crate::AIError::UnsupportedConversion(reason)) if reason.contains("user messages")),
+		"{result:?}"
+	);
+}
 
 fn translate(input: &[u8]) -> Value {
 	let response =

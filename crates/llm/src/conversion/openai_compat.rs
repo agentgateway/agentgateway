@@ -25,7 +25,7 @@ pub mod from_responses {
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		Ok(TranslatedRequest {
-			request: translate_internal(typed),
+			request: translate_internal(typed)?,
 			namespaces,
 		})
 	}
@@ -38,7 +38,7 @@ pub mod from_responses {
 		})
 	}
 
-	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
+	fn translate_internal(req: responses::CreateResponse) -> Result<completions::Request, AIError> {
 		use responses::{
 			EasyInputContent, InputContent, InputItem, InputMessage, InputParam, InputRole,
 			InputTextContent, Item, MessageItem, OutputMessageContent, Role as ResponsesRole,
@@ -75,24 +75,7 @@ pub mod from_responses {
 					ResponsesRole::User => {
 						let content = match msg.content {
 							EasyInputContent::Text(text) => completions::RequestUserMessageContent::Text(text),
-							EasyInputContent::ContentList(parts) => {
-								completions::RequestUserMessageContent::Array(
-									parts
-										.into_iter()
-										.filter_map(|part| match part {
-											InputContent::InputText(text) => {
-												Some(completions::RequestUserMessageContentPart::Text(
-													completions::RequestMessageContentPartText {
-														text: text.text,
-														prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
-													},
-												))
-											},
-											_ => None,
-										})
-										.collect(),
-								)
-							},
+							EasyInputContent::ContentList(parts) => translate_user_content(parts)?,
 						};
 						messages.push(completions::RequestMessage::User(
 							completions::RequestUserMessage {
@@ -110,18 +93,11 @@ pub mod from_responses {
 								completions::RequestAssistantMessageContent::Array(
 									parts
 										.into_iter()
-										.filter_map(|part| match part {
-											InputContent::InputText(text) => {
-												Some(completions::RequestAssistantMessageContentPart::Text(
-													completions::RequestMessageContentPartText {
-														text: text.text,
-														prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
-													},
-												))
-											},
-											_ => None,
+										.map(|part| {
+											translate_text_content(part)
+												.map(completions::RequestAssistantMessageContentPart::Text)
 										})
-										.collect(),
+										.collect::<Result<_, _>>()?,
 								)
 							},
 						};
@@ -141,18 +117,11 @@ pub mod from_responses {
 								completions::RequestDeveloperMessageContent::Array(
 									parts
 										.into_iter()
-										.filter_map(|part| match part {
-											InputContent::InputText(text) => {
-												Some(completions::RequestDeveloperMessageContentPart::Text(
-													completions::RequestMessageContentPartText {
-														text: text.text,
-														prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
-													},
-												))
-											},
-											_ => None,
+										.map(|part| {
+											translate_text_content(part)
+												.map(completions::RequestDeveloperMessageContentPart::Text)
 										})
-										.collect(),
+										.collect::<Result<_, _>>()?,
 								)
 							},
 						};
@@ -186,25 +155,7 @@ pub mod from_responses {
 							InputRole::User => {
 								messages.push(completions::RequestMessage::User(
 									completions::RequestUserMessage {
-										content: completions::RequestUserMessageContent::Array(
-											msg
-												.content
-												.into_iter()
-												.filter_map(|content| match content {
-													InputContent::InputText(text) => {
-														Some(completions::RequestUserMessageContentPart::Text(
-															completions::RequestMessageContentPartText {
-																text: text.text,
-																prompt_cache_breakpoint: cache_breakpoint(
-																	text.prompt_cache_breakpoint,
-																),
-															},
-														))
-													},
-													_ => None,
-												})
-												.collect(),
-										),
+										content: translate_user_content(msg.content)?,
 										name: None,
 									},
 								));
@@ -216,20 +167,11 @@ pub mod from_responses {
 											msg
 												.content
 												.into_iter()
-												.filter_map(|content| match content {
-													InputContent::InputText(text) => {
-														Some(completions::RequestSystemMessageContentPart::Text(
-															completions::RequestMessageContentPartText {
-																text: text.text,
-																prompt_cache_breakpoint: cache_breakpoint(
-																	text.prompt_cache_breakpoint,
-																),
-															},
-														))
-													},
-													_ => None,
+												.map(|part| {
+													translate_text_content(part)
+														.map(completions::RequestSystemMessageContentPart::Text)
 												})
-												.collect(),
+												.collect::<Result<_, _>>()?,
 										),
 										name: None,
 									},
@@ -242,20 +184,11 @@ pub mod from_responses {
 											msg
 												.content
 												.into_iter()
-												.filter_map(|content| match content {
-													InputContent::InputText(text) => {
-														Some(completions::RequestDeveloperMessageContentPart::Text(
-															completions::RequestMessageContentPartText {
-																text: text.text,
-																prompt_cache_breakpoint: cache_breakpoint(
-																	text.prompt_cache_breakpoint,
-																),
-															},
-														))
-													},
-													_ => None,
+												.map(|part| {
+													translate_text_content(part)
+														.map(completions::RequestDeveloperMessageContentPart::Text)
 												})
-												.collect(),
+												.collect::<Result<_, _>>()?,
 										),
 										name: None,
 									},
@@ -463,7 +396,7 @@ pub mod from_responses {
 		};
 
 		#[allow(deprecated)]
-		completions::Request {
+		Ok(completions::Request {
 			messages,
 			tools,
 			tool_choice,
@@ -497,6 +430,78 @@ pub mod from_responses {
 			functions: None,
 			service_tier: None,
 			web_search_options: None,
+		})
+	}
+
+	fn translate_user_content(
+		content: Vec<responses::InputContent>,
+	) -> Result<completions::RequestUserMessageContent, AIError> {
+		use completions::RequestUserMessageContentPart;
+
+		let mut parts = Vec::with_capacity(content.len());
+		for part in content {
+			parts.push(match part {
+				responses::InputContent::InputText(text) => {
+					RequestUserMessageContentPart::Text(completions::RequestMessageContentPartText {
+						text: text.text,
+						prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
+					})
+				},
+				responses::InputContent::InputImage(image) => {
+					let url = image
+						.image_url
+						.filter(|url| !url.is_empty())
+						.ok_or_else(|| {
+							AIError::UnsupportedConversion(agent_core::strng::literal!(
+								"Responses input_image requires image_url for Chat Completions"
+							))
+						})?;
+					RequestUserMessageContentPart::ImageUrl(completions::RequestMessageContentPartImage {
+						image_url: completions::ImageUrl {
+							url,
+							detail: Some(image.detail),
+						},
+						prompt_cache_breakpoint: cache_breakpoint(image.prompt_cache_breakpoint),
+					})
+				},
+				responses::InputContent::InputFile(file) => {
+					let file_data = file
+						.file_data
+						.filter(|data| !data.is_empty())
+						.or_else(|| file.file_url.filter(|url| url.starts_with("data:")));
+					let file_id = file.file_id.filter(|id| !id.is_empty());
+					if file_data.is_none() && file_id.is_none() {
+						return Err(AIError::UnsupportedConversion(agent_core::strng::literal!(
+							"Responses input_file requires file_data, file_id, or a data URL in file_url for Chat Completions"
+						)));
+					}
+					RequestUserMessageContentPart::File(completions::RequestMessageContentPartFile {
+						file: completions::FileObject {
+							file_data,
+							file_id,
+							filename: file.filename,
+						},
+						prompt_cache_breakpoint: cache_breakpoint(file.prompt_cache_breakpoint),
+					})
+				},
+			});
+		}
+		Ok(completions::RequestUserMessageContent::Array(parts))
+	}
+
+	fn translate_text_content(
+		part: responses::InputContent,
+	) -> Result<completions::RequestMessageContentPartText, AIError> {
+		match part {
+			responses::InputContent::InputText(text) => Ok(completions::RequestMessageContentPartText {
+				text: text.text,
+				prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
+			}),
+			responses::InputContent::InputImage(_) | responses::InputContent::InputFile(_) => {
+				Err(AIError::UnsupportedConversion(agent_core::strng::literal!(
+					"Chat Completions accepts Responses image and file inputs only in user messages"
+				)))
+			},
 		}
 	}
 }
