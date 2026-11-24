@@ -274,7 +274,8 @@ impl SubstrateEgress {
 			})
 		} else {
 			None
-		}; let ttl = Duration::from_secs(
+		};
+		let ttl = Duration::from_secs(
 			u64::try_from(source.expiration_seconds)
 				.unwrap_or_default()
 				.saturating_mul(2)
@@ -392,12 +393,11 @@ impl SubstrateEgress {
 		if matches!(&source.source, Some(Source::ActorCertificate(_))) {
 			return self.actor_client_certificate(client, identity).await;
 		}
-		let Some(Source::Credential(source)) = &source.source else {
+		let Some(Source::CredentialProvider(uri)) = &source.source else {
 			return Err(ProxyError::SubstrateEgressDenied(
 				"client certificate source is missing".to_owned(),
 			));
 		};
-		let uri = &source.credential_uri;
 		let provider = self.provider_for_uri(uri)?;
 		let actor_identity = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
 		let ttl = provider.cache_ttl.unwrap_or(DEFAULT_CREDENTIAL_CACHE_TTL);
@@ -974,8 +974,8 @@ mod tests {
 	async fn provider_client_certificate_caches_valid_bundles_and_retries_invalid_bundles() {
 		use std::sync::atomic::{AtomicUsize, Ordering};
 
+		use protos::ateapi::ClientCertificateSource;
 		use protos::ateapi::client_certificate_source::Source;
-		use protos::ateapi::{ClientCertificateSource, CredentialClientCertificateSource};
 		use protos::credprovider::{FetchSecretRequest, FetchSecretResponse};
 
 		const URI: &str = "ate-secret://kubernetes.io/default/ns/cert/client.pem";
@@ -1036,9 +1036,7 @@ mod tests {
 			actor_uid: Some("uid-1".into()),
 		};
 		let source = ClientCertificateSource {
-			source: Some(Source::Credential(CredentialClientCertificateSource {
-				credential_uri: URI.into(),
-			})),
+			source: Some(Source::CredentialProvider(URI.into())),
 		};
 		let fetch = || policy.client_certificate(&client, &identity, &source);
 		assert!(matches!(

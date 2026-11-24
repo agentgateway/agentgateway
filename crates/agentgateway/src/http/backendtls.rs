@@ -207,7 +207,12 @@ impl PerAlpnConfig {
 	}
 
 	fn has_client_identity(&self) -> bool {
-		self.config.client_auth_cert_resolver.has_certs()
+		self
+			.data
+			.load()
+			.config
+			.client_auth_cert_resolver
+			.has_certs()
 	}
 }
 

@@ -99,16 +99,12 @@ message UpstreamTls {
 message ClientCertificateSource {
   oneof source {
     ActorClientCertificateSource actor_certificate = 1;
-    CredentialClientCertificateSource credential = 2;
+    string credential_provider = 2;
   }
 }
 
 // Reserved for the Substrate egress gateway's actor certificate issuer.
 message ActorClientCertificateSource {}
-
-message CredentialClientCertificateSource {
-  string credential_uri = 3;
-}
 
 message TLSPassthroughRule {
   repeated string hostnames = 1;
