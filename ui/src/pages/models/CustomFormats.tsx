@@ -16,7 +16,14 @@ const formats: ProviderFormat[] = [
 	'realtime',
 	'rerank',
 	'decisions',
-	'systemOne'
+	'systemOne',
+	'imageGenerations',
+	'imageEdits',
+	'imageVariations',
+	'audioTranscriptions',
+	'audioTranslations',
+	'audioSpeech',
+	'ocr'
 ];
 
 const formatLabels: Record<ProviderFormat, string> = {
@@ -30,7 +37,14 @@ const formatLabels: Record<ProviderFormat, string> = {
 	realtime: 'Realtime (/realtime)',
 	rerank: 'Rerank (/rerank)',
 	decisions: 'Decisions (/decisions)',
-	systemOne: 'System One (/systemone)'
+	systemOne: 'System One (/systemone)',
+	imageGenerations: 'Image generations (/images/generations)',
+	imageEdits: 'Image edits (/images/edits)',
+	imageVariations: 'Image variations (/images/variations)',
+	audioTranscriptions: 'Audio transcriptions (/audio/transcriptions)',
+	audioTranslations: 'Audio translations (/audio/translations)',
+	audioSpeech: 'Text to speech (/audio/speech)',
+	ocr: 'OCR (/ocr)'
 };
 
 export function CustomFormats(props: {

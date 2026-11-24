@@ -334,9 +334,12 @@ type CustomProviderSettings struct {
 	// +optional
 	ProviderOverride *ShortString `json:"providerOverride,omitempty"`
 
-	// Provider-native API formats this provider supports.
+	// Endpoints this provider supports, with optional path overrides. Chat and
+	// decisions requests are translated to another listed format of the same kind
+	// if needed. Image, audio and OCR requests are always forwarded; listing one
+	// only sets its path.
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=6
+	// +kubebuilder:validation:MaxItems=18
 	// +listType=map
 	// +listMapKey=type
 	// +required
@@ -371,32 +374,53 @@ type ProviderFormatConfig struct {
 type ProviderFormat string
 
 const (
-	// ProviderFormatCompletions is the OpenAI-compatible chat completions API.
+	// ProviderFormatCompletions is the OpenAI-compatible chat completions API (`/chat/completions`).
 	ProviderFormatCompletions ProviderFormat = "Completions"
 
-	// ProviderFormatMessages is the Anthropic-compatible messages API.
+	// ProviderFormatMessages is the Anthropic-compatible messages API (`/messages`).
 	ProviderFormatMessages ProviderFormat = "Messages"
 
-	// ProviderFormatResponses is the OpenAI responses API.
+	// ProviderFormatResponses is the OpenAI responses API (`/responses`).
 	ProviderFormatResponses ProviderFormat = "Responses"
 
-	// ProviderFormatEmbeddings is the OpenAI-compatible embeddings API.
+	// ProviderFormatEmbeddings is the OpenAI-compatible embeddings API (`/embeddings`).
 	ProviderFormatEmbeddings ProviderFormat = "Embeddings"
 
-	// ProviderFormatAnthropicTokenCount is the Anthropic token-count API.
+	// ProviderFormatAnthropicTokenCount is the Anthropic token-count API (`/messages/count_tokens`).
 	ProviderFormatAnthropicTokenCount ProviderFormat = "AnthropicTokenCount" //nolint:gosec // G101: False positive - this is an API format name, not credentials
 
-	// ProviderFormatRealtime is the OpenAI-compatible realtime API.
+	// ProviderFormatRealtime is the OpenAI-compatible realtime API (`/realtime`).
 	ProviderFormatRealtime ProviderFormat = "Realtime"
 
-	// ProviderFormatRerank is the Cohere-compatible rerank API.
+	// ProviderFormatRerank is the Cohere-compatible rerank API (`/rerank`).
 	ProviderFormatRerank ProviderFormat = "Rerank"
 
-	// ProviderFormatDecisions is the OpenAI decisions API.
+	// ProviderFormatDecisions is the OpenAI decisions API (`/decisions`).
 	ProviderFormatDecisions ProviderFormat = "Decisions"
 
-	// ProviderFormatSystemOne is the TypeSafe SystemOne API.
+	// ProviderFormatSystemOne is the TypeSafe SystemOne API (`/systemone`).
 	ProviderFormatSystemOne ProviderFormat = "SystemOne"
+
+	// ProviderFormatImageGenerations is the OpenAI-compatible image generations API (`/images/generations`).
+	ProviderFormatImageGenerations ProviderFormat = "ImageGenerations"
+
+	// ProviderFormatImageEdits is the OpenAI-compatible image edits API (`/images/edits`).
+	ProviderFormatImageEdits ProviderFormat = "ImageEdits"
+
+	// ProviderFormatImageVariations is the OpenAI-compatible image variations API (`/images/variations`).
+	ProviderFormatImageVariations ProviderFormat = "ImageVariations"
+
+	// ProviderFormatAudioTranscriptions is the OpenAI-compatible audio transcriptions API (`/audio/transcriptions`).
+	ProviderFormatAudioTranscriptions ProviderFormat = "AudioTranscriptions"
+
+	// ProviderFormatAudioTranslations is the OpenAI-compatible audio translations API (`/audio/translations`).
+	ProviderFormatAudioTranslations ProviderFormat = "AudioTranslations"
+
+	// ProviderFormatAudioSpeech is the OpenAI-compatible text-to-speech API (`/audio/speech`).
+	ProviderFormatAudioSpeech ProviderFormat = "AudioSpeech"
+
+	// ProviderFormatOCR is the Mistral-compatible OCR API (`/ocr`).
+	ProviderFormatOCR ProviderFormat = "OCR"
 )
 
 // Settings for the [OpenAI](https://developers.openai.com/api/docs/guides/streaming-responses) LLM provider.
