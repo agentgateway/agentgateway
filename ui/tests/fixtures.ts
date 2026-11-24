@@ -3,6 +3,7 @@ import { dump, load } from 'js-yaml';
 
 import { llmSettingsFields, mcpSettingsFields } from '@/config';
 import type { DumpModel, StoresDump } from '@/gateway-admin';
+import { mcpResourceId, trimTrailingSlash } from '@/mcp';
 
 export type TestConfig = Record<string, unknown>;
 
@@ -407,24 +408,61 @@ export async function mockXdsGateway(page: Page, dump: StoresDump = xdsDump()) {
 	return { writeRequests };
 }
 
-export function fileLlmResources(config: TestConfig, filter?: string) {
+export function fileResources(config: TestConfig, filter?: string) {
 	const llm = record(config.llm);
-	return Object.entries({
+	const mcp = record(config.mcp);
+	const lists = Object.entries({
 		'llm.model': array(llm.models),
 		'llm.virtualModel': array(llm.virtualModels),
 		'llm.provider': array(llm.providers)
 	}).flatMap(([kind, items]) =>
-		filter && filter !== kind
-			? []
-			: items.map(value => ({
-					kind,
-					id:
-						(kind === 'llm.model' && stringValue(record(value).id)) ||
-						stringValue(record(value).name),
-					source: 'file',
-					value
-				}))
+		items.map(value => ({
+			kind,
+			id:
+				(kind === 'llm.model' && stringValue(record(value).id)) || stringValue(record(value).name),
+			source: 'file',
+			value
+		}))
 	);
+	const mcpResources = [mcp, ...array(mcp.endpoints).map(record)].flatMap(group => {
+		const endpoint = trimTrailingSlash(stringValue(group.path)) || undefined;
+		const fields = endpoint ? mcpSettingsFields.slice(2) : mcpSettingsFields;
+		const settings = Object.fromEntries(
+			fields.filter(field => Object.hasOwn(group, field)).map(field => [field, group[field]])
+		);
+		return [
+			...array(group.targets).map(item => ({
+				kind: 'mcp.target',
+				id: mcpResourceId(stringValue(record(item).name), endpoint),
+				source: 'file',
+				value: { ...record(item), endpoint } as unknown
+			})),
+			...Object.entries(record(group.policies)).map(([name, value]) => ({
+				kind: 'mcp.policy',
+				id: mcpResourceId(name, endpoint),
+				source: 'file',
+				value
+			})),
+			...(Object.keys(settings).length
+				? [
+						{
+							kind: 'mcp.settings',
+							id: endpoint ?? 'default',
+							source: 'file',
+							value: endpoint ? { ...settings, endpoint } : settings
+						}
+					]
+				: [])
+		];
+	});
+	const gateways = Object.entries(record(config.gateways)).map(([id, value]) => ({
+		kind: 'traffic.gateway',
+		id,
+		source: 'file',
+		value
+	}));
+	const resources = [...lists, ...mcpResources, ...gateways];
+	return resources.filter(resource => !filter || resource.kind === filter);
 }
 
 export async function mockGateway(page: Page, initialConfig: TestConfig = populatedConfig()) {
@@ -448,6 +486,14 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 				buildTarget: 'test'
 			},
 			ui: { gatewayMode: 'standalone', configStoreMode: 'file' },
+			config: {
+				llm: Boolean(config.llm),
+				mcp: Boolean(config.mcp),
+				traffic:
+					array(config.binds).length > 0 ||
+					['gateways', 'routes', 'tcpRoutes'].some(key => key in config),
+				binds: array(config.binds).length > 0
+			},
 			configReload: { synchronized: true, lastError: null }
 		});
 	});
@@ -503,7 +549,7 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 		const suffix = path.split('/api/config/resources')[1] ?? '';
 		const [kind, id] = suffix.split('/').filter(Boolean).map(decodeURIComponent);
 		if (route.request().method() === 'GET') {
-			await json(route, { resources: fileLlmResources(config, kind) });
+			await json(route, { resources: fileResources(config, kind) });
 			return;
 		}
 		if (route.request().method() === 'PUT') {
@@ -875,9 +921,20 @@ function upsertFileConfigResource(
 	}
 	if (kind === 'mcp.settings') {
 		const mcp = ensureRecord(config, 'mcp');
-		for (const field of mcpSettingsFields) {
-			if (value[field] === undefined) delete mcp[field];
-			else mcp[field] = value[field];
+		const endpoint = stringValue(value.endpoint);
+		let settings = mcp;
+		if (endpoint) {
+			const endpoints = ensureArray(mcp, 'endpoints');
+			const existing = endpoints.map(record).find(group => group.path === endpoint);
+			settings = existing ?? { path: endpoint };
+			if (!existing) endpoints.push(settings);
+		}
+		for (const field of endpoint ? mcpSettingsFields.slice(2) : mcpSettingsFields) {
+			if (value[field] === undefined) delete settings[field];
+			else settings[field] = value[field];
+		}
+		if (endpoint && Object.keys(settings).length === 1) {
+			mcp.endpoints = array(mcp.endpoints).filter(group => group !== settings);
 		}
 		return;
 	}

@@ -37,13 +37,7 @@ import type { RuntimeUser } from '@/api/runtimeApi';
 import logoDark from '@/assets/agw-dark.svg';
 import logoLight from '@/assets/agw-light.svg';
 import { StatusBanner, Tooltip, useDismissiblePopover } from '@/components/Primitives';
-import {
-	useConfigDumpMode,
-	useEffectiveGatewayConfig,
-	useMcpConfigData,
-	useRuntimeInfo,
-	useTrafficConfigData
-} from '@/hooks';
+import { useConfigDumpMode, useRuntimeInfo } from '@/hooks';
 import { useTheme } from '@/theme';
 
 type NavItemConfig = {
@@ -79,32 +73,13 @@ export function Shell() {
 	const runtime = useRuntimeInfo();
 	const mode = useConfigDumpMode();
 	const dumpMode = mode.data?.mode === 'dump';
-	const config = useEffectiveGatewayConfig({
-		enabled: Boolean(mode.data && mode.data.mode !== 'dump')
-	});
-	const mcpData = useMcpConfigData({
-		enabled: Boolean(mode.data && mode.data.mode !== 'dump')
-	});
-	const trafficData = useTrafficConfigData({
-		enabled: Boolean(mode.data && mode.data.mode !== 'dump')
-	});
+	const sections = runtime.data?.config;
 	const { theme, toggleTheme } = useTheme();
-	const hasLlm = dumpMode ? false : config.data ? Boolean(config.data.llm) : true;
-	const hasMcp = dumpMode ? false : mcpData.data ? Boolean(mcpData.data.mcp) : true;
-	const hasTraffic = dumpMode
-		? true
-		: trafficData.data
-			? Boolean(trafficData.data.binds?.length) ||
-				'gateways' in trafficData.data ||
-				'routes' in trafficData.data ||
-				'tcpRoutes' in trafficData.data
-			: true;
-	const hasBinds = dumpMode ? true : config.data ? Boolean(config.data.binds?.length) : false;
 	const navGroups = navigationGroups({
-		hasLlm,
-		hasMcp,
-		hasTraffic,
-		hasBinds,
+		hasLlm: !dumpMode && (sections?.llm ?? true),
+		hasMcp: !dumpMode && (sections?.mcp ?? true),
+		hasTraffic: dumpMode || (sections?.traffic ?? true),
+		hasBinds: dumpMode || (sections?.binds ?? false),
 		dumpMode
 	});
 	const nav = navGroups.flatMap(group => group.items);
