@@ -167,6 +167,7 @@ pub enum Error {
 		request_id: Option<RequestId>,
 		version: String,
 		include_supported_versions: bool,
+		modern_only: bool,
 	},
 	#[error("MCP protocol version header/body mismatch")]
 	VersionMismatch(Option<RequestId>),
@@ -344,6 +345,7 @@ impl Error {
 				request_id: Some(id),
 				version,
 				include_supported_versions,
+				modern_only,
 			} => (
 				id.clone(),
 				ErrorData {
@@ -354,7 +356,9 @@ impl Error {
 					// correlation holds only when the upstream advertises a superset of this list.
 					data: include_supported_versions.then(|| {
 						serde_json::json!({
-							"supported": ProtocolVersion::KNOWN_VERSIONS,
+							"supported": ProtocolVersion::KNOWN_VERSIONS.iter()
+								.filter(|version| !modern_only || is_modern_version(version))
+								.collect::<Vec<_>>(),
 							"requested": version,
 						})
 					}),
@@ -425,11 +429,12 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 	let was_tool_call =
 		parsed.as_ref().and_then(streamablehttp::message_method) == Some(CallToolRequestMethod::VALUE);
 	// runs earlier than the ctx stuff so tried to rederive is modern here. Perhaps there is a better place to centralize this call though.
-	let downstream_modern = streamablehttp::protocol_version_header(req.headers(), None, false)
-		.ok()
-		.flatten()
-		.as_ref()
-		.is_some_and(is_modern_version);
+	let downstream_modern =
+		streamablehttp::protocol_version_header(req.headers(), None, false, false)
+			.ok()
+			.flatten()
+			.as_ref()
+			.is_some_and(is_modern_version);
 	let converted = match err {
 		ProxyError::RateLimitExceeded {
 			limit,

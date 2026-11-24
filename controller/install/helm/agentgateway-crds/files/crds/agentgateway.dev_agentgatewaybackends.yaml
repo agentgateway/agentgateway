@@ -10352,6 +10352,18 @@ spec:
               mcp:
                 description: MCP backend.
                 properties:
+                  compatibility:
+                    description: |-
+                      Client-facing MCP compatibility profile.
+
+                      - `Standard` (default) serves Streamable HTTP and accepts the initialize handshake.
+                      - `Legacy` also serves legacy HTTP+SSE.
+                      - `Modern` requires MCP 2026-07-28 or newer and uses stateless operation.
+                    enum:
+                    - Legacy
+                    - Modern
+                    - Standard
+                    type: string
                   failureMode:
                     description: |-
                       Behavior when MCP targets fail to initialize or
@@ -10378,7 +10390,7 @@ spec:
                   sessionRouting:
                     description: |-
                       MCP session routing behavior.
-                      Defaults to `Stateful` if not set.
+                      Defaults to `Stateful` for Legacy and Standard compatibility.
                     enum:
                     - Stateful
                     - Stateless
@@ -12985,6 +12997,10 @@ spec:
                 required:
                 - targets
                 type: object
+                x-kubernetes-validations:
+                - message: Modern compatibility requires stateless operation
+                  rule: '!has(self.compatibility) || self.compatibility != ''Modern''
+                    || !has(self.sessionRouting) || self.sessionRouting == ''Stateless'''
               policies:
                 description: |-
                   Policies for communicating with this backend. Policies may also be set

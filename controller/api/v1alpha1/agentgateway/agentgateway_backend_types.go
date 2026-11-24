@@ -628,6 +628,7 @@ type AWSGuardrailConfig struct {
 }
 
 // MCP backend settings.
+// +kubebuilder:validation:XValidation:rule="!has(self.compatibility) || self.compatibility != 'Modern' || !has(self.sessionRouting) || self.sessionRouting == 'Stateless'",message="Modern compatibility requires stateless operation"
 type MCPBackend struct {
 	// MCP targets to use for this backend. Policies
 	// targeting MCP targets must use `targetRefs[].sectionName` to select
@@ -642,9 +643,17 @@ type MCPBackend struct {
 	Targets []McpTargetSelector `json:"targets"`
 
 	// MCP session routing behavior.
-	// Defaults to `Stateful` if not set.
+	// Defaults to `Stateful` for Legacy and Standard compatibility.
 	// +optional
 	SessionRouting SessionRouting `json:"sessionRouting,omitempty"`
+
+	// Client-facing MCP compatibility profile.
+	//
+	// - `Standard` (default) serves Streamable HTTP and accepts the initialize handshake.
+	// - `Legacy` also serves legacy HTTP+SSE.
+	// - `Modern` requires MCP 2026-07-28 or newer and uses stateless operation.
+	// +optional
+	Compatibility McpCompatibility `json:"compatibility,omitempty"`
 
 	// Behavior when MCP targets fail to initialize or
 	// become unavailable at runtime. `FailOpen` skips failed targets and
@@ -662,6 +671,15 @@ type MCPBackend struct {
 	// +optional
 	PrefixMode PrefixMode `json:"prefixMode,omitempty"`
 }
+
+const (
+	McpCompatibilityLegacy   McpCompatibility = "Legacy"
+	McpCompatibilityStandard McpCompatibility = "Standard"
+	McpCompatibilityModern   McpCompatibility = "Modern"
+)
+
+// +k8s:enum
+type McpCompatibility string
 
 const (
 	// Conditional prefixes tool and prompt names only when there are multiple targets.

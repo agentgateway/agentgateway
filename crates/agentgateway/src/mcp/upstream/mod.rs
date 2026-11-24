@@ -654,6 +654,10 @@ impl UpstreamGroup {
 			.any(|u| matches!(u.as_ref(), Upstream::McpStdio(_) | Upstream::McpSSE(_)))
 	}
 
+	pub(crate) fn compatibility(&self) -> crate::types::agent::McpCompatibility {
+		self.backend.compatibility
+	}
+
 	pub(crate) fn record_extensions(&self, target: &str, extensions: Option<&ExtensionCapabilities>) {
 		let Some(ext) = extensions else {
 			return;

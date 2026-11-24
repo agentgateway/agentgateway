@@ -24,8 +24,8 @@ use crate::test_helpers::proxymock::{
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{
-	BackendTrafficPolicy, FrontendPolicy, McpAuthenticationMode, McpServerOverrides, PolicyTarget,
-	TargetedPolicy,
+	BackendTrafficPolicy, FrontendPolicy, McpAuthenticationMode, McpCompatibility,
+	McpServerOverrides, PolicyTarget, TargetedPolicy,
 };
 use crate::*;
 
@@ -124,9 +124,81 @@ async fn stream_to_stream_single() {
 }
 
 #[tokio::test]
+async fn compatibility_profiles_gate_downstream_transport_and_protocol() {
+	use ::http::StatusCode;
+
+	let mock = mock_modern_streamable_http_server().await;
+	let (bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let sse = format!("http://{io}/sse");
+	let mcp = format!("http://{io}/mcp");
+	let initialize = mcp_initialize_body();
+	let connect_sse = || {
+		client
+			.get(&sse)
+			.header("accept", "text/event-stream")
+			.send()
+	};
+
+	assert_eq!(connect_sse().await.unwrap().status(), StatusCode::NOT_FOUND);
+	let response = mcp_json_post(&client, &mcp, &initialize)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), StatusCode::OK);
+	assert!(response.headers().contains_key("mcp-session-id"));
+
+	let bind = bind.with_mcp_compatibility(mock.addr, McpCompatibility::Legacy);
+	assert_eq!(connect_sse().await.unwrap().status(), StatusCode::OK);
+
+	let _bind = bind.with_mcp_compatibility(mock.addr, McpCompatibility::Modern);
+	assert_eq!(connect_sse().await.unwrap().status(), StatusCode::NOT_FOUND);
+	assert_eq!(
+		mcp_json_post(&client, &mcp, &initialize)
+			.send()
+			.await
+			.unwrap()
+			.status(),
+		StatusCode::BAD_REQUEST,
+	);
+	assert_eq!(
+		client.get(&mcp).send().await.unwrap().status(),
+		StatusCode::METHOD_NOT_ALLOWED,
+	);
+	let discover = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "server/discover",
+		"params": {"_meta": modern_meta()}
+	});
+	let discover = || {
+		mcp_json_post(&client, &mcp, &discover)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", "server/discover")
+	};
+	let response = discover().send().await.unwrap();
+	assert_eq!(response.status(), StatusCode::OK);
+	assert!(!response.headers().contains_key("mcp-session-id"));
+	assert_eq!(
+		read_response_message(response).await["result"]["supportedVersions"],
+		serde_json::json!(["2026-07-28"]),
+	);
+	assert_eq!(
+		discover()
+			.header("mcp-session-id", "old-session")
+			.send()
+			.await
+			.unwrap()
+			.status(),
+		StatusCode::BAD_REQUEST,
+	);
+}
+
+#[tokio::test]
 async fn sse_to_stream_single() {
 	let mock = mock_streamable_http_server(true).await;
-	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let (bind, io) = setup_proxy(&mock, true, false).await;
+	let _bind = bind.with_mcp_compatibility(mock.addr, McpCompatibility::Legacy);
 	let client = mcp_sse_client(io).await;
 	standard_sse_assertions(client).await;
 }
@@ -142,7 +214,8 @@ async fn stream_to_sse_single() {
 #[tokio::test]
 async fn sse_to_sse_single() {
 	let mock = mock_sse_server().await;
-	let (_bind, io) = setup_proxy(&mock, true, true).await;
+	let (bind, io) = setup_proxy(&mock, true, true).await;
+	let _bind = bind.with_mcp_compatibility(mock.addr, McpCompatibility::Legacy);
 	let client = mcp_sse_client(io).await;
 	standard_sse_assertions(client).await;
 }
@@ -3157,7 +3230,8 @@ async fn legacy_sse_post_oversized_body_returns_413_with_configured_limit() {
 	let limit = 64usize;
 	let body = mcp_initialize_body();
 	assert!(serde_json::to_vec(&body).unwrap().len() > limit);
-	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let (t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let _t = t.with_mcp_compatibility(mock.addr, McpCompatibility::Legacy);
 	let client = reqwest::Client::new();
 	let url = format!("http://{io}/sse?sessionId=nonexistent");
 
@@ -3170,7 +3244,8 @@ async fn legacy_sse_post_oversized_body_returns_413_with_configured_limit() {
 #[tokio::test]
 async fn legacy_sse_post_malformed_body_within_limit_returns_400() {
 	let mock = mock_streamable_http_server(true).await;
-	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, 64).await;
+	let (t, io) = setup_proxy_with_max_buffer_size(&mock, 64).await;
+	let _t = t.with_mcp_compatibility(mock.addr, McpCompatibility::Legacy);
 	let client = reqwest::Client::new();
 	let url = format!("http://{io}/sse?sessionId=nonexistent");
 
@@ -3194,7 +3269,8 @@ async fn legacy_sse_post_body_at_configured_limit_reaches_session_lookup() {
 	let mock = mock_streamable_http_server(true).await;
 	let body = mcp_initialize_body();
 	let limit = serde_json::to_vec(&body).unwrap().len();
-	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let (t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let _t = t.with_mcp_compatibility(mock.addr, McpCompatibility::Legacy);
 	let client = reqwest::Client::new();
 	let url = format!("http://{io}/sse?sessionId=nonexistent");
 
@@ -5334,7 +5410,8 @@ async fn discover_error_is_recorded_in_access_log() {
 async fn legacy_sse_tool_call_exposes_arguments_without_terminal_payloads() {
 	let mock = mock_streamable_http_server(true).await;
 	let trace_id = format!("mcp-e2e-sse-{}", uuid::Uuid::new_v4());
-	let (_t, io) = setup_access_log_mcp_proxy(&mock).await;
+	let (t, io) = setup_access_log_mcp_proxy(&mock).await;
+	let _t = t.with_mcp_compatibility(mock.addr, McpCompatibility::Legacy);
 	let client = mcp_sse_client(io).await;
 
 	let result = client

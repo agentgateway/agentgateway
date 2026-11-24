@@ -2146,6 +2146,14 @@ message MCPBackend {
   // dead connection and is dropped by intermediaries such as load balancers
   // and API gateways.
   optional google.protobuf.Duration sse_keep_alive = 6;
+
+  enum Compatibility {
+    STANDARD = 0;
+    LEGACY = 1;
+    MODERN = 2;
+  }
+  // Client-facing transports and protocol revisions.
+  Compatibility compatibility = 7;
 }
 
 message MCPTarget {

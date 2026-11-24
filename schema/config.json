@@ -98,7 +98,7 @@
       ]
     },
     "mcp": {
-      "description": "mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be\nserved under the attached `gateways` at /mcp and /sse.\nAll MCP servers listed will be served as a single virtual MCP server.",
+      "description": "mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be\nserved under the attached `gateways` at /mcp. Legacy compatibility also serves /sse.\nAll MCP servers listed will be served as a single virtual MCP server.",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalSimpleMcpConfig"
@@ -9174,7 +9174,19 @@
           }
         },
         "statefulMode": {
-          "$ref": "#/$defs/McpStatefulMode"
+          "description": "Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpStatefulMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compatibility": {
+          "description": "Client-facing compatibility profile. Defaults to Standard.",
+          "$ref": "#/$defs/McpCompatibility"
         },
         "prefixMode": {
           "description": "How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).",
@@ -9514,6 +9526,26 @@
       "enum": [
         "stateless",
         "stateful"
+      ]
+    },
+    "McpCompatibility": {
+      "description": "Client-facing MCP transports and protocol revisions.",
+      "oneOf": [
+        {
+          "description": "Serve Streamable HTTP and legacy HTTP+SSE.",
+          "type": "string",
+          "const": "Legacy"
+        },
+        {
+          "description": "Serve Streamable HTTP, including clients that use the initialize handshake.",
+          "type": "string",
+          "const": "Standard"
+        },
+        {
+          "description": "Serve Streamable HTTP with MCP 2026-07-28 or newer.",
+          "type": "string",
+          "const": "Modern"
+        }
       ]
     },
     "McpPrefixMode": {
@@ -13922,7 +13954,19 @@
           }
         },
         "statefulMode": {
-          "$ref": "#/$defs/McpStatefulMode"
+          "description": "Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpStatefulMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compatibility": {
+          "description": "Client-facing compatibility profile. Defaults to Standard.",
+          "$ref": "#/$defs/McpCompatibility"
         },
         "prefixMode": {
           "description": "How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).",
@@ -13980,7 +14024,7 @@
           ]
         },
         "endpoints": {
-          "description": "endpoints serves MCP servers under their own paths. Endpoints inherit the top-level settings and\n`policies`; a policy set on an endpoint replaces the top-level policy of the same type, except\n`authorization` and `mcpAuthorization`, whose rules from both apply. The top-level\n`targets` are the targets of the `/mcp` endpoint, which also serves `/sse`; list an endpoint with\npath `/mcp` to give it its own settings or policies. Requires `gateways`.",
+          "description": "endpoints serves MCP servers under their own paths. Endpoints inherit the top-level settings and\n`policies`; a policy set on an endpoint replaces the top-level policy of the same type, except\n`authorization` and `mcpAuthorization`, whose rules from both apply. The top-level\n`targets` are the targets of the `/mcp` endpoint. List an endpoint with\npath `/mcp` to give it its own settings or policies. Requires `gateways`.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalMcpEndpoint"
@@ -14007,6 +14051,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/McpStatefulMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compatibility": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpCompatibility"
             },
             {
               "type": "null"
@@ -14503,7 +14557,19 @@
           "maximum": 65535
         },
         "statefulMode": {
-          "$ref": "#/$defs/McpStatefulMode"
+          "description": "Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpStatefulMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compatibility": {
+          "description": "Client-facing compatibility profile. Defaults to Standard.",
+          "$ref": "#/$defs/McpCompatibility"
         },
         "prefixMode": {
           "description": "How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).",
@@ -14551,7 +14617,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "`mcp.gateways`, `mcp.port`, `mcp.statefulMode`, `mcp.prefixMode`, `mcp.failureMode`, `mcp.sseKeepAlive`, `mcp.dnsRebindingProtection`, `mcp.server`. ID: `default`."
+      "description": "`mcp.gateways`, `mcp.port`, `mcp.statefulMode`, `mcp.compatibility`, `mcp.prefixMode`, `mcp.failureMode`, `mcp.sseKeepAlive`, `mcp.dnsRebindingProtection`, `mcp.server`. ID: `default`."
     },
     "traffic.gateway": {
       "type": "object",

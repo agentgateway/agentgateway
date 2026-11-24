@@ -38,9 +38,9 @@ use crate::transport::tls;
 use crate::types::agent::{
 	Backend, BackendReference, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind,
 	BindKey, BindProtocol, BindSnapshot, FrontendPolicy, Listener, ListenerProtocol, ListenerSet,
-	ListenerTarget, McpBackend, McpTarget, McpTargetSpec, PathMatch, PolicyInheritance, PolicyPhase,
-	PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
-	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	ListenerTarget, McpBackend, McpCompatibility, McpTarget, McpTargetSpec, PathMatch,
+	PolicyInheritance, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference,
+	RouteMatch, RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, Target, TargetedPolicy,
 };
 use crate::types::loadbalancer::EndpointSet;
@@ -714,6 +714,25 @@ impl TestBind {
 		self.with_mcp_backend_policies(b, stateful, legacy_sse, Default::default())
 	}
 
+	pub fn with_mcp_compatibility(self, addr: SocketAddr, compatibility: McpCompatibility) -> Self {
+		let mut backend = self
+			.pi
+			.stores
+			.read_binds()
+			.backend(&strng::format!("/{addr}"))
+			.unwrap()
+			.as_ref()
+			.clone();
+		let Backend::MCP(_, mcp) = &mut backend.backend else {
+			panic!("expected MCP backend");
+		};
+		mcp.compatibility = compatibility;
+		if compatibility == McpCompatibility::Modern {
+			mcp.stateful = false;
+		}
+		self.with_raw_backend(backend)
+	}
+
 	pub fn with_mcp_backend_policies(
 		self,
 		b: SocketAddr,
@@ -770,6 +789,7 @@ impl TestBind {
 					},
 				})],
 				stateful,
+				compatibility: Default::default(),
 				prefix_mode: Default::default(),
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
@@ -915,6 +935,7 @@ impl TestBind {
 					})
 					.collect_vec(),
 				stateful,
+				compatibility: Default::default(),
 				prefix_mode,
 				failure_mode,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,

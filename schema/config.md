@@ -714,7 +714,8 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].condition`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
-|`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
+|`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.<br>Possible values: `stateless`, `stateful`.|
+|`binds[].listeners[].routes[].backends[].mcp.compatibility`|enum|Client-facing compatibility profile. Defaults to Standard.<br>Possible values: `Legacy`, `Standard`, `Modern`.|
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
@@ -2281,7 +2282,8 @@
 |`backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`backends[].mcp.targets[].condition`|string||
 |`backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
-|`backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
+|`backends[].mcp.statefulMode`|enum|Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.<br>Possible values: `stateless`, `stateful`.|
+|`backends[].mcp.compatibility`|enum|Client-facing compatibility profile. Defaults to Standard.<br>Possible values: `Legacy`, `Standard`, `Modern`.|
 |`backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
@@ -3424,7 +3426,8 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`routeGroups[].routes[].backends[].mcp.targets[].condition`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
-|`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
+|`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.<br>Possible values: `stateless`, `stateful`.|
+|`routeGroups[].routes[].backends[].mcp.compatibility`|enum|Client-facing compatibility profile. Defaults to Standard.<br>Possible values: `Legacy`, `Standard`, `Modern`.|
 |`routeGroups[].routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
@@ -5058,7 +5061,8 @@
 |`routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`routes[].backends[].mcp.targets[].condition`|string||
 |`routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
-|`routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
+|`routes[].backends[].mcp.statefulMode`|enum|Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.<br>Possible values: `stateless`, `stateful`.|
+|`routes[].backends[].mcp.compatibility`|enum|Client-facing compatibility profile. Defaults to Standard.<br>Possible values: `Legacy`, `Standard`, `Modern`.|
 |`routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
@@ -6220,7 +6224,7 @@
 |`llm.policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
 |`llm.policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
 |`llm.policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
-|`mcp`|object|mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be<br>served under the attached `gateways` at /mcp and /sse.<br>All MCP servers listed will be served as a single virtual MCP server.|
+|`mcp`|object|mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be<br>served under the attached `gateways` at /mcp. Legacy compatibility also serves /sse.<br>All MCP servers listed will be served as a single virtual MCP server.|
 |`mcp.gateways`|string|gateways attaches the MCP routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>When omitted and a gateway named `default` exists, the MCP routes attach to it unless port is set.|
 |`mcp.port`|integer|port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.|
 |`mcp.targets`|[]object|MCP server targets to multiplex together.|
@@ -6256,7 +6260,8 @@
 |`mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`mcp.targets[].condition`|string||
 |`mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
-|`mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
+|`mcp.statefulMode`|enum|Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.<br>Possible values: `stateless`, `stateful`.|
+|`mcp.compatibility`|enum|Client-facing compatibility profile. Defaults to Standard.<br>Possible values: `Legacy`, `Standard`, `Modern`.|
 |`mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
@@ -6744,7 +6749,7 @@
 |`mcp.policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`mcp.policies.delay`|object|Inject artificial latency before forwarding requests.|
 |`mcp.policies.delay.duration`|string|Artificial latency injected before the request is forwarded to the backend. Either a duration<br>string such as `2s`, or a CEL expression evaluated against the request that returns a duration<br>(e.g. `duration("500ms")`) or a number interpreted as milliseconds (e.g.<br>`random() < 0.1 ? 500 : 0` for probabilistic delay, or `int(random() * 500)` for jitter). A<br>non-positive result injects no delay.|
-|`mcp.endpoints`|[]object|endpoints serves MCP servers under their own paths. Endpoints inherit the top-level settings and<br>`policies`; a policy set on an endpoint replaces the top-level policy of the same type, except<br>`authorization` and `mcpAuthorization`, whose rules from both apply. The top-level<br>`targets` are the targets of the `/mcp` endpoint, which also serves `/sse`; list an endpoint with<br>path `/mcp` to give it its own settings or policies. Requires `gateways`.|
+|`mcp.endpoints`|[]object|endpoints serves MCP servers under their own paths. Endpoints inherit the top-level settings and<br>`policies`; a policy set on an endpoint replaces the top-level policy of the same type, except<br>`authorization` and `mcpAuthorization`, whose rules from both apply. The top-level<br>`targets` are the targets of the `/mcp` endpoint. List an endpoint with<br>path `/mcp` to give it its own settings or policies. Requires `gateways`.|
 |`mcp.endpoints[].path`|string|path the endpoint is served under, for example `/eng/mcp`. Clients connect with Streamable HTTP.|
 |`mcp.endpoints[].targets`|[]object|MCP server targets to multiplex together.|
 |`mcp.endpoints[].targets[].sse`|object|Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.|
@@ -6780,6 +6785,7 @@
 |`mcp.endpoints[].targets[].condition`|string||
 |`mcp.endpoints[].targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`mcp.endpoints[].statefulMode`|enum|Possible values: `stateless`, `stateful`.|
+|`mcp.endpoints[].compatibility`|enum|Possible values: `Legacy`, `Standard`, `Modern`.|
 |`mcp.endpoints[].prefixMode`|enum|Possible values: `conditional`, `always`, `never`.|
 |`mcp.endpoints[].failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`mcp.endpoints[].sseKeepAlive`|string||
@@ -10778,7 +10784,7 @@ Values accepted by the `/api/config/resources/{kind}` API. The JSON schema for e
 |`mcp.target`|An item of `mcp.targets[]`|`name`|Yes|
 |`mcp.policy`|`mcp.policies.<id>`|Field name|Use item `PUT`|
 |`llm.settings`|`llm.gateways`, `llm.port`, `llm.tls`|`default`|Yes|
-|`mcp.settings`|`mcp.gateways`, `mcp.port`, `mcp.statefulMode`, `mcp.prefixMode`, `mcp.failureMode`, `mcp.sseKeepAlive`, `mcp.dnsRebindingProtection`, `mcp.server`|`default`|Yes|
+|`mcp.settings`|`mcp.gateways`, `mcp.port`, `mcp.statefulMode`, `mcp.compatibility`, `mcp.prefixMode`, `mcp.failureMode`, `mcp.sseKeepAlive`, `mcp.dnsRebindingProtection`, `mcp.server`|`default`|Yes|
 |`traffic.gateway`|`gateways.<id>` with a required `name` field|`name`|Yes|
 |`traffic.route`|An item of `routes[]` with a required `name` field|`name`|Yes|
 |`traffic.tcpRoute`|An item of `tcpRoutes[]` with a required `name` field|`name`|Yes|

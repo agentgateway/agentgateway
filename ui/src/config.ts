@@ -43,6 +43,7 @@ export const mcpSettingsFields = [
 	'gateways',
 	'port',
 	'statefulMode',
+	'compatibility',
 	'prefixMode',
 	'failureMode',
 	'sseKeepAlive',

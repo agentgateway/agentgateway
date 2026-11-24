@@ -27,6 +27,7 @@ const HANDLE_POST_FUTURE_SIZE: usize = 4 * 1024;
 pub struct StreamableHttpServerConfig {
 	/// If true, the server will create a session for each request and keep it alive.
 	pub stateful_mode: bool,
+	pub modern_only: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +88,9 @@ impl StreamableHttpService {
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		let method = request.method().clone();
+		if self.config.modern_only && method != http::Method::POST {
+			return Err(ProxyError::MethodNotAllowed);
+		}
 
 		match (method, self.config.stateful_mode) {
 			(http::Method::POST, _) => {
@@ -157,8 +161,12 @@ impl StreamableHttpService {
 		};
 		mcp::validate_client_message(&message)?;
 		let request_id = request_id(&message);
-		let protocol = validate_request_protocol(&part.headers, &message, request_id.clone())?;
+		let protocol =
+			validate_request_protocol(&part.headers, &message, request_id, self.config.modern_only)?;
 		validate_standard_headers(&part.headers, &message, &protocol)?;
+		if protocol.is_modern() && part.headers.contains_key(HEADER_SESSION_ID) {
+			return mcp::Error::InvalidSessionIdHeader.into();
+		}
 		part.extensions.insert(protocol.clone());
 		// Keep the original HTTP bytes for detached authorization and guardrail CEL.
 		// They must not be reconstructed from the subsequently rewritten MCP message.
@@ -175,9 +183,6 @@ impl StreamableHttpService {
 			.and_then(|v| v.to_str().ok());
 
 		if let Some(session_id) = session_id {
-			if !protocol.uses_sessions() {
-				return mcp::Error::InvalidSessionIdHeader.into();
-			}
 			let Some(mut session) = self
 				.session_manager
 				.get_or_resume_session(session_id, inputs, &ctx)?
@@ -452,6 +457,7 @@ pub(crate) fn protocol_version_header(
 	headers: &::http::HeaderMap,
 	request_id: Option<RequestId>,
 	include_supported_versions: bool,
+	modern_only: bool,
 ) -> Result<Option<ProtocolVersion>, ProxyError> {
 	let Some(value) = headers.get(HEADER_MCP_PROTOCOL_VERSION) else {
 		return Ok(None);
@@ -462,13 +468,14 @@ pub(crate) fn protocol_version_header(
 	// This is the gateway-owned version set used by the transport gate and version errors.
 	let version = ProtocolVersion::KNOWN_VERSIONS
 		.iter()
-		.find(|version| version.as_str() == value)
+		.find(|version| version.as_str() == value && (!modern_only || is_modern_version(version)))
 		.cloned()
 		.ok_or_else(|| {
 			ProxyError::MCP(mcp::Error::UnsupportedVersion {
 				request_id,
 				version: value.to_string(),
 				include_supported_versions,
+				modern_only,
 			})
 		})?;
 	Ok(Some(version))
@@ -483,15 +490,34 @@ fn validate_request_protocol(
 	headers: &::http::HeaderMap,
 	message: &ClientJsonRpcMessage,
 	request_id: Option<RequestId>,
+	modern_only: bool,
 ) -> Result<RequestProtocol, ProxyError> {
 	let is_initialize = matches!(
 		message,
 		ClientJsonRpcMessage::Request(request)
 			if matches!(request.request, ClientRequest::InitializeRequest(_))
 	);
-	let header_version = protocol_version_header(headers, request_id.clone(), !is_initialize)?;
+	let header_version =
+		protocol_version_header(headers, request_id.clone(), !is_initialize, modern_only)?;
+	if modern_only && header_version.is_none() {
+		return Err(
+			mcp::Error::InvalidParams(
+				request_id,
+				format!(
+					"Mcp-Protocol-Version {} or newer is required",
+					ProtocolVersion::STANDARD_HEADERS
+				),
+			)
+			.into(),
+		);
+	}
 	let body_version = message_protocol_version(message);
 
+	if modern_only && message_method(message) == Some("notifications/initialized") {
+		return Err(
+			mcp::Error::MethodNotFound(request_id, "notifications/initialized".to_string()).into(),
+		);
+	}
 	// This check uses only the header version because modern clients must send it and the
 	// body version is reconciled later.
 	if header_version.as_ref().is_some_and(is_modern_version)
@@ -546,7 +572,7 @@ fn validate_request_protocol(
 /// fallback only classifies bodies the typed parse cannot represent.
 /// Header-only modern detection: body `_meta` is unreadable once the typed parse has failed.
 fn unknown_method_error(headers: &::http::HeaderMap, bytes: &[u8]) -> Option<mcp::Error> {
-	if !protocol_version_header(headers, None, true)
+	if !protocol_version_header(headers, None, true, false)
 		.ok()?
 		.is_some_and(|v| is_modern_version(&v))
 	{
@@ -616,7 +642,7 @@ fn accepted_response() -> Response {
 }
 
 fn reject_modern_session_request(headers: &::http::HeaderMap) -> Result<(), ProxyError> {
-	if let Some(version) = protocol_version_header(headers, None, true)?
+	if let Some(version) = protocol_version_header(headers, None, true, false)?
 		&& is_modern_version(&version)
 	{
 		return Err(
@@ -624,6 +650,7 @@ fn reject_modern_session_request(headers: &::http::HeaderMap) -> Result<(), Prox
 				request_id: None,
 				version: version.to_string(),
 				include_supported_versions: true,
+				modern_only: false,
 			}
 			.into(),
 		);
