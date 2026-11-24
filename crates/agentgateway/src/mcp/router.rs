@@ -17,8 +17,8 @@ use crate::proxy::{ProxyError, ProxyResponseReason};
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
-	BackendTargetRef, McpBackend, McpPrefixMode, McpServerOverrides, McpTargetSpec, ResourceName,
-	SimpleBackend, SimpleBackendReference,
+	BackendTargetRef, McpBackend, McpCompatibility, McpPrefixMode, McpServerOverrides, McpTargetSpec,
+	ResourceName, SimpleBackend, SimpleBackendReference,
 };
 use crate::{ProxyInputs, cel, mcp};
 
@@ -81,6 +81,10 @@ impl App {
 		mut req: MustSnapshot<'_>,
 		mut log: &mut RequestLog,
 	) -> Result<Response, ProxyError> {
+		let legacy_sse = req.uri().path() == "/sse";
+		if legacy_sse && backend.compatibility != McpCompatibility::Legacy {
+			return Err(ProxyError::RouteNotFound);
+		}
 		let backends = {
 			let binds = self.state.read_binds();
 			let nt = backend
@@ -115,6 +119,7 @@ impl App {
 			McpBackendGroup {
 				targets: nt,
 				stateful: backend.stateful,
+				compatibility: backend.compatibility,
 				prefix_mode: backend.prefix_mode,
 				failure_mode: backend.failure_mode,
 				session_idle_ttl: backend.session_idle_ttl,
@@ -179,9 +184,7 @@ impl App {
 			log.request_processing_duration = Some(log.request_processing_start.elapsed());
 		}
 		let upstream_start = Instant::now();
-		let mut response = if req.uri().path() == "/sse" {
-			// Legacy handling
-			// Assume this is streamable HTTP otherwise
+		let mut response = if legacy_sse {
 			let sse = LegacySSEService::new(sessions);
 			Box::pin(
 				sse
@@ -203,6 +206,7 @@ impl App {
 				sessions,
 				StreamableHttpServerConfig {
 					stateful_mode: backend.stateful,
+					modern_only: backend.compatibility == McpCompatibility::Modern,
 				},
 			);
 			Box::pin(
@@ -244,6 +248,7 @@ impl App {
 pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
+	pub compatibility: McpCompatibility,
 	pub prefix_mode: McpPrefixMode,
 	pub failure_mode: FailureMode,
 	pub session_idle_ttl: Duration,
@@ -256,6 +261,7 @@ impl Default for McpBackendGroup {
 		Self {
 			targets: vec![],
 			stateful: true,
+			compatibility: McpCompatibility::default(),
 			prefix_mode: McpPrefixMode::default(),
 			failure_mode: crate::mcp::FailureMode::default(),
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,

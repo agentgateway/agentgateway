@@ -519,6 +519,7 @@ function McpSettings(props: {
 	const inheritLabel = (value?: string | null) => (value ? `Inherit (${value})` : 'Inherit');
 	const inheritDescription = 'Use the shared MCP setting.';
 	const overrideHint = props.endpoint ? 'Overrides the shared MCP setting.' : undefined;
+	const modern = (props.mcp?.compatibility ?? shared?.compatibility) === 'Modern';
 	const [statefulMode, setStatefulMode] = useState<McpStatefulMode | 'inherit'>(
 		props.mcp?.statefulMode ?? (props.endpoint ? 'inherit' : 'stateful')
 	);
@@ -547,6 +548,7 @@ function McpSettings(props: {
 					port: binding.gateways != null && binding.gateways.length > 0 ? null : binding.port
 				}),
 		statefulMode: statefulMode === 'inherit' ? null : statefulMode,
+		compatibility: props.mcp?.compatibility,
 		prefixMode: prefixMode === 'inherit' ? null : prefixMode,
 		failureMode: failureMode === 'inherit' ? null : failureMode,
 		sseKeepAlive: sseKeepAlive.trim() || null,
@@ -625,7 +627,7 @@ function McpSettings(props: {
 					>
 						<EnumSelector
 							ariaLabel="State mode"
-							value={statefulMode}
+							value={modern ? 'stateless' : statefulMode}
 							options={[
 								...(props.endpoint
 									? [
@@ -653,7 +655,7 @@ function McpSettings(props: {
 								'properties',
 								'statefulMode'
 							])}
-							disabled={props.readOnlyFields?.has('statefulMode')}
+							disabled={modern || props.readOnlyFields?.has('statefulMode')}
 							onChange={setStatefulMode}
 						/>
 					</FieldGroup>

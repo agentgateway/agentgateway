@@ -2331,9 +2331,12 @@ pub(crate) fn backend_with_policies_from_proto(
 					.iter()
 					.map(|t| mcp_target_from_proto(t, diagnostics).map(Arc::new))
 					.collect::<Result<Vec<_>, _>>()?,
-				stateful: match m.stateful_mode() {
-					proto::agent::mcp_backend::StatefulMode::Stateful => true,
-					proto::agent::mcp_backend::StatefulMode::Stateless => false,
+				stateful: m.compatibility() != proto::agent::mcp_backend::Compatibility::Modern
+					&& m.stateful_mode() == proto::agent::mcp_backend::StatefulMode::Stateful,
+				compatibility: match m.compatibility() {
+					proto::agent::mcp_backend::Compatibility::Standard => McpCompatibility::Standard,
+					proto::agent::mcp_backend::Compatibility::Legacy => McpCompatibility::Legacy,
+					proto::agent::mcp_backend::Compatibility::Modern => McpCompatibility::Modern,
 				},
 				prefix_mode: match m.prefix_mode() {
 					proto::agent::mcp_backend::PrefixMode::Always => McpPrefixMode::Always,
@@ -6415,6 +6418,7 @@ mod tests {
 				prefix_mode: proto::agent::mcp_backend::PrefixMode::Conditional as i32,
 				failure_mode: proto::agent::mcp_backend::FailureMode::FailClosed as i32,
 				sse_keep_alive,
+				compatibility: proto::agent::mcp_backend::Compatibility::Standard as i32,
 			})),
 			inline_policies: vec![],
 		}

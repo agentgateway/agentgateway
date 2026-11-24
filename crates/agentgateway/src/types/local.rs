@@ -29,9 +29,9 @@ use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
 	BackendWithPolicies, Bind, BindMode, BindProtocol, BindSnapshot, FrontendPolicy, HeaderMatch,
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
-	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode,
-	McpServerOverrides, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpCompatibility,
+	McpPrefixMode, McpServerOverrides, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget,
+	PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference,
 	RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName, ServerTLSConfig, SimpleBackend,
 	SimpleBackendReference, SimpleBackendReferenceWithPolicies, SimpleBackendWithPolicies,
 	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target,
@@ -426,7 +426,7 @@ pub struct LocalConfig {
 	#[serde(default)]
 	llm: Option<LocalLLMConfig>,
 	/// mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be
-	/// served under the attached `gateways` at /mcp and /sse.
+	/// served under the attached `gateways` at /mcp. Legacy compatibility also serves /sse.
 	/// All MCP servers listed will be served as a single virtual MCP server.
 	#[serde(default)]
 	mcp: Option<LocalSimpleMcpConfig>,
@@ -625,7 +625,7 @@ pub struct LocalSimpleMcpConfig {
 	/// endpoints serves MCP servers under their own paths. Endpoints inherit the top-level settings and
 	/// `policies`; a policy set on an endpoint replaces the top-level policy of the same type, except
 	/// `authorization` and `mcpAuthorization`, whose rules from both apply. The top-level
-	/// `targets` are the targets of the `/mcp` endpoint, which also serves `/sse`; list an endpoint with
+	/// `targets` are the targets of the `/mcp` endpoint. List an endpoint with
 	/// path `/mcp` to give it its own settings or policies. Requires `gateways`.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	endpoints: Vec<LocalMcpEndpoint>,
@@ -641,6 +641,8 @@ pub struct LocalMcpEndpoint {
 	targets: Vec<Arc<LocalMcpTarget>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	stateful_mode: Option<McpStatefulMode>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	compatibility: Option<McpCompatibility>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	prefix_mode: Option<McpPrefixMode>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1839,6 +1841,13 @@ impl LocalBackend {
 			LocalBackend::Internal(tgt) => vec![Backend::Internal(name, tgt.clone()).into()],
 			LocalBackend::Dynamic { target } => vec![Backend::Dynamic(name, target.clone()).into()],
 			LocalBackend::MCP(tgt) => {
+				if tgt.compatibility == McpCompatibility::Modern
+					&& matches!(tgt.stateful_mode, Some(McpStatefulMode::Stateful))
+				{
+					bail!("MCP Modern compatibility requires stateless operation");
+				}
+				let stateful = tgt.compatibility != McpCompatibility::Modern
+					&& !matches!(tgt.stateful_mode, Some(McpStatefulMode::Stateless));
 				if tgt.targets.len() <= 1 && tgt.targets.iter().any(|target| target.condition.is_some()) {
 					bail!("mcp target condition requires at least two configured targets");
 				}
@@ -1944,16 +1953,13 @@ impl LocalBackend {
 					};
 					targets.push(Arc::new(t));
 				}
-				let stateful = match &tgt.stateful_mode {
-					McpStatefulMode::Stateless => false,
-					McpStatefulMode::Stateful => true,
-				};
 				if let Some(server) = &tgt.server {
 					server.validate().map_err(Error::msg)?;
 				}
 				let m = McpBackend {
 					targets,
 					stateful,
+					compatibility: tgt.compatibility,
 					prefix_mode: tgt.prefix_mode.unwrap_or_default(),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
@@ -2018,8 +2024,16 @@ pub struct LocalMcpBackend {
 	/// MCP server targets to multiplex together.
 	#[serde(default)]
 	pub targets: Vec<Arc<LocalMcpTarget>>,
-	#[serde(default)]
-	pub stateful_mode: McpStatefulMode,
+	/// Session behavior. Defaults to stateful for Legacy and Standard. Modern uses stateless operation.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub stateful_mode: Option<McpStatefulMode>,
+	/// Client-facing MCP compatibility profile.
+	///
+	/// - `Standard` (default) serves Streamable HTTP and accepts the initialize handshake.
+	/// - `Legacy` also serves legacy HTTP+SSE.
+	/// - `Modern` requires MCP 2026-07-28 or newer and uses stateless operation.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub compatibility: McpCompatibility,
 	/// How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prefix_mode: Option<McpPrefixMode>,
@@ -2258,27 +2272,21 @@ fn default_matches() -> Vec<RouteMatch> {
 	}]
 }
 
-fn mcp_matches() -> Vec<RouteMatch> {
-	vec![
-		RouteMatch {
-			headers: vec![],
-			path: PathMatch::PathPrefix("/mcp".into()),
-			method: None,
-			query: vec![],
-		},
-		RouteMatch {
-			headers: vec![],
-			path: PathMatch::PathPrefix("/sse".into()),
-			method: None,
-			query: vec![],
-		},
-		RouteMatch {
-			headers: vec![],
-			path: PathMatch::PathPrefix("/.well-known".into()),
-			method: None,
-			query: vec![],
-		},
+fn mcp_matches(compatibility: McpCompatibility) -> Vec<RouteMatch> {
+	[
+		Some("/mcp"),
+		(compatibility == McpCompatibility::Legacy).then_some("/sse"),
+		Some("/.well-known"),
 	]
+	.into_iter()
+	.flatten()
+	.map(|path| RouteMatch {
+		headers: vec![],
+		path: PathMatch::PathPrefix(path.into()),
+		method: None,
+		query: vec![],
+	})
+	.collect()
 }
 
 fn ui_matches(oidc_redirect_path: Option<Strng>) -> Vec<RouteMatch> {
@@ -4304,6 +4312,7 @@ async fn convert_attached_mcp(
 			path,
 			targets,
 			stateful_mode,
+			compatibility,
 			prefix_mode,
 			failure_mode,
 			sse_keep_alive,
@@ -4319,6 +4328,7 @@ async fn convert_attached_mcp(
 			bail!("mcp endpoint path {path:?} must be a URL path starting with '/' and must not be '/'");
 		}
 		let path = strng::new(path);
+		let compatibility = compatibility.unwrap_or(shared_backend.compatibility);
 		if seen_paths.contains(&path) {
 			bail!("duplicate mcp endpoint path {path:?}");
 		}
@@ -4368,18 +4378,20 @@ async fn convert_attached_mcp(
 				kind: None,
 			},
 			hostnames: vec![],
-			// Legacy SSE clients reach the /mcp endpoint at /sse.
-			matches: [Some(path.as_str()), (path == "/mcp").then_some("/sse")]
-				.into_iter()
-				.flatten()
-				.flat_map(|p| {
-					[
-						prefix(p.to_string()),
-						prefix(format!("/.well-known/oauth-protected-resource{p}")),
-						prefix(format!("/.well-known/oauth-authorization-server{p}")),
-					]
-				})
-				.collect(),
+			matches: [
+				Some(path.as_str()),
+				(path == "/mcp" && compatibility == McpCompatibility::Legacy).then_some("/sse"),
+			]
+			.into_iter()
+			.flatten()
+			.flat_map(|p| {
+				[
+					prefix(p.to_string()),
+					prefix(format!("/.well-known/oauth-protected-resource{p}")),
+					prefix(format!("/.well-known/oauth-authorization-server{p}")),
+				]
+			})
+			.collect(),
 			backends: vec![RouteBackendReference {
 				weight: 1,
 				target: BackendReference::Backend(strng::format!("/{backend_name}")).into(),
@@ -4390,7 +4402,8 @@ async fn convert_attached_mcp(
 		});
 		let backend = LocalMcpBackend {
 			targets,
-			stateful_mode: stateful_mode.unwrap_or_else(|| shared_backend.stateful_mode.clone()),
+			stateful_mode: stateful_mode.or_else(|| shared_backend.stateful_mode.clone()),
+			compatibility,
 			prefix_mode: prefix_mode.or(shared_backend.prefix_mode),
 			failure_mode: failure_mode.or(shared_backend.failure_mode),
 			sse_keep_alive: sse_keep_alive.or(shared_backend.sse_keep_alive),
@@ -5430,7 +5443,7 @@ async fn convert_mcp_config(
 		},
 		hostnames: vec![],
 		matches: if shared_port {
-			mcp_matches()
+			mcp_matches(backend.compatibility)
 		} else {
 			default_matches()
 		},

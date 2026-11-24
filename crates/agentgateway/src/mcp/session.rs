@@ -102,6 +102,7 @@ impl Session {
 				ctx.request.headers(),
 				req_id.clone(),
 				true,
+				false,
 			)? {
 				client_info.protocol_version = protocol_version;
 			}

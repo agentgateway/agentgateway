@@ -33,7 +33,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
-use crate::types::agent::{McpPrefixMode, McpServerOverrides, ResourceName};
+use crate::types::agent::{McpCompatibility, McpPrefixMode, McpServerOverrides, ResourceName};
 
 const DELIMITER: &str = "_";
 
@@ -978,17 +978,21 @@ impl Relay {
 
 	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
 		let upstreams = self.upstreams.clone();
+		let modern_only = upstreams.compatibility() == McpCompatibility::Modern;
 		Box::new(move |s, _cel| {
-			// Single server: forward the upstream's advertised versions untouched. The gateway
-			// does no version translation, so an old-only upstream must surface as-is and let
-			// the client fall back to `initialize`. Multiplexed: advertise the intersection.
+			// Multiplexed endpoints advertise the intersection of upstream versions.
 			if !multiplexing {
 				let Some((_, result)) = s.into_iter().next() else {
 					return Err(incompatible_upstream_result("server/discover"));
 				};
-				let ServerResult::DiscoverResult(dr) = result else {
+				let ServerResult::DiscoverResult(mut dr) = result else {
 					return Err(incompatible_upstream_result("server/discover"));
 				};
+				if modern_only {
+					dr.supported_versions.retain(|version| {
+						mcp::is_modern_version(version) && ProtocolVersion::KNOWN_VERSIONS.contains(version)
+					});
+				}
 				// Cache hints describe the gateway's presented server, not the upstream.
 				// Gateway routing/backend config can change without client invalidation.
 				return Ok(
@@ -1000,6 +1004,9 @@ impl Relay {
 
 			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
 			let mut supported_versions = ProtocolVersion::KNOWN_VERSIONS.to_vec();
+			if modern_only {
+				supported_versions.retain(mcp::is_modern_version);
+			}
 			let mut upstream_extensions: HashMap<Strng, ExtensionCapabilities> = HashMap::new();
 			let mut notifications = UpstreamNotifications::default();
 			for (server_name, v) in s {

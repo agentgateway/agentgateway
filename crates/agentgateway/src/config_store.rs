@@ -494,10 +494,11 @@ pub(crate) struct PreparedResource {
 	pub value: Value,
 }
 
-pub(crate) const MCP_SETTINGS_FIELDS: [&str; 8] = [
+pub(crate) const MCP_SETTINGS_FIELDS: [&str; 9] = [
 	"gateways",
 	"port",
 	"statefulMode",
+	"compatibility",
 	"prefixMode",
 	"failureMode",
 	"sseKeepAlive",

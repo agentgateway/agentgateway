@@ -1954,10 +1954,28 @@ pub enum McpPrefixMode {
 	Never,
 }
 
+/// Client-facing MCP transports and protocol revisions.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum McpCompatibility {
+	/// Serve Streamable HTTP and legacy HTTP+SSE.
+	#[serde(rename = "Legacy")]
+	Legacy,
+	/// Serve Streamable HTTP, including clients that use the initialize handshake.
+	#[default]
+	#[serde(rename = "Standard")]
+	Standard,
+	/// Serve Streamable HTTP with MCP 2026-07-28 or newer.
+	#[serde(rename = "Modern")]
+	Modern,
+}
+
 #[apply(schema_ser_schema!)]
 pub struct McpBackend {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub compatibility: McpCompatibility,
 	pub prefix_mode: McpPrefixMode,
 	/// Behavior when one or more MCP targets fail to initialize or fail during fanout.
 	/// Defaults to `failClosed`.
