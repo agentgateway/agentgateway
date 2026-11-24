@@ -881,7 +881,10 @@ impl Gateway {
 			.ext::<TCPConnectionInfo>()
 			.expect("tcp info must be set");
 		let tls = stream.ext::<TLSConnectionInfo>();
-		let transport_protocol = if tls.is_some() {
+		let transport_protocol = if selected_listener
+			.as_ref()
+			.is_some_and(|l| l.protocol.is_https())
+		{
 			TransportProtocol::https
 		} else {
 			TransportProtocol::http

@@ -676,6 +676,11 @@ async fn apply_llm_request_policies(
 	})
 }
 
+/// Marks a request received on a listener that terminated HTTPS. Outer TLS (CONNECT, HBONE) carried
+/// onto an inner plaintext connection does not count.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct HttpsListener;
+
 #[derive(Clone)]
 pub struct HTTPProxy {
 	pub(super) bind_name: BindKey,
@@ -728,13 +733,10 @@ where
 
 impl HTTPProxy {
 	fn is_https(&self) -> bool {
-		matches!(
-			self
-				.selected_listener
-				.as_ref()
-				.map(|listener| &listener.protocol),
-			Some(ListenerProtocol::HTTPS(_))
-		)
+		self
+			.selected_listener
+			.as_ref()
+			.is_some_and(|l| l.protocol.is_https())
 	}
 
 	pub async fn proxy(&self, connection: Arc<Extension>, mut req: Request) -> Response {
@@ -747,12 +749,16 @@ impl HTTPProxy {
 			.expect("tcp connection must be set")
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		let is_https = self.is_https();
+		if is_https {
+			req.extensions_mut().insert(HttpsListener);
+		}
 		if connection
 			.copy::<ActorIdentity>(req.extensions_mut())
 			.is_some()
 		{
 			// Outer CONNECT TLS authenticates the actor but does not make inner HTTP HTTPS.
-			let protocol = if self.is_https() {
+			let protocol = if is_https {
 				EgressRequestProtocol::Https
 			} else {
 				EgressRequestProtocol::Http
