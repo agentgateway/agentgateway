@@ -91,6 +91,10 @@ info:
     "output_tokens": 275,
     "total_tokens": 288,
     "cached_input_tokens": 0,
-    "provider_model": "zai-glm-5-3"
+    "provider_model": "zai-glm-5-3",
+    "response_id": "83a905c2fe1e4ec8a2ce8dd5e0a3ec35",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

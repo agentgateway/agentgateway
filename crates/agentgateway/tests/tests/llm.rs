@@ -811,6 +811,8 @@ llm:
     provider: openAI
   - name: text-embedding-3-small
     provider: openAI
+  - name: gpt-decision
+    provider: openAI
   - name: gpt-image-2
     provider: openAI
   - name: claude-sonnet-4-5
@@ -818,6 +820,8 @@ llm:
   - name: gemini-2.5-flash
     provider: gemini
   - name: gemini-2.5-flash-image
+    provider: gemini
+  - name: gemini-decision-1
     provider: gemini
   - name: vertex/claude-sonnet-4-5
     provider: vertex
@@ -894,8 +898,8 @@ llm:
 	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
 		agentgateway::ModelCatalogSource::Inline {
 			inline: r#"{"metadata":{"generatedAt":"2099-01-01T00:00:00Z"},"providers":{
-				"openai":{"models":{"gpt-5.5":{},"text-embedding-3-small":{"endpoints":["/embeddings"]},"gpt-image-2":{"endpoints":["/images/generations","/images/edits"]}}},
-				"gcp.gemini":{"models":{"gemini-2.5-flash":{},"gemini-2.5-flash-image":{"endpoints":["/images/generations","/images/edits"]}}},
+				"openai":{"models":{"gpt-5.5":{},"text-embedding-3-small":{"endpoints":["/embeddings"]},"gpt-decision":{"endpoints":["/decisions"]},"gpt-image-2":{"endpoints":["/images/generations","/images/edits"]}}},
+				"gcp.gemini":{"models":{"gemini-2.5-flash":{},"gemini-2.5-flash-image":{"endpoints":["/images/generations","/images/edits"]},"gemini-decision-1":{"endpoints":[]}}},
 				"gcp.vertex_ai":{"models":{"gemini-embedding-001":{"endpoints":["/embeddings"]}}},
 				"aws.bedrock":{"models":{"anthropic.claude-sonnet-4-5":{"modalities":{"input":["text"],"output":["text"]}},"meta.llama3-70b-instruct-v1:0":{"modalities":{"input":["text"],"output":["text"]}},"amazon.titan-embed-text-v2:0":{}}},
 				"togetherai":{"models":{"FLUX.1-schnell":{"endpoints":["/images/generations","/images/edits"]}}}
@@ -2312,7 +2316,7 @@ async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
 }
 
 #[rstest::rstest]
-#[case::preserves_path(None, None, "/v1/messages?trace=repro")]
+#[case::drops_translated_query(None, None, "/v1/messages")]
 #[case::path_override(Some("/custom/chat/completions"), None, "/custom/chat/completions")]
 #[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses")]
 #[tokio::test]

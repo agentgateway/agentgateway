@@ -1,8 +1,16 @@
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
+import { Button } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { gatewayOptions } from '@/components/GatewayBindingEditor';
-import { Dropdown, FieldGroup, PageHeader, Panel, StatusBanner } from '@/components/Primitives';
+import {
+	ButtonLink,
+	Dropdown,
+	FieldGroup,
+	PageHeader,
+	Panel,
+	StatusBanner
+} from '@/components/Primitives';
 import { startupGatewayRefs } from '@/config';
 import {
 	useEffectiveGatewayConfig,
@@ -161,22 +169,19 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 
 				<div className="button-row">
 					{enabled ? (
-						<Link className="button primary" to={surface.destination}>
+						<ButtonLink color="primary" variant="solid" to={surface.destination}>
 							{surface.destinationLabel}
-						</Link>
+						</ButtonLink>
 					) : (
-						<button
-							className="button primary"
-							type="button"
+						<Button
+							type="primary"
 							disabled={loading || enableSurface.isPending}
 							onClick={() => void enable()}
 						>
 							Enable
-						</button>
+						</Button>
 					)}
-					<Link className="button" to="/">
-						Back to home
-					</Link>
+					<ButtonLink to="/">Back to home</ButtonLink>
 				</div>
 			</Panel>
 		</div>

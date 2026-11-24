@@ -301,6 +301,8 @@ pub enum ProviderState {
 	VertexGemini,
 	SystemOneDecisions(Arc<conversion::systemone::from_decisions::State>),
 	DecisionsSystemOne(Arc<conversion::systemone::from_systemone::State>),
+	GeminiSystemOne(Arc<conversion::gemini::from_systemone::State>),
+	GeminiDecisions(Arc<conversion::gemini::from_decisions::State>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
@@ -490,6 +492,14 @@ pub struct LLMResponse {
 	pub service_tier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub provider_model: Option<Strng>,
+	/// Underlying model that served the request, when the provider reports it out of band
+	/// (Azure `x-ms-served-model`). Preferred over `provider_model` for pricing.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub served_model: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub response_id: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub finish_reasons: Option<Vec<Strng>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -523,6 +533,21 @@ pub struct UsageLine {
 	pub cache_creation_1h_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_input_tokens: Option<u64>,
+}
+
+const MAX_FINISH_REASONS: usize = 128;
+
+impl LLMResponse {
+	pub fn set_finish_reason(&mut self, index: usize, reason: Strng) {
+		if index >= MAX_FINISH_REASONS {
+			return;
+		}
+		let reasons = self.finish_reasons.get_or_insert_default();
+		if reasons.len() <= index {
+			reasons.resize(index + 1, agent_core::strng::literal!("error"));
+		}
+		reasons[index] = reason;
+	}
 }
 
 /// Upper bounds for bucketing inter-chunk gaps before they're replayed into the
@@ -771,5 +796,53 @@ mod token_gap_summary_tests {
 			assert_eq!(count, 0);
 			assert_eq!(mean, 0.0);
 		}
+	}
+}
+
+#[cfg(test)]
+mod finish_reason_tests {
+	use agent_core::strng;
+
+	use super::*;
+
+	#[test]
+	fn unreported_positions_are_error() {
+		let mut response = LLMResponse::default();
+		response.set_finish_reason(1, strng::new("stop"));
+		assert_eq!(
+			response.finish_reasons,
+			Some(vec![strng::new("error"), strng::new("stop")])
+		);
+		response.set_finish_reason(0, strng::new("length"));
+		assert_eq!(
+			response.finish_reasons,
+			Some(vec![strng::new("length"), strng::new("stop")])
+		);
+	}
+
+	#[test]
+	fn ignores_out_of_range_index() {
+		let mut response = LLMResponse::default();
+		response.set_finish_reason(MAX_FINISH_REASONS, strng::new("stop"));
+		assert_eq!(response.finish_reasons, None);
+	}
+
+	#[test]
+	fn buffered_missing_positions_are_error() {
+		assert_eq!(
+			types::finish_reasons([None, Some("length")]),
+			Some(vec![strng::new("error"), strng::new("length")])
+		);
+		assert_eq!(types::finish_reasons([None::<&str>, None]), None);
+	}
+
+	#[test]
+	fn responses_nonterminal_status_has_no_finish_reason() {
+		assert_eq!(types::responses::finish_reason("queued", None), None);
+		assert_eq!(types::responses::finish_reason("in_progress", None), None);
+		assert_eq!(
+			types::responses::finish_reason("incomplete", Some("max_output_tokens")),
+			Some(strng::new("max_output_tokens"))
+		);
 	}
 }

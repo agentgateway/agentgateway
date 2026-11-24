@@ -43,6 +43,10 @@ data: {"type":"message_stop"}
   "cache_creation_12h_input_tokens": 2,
   "cached_input_tokens": 0,
   "provider_model": "gpt-4.1-mini",
+  "response_id": "",
+  "finish_reasons": [
+    "stop"
+  ],
   "completion": [
     "Hello"
   ],

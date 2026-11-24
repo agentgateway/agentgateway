@@ -799,6 +799,81 @@ async fn mcp_authentication_runs_in_route_policy_path() {
 	assert_eq!(res.hdr("content-type"), "application/json");
 }
 
+#[rstest::rstest]
+#[case::rfc8414("/.well-known/oauth-authorization-server")]
+#[case::openid_discovery_only("/.well-known/openid-configuration")]
+#[tokio::test]
+async fn mcp_authentication_client_id_discovery_reaches_gateway_registration(
+	#[case] upstream_metadata_path: &str,
+) {
+	let (mock, mut bind, io) = basic_setup().await;
+	let idp = mock.uri();
+	Mock::given(wiremock::matchers::path_regex("/.well-known/.*"))
+		.respond_with(ResponseTemplate::new(404))
+		.with_priority(2)
+		.mount(&mock)
+		.await;
+	Mock::given(wiremock::matchers::path(upstream_metadata_path))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"issuer": idp,
+			"authorization_endpoint": format!("{idp}/authorize"),
+			"token_endpoint": format!("{idp}/token"),
+		})))
+		.with_priority(1)
+		.mount(&mock)
+		.await;
+	bind
+		.attach_route_policy(json!({
+			"mcpAuthentication": {
+				"issuer": idp,
+				"audiences": ["test-aud"],
+				"jwks": serde_json::to_string(&test_jwks()).expect("jwks"),
+				"clientId": "pre-registered",
+				"resourceMetadata": {
+					"mcpResourceUri": "mcp://test"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(
+		io.clone(),
+		Method::GET,
+		"http://lo/.well-known/oauth-protected-resource/mcp",
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let resource: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	let authorization_server = resource["authorization_servers"][0].as_str().unwrap();
+	assert_eq!(authorization_server, "http://lo/mcp");
+
+	let res = send_request(
+		io.clone(),
+		Method::GET,
+		"http://lo/.well-known/oauth-authorization-server/mcp",
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let metadata: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(metadata["issuer"], authorization_server);
+	assert_eq!(
+		metadata["authorization_endpoint"],
+		format!("{idp}/authorize")
+	);
+	assert_eq!(metadata["token_endpoint"], format!("{idp}/token"));
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		metadata["registration_endpoint"].as_str().unwrap(),
+		br#"{"redirect_uris":["http://localhost:1234/cb"]}"#,
+	)
+	.await;
+	assert_eq!(res.status(), 201);
+	let registered: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(registered["client_id"], "pre-registered");
+}
+
 #[tokio::test]
 async fn api_key() {
 	let (_mock, mut bind, io) = basic_setup().await;

@@ -45,6 +45,10 @@ info:
     "output_tokens": 50,
     "total_tokens": 69,
     "reasoning_tokens": 20,
-    "provider_model": "google/gemini-3.8-flash"
+    "provider_model": "google/gemini-3.8-flash",
+    "response_id": "9W7VaabzK7KPjMcPnYGiuAU",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

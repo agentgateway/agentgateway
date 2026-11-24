@@ -69,6 +69,7 @@ pub enum ProviderPreset {
 	Perplexity,
 	Typesafe,
 	Nebius,
+	Coreweave,
 }
 
 impl ProviderPreset {
@@ -91,6 +92,7 @@ impl ProviderPreset {
 			Self::Perplexity => "https://api.perplexity.ai/v1",
 			Self::Typesafe => "https://api.typesafe.ai/v1",
 			Self::Nebius => "https://api.tokenfactory.nebius.com/v1",
+			Self::Coreweave => "https://api.inference.wandb.ai/v1",
 		}
 	}
 
@@ -200,6 +202,7 @@ impl ProviderPreset {
 				"nebius",
 				vec![format(Completions, None), format(Embeddings, None)],
 			),
+			Self::Coreweave => ("coreweave", vec![format(Completions, None)]),
 		};
 		Provider {
 			model_override: model,

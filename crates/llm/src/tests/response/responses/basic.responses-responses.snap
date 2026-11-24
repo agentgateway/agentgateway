@@ -194,6 +194,10 @@ info:
     "cache_creation_12h_input_tokens": 2,
     "cached_input_tokens": 0,
     "service_tier": "default",
-    "provider_model": "gpt-4o-2024-08-06"
+    "provider_model": "gpt-4o-2024-08-06",
+    "response_id": "resp_0fd43e1b46691ead0069a89a2144808199a06ce29faf5798da",
+    "finish_reasons": [
+      "stop"
+    ]
   }
 }

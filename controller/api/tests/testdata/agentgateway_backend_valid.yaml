@@ -85,10 +85,10 @@ spec:
                   - 'bad.*'
                 response:
                   message: "regex rejected"
-              - openAIModeration:
-                  policies:
-                    tls:
-                      insecureSkipVerify: All
+              - openAIModeration: {}
+                policies:
+                  tls:
+                    insecureSkipVerify: All
               - webhook:
                   backendRef:
                     name: hello

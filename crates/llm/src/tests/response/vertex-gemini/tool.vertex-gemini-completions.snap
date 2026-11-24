@@ -55,6 +55,9 @@ info:
     "output_tokens": 8,
     "total_tokens": 28,
     "provider_model": "gemini-2.5-pro",
+    "finish_reasons": [
+      "STOP"
+    ],
     "output_messages": [
       {
         "role": "assistant",

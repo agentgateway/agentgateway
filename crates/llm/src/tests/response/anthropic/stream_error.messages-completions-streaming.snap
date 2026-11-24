@@ -15,6 +15,7 @@ data: [DONE]
   "output_tokens": 1,
   "total_tokens": 16,
   "provider_model": "claude-haiku-4-5-20251001",
+  "response_id": "msg_stream_error",
   "completion": [
     "Hi there"
   ]

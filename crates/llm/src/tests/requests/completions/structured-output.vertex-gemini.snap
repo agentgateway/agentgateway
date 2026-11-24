@@ -42,10 +42,18 @@ info:
     ],
     "generationConfig": {
       "responseMimeType": "application/json",
-      "responseSchema": {
+      "responseJsonSchema": {
         "type": "object",
         "properties": {
           "person": {
+            "$ref": "#/$defs/Person"
+          }
+        },
+        "required": [
+          "person"
+        ],
+        "$defs": {
+          "Person": {
             "type": "object",
             "properties": {
               "name": {
@@ -59,10 +67,7 @@ info:
               "name"
             ]
           }
-        },
-        "required": [
-          "person"
-        ]
+        }
       }
     }
   },

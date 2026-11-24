@@ -40,6 +40,10 @@ data: {"type":"response.completed","sequence_number":10,"response":{"created_at"
   "total_tokens": 20,
   "service_tier": "default",
   "provider_model": "claude-opus-4-8",
+  "response_id": "chatcmpl-tool-empty-content",
+  "finish_reasons": [
+    "tool_calls"
+  ],
   "completion": [
     ""
   ],

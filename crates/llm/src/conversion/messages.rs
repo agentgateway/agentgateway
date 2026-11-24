@@ -319,11 +319,11 @@ pub fn translate_anthropic_error(
 
 /// Translate a Google error response into an Anthropic Messages error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-	let res = super::completions::parse_google_error(bytes)?;
+	let res = super::gemini::parse_google_error(bytes)?;
 	let m = messages::MessagesErrorResponse {
 		r#type: "error".to_string(),
 		error: messages::MessagesError {
-			r#type: super::completions::google_error_type(&res.error).to_string(),
+			r#type: super::gemini::google_error_type(res.error.status.as_deref()).to_string(),
 			message: res.error.message.clone(),
 		},
 	};
@@ -900,12 +900,17 @@ pub mod from_completions {
 			usage_lines: crate::types::messages::usage_lines(&resp.usage.iterations),
 			..Default::default()
 		});
+		let id = Some(strng::new(&resp.id));
+		let finish_reasons =
+			types::finish_reasons([resp.stop_reason.as_ref().and_then(types::serialize_str)]);
 		let openai = translate_response_internal(resp);
 		let passthrough = json::convert::<_, types::completions::Response>(&openai)
 			.map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
+		Ok(Box::new(super::super::ProviderResponse {
 			response: passthrough,
-			provider_usage,
+			usage: provider_usage,
+			id,
+			finish_reasons,
 		}))
 	}
 
@@ -1139,7 +1144,8 @@ pub mod from_completions {
 							message.usage.service_tier.as_deref(),
 							message.usage.speed.as_deref(),
 						);
-						r.response.provider_model = Some(strng::new(&message.model))
+						r.response.provider_model = Some(strng::new(&message.model));
+						r.response.response_id = message_id.as_deref().map(strng::new);
 					});
 					// no need to respond with anything yet
 					None
@@ -1255,6 +1261,9 @@ pub mod from_completions {
 						}
 						if let Some(completion) = completion.take() {
 							r.response.completion = Some(vec![completion]);
+						}
+						if let Some(reason) = &log_finish_reason {
+							r.response.set_finish_reason(0, reason.clone());
 						}
 						r.response.output_messages = tool_calls.take_output_messages(log_finish_reason.clone());
 					});
@@ -1471,7 +1480,8 @@ pub fn passthrough_stream(
 						message.usage.service_tier.as_deref(),
 						message.usage.speed.as_deref(),
 					);
-					r.response.provider_model = Some(strng::new(&message.model))
+					r.response.provider_model = Some(strng::new(&message.model));
+					r.response.response_id = Some(strng::new(&message.id));
 				});
 			},
 			messages::MessagesStreamEvent::ContentBlockStart {
@@ -1520,6 +1530,9 @@ pub fn passthrough_stream(
 					}
 					if let Some(c) = completion.take() {
 						r.response.completion = Some(vec![c]);
+					}
+					if let Some(reason) = &finish_reason {
+						r.response.set_finish_reason(0, reason.clone());
 					}
 					r.response.output_messages = tool_calls.take_output_messages(finish_reason.clone());
 				});

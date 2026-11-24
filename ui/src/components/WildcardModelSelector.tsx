@@ -1,3 +1,5 @@
+import { Input } from 'antd';
+
 import { CatalogModelSelector } from '@/components/CatalogModelSelector';
 import {
 	wildcardCatalogPrefix,
@@ -26,7 +28,7 @@ export function WildcardModelSelector(props: {
 		<div className="target-resolved-composite">
 			{prefix ? <span className="target-prefix">{prefix}</span> : null}
 			{catalogPrefix === undefined ? (
-				<input
+				<Input
 					id={props.id}
 					aria-label={props.ariaLabel}
 					aria-describedby={props['aria-describedby']}

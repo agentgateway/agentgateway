@@ -58,6 +58,8 @@
 |`llm.requestModel`|string|The model requested for the LLM request. Before LLM processing, this is extracted from<br>the incoming URL or body, before provider overrides. This may differ from the actual model used.|
 |`llm.originalModel`|string|The model the client asked for, before any virtual model, alias, provider override, or<br>request body rewrite. Equal to `requestModel` when the model was not rewritten.|
 |`llm.responseModel`|string|The model that actually served the LLM response.|
+|`llm.responseId`|string|The provider's identifier for the response.|
+|`llm.finishReasons`|[]string|The provider's reasons for ending generation, one per returned choice.|
 |`llm.provider`|string|The provider of the LLM.|
 |`llm.inputTokens`|integer|The total number of tokens in the input/prompt, including tokens read from or written to<br>cache. This has consistent semantics across providers.|
 |`llm.providerInputTokens`|integer|The provider-reported number of tokens in the input/prompt. This is inconsistent across<br>providers: some include cached tokens while others exclude them.|
@@ -74,7 +76,7 @@
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of input and output tokens for the request. Input tokens include tokens read<br>from or written to cache, giving this field consistent semantics across providers.|
 |`llm.providerTotalTokens`|integer|The provider-reported total number of tokens for the request. This is inconsistent across<br>providers because some include cached input tokens while others exclude them.|
-|`llm.serviceTier`|enum|The service tier the provider served the request under.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `ultrafast`, `fast`, `null`.|
+|`llm.serviceTier`|enum|The service tier the provider served the request under.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `ultrafast`, `fast`.|
 |`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
 |`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|

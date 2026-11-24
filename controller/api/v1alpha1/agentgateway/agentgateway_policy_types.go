@@ -313,6 +313,23 @@ func (p *GoogleModelArmorPolicy) BackendSimple() *BackendSimple {
 	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
 }
 
+// PromptGuardPolicy configures calls to a prompt guard provider.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type PromptGuardPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to the prompt guard provider.
+	// +optional
+	Auth *PromptGuardAuth `json:"auth,omitempty"`
+}
+
+func (p *PromptGuardPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
 type Health struct {
 	// CEL expression that determines whether a response indicates an unhealthy backend.
 	// When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
@@ -582,6 +599,7 @@ const (
 // +kubebuilder:validation:AtMostOneOf=verifySubjectAltNames;insecureSkipVerify
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
+// +kubebuilder:validation:XValidation:rule="!has(self.caCertificateRefs) || !has(self.mtlsCertificateRef) || !self.mtlsCertificateRef.exists(r, has(r.kind) && r.kind == 'File')",message="caCertificateRefs may not be combined with a File mtlsCertificateRef; use file.root instead"
 // +kubebuilder:validation:XValidation:rule="!has(self.certificateSource) || self.certificateSource != 'SPIFFE' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))",message="certificateSource SPIFFE may not be combined with mtlsCertificateRef, caCertificateRefs, or insecureSkipVerify"
 type BackendTLS struct {
 	// Source for the gateway's client identity and trust roots (`Inline` default, or `SPIFFE`).
@@ -590,15 +608,15 @@ type BackendTLS struct {
 	CertificateSource *BackendTLSCertificateSource `json:"certificateSource,omitempty"`
 
 	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-	// referenced credential source (defaulting to a Kubernetes `Secret`). An
-	// optional `ca.cert`, if present, verifies the server certificate, but
-	// `caCertificateRefs` takes priority. If unspecified, no client certificate
-	// is used.
+	// referenced credential source (defaulting to a Kubernetes `Secret`), or from
+	// files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+	// present, verifies the server certificate, but `caCertificateRefs` takes
+	// priority. If unspecified, no client certificate is used.
 	//
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
-	MtlsCertificateRef []LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
+	MtlsCertificateRef []BackendTLSCertificateRef `json:"mtlsCertificateRef,omitempty"`
 	// CA certificate source to use to verify the server certificate. Omitted kind
 	// and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
 	// read from the `ca.crt` key unless `key` names a different one. If unset, the
@@ -649,6 +667,46 @@ type BackendTLS struct {
 	// For example: `X25519_MLKEM768,X25519`.
 	// +optional
 	KeyExchangeGroups []KeyExchangeGroup `json:"keyExchangeGroups,omitempty"`
+}
+
+// References the backend mTLS client credential: a same-namespace `Secret` (or custom
+// credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
+//
+// +structType=atomic
+// +kubebuilder:validation:XValidation:rule="has(self.kind) && self.kind == 'File' ? (has(self.file) && !has(self.name) && !has(self.group)) : (has(self.name) && !has(self.file))",message="kind File requires file and no name/group; any other kind requires name and no file"
+// +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret' || self.kind == 'File') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
+type BackendTLSCertificateRef struct {
+	// Name of the referenced credential. Required unless `kind` is `File`.
+	// +optional
+	Name gwv1.ObjectName `json:"name,omitempty"`
+
+	// API group of the referenced credential; empty selects the core API group.
+	// +optional
+	Group string `json:"group,omitempty"`
+
+	// Kind of the referenced credential; empty defaults to `Secret`. `File` reads from `file`.
+	// +optional
+	Kind string `json:"kind,omitempty"`
+
+	// Paths on the agentgateway pod's local filesystem, which must be allowed by the gateway's
+	// `fileAccess` config. Required when `kind` is `File`.
+	// +optional
+	File *BackendTLSFile `json:"file,omitempty"`
+}
+
+// BackendTLSFile references client certificate, key and CA bundle files on the agentgateway
+// pod's local filesystem. The controller does not read them; it forwards the paths to the gateway.
+type BackendTLSFile struct {
+	// Path to the client certificate file.
+	// +required
+	Cert LongString `json:"cert"`
+	// Path to the client certificate's private key file.
+	// +required
+	Key LongString `json:"key"`
+	// Path to a CA bundle file used to verify the backend's certificate.
+	// If unset, the system's trusted certificates are used.
+	// +optional
+	Root LongString `json:"root,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -1867,6 +1925,57 @@ func (a *GoogleModelArmorAuth) BackendAuth() *BackendAuth {
 	}
 	return &BackendAuth{
 		GCP: a.GCP,
+	}
+}
+
+// PromptGuardAuth configures credentials for prompt guard provider requests.
+// Which methods are supported depends on the guard:
+//   - `openAIModeration`: `key` or `secretRef`.
+//   - `bedrockGuardrails`: `key`, `secretRef`, or `aws`.
+//   - `googleModelArmor`: `gcp`.
+//
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;aws;gcp
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) : true",message="location may only be set for key or secretRef auth"
+type PromptGuardAuth struct {
+	// Inline key. This option is the least secure; usage of a `Secret` is
+	// preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the key, defaulting to a Kubernetes `Secret`. By
+	// default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where keys are inserted. Defaults to the `Authorization` header with the
+	// `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+
+	// AWS authentication method. Use `aws: {}` for default AWS SDK credential
+	// discovery.
+	// +optional
+	AWS *AwsAuth `json:"aws,omitempty"`
+
+	// Google authentication method. Use `gcp: {}` for default Google
+	// credential discovery.
+	// +optional
+	GCP *GcpAuth `json:"gcp,omitempty"`
+}
+
+func (a *PromptGuardAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		Location:  a.Location,
+		AWS:       a.AWS,
+		GCP:       a.GCP,
 	}
 }
 

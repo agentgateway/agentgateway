@@ -22,6 +22,9 @@ data: [DONE]
   "input_tokens": 18,
   "output_tokens": 46,
   "total_tokens": 64,
+  "finish_reasons": [
+    "end_turn"
+  ],
   "completion": [
     "The answer is 4."
   ]

@@ -32,6 +32,10 @@ data: {"type":"message_stop"}
   "reasoning_tokens": 0,
   "cached_input_tokens": 0,
   "provider_model": "gpt-4.1-mini",
+  "response_id": "",
+  "finish_reasons": [
+    "stop"
+  ],
   "completion": [
     "I cannot help with that."
   ]

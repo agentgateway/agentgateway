@@ -13,35 +13,6 @@ use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
 #[path = "completions_tests.rs"]
 mod tests;
 
-/// Parse a Google error response, handling both single object and array-wrapped formats.
-/// Google's OpenAI-compatible endpoints consistently return `[{"error": {...}}]`
-/// rather than `{"error": {...}}` when using the Vertex AI shim.
-pub(crate) fn parse_google_error(
-	bytes: &Bytes,
-) -> Result<types::completions::typed::GoogleErrorResponse, crate::AIError> {
-	serde_json::from_slice::<types::completions::typed::GoogleErrorResponse>(bytes).or_else(|_| {
-		serde_json::from_slice::<Vec<types::completions::typed::GoogleErrorResponse>>(bytes)
-			.map_err(logged_response_parsing(bytes))?
-			.into_iter()
-			.next()
-			.ok_or_else(|| {
-				crate::AIError::InvalidResponse(agent_core::strng::literal!(
-					"error response missing error details"
-				))
-			})
-	})
-}
-
-pub(crate) fn google_error_type(error: &types::completions::typed::GoogleError) -> &'static str {
-	match error.status.as_deref() {
-		Some("INVALID_ARGUMENT") | Some("FAILED_PRECONDITION") => "invalid_request_error",
-		Some("NOT_FOUND") => "not_found_error",
-		Some("PERMISSION_DENIED") | Some("UNAUTHENTICATED") => "authentication_error",
-		Some("RESOURCE_EXHAUSTED") => "rate_limit_error",
-		_ => "api_error",
-	}
-}
-
 pub(crate) fn parse_chat_completion_error(
 	bytes: &Bytes,
 ) -> Result<types::completions::typed::ChatCompletionErrorResponse, crate::AIError> {
@@ -51,11 +22,11 @@ pub(crate) fn parse_chat_completion_error(
 
 /// Translate a Google error response into an OpenAI Chat Completions error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, crate::AIError> {
-	let res = parse_google_error(bytes)?;
+	let res = super::gemini::parse_google_error(bytes)?;
 	let m = types::completions::typed::ChatCompletionErrorResponse {
 		event_id: None,
 		error: types::completions::typed::ChatCompletionError {
-			r#type: Some(google_error_type(&res.error).to_string()),
+			r#type: Some(super::gemini::google_error_type(res.error.status.as_deref()).to_string()),
 			message: res.error.message.clone(),
 			param: None,
 			code: res.error.status.clone().map(serde_json::Value::String),
@@ -128,10 +99,14 @@ pub mod from_messages {
 				.and_then(|d| d.reasoning_tokens),
 			..Default::default()
 		});
+		let id = Some(strng::new(&resp.id));
+		let finish_reasons = resp.finish_reasons();
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(super::super::ResponseWithProviderUsage {
+		Ok(Box::new(super::super::ProviderResponse {
 			response: anthropic,
-			provider_usage,
+			usage: provider_usage,
+			id,
+			finish_reasons,
 		}))
 	}
 
@@ -618,7 +593,10 @@ pub mod from_messages {
 							},
 						);
 
-						log.update(|r| r.response.provider_model = Some(strng::new(&f.model)));
+						log.update(|r| {
+							r.response.provider_model = Some(strng::new(&f.model));
+							r.response.response_id = Some(strng::new(&f.id));
+						});
 					}
 
 					if let Some(usage) = f.usage {
@@ -726,6 +704,12 @@ pub mod from_messages {
 						}
 
 						if let Some(finish_reason) = &choice.finish_reason {
+							if let Some(reason) = crate::types::serialize_str(finish_reason) {
+								log.update(|r| {
+									r.response
+										.set_finish_reason(choice.index as usize, reason.clone())
+								});
+							}
 							let mut stop_reason = match finish_reason {
 								completions::FinishReason::Stop => messages::StopReason::EndTurn,
 								completions::FinishReason::Length => messages::StopReason::MaxTokens,
@@ -1394,6 +1378,18 @@ pub fn passthrough_stream(
 						{
 							finish_reason = crate::types::serialize_str(reason);
 						}
+						for choice in &f.choices {
+							if let Some(reason) = choice
+								.finish_reason
+								.as_ref()
+								.and_then(crate::types::serialize_str)
+							{
+								log.update(|r| {
+									r.response
+										.set_finish_reason(choice.index as usize, reason.clone())
+								});
+							}
+						}
 						if let Some(c) = completion.as_mut()
 							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
 						{
@@ -1432,6 +1428,7 @@ pub fn passthrough_stream(
 							seen_provider = true;
 							log.update(|r| {
 								r.response.provider_model = Some(strng::new(&f.model));
+								r.response.response_id = Some(strng::new(&f.id));
 								r.response.service_tier = f.service_tier.as_deref().map(Into::into);
 							});
 						}

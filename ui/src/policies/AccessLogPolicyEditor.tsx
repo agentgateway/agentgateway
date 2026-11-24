@@ -1,3 +1,4 @@
+import { Input } from 'antd';
 import { Database, ScrollText, Send } from 'lucide-react';
 import { useState } from 'react';
 
@@ -7,7 +8,12 @@ import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type { LoggingPolicy, OtlpLoggingConfig } from '@/gateway-config';
 import { ListEditor } from '@/policies/ListEditor';
-import { hasUnsupportedTarget, KeyValueEditor, targetFrom } from '@/policies/PolicyFormControls';
+import {
+	hasUnsupportedTarget,
+	KeyValueEditor,
+	OptionCheckbox,
+	targetFrom
+} from '@/policies/PolicyFormControls';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty } from '@/policies/policyUtils';
 import { otlpProtocolOptions } from '@/policies/TracingPolicyEditor';
@@ -129,21 +135,16 @@ export function AccessLogPolicyEditor(props: {
 				title="OTLP export"
 				description="Send access logs to an OpenTelemetry collector."
 			>
-				<label className="config-option-row">
-					<input
-						type="checkbox"
-						checked={otlpEnabled}
-						onChange={event => setOtlpEnabled(event.target.checked)}
-					/>
-					<span>
-						<strong>Export logs over OTLP</strong>
-					</span>
-				</label>
+				<OptionCheckbox
+					checked={otlpEnabled}
+					onChange={setOtlpEnabled}
+					title="Export logs over OTLP"
+				/>
 				{otlpEnabled ? (
 					<>
 						<div className="form-grid">
 							<Field label="Collector host">
-								<input
+								<Input
 									value={otlpHost}
 									onChange={event => setOtlpHost(event.target.value)}
 									placeholder="localhost:4317"
@@ -166,7 +167,7 @@ export function AccessLogPolicyEditor(props: {
 									label="Path"
 									tooltip={props.help.field<OtlpLoggingConfig>('OtlpLoggingConfig', 'path')}
 								>
-									<input
+									<Input
 										value={otlpPath}
 										onChange={event => setOtlpPath(event.target.value)}
 										placeholder="/v1/logs"

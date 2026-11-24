@@ -61,6 +61,10 @@ info:
     "total_tokens": 402,
     "reasoning_tokens": 0,
     "cached_input_tokens": 0,
-    "provider_model": "input-model"
+    "provider_model": "input-model",
+    "response_id": "9W7VaabzK7KPjMcPnYGiuAU",
+    "finish_reasons": [
+      "length"
+    ]
   }
 }

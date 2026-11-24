@@ -27,6 +27,10 @@ data: [DONE]
   "cached_input_tokens": 12,
   "service_tier": "standard",
   "provider_model": "claude-haiku-4-5-20251001",
+  "response_id": "msg_016wbjv5k86nxxd8CEZwSQnA",
+  "finish_reasons": [
+    "end_turn"
+  ],
   "completion": [
     "Hi there! How are you doing today? Is there anything I can help you with?"
   ]

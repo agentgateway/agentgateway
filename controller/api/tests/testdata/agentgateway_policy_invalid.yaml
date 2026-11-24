@@ -23,10 +23,10 @@ spec:
     ai:
       promptGuard:
         request:
-        - openAIModeration:
-            policies:
-              auth:
-                oauthTokenExchange: {}
+        - openAIModeration: {}
+          policies:
+            auth:
+              oauthTokenExchange: {}
 ---
 _err: exactly one
 apiVersion: agentgateway.dev/v1alpha1
@@ -46,11 +46,11 @@ spec:
             identifier: guardrail
             version: DRAFT
             region: us-west-2
-            policies:
-              auth:
-                aws: {}
-                secretRef:
-                  name: bedrock-secret
+          policies:
+            auth:
+              aws: {}
+              secretRef:
+                name: bedrock-secret
 ---
 _err: exactly one
 apiVersion: agentgateway.dev/v1alpha1
@@ -70,8 +70,8 @@ spec:
             identifier: guardrail
             version: DRAFT
             region: us-west-2
-            policies:
-              auth: {}
+          policies:
+            auth: {}
 ---
 _err: location may only be set for key or secretRef auth
 apiVersion: agentgateway.dev/v1alpha1
@@ -91,14 +91,14 @@ spec:
             identifier: guardrail
             version: DRAFT
             region: us-west-2
-            policies:
-              auth:
-                aws: {}
-                location:
-                  header:
-                    name: X-Api-Key
+          policies:
+            auth:
+              aws: {}
+              location:
+                header:
+                  name: X-Api-Key
 ---
-_err: unknown fields
+_err: googleModelArmor policies.auth supports only gcp
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -115,10 +115,10 @@ spec:
         - googleModelArmor:
             templateId: template
             projectId: project
-            policies:
-              auth:
-                aws:
-                  serviceName: bedrock
+          policies:
+            auth:
+              aws:
+                serviceName: bedrock
 ---
 _err: exactly one
 apiVersion: agentgateway.dev/v1alpha1
@@ -137,8 +137,8 @@ spec:
         - googleModelArmor:
             templateId: template
             projectId: project
-            policies:
-              auth: {}
+          policies:
+            auth: {}
 ---
 _err: 'sni in body should be at least 1 char'
 apiVersion: agentgateway.dev/v1alpha1
@@ -1913,3 +1913,245 @@ spec:
       - location:
           header:
             name: Proxy-Authorization
+---
+_err: googleModelArmor policies.auth supports only gcp
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: google-model-armor-key-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - googleModelArmor:
+            templateId: template
+            projectId: project
+          policies:
+            auth:
+              key: foo
+---
+_err: openAIModeration policies.auth supports only key or secretRef
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: openai-moderation-aws-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - openAIModeration: {}
+          policies:
+            auth:
+              aws: {}
+---
+_err: bedrockGuardrails policies.auth supports only key, secretRef, or aws
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: bedrock-guardrails-gcp-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        response:
+        - bedrockGuardrails:
+            identifier: guardrail
+            version: DRAFT
+            region: us-west-2
+          policies:
+            auth:
+              gcp: {}
+---
+_err: policies is not supported for regex or webhook guards
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-policies-regex
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        response:
+        - regex:
+            matches:
+            - foo
+          policies:
+            tls:
+              insecureSkipVerify: All
+---
+_err: policies may not be set together with the deprecated provider-level policies
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-both-policies-request
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - openAIModeration:
+            policies:
+              auth:
+                key: old
+          policies:
+            auth:
+              key: new
+---
+_err: policies may not be set together with the deprecated provider-level policies
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-both-policies-response
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        response:
+        - googleModelArmor:
+            templateId: template
+            projectId: project
+            policies:
+              auth:
+                gcp: {}
+          policies:
+            auth:
+              gcp: {}
+---
+_err: 'kind File requires file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-kind-without-file
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+
+---
+_err: 'kind File requires file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-kind-with-name
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        name: client-cert
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+
+---
+_err: 'requires name and no file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-secret-with-file
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - name: client-cert
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+
+---
+_err: 'key'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-missing-key
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        file:
+          cert: /etc/certs/tls.crt
+---
+_err: 'use file.root instead'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-with-ca-refs
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+      caCertificateRefs:
+      - name: ca-bundle
+---
+_err: 'use file.root instead'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-root-with-ca-refs
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+          root: /etc/certs/ca.crt
+      caCertificateRefs:
+      - name: ca-bundle

@@ -54,6 +54,10 @@ info:
     "cache_creation_input_tokens": 13,
     "cached_input_tokens": 12,
     "service_tier": "standard",
-    "provider_model": "claude-haiku-4-5-20251001"
+    "provider_model": "claude-haiku-4-5-20251001",
+    "response_id": "msg_012JYtNYb8sv6Hb67TcGT7xW",
+    "finish_reasons": [
+      "end_turn"
+    ]
   }
 }

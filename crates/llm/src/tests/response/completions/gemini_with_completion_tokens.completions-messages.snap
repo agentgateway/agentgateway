@@ -40,6 +40,10 @@ info:
     "input_tokens": 7,
     "output_tokens": 395,
     "total_tokens": 402,
-    "provider_model": "gemini-2.5-flash"
+    "provider_model": "gemini-2.5-flash",
+    "response_id": "9W7VaabzK7KPjMcPnYGiuAU",
+    "finish_reasons": [
+      "length"
+    ]
   }
 }

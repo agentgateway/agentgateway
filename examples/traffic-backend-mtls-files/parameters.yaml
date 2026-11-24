@@ -1,0 +1,10 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: backend-mtls-files
+spec:
+  rawConfig:
+    config:
+      fileAccess:
+        allow:
+        - /var/run/certs

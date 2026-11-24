@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use super::PricingTier;
-use crate::llm::{Provider as _, vertex};
+use crate::llm::{Provider as _, azure, vertex};
 
 // Unknown fields are captured rather than denied by serde, so catalogs from newer versions can be
 // loaded leniently. `validate` rejects them for catalogs written for this version.
@@ -42,7 +42,9 @@ impl Catalog {
 			.values_mut()
 			.flat_map(|p| p.models.values_mut())
 		{
-			m.tiers.retain(|t| t.unknown.is_empty());
+			m.tiers.retain(|t| {
+				t.unknown.is_empty() && !matches!(t.service_tier.as_ref(), Some(PricingTier::Unknown(_)))
+			});
 		}
 		self.check(false)
 	}
@@ -79,6 +81,11 @@ impl Catalog {
 				}
 				let mut previous = BTreeMap::new();
 				for (index, tier) in pricing.tiers.iter().enumerate() {
+					if strict && let Some(PricingTier::Unknown(value)) = &tier.service_tier {
+						anyhow::bail!(
+							"{provider}/{model} tier {index}: unrecognized serviceTier value {value:?}"
+						);
+					}
 					reject_unknown(
 						&format_args!("{provider}/{model} tier {index}"),
 						&tier.unknown,
@@ -87,7 +94,7 @@ impl Catalog {
 						&format_args!("{provider}/{model} tier {index} rates"),
 						&tier.rates.unknown,
 					)?;
-					if let Some(prior) = previous.insert(tier.service_tier, tier.context_over)
+					if let Some(prior) = previous.insert(tier.service_tier.as_ref(), tier.context_over)
 						&& tier.context_over <= prior
 					{
 						anyhow::bail!(
@@ -171,13 +178,41 @@ impl Catalog {
 	/// Like `resolve`, but also returns the catalog model ID that matched.
 	pub fn resolve_entry(&self, provider: &str, model: &str) -> Option<(&String, &Model)> {
 		let models = &self.providers.get(provider)?.models;
-		models.get_key_value(model).or_else(|| {
-			if provider != vertex::Provider::NAME.as_str() {
-				return None;
-			}
-			models.get_key_value(vertex::Provider::canonical_model(model).as_str())
+		models.get_key_value(model).or_else(|| match provider {
+			p if p == vertex::Provider::NAME.as_str() => {
+				models.get_key_value(vertex::Provider::canonical_model(model).as_str())
+			},
+			p if p == azure::Provider::NAME.as_str() => {
+				// Azure deployment names are case-insensitive, and responses report dated model
+				// versions while the catalog is keyed by the undated lowercase model.
+				let model = model.to_ascii_lowercase();
+				models
+					.get_key_value(model.as_str())
+					.or_else(|| models.get_key_value(strip_version_date(&model)?))
+			},
+			_ => None,
 		})
 	}
+}
+
+/// Strips a trailing `-YYYY-MM-DD` or `-YYYYMMDD` model version.
+fn strip_version_date(model: &str) -> Option<&str> {
+	["-dddd-dd-dd", "-dddddddd"]
+		.into_iter()
+		.find_map(|pattern| {
+			let split = model.len().checked_sub(pattern.len())?;
+			model.as_bytes()[split..]
+				.iter()
+				.zip(pattern.bytes())
+				.all(|(c, p)| {
+					if p == b'd' {
+						c.is_ascii_digit()
+					} else {
+						*c == p
+					}
+				})
+				.then(|| &model[..split])
+		})
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -616,17 +651,15 @@ impl Model {
 	#[cfg(test)]
 	pub fn breakdown(&self, usage: &Usage) -> Breakdown {
 		self
-			.effective_rates(usage.context_tokens(), PricingTier::Standard)
+			.effective_rates(usage.context_tokens(), &PricingTier::Standard)
 			.breakdown(usage)
 	}
 
-	pub(super) fn effective_rates(&self, context_tokens: u64, service_tier: PricingTier) -> Rates {
-		let select = |service_tier: Option<PricingTier>| {
-			self
-				.tiers
-				.iter()
-				.rev()
-				.find(|tier| tier.service_tier == service_tier && context_tokens > tier.context_over)
+	pub(super) fn effective_rates(&self, context_tokens: u64, service_tier: &PricingTier) -> Rates {
+		let select = |service_tier: Option<&PricingTier>| {
+			self.tiers.iter().rev().find(|tier| {
+				tier.service_tier.as_ref() == service_tier && context_tokens > tier.context_over
+			})
 		};
 		// Service-tier rates overlay the context tier, so components a service tier omits use the
 		// context-appropriate standard rate.
@@ -715,7 +748,7 @@ mod tests {
 		assert!(
 			!mini
 				.unwrap()
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty(),
 			"and is priced"
 		);
@@ -805,6 +838,29 @@ mod tests {
 	}
 
 	#[test]
+	fn resolve_azure_versions() {
+		let catalog = from_json(
+			r#"{"providers":{
+				"azure":{"models":{
+					"gpt-x":{"rates":{"input":"1"}},
+					"gpt-x-2026-01-02":{"rates":{"input":"2"}},
+					"claude-x":{"rates":{"input":"3"}},
+					"mistral-large":{"rates":{"input":"4"}}
+				}},
+				"openai":{"models":{"gpt-x":{"rates":{"input":"1"}}}}
+			}}"#,
+		)
+		.unwrap();
+		let input = |p, m| catalog.resolve(p, m).and_then(|m| m.rates.input.clone());
+		assert_eq!(input("azure", "GPT-X"), Some(m("1")));
+		assert_eq!(input("azure", "gpt-x-2026-03-17"), Some(m("1")));
+		assert_eq!(input("azure", "gpt-x-2026-01-02"), Some(m("2")));
+		assert_eq!(input("azure", "claude-x-20251001"), Some(m("3")));
+		assert_eq!(input("azure", "mistral-large-2411"), None);
+		assert_eq!(input("openai", "gpt-x-2026-03-17"), None);
+	}
+
+	#[test]
 	fn money_is_a_string_not_a_number() {
 		assert_eq!(serde_json::to_string(&m("0.175")).unwrap(), "\"0.175\"");
 		let ok: Rates = serde_json::from_str(r#"{"input": "0.175"}"#).unwrap();
@@ -834,6 +890,42 @@ mod tests {
 		catalog.validate_newer().unwrap();
 		let expected = from_json(
 			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[{"contextOver":100,"rates":{"input":"3"}}]}}}}}"#,
+		)
+		.unwrap();
+		assert_eq!(
+			serde_json::to_value(&catalog).unwrap(),
+			serde_json::to_value(&expected).unwrap()
+		);
+	}
+
+	#[test]
+	fn newer_catalog_drops_tiers_with_unknown_service_tier() {
+		let json = r#"{"providers":{"openai":{"models":{"m":{
+			"rates":{"input":"1"},
+			"tiers":[
+				{"serviceTier":"flex","rates":{"input":"0.5"}},
+				{"serviceTier":"future","rates":{"input":"9"}}
+			]}}}}}"#;
+		assert_eq!(
+			from_json(json).unwrap_err().to_string(),
+			r#"openai/m tier 1: unrecognized serviceTier value "future""#
+		);
+		let mut catalog: Catalog = serde_json::from_str(json).unwrap();
+		let tier = &catalog.providers["openai"].models["m"].tiers[1];
+		assert_eq!(
+			tier.service_tier,
+			Some(PricingTier::Unknown("future".to_string()))
+		);
+		assert_eq!(serde_json::to_value(tier).unwrap()["serviceTier"], "future");
+		for value in ["42", "true", "{}", "[]"] {
+			assert!(
+				serde_json::from_str::<Tier>(&format!(r#"{{"serviceTier":{value},"rates":{{}}}}"#))
+					.is_err()
+			);
+		}
+		catalog.validate_newer().unwrap();
+		let expected = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[{"serviceTier":"flex","rates":{"input":"0.5"}}]}}}}}"#,
 		)
 		.unwrap();
 		assert_eq!(
@@ -1114,30 +1206,30 @@ mod tests {
 		};
 		assert!(
 			entry(Rates::default(), vec![])
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty()
 		);
 		assert!(
 			!entry(input_rate.clone(), vec![])
-				.effective_rates(0, PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard)
 				.is_empty()
 		);
 
 		let tier_only = entry(Rates::default(), vec![tier(100_000, input_rate)]);
 		assert!(
 			tier_only
-				.effective_rates(100_000, PricingTier::Standard)
+				.effective_rates(100_000, &PricingTier::Standard)
 				.is_empty()
 		);
 		assert!(
 			!tier_only
-				.effective_rates(100_001, PricingTier::Standard)
+				.effective_rates(100_001, &PricingTier::Standard)
 				.is_empty()
 		);
 
 		assert!(
 			entry(Rates::default(), vec![tier(100_000, Rates::default())])
-				.effective_rates(100_001, PricingTier::Standard)
+				.effective_rates(100_001, &PricingTier::Standard)
 				.is_empty()
 		);
 	}

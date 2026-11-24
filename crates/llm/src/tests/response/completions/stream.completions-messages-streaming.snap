@@ -280,5 +280,9 @@ data: {"type":"message_stop"}
   "total_tokens": 304,
   "reasoning_tokens": 192,
   "cached_input_tokens": 0,
-  "provider_model": "gpt-5-nano-2025-08-07"
+  "provider_model": "gpt-5-nano-2025-08-07",
+  "response_id": "chatcmpl-DFnKV81lMKGBRRh35sxZO8I88ireo",
+  "finish_reasons": [
+    "stop"
+  ]
 }

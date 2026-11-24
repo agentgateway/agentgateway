@@ -1,4 +1,5 @@
 import { useBlocker } from '@tanstack/react-router';
+import { Button, Checkbox, Collapse, Input, Tag } from 'antd';
 import { Braces, ListChecks, Pencil, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -223,15 +224,14 @@ export function GuardrailsPage() {
 				description="Apply prompt and response guardrails to all LLM models."
 				actions={
 					guardrails ? (
-						<button
-							className="button danger"
-							type="button"
+						<Button
+							danger
+							icon={<Trash2 size={16} />}
 							disabled={saving || (hybrid && fileOwned)}
 							onClick={() => setRemoveAllOpen(true)}
 						>
-							<Trash2 size={16} />
 							Remove
-						</button>
+						</Button>
 					) : null
 				}
 			/>
@@ -360,7 +360,7 @@ function GuardrailsEditor(props: {
 					</span>
 					<div>
 						<h4>
-							Data tokenization <span className="badge warn">(Beta)</span>
+							Data tokenization <Tag color="warning">(Beta)</Tag>
 						</h4>
 						<p>
 							Replace sensitive data with temporary tokens before sending it to the model. Restore
@@ -369,14 +369,12 @@ function GuardrailsEditor(props: {
 					</div>
 				</div>
 				<div className="policy-form-section-body">
-					<label className="config-option-row">
-						<input
-							type="checkbox"
-							checked={draft.email}
-							onChange={event => applyDraft({ ...draft, email: event.target.checked })}
-						/>
-						<span>Email addresses</span>
-					</label>
+					<Checkbox
+						checked={draft.email}
+						onChange={event => applyDraft({ ...draft, email: event.target.checked })}
+					>
+						Email addresses
+					</Checkbox>
 					<p className="muted-copy">
 						Detects standard ASCII email addresses in message text and tool arguments. Repeated
 						addresses reuse the same token within a request. Tokens are private to each request.
@@ -516,10 +514,9 @@ function GuardrailSection(props: {
 
 function AddGuardButton(props: { onOpen: () => void }) {
 	return (
-		<button className="button" type="button" onClick={props.onOpen}>
-			<Plus size={16} />
+		<Button icon={<Plus size={16} />} onClick={props.onOpen}>
 			Add guard
-		</button>
+		</Button>
 	);
 }
 
@@ -561,9 +558,7 @@ function AddGuardModal(props: {
 			}}
 			footer={requestClose => (
 				<div className="button-row">
-					<button className="button" type="button" onClick={requestClose}>
-						Cancel
-					</button>
+					<Button onClick={requestClose}>Cancel</Button>
 					<DrawerSaveButton
 						disabled={!merged.value}
 						onClick={() => guard && merged.value && props.onAdd(withValue(guard, merged.value))}
@@ -611,28 +606,48 @@ function GuardCard(props: {
 					<strong>{guardKindLabel(props.guard.kind)}</strong>
 				</span>
 				<div className="button-row compact">
-					<button className="table-action" type="button" onClick={props.onEdit}>
-						<Pencil size={14} />
+					<Button
+						className="table-action"
+						size="small"
+						icon={<Pencil size={14} />}
+						onClick={props.onEdit}
+					>
 						Edit
-					</button>
-					<button className="table-action danger" type="button" onClick={props.onRemove}>
-						<Trash2 size={14} />
+					</Button>
+					<Button
+						className="table-action danger"
+						size="small"
+						icon={<Trash2 size={14} />}
+						onClick={props.onRemove}
+					>
 						Remove
-					</button>
+					</Button>
 				</div>
 			</div>
 			<p className="muted-copy">{guardSummary(props.guard)}</p>
 			{props.guard.kind === 'unsupported' ? (
-				<details>
-					<summary>Raw guard YAML</summary>
-					<YamlBlock value={props.guard.raw} />
-				</details>
+				<Collapse
+					size="small"
+					items={[
+						{
+							key: 'raw',
+							label: 'Raw guard YAML',
+							children: <YamlBlock value={props.guard.raw} />
+						}
+					]}
+				/>
 			) : null}
 			{props.guard.kind !== 'unsupported' && props.guard.policies ? (
-				<details>
-					<summary>Backend policies</summary>
-					<YamlBlock value={props.guard.policies} />
-				</details>
+				<Collapse
+					size="small"
+					items={[
+						{
+							key: 'policies',
+							label: 'Backend policies',
+							children: <YamlBlock value={props.guard.policies} />
+						}
+					]}
+				/>
 			) : null}
 		</section>
 	);
@@ -665,9 +680,7 @@ function EditGuardDrawer(props: {
 			}}
 			footer={requestClose => (
 				<div className="button-row">
-					<button className="button" type="button" onClick={requestClose}>
-						Cancel
-					</button>
+					<Button onClick={requestClose}>Cancel</Button>
 					<DrawerSaveButton onClick={() => props.onApply(withValue(draft, merged.value))}>
 						<Save size={16} />
 						Apply changes
@@ -822,9 +835,10 @@ function BuiltinGuardFields(props: {
 					{builtinOptions.map(option => {
 						const selected = props.guard.builtins.includes(option.value);
 						return (
-							<button
-								className={selected ? 'choice-pill active' : 'choice-pill'}
-								type="button"
+							<Button
+								shape="round"
+								type={selected ? 'primary' : 'default'}
+								aria-pressed={selected}
 								key={option.value}
 								onClick={() =>
 									patch({
@@ -835,7 +849,7 @@ function BuiltinGuardFields(props: {
 								}
 							>
 								{option.label}
-							</button>
+							</Button>
 						);
 					})}
 				</div>
@@ -921,7 +935,7 @@ function WebhookGuardFields(props: {
 			tooltip={props.help.field<Webhook>('Webhook', 'target')}
 			hint="Backend host URL for guardrail checks."
 		>
-			<input
+			<Input
 				value={props.guard.target}
 				onChange={event =>
 					props.onChange({
@@ -1013,7 +1027,7 @@ function OpenAIModerationFields(props: {
 			tooltip={props.help.field<Moderation>('Moderation', 'model')}
 			hint="Optional. Defaults to omni-moderation-latest."
 		>
-			<input
+			<Input
 				value={props.guard.model}
 				onChange={event =>
 					props.onChange({
@@ -1038,7 +1052,7 @@ function BedrockGuardFields(props: {
 				path="bedrockGuardrails.guardrailIdentifier"
 				tooltip={props.help.field<BedrockGuardrails>('BedrockGuardrails', 'guardrailIdentifier')}
 			>
-				<input
+				<Input
 					value={props.guard.guardrailIdentifier}
 					onChange={event =>
 						props.onChange({
@@ -1052,7 +1066,7 @@ function BedrockGuardFields(props: {
 				path="bedrockGuardrails.guardrailVersion"
 				tooltip={props.help.field<BedrockGuardrails>('BedrockGuardrails', 'guardrailVersion')}
 			>
-				<input
+				<Input
 					value={props.guard.guardrailVersion}
 					onChange={event =>
 						props.onChange({
@@ -1094,7 +1108,7 @@ function GoogleModelArmorFields(props: {
 				path="googleModelArmor.templateId"
 				tooltip={props.help.field<GoogleModelArmor>('GoogleModelArmor', 'templateId')}
 			>
-				<input
+				<Input
 					value={props.guard.templateId}
 					onChange={event =>
 						props.onChange({
@@ -1108,7 +1122,7 @@ function GoogleModelArmorFields(props: {
 				path="googleModelArmor.projectId"
 				tooltip={props.help.field<GoogleModelArmor>('GoogleModelArmor', 'projectId')}
 			>
-				<input
+				<Input
 					value={props.guard.projectId}
 					onChange={event =>
 						props.onChange({
@@ -1152,7 +1166,7 @@ function AzureContentSafetyFields(props: {
 				path="azureContentSafety.endpoint"
 				tooltip={props.help.field<AzureContentSafety>('AzureContentSafety', 'endpoint')}
 			>
-				<input
+				<Input
 					value={props.guard.endpoint}
 					onChange={event =>
 						props.onChange({
@@ -1169,7 +1183,7 @@ function AzureContentSafetyFields(props: {
 					tooltip={props.help.field<AnalyzeTextConfig>('AnalyzeTextConfig', 'severityThreshold')}
 					hint="Optional. 0-6; default is 2."
 				>
-					<input
+					<Input
 						value={props.guard.severityThreshold}
 						onChange={event =>
 							props.onChange({
@@ -1184,7 +1198,7 @@ function AzureContentSafetyFields(props: {
 					path="azureContentSafety.analyzeText.apiVersion"
 					tooltip={props.help.field<AnalyzeTextConfig>('AnalyzeTextConfig', 'apiVersion')}
 				>
-					<input
+					<Input
 						value={props.guard.analyzeApiVersion}
 						onChange={event =>
 							props.onChange({
@@ -1200,7 +1214,7 @@ function AzureContentSafetyFields(props: {
 					tooltip={props.help.field<AnalyzeTextConfig>('AnalyzeTextConfig', 'blocklistNames')}
 					hint="Comma-separated names."
 				>
-					<input
+					<Input
 						value={props.guard.blocklistNames}
 						onChange={event =>
 							props.onChange({
@@ -1210,32 +1224,28 @@ function AzureContentSafetyFields(props: {
 					/>
 				</Field>
 			</div>
-			<label className="native-toggle">
-				<input
-					type="checkbox"
-					checked={props.guard.haltOnBlocklistHit}
-					onChange={event =>
-						props.onChange({
-							haltOnBlocklistHit: event.target.checked
-						} as Partial<SupportedGuardDraft>)
-					}
-				/>
-				<span>Halt on blocklist hit</span>
-			</label>
+			<Checkbox
+				checked={props.guard.haltOnBlocklistHit}
+				onChange={event =>
+					props.onChange({
+						haltOnBlocklistHit: event.target.checked
+					} as Partial<SupportedGuardDraft>)
+				}
+			>
+				Halt on blocklist hit
+			</Checkbox>
 			{props.phase === 'request' ? (
 				<>
-					<label className="native-toggle">
-						<input
-							type="checkbox"
-							checked={props.guard.detectJailbreak}
-							onChange={event =>
-								props.onChange({
-									detectJailbreak: event.target.checked
-								} as Partial<SupportedGuardDraft>)
-							}
-						/>
-						<span>Detect jailbreak attempts</span>
-					</label>
+					<Checkbox
+						checked={props.guard.detectJailbreak}
+						onChange={event =>
+							props.onChange({
+								detectJailbreak: event.target.checked
+							} as Partial<SupportedGuardDraft>)
+						}
+					>
+						Detect jailbreak attempts
+					</Checkbox>
 					{props.guard.detectJailbreak ? (
 						<Field
 							label="Jailbreak API version"
@@ -1245,7 +1255,7 @@ function AzureContentSafetyFields(props: {
 								'apiVersion'
 							)}
 						>
-							<input
+							<Input
 								value={props.guard.jailbreakApiVersion}
 								onChange={event =>
 									props.onChange({
@@ -1279,7 +1289,7 @@ function RejectionFields(props: {
 						: props.help.field<RequestRejection1>('RequestRejection1', 'status')
 				}
 			>
-				<input
+				<Input
 					value={props.guard.rejectionStatus}
 					onChange={event =>
 						props.onChange({
@@ -1306,7 +1316,7 @@ function RejectionFields(props: {
 							)
 				}
 			>
-				<textarea
+				<Input.TextArea
 					rows={4}
 					value={props.guard.rejectionBody}
 					onChange={event =>
@@ -1336,7 +1346,7 @@ function PatternList(props: {
 			{props.patterns.map((pattern, index) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				<div className="guardrail-pattern-row" key={index}>
-					<input
+					<Input
 						className="mono-input"
 						value={pattern}
 						onChange={event =>
@@ -1348,26 +1358,20 @@ function PatternList(props: {
 						}
 						placeholder="(?i)secret-[a-z0-9]+"
 					/>
-					<button
-						className="icon-button danger guardrail-pattern-remove"
-						type="button"
+					<Button
+						className="guardrail-pattern-remove"
+						danger
 						aria-label="Remove pattern"
+						icon={<Trash2 size={16} />}
 						onClick={() =>
 							props.onChange(props.patterns.filter((_, itemIndex) => itemIndex !== index))
 						}
-					>
-						<Trash2 size={16} />
-					</button>
+					/>
 				</div>
 			))}
-			<button
-				className="button"
-				type="button"
-				onClick={() => props.onChange([...props.patterns, ''])}
-			>
-				<Plus size={16} />
+			<Button icon={<Plus size={16} />} onClick={() => props.onChange([...props.patterns, ''])}>
 				Add pattern
-			</button>
+			</Button>
 		</FieldGroup>
 	);
 }

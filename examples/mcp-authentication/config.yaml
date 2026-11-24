@@ -149,6 +149,8 @@ binds:
             #       exact: /.well-known/oauth-protected-resource/auth0/mcp
             #   - path:
             #       exact: /.well-known/oauth-authorization-server/auth0/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/auth0/mcp/client-registration
             #   policies:
             #     cors:
             #       allowHeaders:
@@ -164,6 +166,7 @@ binds:
             #         url: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
             #       provider:
             #         auth0: {}
+            #       clientId: <pre-registered-client-id>
             #       resourceMetadata:
             #         resource: http://localhost:3000/auth0/mcp
             #         scopesSupported:

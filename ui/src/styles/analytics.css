@@ -5,11 +5,44 @@
 	align-items: end;
 }
 
+/* minmax(0, 1fr) keeps a long tag from widening the field, which made antd's tag count flicker. */
 .multi-check {
 	position: relative;
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	min-width: 190px;
 	gap: 6px;
+}
+
+/* Leaves room for the "+n" tag, so a long first value is cut off rather than hidden. */
+.multi-check
+.ant-select-content-item:not(.ant-select-content-item-rest, .ant-select-content-item-suffix) {
+	max-width: calc(100% - 40px);
+}
+
+/* A filter narrowed from "All" is tinted, with a purple icon and "+n", as on main. */
+.multi-check .ant-select:has(.ant-select-selection-item) {
+	border-color: color-mix(in srgb, var(--primary) 34%, var(--line-strong));
+	background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+
+.multi-check .ant-select:has(.ant-select-selection-item) .ant-select-prefix,
+.multi-check .ant-select-content-item-rest .ant-select-selection-item {
+	color: var(--primary);
+}
+
+.multi-check .ant-select-content-item-rest .ant-select-selection-item {
+	border-color: transparent;
+	background: color-mix(in srgb, var(--primary) 12%, transparent);
+	font-weight: 600;
+}
+
+:root[data-theme='dark']
+	.multi-check
+	.ant-select:has(.ant-select-selection-item)
+	.ant-select-prefix,
+:root[data-theme='dark'] .multi-check .ant-select-content-item-rest .ant-select-selection-item {
+	color: #c084fc;
 }
 
 .multi-check > span {
@@ -17,171 +50,6 @@
 	font-size: 12px;
 	font-weight: 600;
 	text-transform: uppercase;
-}
-
-.multi-check-trigger {
-	display: inline-grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 8px;
-	justify-content: space-between;
-	min-height: 40px;
-	border-color: var(--line-strong);
-	background: var(--surface);
-	font-weight: 500;
-}
-
-.multi-check-trigger:hover {
-	background: var(--surface-2);
-}
-
-.multi-check-trigger.has-selection {
-	border-color: color-mix(in srgb, var(--primary) 34%, var(--line-strong));
-	background: color-mix(in srgb, var(--primary) 4%, var(--surface));
-	color: var(--text);
-}
-
-.multi-check-trigger-main {
-	display: inline-flex;
-	min-width: 0;
-	align-items: center;
-	gap: 8px;
-}
-
-.multi-check-trigger-main svg {
-	flex: 0 0 auto;
-	color: var(--muted);
-}
-
-.multi-check-trigger-main span {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.multi-check-trigger.has-selection .multi-check-trigger-main svg {
-	color: var(--primary);
-}
-
-/* contain: the selection never changes the field's width, so the open popover stays put. */
-.multi-check-values {
-	position: relative;
-	display: flex;
-	flex: 1 1 0;
-	min-width: 0;
-	align-items: center;
-	gap: 4px;
-	overflow: hidden;
-	contain: inline-size;
-}
-
-.multi-check-chip {
-	flex: 0 1 auto;
-	min-width: 0;
-	height: 20px;
-	border-radius: 4px;
-	background: color-mix(in srgb, var(--primary) 12%, transparent);
-	font-size: 12px;
-	line-height: 20px;
-	padding: 0 6px;
-}
-
-.multi-check-measure {
-	position: absolute;
-	display: flex;
-	width: max-content;
-	gap: 4px;
-	visibility: hidden;
-}
-
-.multi-check-measure > * {
-	flex: none;
-}
-
-.multi-check-count {
-	display: inline-flex;
-	flex: none;
-	height: 20px;
-	min-width: 24px;
-	align-items: center;
-	justify-content: center;
-	border-radius: 999px;
-	background: color-mix(in srgb, var(--primary) 12%, transparent);
-	color: var(--primary);
-	font-size: 12px;
-	font-weight: 600;
-	padding: 0 7px;
-}
-
-.multi-check-popover {
-	position: absolute;
-	top: calc(100% + 8px);
-	left: 0;
-	z-index: 35;
-	display: grid;
-	gap: 4px;
-	width: max-content;
-	min-width: max(240px, 100%);
-	max-height: 280px;
-	overflow: auto;
-	border: 1px solid var(--line-strong);
-	border-radius: 8px;
-	background: var(--surface);
-	box-shadow: var(--shadow-popover);
-	padding: 8px;
-}
-
-.multi-check-search {
-	position: sticky;
-	top: -8px;
-	z-index: 1;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin: -8px -8px 0;
-	background: var(--surface);
-	color: var(--muted);
-	padding: 8px 8px 4px 18px;
-}
-
-.multi-check-search input {
-	min-height: 32px;
-	font-size: 13px;
-	padding: 6px 8px;
-}
-
-.multi-check-option {
-	display: grid;
-	grid-template-columns: 18px minmax(0, 1fr);
-	gap: 10px;
-	align-items: center;
-	min-height: 34px;
-	border-radius: 6px;
-	color: var(--text);
-	cursor: pointer;
-	font-size: 13px;
-	padding: 0 10px;
-}
-
-.multi-check-option input[type='checkbox'] {
-	margin: 0;
-}
-
-.multi-check-option:hover {
-	background: var(--surface-2);
-}
-
-.multi-check-option.all {
-	margin-bottom: 4px;
-	border-bottom: 1px solid var(--line);
-	border-radius: 6px 6px 0 0;
-	padding-bottom: 6px;
-	color: var(--muted);
-}
-
-.multi-check-option span {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 .analytics-chart-frame {
@@ -221,102 +89,4 @@
 	fill: var(--text);
 	font-size: 12px;
 	font-weight: 600;
-}
-
-.date-range-picker {
-	position: relative;
-}
-
-.date-range-trigger {
-	min-width: 172px;
-	justify-content: space-between;
-	font-weight: 600;
-}
-
-.date-range-popover {
-	position: absolute;
-	top: calc(100% + 8px);
-	right: 0;
-	z-index: 35;
-	display: grid;
-	width: min(560px, calc(100vw - 40px));
-	grid-template-columns: 180px minmax(0, 1fr);
-	overflow: hidden;
-	border: 1px solid var(--line-strong);
-	border-radius: 8px;
-	background: var(--surface);
-	box-shadow: var(--shadow-popover);
-}
-
-.date-range-presets {
-	display: grid;
-	align-content: start;
-	gap: 2px;
-	border-right: 1px solid var(--line);
-	background: var(--surface-2);
-	padding: 10px;
-}
-
-.date-range-presets button {
-	min-height: 34px;
-	border: 0;
-	border-radius: 6px;
-	background: transparent;
-	color: var(--text);
-	padding: 0 10px;
-	text-align: left;
-	font-size: 13px;
-	font-weight: 600;
-}
-
-.date-range-presets button:hover,
-.date-range-presets button.active {
-	background: var(--surface);
-}
-
-.date-range-presets button.active {
-	color: var(--primary);
-}
-
-.date-range-custom {
-	display: grid;
-	gap: 14px;
-	padding: 16px;
-}
-
-.date-range-field-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 12px;
-}
-
-.date-range-custom input:disabled {
-	color: var(--muted);
-	background: var(--surface-2);
-}
-
-.date-range-footer {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 14px;
-	border-top: 1px solid var(--line);
-	margin: 2px -16px -16px;
-	padding: 12px 16px;
-	color: var(--muted);
-	font-size: 13px;
-}
-
-@media (max-width: 760px) {
-	.date-range-popover {
-		right: auto;
-		left: 0;
-		grid-template-columns: 1fr;
-	}
-
-	.date-range-presets {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		border-right: 0;
-		border-bottom: 1px solid var(--line);
-	}
 }

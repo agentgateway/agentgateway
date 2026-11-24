@@ -391,6 +391,23 @@
             "null"
           ]
         },
+        "responseId": {
+          "description": "The provider's identifier for the response.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "finishReasons": {
+          "description": "The provider's reasons for ending generation, one per returned choice.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "provider": {
           "description": "The provider of the LLM.",
           "type": "string"
@@ -531,18 +548,25 @@
         },
         "serviceTier": {
           "description": "The service tier the provider served the request under.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "enum": [
-            "standard",
-            "flex",
-            "priority",
-            "reserved",
-            "ultrafast",
-            "fast",
-            null
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "standard",
+                    "flex",
+                    "priority",
+                    "reserved",
+                    "ultrafast",
+                    "fast"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "timeToFirstToken": {

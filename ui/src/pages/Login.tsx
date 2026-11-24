@@ -1,3 +1,4 @@
+import { Button } from 'antd';
 import { useEffect } from 'react';
 
 import { apiBase } from '@/api/base';
@@ -28,9 +29,9 @@ export function LoginPage() {
 				</div>
 				<h1 id="login-heading">Sign in</h1>
 				<p>Sign in with your organization’s identity provider to continue.</p>
-				<a className="button primary" href={`${apiBase}/api/auth/login?${query}`}>
+				<Button type="primary" size="large" block href={`${apiBase}/api/auth/login?${query}`}>
 					Sign in with SSO
-				</a>
+				</Button>
 			</section>
 		</main>
 	);

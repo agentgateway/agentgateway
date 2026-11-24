@@ -1599,6 +1599,14 @@ pub struct LLMContext {
 	#[dynamic(rename = "responseModel")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub response_model: Option<Strng>,
+	/// The provider's identifier for the response.
+	#[dynamic(rename = "responseId")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub response_id: Option<Strng>,
+	/// The provider's reasons for ending generation, one per returned choice.
+	#[dynamic(rename = "finishReasons")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub finish_reasons: Option<Vec<Strng>>,
 	/// The provider of the LLM.
 	pub provider: Strng,
 	/// The total number of tokens in the input/prompt, including tokens read from or written to
@@ -1758,6 +1766,8 @@ impl LLMContext {
 				.as_deref()
 				.and_then(|tier| llm::catalog::PricingTier::detect(&value.request.provider, tier)),
 			response_model: resp.provider_model,
+			response_id: resp.response_id.filter(|id| !id.is_empty()),
+			finish_reasons: resp.finish_reasons,
 			// Not always set
 			completion: resp.completion,
 			tool_calls: resp.output_messages.map(|msgs| {
@@ -1854,6 +1864,8 @@ impl From<llm::LLMRequest> for LLMContext {
 			time_per_output_token: None,
 			count_tokens: None,
 			response_model: None,
+			response_id: None,
+			finish_reasons: None,
 			output_tokens: None,
 			output_image_tokens: None,
 			output_text_tokens: None,
@@ -1930,6 +1942,7 @@ fn service_tier_to_value(c: &Option<llm::catalog::PricingTier>) -> Value<'_> {
 		Some(llm::catalog::PricingTier::Reserved) => Value::String("reserved".into()),
 		Some(llm::catalog::PricingTier::Ultrafast) => Value::String("ultrafast".into()),
 		Some(llm::catalog::PricingTier::Fast) => Value::String("fast".into()),
+		Some(llm::catalog::PricingTier::Unknown(value)) => Value::String(value.as_str().into()),
 	}
 }
 
@@ -2587,6 +2600,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 			request_model: "gpt-4".into(),
 			original_model: "gpt-4".into(),
 			response_model: Some("gpt-4-turbo".into()),
+			response_id: Some("chatcmpl-123".into()),
+			finish_reasons: Some(vec!["stop".into()]),
 			provider: "fake-ai".into(),
 			input_tokens: Some(100),
 			provider_input_tokens: Some(100),

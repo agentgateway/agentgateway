@@ -76,6 +76,10 @@ info:
     "cached_input_tokens": 4,
     "service_tier": "default",
     "provider_model": "gpt-4.1-mini",
+    "response_id": "resp_tool",
+    "finish_reasons": [
+      "stop"
+    ],
     "output_messages": [
       {
         "role": "assistant",

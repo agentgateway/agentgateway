@@ -119,18 +119,19 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	}
 
 	let runtime = bedrock(bedrock::BedrockEndpointPreference::RuntimeOnly);
-	for input in [
-		InputFormat::Completions,
-		InputFormat::Messages,
-		InputFormat::Responses,
+	// Runtime serves Claude natively, falling back to Converse for Responses.
+	for (input, output) in [
+		(InputFormat::Completions, ChatFormat::AnthropicMessages),
+		(InputFormat::Messages, ChatFormat::AnthropicMessages),
+		(InputFormat::Responses, ChatFormat::BedrockConverse),
 	] {
 		assert_eq!(
 			runtime
 				.chat_translation(input, "anthropic.claude-3-5-sonnet-20241022-v2:0", None)
 				.unwrap()
 				.output,
-			ChatFormat::BedrockConverse,
-			"{input:?} must render Converse on the Runtime endpoint"
+			output,
+			"{input:?} on the Runtime endpoint"
 		);
 	}
 
@@ -2040,9 +2041,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::bedrock(bedrock::Provider {
-		model_override: Some(strng::new(
-			"bedrock-runtime/us/anthropic.claude-3-5-sonnet-20241022-v2:0",
-		)),
+		model_override: Some(strng::new("bedrock-runtime/us/amazon.nova-pro-v1:0")),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
@@ -2070,7 +2069,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		),
 		..Default::default()
 	};
-	let expected_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+	let expected_model = "amazon.nova-pro-v1:0";
 
 	let req = ::http::Request::builder()
 		.uri("https://gateway.example.com/v1/chat/completions")
@@ -2122,7 +2121,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let configured_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+	let configured_model = "amazon.nova-pro-v1:0";
 	let provider = AIProvider::bedrock(bedrock::Provider {
 		model_override: Some(strng::new(configured_model)),
 		region: strng::new("us-east-1"),
@@ -3105,6 +3104,143 @@ fn setup_request_drops_inbound_query_only_when_translated() {
 }
 
 #[test]
+fn setup_request_preserves_gemini_query_auth_with_host_override() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let decision_request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "test",
+		"questions": [{"type": "predicate", "instructions": "test?"}]
+	}))
+	.expect("decision request should parse");
+	let (_, state) = conversion::gemini::from_decisions::translate(&decision_request)
+		.expect("decision request should translate");
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Decisions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-decision-1".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::GeminiDecisions(state.into())),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/decisions?key=client-key&foo=bar",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Decisions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/decisions");
+	assert_eq!(req.uri().query(), Some("key=client-key"));
+}
+
+#[test]
+fn setup_request_drops_gemini_query_auth_when_api_key_header_is_present() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let decision_request = serde_json::from_value(json!({
+		"model": "gemini-decision-1",
+		"input": "test",
+		"questions": [{"type": "predicate", "instructions": "test?"}]
+	}))
+	.expect("decision request should parse");
+	let (_, state) = conversion::gemini::from_decisions::translate(&decision_request)
+		.expect("decision request should translate");
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Decisions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-decision-1".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::GeminiDecisions(state.into())),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/decisions?key=client-key&foo=bar",
+		http::Method::POST,
+		&[("x-goog-api-key", "backend-key")],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Decisions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/decisions");
+	assert_eq!(req.uri().query(), None);
+	assert_eq!(req.headers()["x-goog-api-key"], "backend-key");
+}
+
+#[test]
+fn setup_request_drops_translated_query_with_host_override() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-2.5-flash".into(),
+		original_model: None,
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::VertexGemini),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/messages?beta=true",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/messages");
+	assert_eq!(req.uri().query(), None);
+}
+
+#[test]
 fn setup_request_custom_generate_content_defaults_to_the_native_path() {
 	// A static configured path cannot carry the model or the streaming method, so the
 	// default for the native Gemini chat format is the canonical Gemini API shape.
@@ -3446,8 +3582,8 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			endpoint_preference: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
-		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
-		None,
+		"/proxy/anthropic/v1/messages",
+		Some("trace=repro"),
 	);
 }
 

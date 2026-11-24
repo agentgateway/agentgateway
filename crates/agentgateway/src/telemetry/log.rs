@@ -1945,6 +1945,17 @@ impl Drop for DropOnLog {
 						.and_then(|l| l.response_model.display()),
 				),
 				(
+					"gen_ai.response.id",
+					llm_response.as_ref().and_then(|l| l.response_id.display()),
+				),
+				(
+					"gen_ai.response.finish_reasons",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.finish_reasons.as_ref())
+						.map(ValueBag::capture_serde1),
+				),
+				(
 					"agw.ai.original_model",
 					log.original_model.as_deref().map(Into::into),
 				),
@@ -2411,6 +2422,13 @@ fn to_any_value(v: &ValueBag) -> AnyValue {
 		AnyValue::Double(b)
 	} else if let Some(b) = v.to_bool() {
 		AnyValue::Boolean(b)
+	} else if let Some(seq) = v.to_str_seq::<Vec<Option<std::borrow::Cow<str>>>>()
+		&& let Some(seq) = seq
+			.into_iter()
+			.map(|s| s.map(|s| AnyValue::String(s.into_owned().into())))
+			.collect::<Option<Vec<_>>>()
+	{
+		AnyValue::ListAny(Box::new(seq))
 	} else {
 		AnyValue::String(v.to_string().into())
 	}
@@ -3898,6 +3916,8 @@ mod tests {
 			output_audio_tokens: Some(4),
 			reasoning_tokens: Some(5),
 			total_tokens: Some(70),
+			response_id: Some(strng::literal!("msg_123")),
+			finish_reasons: Some(vec![strng::literal!("end_turn")]),
 			..Default::default()
 		};
 
@@ -3950,6 +3970,16 @@ mod tests {
 		assert_eq!(
 			value("gen_ai.usage.output_audio_tokens"),
 			Some(&opentelemetry::Value::I64(4))
+		);
+		assert_eq!(
+			value("gen_ai.response.id"),
+			Some(&opentelemetry::Value::String("msg_123".into()))
+		);
+		assert_eq!(
+			value("gen_ai.response.finish_reasons"),
+			Some(&opentelemetry::Value::Array(opentelemetry::Array::String(
+				vec!["end_turn".into()]
+			)))
 		);
 	}
 

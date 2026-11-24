@@ -28,7 +28,7 @@ const TRACE_POLICY_KIND: &str = "llm_cost";
 const BUILTIN_CATALOG_JSON: &str = include_str!("../../../../../catalog/model-catalog.json");
 
 #[apply(schema!)]
-#[derive(Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub enum PricingTier {
 	Standard,
 	Flex,
@@ -36,6 +36,9 @@ pub enum PricingTier {
 	Reserved,
 	Ultrafast,
 	Fast,
+	#[serde(untagged)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	Unknown(String),
 }
 
 impl PricingTier {
@@ -238,14 +241,12 @@ impl ModelCatalog {
 		let state = self.state.load();
 		let snapshot = &state.snapshot;
 		let primary = |resp: &LLMResponse| {
-			if let Some(provider_model) = &info.response.provider_model {
-				let projection = snapshot.project_with_missing_trace(
-					provider,
-					provider_model.as_str(),
-					resp,
-					convention,
-					false,
-				);
+			for model in [&info.response.served_model, &info.response.provider_model]
+				.into_iter()
+				.flatten()
+			{
+				let projection =
+					snapshot.project_with_missing_trace(provider, model.as_str(), resp, convention, false);
 				if projection.status != CostLookupStatus::Missing {
 					return projection;
 				}
@@ -523,7 +524,7 @@ impl CatalogSnapshot {
 		// Tier selection must be invariant to cache repricing below: cache tokens
 		// may move between input and their cache buckets, but their sum is stable.
 		let context_tokens = provisional_usage.context_tokens();
-		let rates = entry.effective_rates(context_tokens, pricing_tier);
+		let rates = entry.effective_rates(context_tokens, &pricing_tier);
 		if rates.is_empty() {
 			crate::proxy::dtrace::pol_event!(
 				TRACE_POLICY_KIND,
@@ -2123,6 +2124,16 @@ mod tests {
 		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(5.0));
+	}
+
+	#[tokio::test]
+	async fn builtin_catalog_has_no_client_endpoints_for_gemini_decision_model() {
+		let catalog = ModelCatalog::new(Vec::new()).await.unwrap();
+		let snapshot = catalog.snapshot();
+		let decision_model = snapshot
+			.model(gemini::Provider::NAME.as_str(), "gemini-decision-1")
+			.unwrap();
+		assert_eq!(decision_model.endpoints.as_deref(), Some(&[][..]));
 	}
 
 	#[tokio::test]

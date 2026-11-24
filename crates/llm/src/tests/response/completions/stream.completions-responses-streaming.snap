@@ -291,6 +291,10 @@ data: {"type":"response.completed","sequence_number":93,"response":{"created_at"
   "cached_input_tokens": 0,
   "service_tier": "default",
   "provider_model": "gpt-5-nano-2025-08-07",
+  "response_id": "chatcmpl-DFnKV81lMKGBRRh35sxZO8I88ireo",
+  "finish_reasons": [
+    "stop"
+  ],
   "completion": [
     "Hi there! How can I help today? If you’re not sure where to start, I can:\n\n- Answer questions or explain concepts\n- Help with writing, editing, or brainstorming\n- Assist with coding, math, or data tasks\n- Plan something (a trip, a project, a study schedule)\n- Translate or practice a language\n\nTell me what you’re aiming for, and I’ll tailor my help."
   ]

@@ -305,8 +305,12 @@ pub struct GenerationConfig {
 	pub seed: Option<i64>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response_mime_type: Option<String>,
+	/// Legacy OpenAPI-subset schema; Google recommends `response_json_schema` instead.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response_schema: Option<serde_json::Value>,
+	/// Raw JSON Schema. Mutually exclusive with `response_schema`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub response_json_schema: Option<serde_json::Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub thinking_config: Option<ThinkingConfig>,
 	#[serde(flatten, default)]
@@ -354,6 +358,12 @@ pub struct GenerateContentResponse {
 	pub model_version: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+impl GenerateContentResponse {
+	pub fn finish_reasons(&self) -> Option<Vec<agent_core::strng::Strng>> {
+		super::finish_reasons(self.candidates.iter().map(|c| c.finish_reason.as_deref()))
+	}
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -2772,6 +2772,7 @@ const (
 	AIBackend_PROVIDER_PRESET_PERPLEXITY  AIBackend_ProviderPreset = 15
 	AIBackend_PROVIDER_PRESET_TYPESAFE    AIBackend_ProviderPreset = 16
 	AIBackend_PROVIDER_PRESET_NEBIUS      AIBackend_ProviderPreset = 17
+	AIBackend_PROVIDER_PRESET_COREWEAVE   AIBackend_ProviderPreset = 18
 )
 
 // Enum value maps for AIBackend_ProviderPreset.
@@ -2795,6 +2796,7 @@ var (
 		15: "PROVIDER_PRESET_PERPLEXITY",
 		16: "PROVIDER_PRESET_TYPESAFE",
 		17: "PROVIDER_PRESET_NEBIUS",
+		18: "PROVIDER_PRESET_COREWEAVE",
 	}
 	AIBackend_ProviderPreset_value = map[string]int32{
 		"PROVIDER_PRESET_UNSPECIFIED": 0,
@@ -2815,6 +2817,7 @@ var (
 		"PROVIDER_PRESET_PERPLEXITY":  15,
 		"PROVIDER_PRESET_TYPESAFE":    16,
 		"PROVIDER_PRESET_NEBIUS":      17,
+		"PROVIDER_PRESET_COREWEAVE":   18,
 	}
 )
 
@@ -14559,8 +14562,12 @@ type BackendPolicySpec_BackendTLS struct {
 	// If empty, defaults are used.
 	KeyExchangeGroups []TLSConfig_KeyExchangeGroup                   `protobuf:"varint,8,rep,packed,name=key_exchange_groups,json=keyExchangeGroups,proto3,enum=agentgateway.dev.resource.TLSConfig_KeyExchangeGroup" json:"key_exchange_groups,omitempty"`
 	CertificateSource BackendPolicySpec_BackendTLS_CertificateSource `protobuf:"varint,9,opt,name=certificate_source,json=certificateSource,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_BackendTLS_CertificateSource" json:"certificate_source,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Local file paths to read the client cert, key and root from, watched and reloaded on change.
+	CertPath      *string `protobuf:"bytes,10,opt,name=cert_path,json=certPath,proto3,oneof" json:"cert_path,omitempty"`
+	KeyPath       *string `protobuf:"bytes,11,opt,name=key_path,json=keyPath,proto3,oneof" json:"key_path,omitempty"`
+	RootPath      *string `protobuf:"bytes,12,opt,name=root_path,json=rootPath,proto3,oneof" json:"root_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_BackendTLS) Reset() {
@@ -14654,6 +14661,27 @@ func (x *BackendPolicySpec_BackendTLS) GetCertificateSource() BackendPolicySpec_
 		return x.CertificateSource
 	}
 	return BackendPolicySpec_BackendTLS_INLINE
+}
+
+func (x *BackendPolicySpec_BackendTLS) GetCertPath() string {
+	if x != nil && x.CertPath != nil {
+		return *x.CertPath
+	}
+	return ""
+}
+
+func (x *BackendPolicySpec_BackendTLS) GetKeyPath() string {
+	if x != nil && x.KeyPath != nil {
+		return *x.KeyPath
+	}
+	return ""
+}
+
+func (x *BackendPolicySpec_BackendTLS) GetRootPath() string {
+	if x != nil && x.RootPath != nil {
+		return *x.RootPath
+	}
+	return ""
 }
 
 type BackendPolicySpec_BackendHTTP struct {
@@ -19864,7 +19892,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kindJ\x04\b\x19\x10\x1a\"\xcco\n" +
+	"\x04kindJ\x04\b\x19\x10\x1a\"\xd9p\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -20098,7 +20126,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11_health_thresholdJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05R\x11max_eviction_timeR\x14max_eviction_percent\x1a\x8c\x01\n" +
 	"\x06Health\x12/\n" +
 	"\x13unhealthy_condition\x18\x01 \x01(\tR\x12unhealthyCondition\x12Q\n" +
-	"\beviction\x18\x02 \x01(\v25.agentgateway.dev.resource.BackendPolicySpec.EvictionR\beviction\x1a\xcc\x05\n" +
+	"\beviction\x18\x02 \x01(\v25.agentgateway.dev.resource.BackendPolicySpec.EvictionR\beviction\x1a\xd9\x06\n" +
 	"\n" +
 	"BackendTLS\x12\x17\n" +
 	"\x04cert\x18\x01 \x01(\fH\x00R\x04cert\x88\x01\x01\x12\x15\n" +
@@ -20109,7 +20137,11 @@ const file_resource_proto_rawDesc = "" +
 	"\x18verify_subject_alt_names\x18\x06 \x03(\tR\x15verifySubjectAltNames\x123\n" +
 	"\x04alpn\x18\a \x01(\v2\x1f.agentgateway.dev.resource.AlpnR\x04alpn\x12e\n" +
 	"\x13key_exchange_groups\x18\b \x03(\x0e25.agentgateway.dev.resource.TLSConfig.KeyExchangeGroupR\x11keyExchangeGroups\x12x\n" +
-	"\x12certificate_source\x18\t \x01(\x0e2I.agentgateway.dev.resource.BackendPolicySpec.BackendTLS.CertificateSourceR\x11certificateSource\"C\n" +
+	"\x12certificate_source\x18\t \x01(\x0e2I.agentgateway.dev.resource.BackendPolicySpec.BackendTLS.CertificateSourceR\x11certificateSource\x12 \n" +
+	"\tcert_path\x18\n" +
+	" \x01(\tH\x04R\bcertPath\x88\x01\x01\x12\x1e\n" +
+	"\bkey_path\x18\v \x01(\tH\x05R\akeyPath\x88\x01\x01\x12 \n" +
+	"\troot_path\x18\f \x01(\tH\x06R\brootPath\x88\x01\x01\"C\n" +
 	"\x10VerificationMode\x12\n" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\x11\n" +
@@ -20123,7 +20155,12 @@ const file_resource_proto_rawDesc = "" +
 	"\x05_certB\x06\n" +
 	"\x04_keyB\a\n" +
 	"\x05_rootB\v\n" +
-	"\t_hostname\x1a\xba\x02\n" +
+	"\t_hostnameB\f\n" +
+	"\n" +
+	"_cert_pathB\v\n" +
+	"\t_key_pathB\f\n" +
+	"\n" +
+	"_root_path\x1a\xba\x02\n" +
 	"\vBackendHTTP\x12^\n" +
 	"\aversion\x18\x01 \x01(\x0e2D.agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersionR\aversion\x12B\n" +
 	"\x0frequest_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0erequestTimeout\x12Q\n" +
@@ -20239,7 +20276,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\x8a$\n" +
+	"_qualifier\"\xa9$\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -20368,7 +20405,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x06RERANK\x10\a\x12\r\n" +
 	"\tDECISIONS\x10\b\x12\x0e\n" +
 	"\n" +
-	"SYSTEM_ONE\x10\t\"\xa5\x04\n" +
+	"SYSTEM_ONE\x10\t\"\xc4\x04\n" +
 	"\x0eProviderPreset\x12\x1f\n" +
 	"\x1bPROVIDER_PRESET_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PROVIDER_PRESET_COHERE\x10\x01\x12\x1a\n" +
@@ -20388,7 +20425,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x14PROVIDER_PRESET_META\x10\x0e\x12\x1e\n" +
 	"\x1aPROVIDER_PRESET_PERPLEXITY\x10\x0f\x12\x1c\n" +
 	"\x18PROVIDER_PRESET_TYPESAFE\x10\x10\x12\x1a\n" +
-	"\x16PROVIDER_PRESET_NEBIUS\x10\x11\"\xb9\x04\n" +
+	"\x16PROVIDER_PRESET_NEBIUS\x10\x11\x12\x1d\n" +
+	"\x19PROVIDER_PRESET_COREWEAVE\x10\x12\"\xb9\x04\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +

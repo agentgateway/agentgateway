@@ -62,6 +62,10 @@ info:
     "cached_input_tokens": 2,
     "service_tier": "standard",
     "provider_model": "claude-opus-4-6",
+    "response_id": "msg_01Aq9w938a90dw8q",
+    "finish_reasons": [
+      "tool_use"
+    ],
     "output_messages": [
       {
         "role": "assistant",

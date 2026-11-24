@@ -71,6 +71,9 @@
 |`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`, `readOnly`.|
+|`config.fileAccess`|object|Restricts which resource files configuration API validation and xDS backend TLS may use.<br>The longest matching prefix wins. A tie goes to `deny`.|
+|`config.fileAccess.allow`|[]string|Absolute path prefixes to allow. An empty list allows any path that passes the deny rules.|
+|`config.fileAccess.deny`|[]string|Absolute path prefixes to deny alongside the default prefixes `/dev`, `/proc`, and `/sys`.|
 |`config.caAddress`|string|Address of the Certificate Authority used to issue SPIFFE certificates.|
 |`config.caAuthToken`|string|Authentication token for communicating with the Certificate Authority.|
 |`config.xdsAddress`|string|Address of the xDS control plane used for dynamic configuration.|
@@ -346,7 +349,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`binds[].listeners[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`binds[].listeners[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -1913,7 +1916,7 @@
 |`policies[].policy.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`policies[].policy.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`policies[].policy.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`policies[].policy.localRateLimit`|object|Local rate limits for incoming requests.|
+|`policies[].policy.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`policies[].policy.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`policies[].policy.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -3056,7 +3059,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routeGroups[].routes[].policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`routeGroups[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`routeGroups[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -4690,7 +4693,7 @@
 |`routes[].policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routes[].policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`routes[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`routes[].policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routes[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
@@ -6185,7 +6188,7 @@
 |`llm.policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`llm.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails`|[`<Guardrails>`](#guardrails)|Guardrails to apply to every configured model.|
-|`llm.policies.localRateLimit`|[]object|Local rate limits for incoming requests.|
+|`llm.policies.localRateLimit`|[]object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`llm.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`llm.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
@@ -6419,7 +6422,7 @@
 |`mcp.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`mcp.policies.backendTunnel.policies`|[`<BackendPolicies>`](#backendpolicies)|Policies to connect to the proxy backend|
 |`mcp.policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to the backend.|
-|`mcp.policies.localRateLimit`|object|Local rate limits for incoming requests.|
+|`mcp.policies.localRateLimit`|object|Local rate limits for incoming requests. Each gateway instance enforces its own limit. For a shared limit across instances, configure a remote rate limit service.|
 |`mcp.policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|

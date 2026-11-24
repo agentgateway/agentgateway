@@ -1,3 +1,4 @@
+import { Button } from 'antd';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
@@ -40,9 +41,9 @@ export function CollapsiblePolicySection(props: {
 					: 'policy-form-section transform-section'
 			}
 		>
-			<button
+			<Button
 				className="policy-form-section-header transform-section-toggle"
-				type="button"
+				type="text"
 				aria-expanded={open}
 				onClick={() => setOpen(current => !current)}
 			>
@@ -55,7 +56,7 @@ export function CollapsiblePolicySection(props: {
 					<span className="policy-form-section-summary">{props.summary}</span>
 				) : null}
 				{open ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
-			</button>
+			</Button>
 			{open ? (
 				<div
 					className={

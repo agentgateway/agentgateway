@@ -12,6 +12,7 @@ data: {"type":"error","error":{"type":"rate_limit_error","message":"provider fai
 
 {
   "provider_model": "gpt-5.6-luna",
+  "response_id": "resp_terminal",
   "completion": [
     ""
   ]

@@ -281,6 +281,7 @@ const (
 	ModelProviderPerplexity  ModelProvider = "Perplexity"
 	ModelProviderTypesafe    ModelProvider = "Typesafe"
 	ModelProviderNebius      ModelProvider = "Nebius"
+	ModelProviderCoreWeave   ModelProvider = "CoreWeave"
 	ModelProviderCustom      ModelProvider = "Custom"
 )
 

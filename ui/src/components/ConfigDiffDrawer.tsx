@@ -1,5 +1,5 @@
-import '@/monacoWorkers';
 import { DiffEditor } from '@monaco-editor/react';
+import { Button } from 'antd';
 import { FileText, Save } from 'lucide-react';
 import { type ReactNode, useContext, useId, useState } from 'react';
 
@@ -7,7 +7,9 @@ import { Drawer, DrawerCheckContext, Tooltip } from '@/components/Primitives';
 import { cloneConfig } from '@/config';
 import { configureConfigYamlMonaco } from '@/configMonaco';
 import { allowNextHybridFileWrite, useHybridFileWriteOverrideKeys, useRuntimeInfo } from '@/hooks';
+import { monacoTheme } from '@/monacoWorkers';
 import { toYamlText } from '@/policies/policyUtils';
+import { useTheme } from '@/theme';
 import type { GatewayConfig } from '@/types';
 
 const hybridFileWriteMessage =
@@ -26,10 +28,12 @@ export function ConfigSaveButton(props: {
 	const overrideKeysActive = useHybridFileWriteOverrideKeys();
 	const fileWriteDisabled =
 		runtime.data?.ui.configStoreMode === 'hybrid' && !props.allowHybridWrite;
+	// Blocked saves look disabled without hover colours; the override keys make them clickable.
+	const blocked = fileWriteDisabled && !overrideKeysActive;
 	const button = (
-		<button
-			className={`button primary${fileWriteDisabled ? ' hybrid-write-disabled' : ''}${fileWriteDisabled && overrideKeysActive ? ' hybrid-write-override' : ''}`}
-			type="button"
+		<Button
+			type="primary"
+			style={blocked ? { opacity: 0.6, pointerEvents: 'none' } : undefined}
 			disabled={props.disabled}
 			aria-disabled={fileWriteDisabled}
 			onClick={event => {
@@ -41,7 +45,7 @@ export function ConfigSaveButton(props: {
 			}}
 		>
 			{props.children}
-		</button>
+		</Button>
 	);
 	if (!fileWriteDisabled) return button;
 	return (
@@ -52,7 +56,9 @@ export function ConfigSaveButton(props: {
 					: (props.hybridFileWriteMessage ?? hybridFileWriteMessage)
 			}
 		>
-			{button}
+			<span style={{ display: 'inline-flex', cursor: blocked ? 'not-allowed' : undefined }}>
+				{button}
+			</span>
 		</Tooltip>
 	);
 }
@@ -83,6 +89,7 @@ export function ConfigDiffDrawer(props: {
 	onSave?: () => void;
 }) {
 	const modelId = useId();
+	const { theme } = useTheme();
 	const modelPath = `inmemory://config-diff/${encodeURIComponent(props.title)}/${encodeURIComponent(modelId)}`;
 	const saveButton = props.onSave ? (
 		<ConfigSaveButton
@@ -101,9 +108,7 @@ export function ConfigDiffDrawer(props: {
 			onClose={props.onClose}
 			footer={
 				<div className="button-row">
-					<button className="button" type="button" onClick={props.onClose}>
-						Close
-					</button>
+					<Button onClick={props.onClose}>Close</Button>
 					{saveButton}
 				</div>
 			}
@@ -118,7 +123,7 @@ export function ConfigDiffDrawer(props: {
 					modifiedModelPath={`${modelPath}/modified.yaml`}
 					keepCurrentOriginalModel
 					keepCurrentModifiedModel
-					theme={document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'light'}
+					theme={monacoTheme(theme)}
 					options={{
 						automaticLayout: true,
 						copyWithSyntaxHighlighting: false,
@@ -147,6 +152,7 @@ export function ConfigDiffDrawer(props: {
 
 export function ConfigDiffSaveActions(props: {
 	config?: GatewayConfig | null;
+	allowHybridWrite?: boolean;
 	resourceDiff?:
 		| { original: unknown; modified: unknown }
 		| (() => { original: unknown; modified: unknown });
@@ -159,13 +165,15 @@ export function ConfigDiffSaveActions(props: {
 	onCancel?: () => void;
 	onSave: () => void;
 	beforeDiff?: () => boolean;
-	applyDiff: (config: GatewayConfig) => void;
+	applyDiff?: (config: GatewayConfig) => void;
 }) {
 	const [diff, setDiff] = useState<{
 		original: string;
 		modified: string;
 	} | null>(null);
 	const check = useContext(DrawerCheckContext);
+	const canDiff = Boolean(props.resourceDiff || (props.config && props.applyDiff));
+	const allowHybridWrite = props.allowHybridWrite ?? Boolean(props.resourceDiff);
 
 	function save() {
 		if (check && !check()) return;
@@ -173,7 +181,7 @@ export function ConfigDiffSaveActions(props: {
 	}
 
 	function viewDiff() {
-		if ((!props.config && !props.resourceDiff) || props.diffDisabled || props.saveDisabled) return;
+		if (!canDiff || props.diffDisabled || props.saveDisabled) return;
 		if (check && !check()) return;
 		if (props.beforeDiff && !props.beforeDiff()) return;
 		if (props.resourceDiff) {
@@ -185,41 +193,30 @@ export function ConfigDiffSaveActions(props: {
 			});
 			return;
 		}
-		if (!props.config) return;
+		if (!props.config || !props.applyDiff) return;
 		const modified = cloneConfig(props.config);
 		props.applyDiff(modified);
 		setDiff(configDiffText(props.config, modified));
 	}
 
 	const diffButton = (
-		<button
-			className="button"
-			type="button"
-			disabled={
-				props.saving ||
-				(!props.config && !props.resourceDiff) ||
-				props.diffDisabled ||
-				props.saveDisabled
-			}
+		<Button
+			icon={<FileText size={16} />}
+			disabled={props.saving || !canDiff || props.diffDisabled || props.saveDisabled}
 			onClick={viewDiff}
 		>
-			<FileText size={16} />
 			View diff
-		</button>
+		</Button>
 	);
 
 	return (
 		<>
 			<div className="button-row">
-				{props.onCancel ? (
-					<button className="button" type="button" onClick={props.onCancel}>
-						Cancel
-					</button>
-				) : null}
+				{props.onCancel ? <Button onClick={props.onCancel}>Cancel</Button> : null}
 				{props.diffDisabled ? <Tooltip content="No diff">{diffButton}</Tooltip> : diffButton}
 				<ConfigSaveButton
 					disabled={props.saving || props.saveDisabled}
-					allowHybridWrite={Boolean(props.resourceDiff)}
+					allowHybridWrite={allowHybridWrite}
 					hybridFileWriteMessage={props.hybridFileWriteMessage}
 					onClick={save}
 				>
@@ -233,7 +230,7 @@ export function ConfigDiffSaveActions(props: {
 					original={diff.original}
 					modified={diff.modified}
 					saving={props.saving}
-					allowHybridWrite={Boolean(props.resourceDiff)}
+					allowHybridWrite={allowHybridWrite}
 					onClose={() => setDiff(null)}
 					onSave={() => {
 						setDiff(null);

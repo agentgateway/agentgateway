@@ -1,10 +1,11 @@
 import { Link } from '@tanstack/react-router';
+import { Button, Collapse, Tag } from 'antd';
 import { Shield } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { PolicyResourceKind } from '@/api/configResourcesApi';
-import { PageHeader, Panel, StatusBanner, YamlBlock } from '@/components/Primitives';
+import { PageHeader, StatusBanner, YamlBlock } from '@/components/Primitives';
 import { ensureLlm, ensureMcp } from '@/config';
 import {
 	resetFinishedSaves,
@@ -276,15 +277,31 @@ export function PolicyCatalogPage(props: {
 				))}
 			</div>
 
-			<details className="schema-details policy-yaml-details">
-				<summary>Current top-level policy YAML</summary>
-				<Panel>
-					<div className="section-heading">
-						<p>{props.yamlDescription}</p>
-					</div>
-					<YamlBlock value={policies ?? {}} />
-				</Panel>
-			</details>
+			<Collapse
+				ghost
+				styles={{
+					root: { marginBottom: 8 },
+					header: {
+						padding: '10px 0 8px',
+						color: 'var(--muted)',
+						fontSize: 13,
+						fontWeight: 700,
+						lineHeight: 'normal'
+					}
+				}}
+				items={[
+					{
+						key: 'yaml',
+						label: 'Current top-level policy YAML',
+						children: (
+							<>
+								<p className="muted-copy">{props.yamlDescription}</p>
+								<YamlBlock value={policies ?? {}} />
+							</>
+						)
+					}
+				]}
+			/>
 
 			{selected && selectedMeta && !policiesDisabled && !policyDataUnavailable ? (
 				<PolicyDrawer
@@ -344,14 +361,13 @@ function PolicyTile(props: {
 		);
 	}
 	return (
-		<button
+		<Button
 			className={className}
-			type="button"
 			disabled={props.disabled}
 			onClick={() => props.onOpen(props.policy.key)}
 		>
 			<PolicyTileContent policy={props.policy} />
-		</button>
+		</Button>
 	);
 }
 
@@ -394,9 +410,9 @@ function PolicyTileContent(props: {
 				<span className="policy-icon">
 					<Icon size={18} />
 				</span>
-				<span className={props.policy.enabled ? 'badge ok' : 'badge'}>
+				<Tag color={props.policy.enabled ? 'success' : undefined}>
 					{props.policy.enabled ? 'enabled' : 'disabled'}
-				</span>
+				</Tag>
 			</div>
 			<strong>{props.policy.title}</strong>
 			{summary ? <span>{summary}</span> : null}

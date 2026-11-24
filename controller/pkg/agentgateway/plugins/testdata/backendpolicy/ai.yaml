@@ -57,20 +57,20 @@ spec:
               identifier: bedrock-guardrail-identifier
               version: DRAFT
               region: us-west-2
-              policies:
-                auth:
-                  aws:
-                    secretRef:
-                      name: aws-secret
+            policies:
+              auth:
+                aws:
+                  secretRef:
+                    name: aws-secret
           - googleModelArmor:
               templateId: model-armor-template-id
               projectId: model-armor-project-id
               location: us-central1
-              policies:
-                auth:
-                  gcp:
-                    type: IdToken
-                    audience: "https://ai-guardrails.example.com"
+            policies:
+              auth:
+                gcp:
+                  type: IdToken
+                  audience: "https://ai-guardrails.example.com"
         request:
           - response:
               message: "regex rejected on request"
@@ -84,10 +84,10 @@ spec:
                 - CreditCard
               matches:
                 - 'bad.*'
-          - openAIModeration:
-              policies:
-                tls:
-                  insecureSkipVerify: All
+          - openAIModeration: {}
+            policies:
+              tls:
+                insecureSkipVerify: All
           - bedrockGuardrails:
               identifier: bedrock-guardrail-identifier
               version: DRAFT

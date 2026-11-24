@@ -60,6 +60,7 @@ pub fn passthrough_stream(
 				}
 			});
 		}
+		record_provider_chunk(&log, &chunk);
 		if let Some(um) = &chunk.usage_metadata {
 			let (prompt, completion, total) = um.counts();
 			log.update(|r| {
@@ -103,6 +104,18 @@ pub fn passthrough_stream(
 			}
 		}
 	})
+}
+
+fn record_provider_chunk(log: &crate::StreamingUsageGuard, chunk: &vg::GenerateContentResponse) {
+	if let Some(id) = &chunk.response_id {
+		log.update(|r| r.response.response_id = Some(strng::new(id)));
+	}
+	for (i, candidate) in chunk.candidates.iter().enumerate() {
+		if let Some(reason) = &candidate.finish_reason {
+			let index = candidate.index.map_or(i, |index| index as usize);
+			log.update(|r| r.response.set_finish_reason(index, strng::new(reason)));
+		}
+	}
 }
 
 pub mod from_completions {
@@ -154,14 +167,13 @@ pub mod from_completions {
 			mime_from_ext_token(hint).map(str::to_string)
 		}
 	}
-	pub fn translate(req: &types::completions::Request, is_vertex: bool) -> Result<Vec<u8>, AIError> {
-		let out = build_request(req, is_vertex)?;
+	pub fn translate(req: &types::completions::Request) -> Result<Vec<u8>, AIError> {
+		let out = build_request(req)?;
 		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
 	}
 
 	pub(super) fn build_request(
 		req: &types::completions::Request,
-		is_vertex: bool,
 	) -> Result<vg::GenerateContentRequest, AIError> {
 		let model = req
 			.model
@@ -189,7 +201,7 @@ pub mod from_completions {
 
 		let tools = build_tools(req);
 		let tool_config = build_tool_config(req);
-		let generation_config = build_generation_config(req, model, is_vertex);
+		let generation_config = build_generation_config(req, model);
 
 		let cached_content = req
 			.rest
@@ -633,9 +645,7 @@ pub mod from_completions {
 					.get("description")
 					.and_then(Value::as_str)
 					.map(str::to_string),
-				parameters: f
-					.get("parameters")
-					.map(|s| normalize_gemini_schema(s, false)),
+				parameters: f.get("parameters").map(normalize_gemini_schema),
 				rest: Default::default(),
 			})
 			.collect();
@@ -688,7 +698,6 @@ pub mod from_completions {
 	fn build_generation_config(
 		req: &types::completions::Request,
 		model: &str,
-		is_vertex: bool,
 	) -> Option<vg::GenerationConfig> {
 		let stop_sequences = match &req.stop {
 			Some(Value::String(s)) => vec![s.clone()],
@@ -700,7 +709,7 @@ pub mod from_completions {
 			_ => Vec::new(),
 		};
 
-		let (response_mime_type, response_schema) = response_format(req, is_vertex);
+		let (response_mime_type, response_json_schema) = response_format(req);
 		let thinking_config = thinking_config(req, model);
 
 		let cfg = vg::GenerationConfig {
@@ -718,7 +727,8 @@ pub mod from_completions {
 			candidate_count: req.rest.get("n").and_then(Value::as_u64).map(|v| v as u32),
 			seed: req.seed,
 			response_mime_type,
-			response_schema,
+			response_schema: None,
+			response_json_schema,
 			thinking_config,
 			rest: Default::default(),
 		};
@@ -730,35 +740,33 @@ pub mod from_completions {
 		}
 	}
 
-	fn response_format(
-		req: &types::completions::Request,
-		is_vertex: bool,
-	) -> (Option<String>, Option<Value>) {
+	fn response_format(req: &types::completions::Request) -> (Option<String>, Option<Value>) {
 		let Some(rf) = req.rest.get("response_format") else {
 			return (None, None);
 		};
 		match rf.get("type").and_then(Value::as_str) {
 			Some("json_object") => (Some("application/json".into()), None),
 			Some("json_schema") => {
-				// Unwrap OpenAI's {schema, strict, name, description} and normalize the bare schema.
-				// Vertex AI accepts additionalProperties in responseSchema; the Gemini API does not.
+				// Unwrap OpenAI's {schema, strict, name, description}. `responseJsonSchema` accepts
+				// raw JSON Schema ($defs/$ref/anyOf/additionalProperties) on both the Gemini API and
+				// Vertex AI, so the schema passes through unchanged — no normalization needed.
 				let schema = rf
 					.get("json_schema")
 					.and_then(|js| js.get("schema"))
-					.map(|s| normalize_gemini_schema(s, is_vertex));
+					.cloned();
 				(Some("application/json".into()), schema)
 			},
 			_ => (None, None),
 		}
 	}
 
-	// Gemini's responseSchema / functionDeclarations[].parameters accept only a subset of JSON Schema.
-	// The normalization below is ported from litellm's `_build_vertex_schema` (BerriAI/litellm, MIT).
-	//
-	// Authoritative field list: google/ai/generativelanguage/v1beta/content.proto — Schema message.
-	// Cross-checked against litellm/types/llms/vertex_ai.py Schema TypedDict (both MIT-licensed).
+	// Gemini's functionDeclarations[].parameters accept only a subset of JSON Schema (the
+	// generativelanguage v1beta content.proto Schema message), so tool parameters are normalized
+	// below. Structured-output schemas bypass this: they egress as raw JSON Schema via
+	// `responseJsonSchema`, which Google recommends over the legacy `responseSchema` subset.
 
-	/// Schema fields Gemini accepts. `enum` is dropped on non-string types.
+	/// Schema fields Gemini accepts in `functionDeclarations[].parameters`.
+	/// `additionalProperties` is rejected and `enum` is dropped on non-string types.
 	const ALLOWED_SCHEMA_FIELDS: &[&str] = &[
 		"type",
 		"format",
@@ -783,20 +791,17 @@ pub mod from_completions {
 		"minProperties",
 		"maxProperties",
 		"example",
-		"additionalProperties",
 		"propertyOrdering",
 	];
 
-	/// Normalize an OpenAI JSON Schema into the Gemini/Vertex subset.
-	///
-	/// Set `preserve_ap` to `true` for Vertex AI `responseSchema` — Vertex accepts
-	/// `additionalProperties`. Set it to `false` for the Gemini API `responseSchema` and for
-	/// `functionDeclarations[].parameters` (both reject the key).
-	pub(super) fn normalize_gemini_schema(schema: &Value, preserve_ap: bool) -> Value {
+	/// Normalize an OpenAI JSON Schema into the subset Gemini accepts for tool parameters:
+	/// inline `$ref`/`$defs`, rewrite unsupported keywords, and strip `additionalProperties`.
+	/// Caller-provided `propertyOrdering` is preserved; none is injected.
+	pub(super) fn normalize_gemini_schema(schema: &Value) -> Value {
 		let mut out = schema.clone();
 		let defs = take_defs(&mut out);
 		inline_refs(&mut out, &defs, &mut Vec::new());
-		clean_schema_node(&mut out, preserve_ap);
+		clean_schema_node(&mut out);
 		out
 	}
 
@@ -1038,12 +1043,12 @@ pub mod from_completions {
 	}
 
 	/// Rewrite a single schema node and its children into Gemini's accepted shape.
-	fn clean_schema_node(node: &mut Value, preserve_ap: bool) {
+	fn clean_schema_node(node: &mut Value) {
 		let map = match node {
 			Value::Object(map) => map,
 			Value::Array(arr) => {
 				for v in arr.iter_mut() {
-					clean_schema_node(v, preserve_ap);
+					clean_schema_node(v);
 				}
 				return;
 			},
@@ -1082,10 +1087,8 @@ pub mod from_completions {
 			map.insert("type".to_string(), "object".into());
 		}
 
-		for_each_child_schema(map, |v| clean_schema_node(v, preserve_ap));
-		map.retain(|k, _| {
-			ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()) && (preserve_ap || k != "additionalProperties")
-		});
+		for_each_child_schema(map, clean_schema_node);
+		map.retain(|k, _| ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()));
 	}
 
 	/// Model families that take a `thinkingLevel` string instead of an integer
@@ -1206,7 +1209,12 @@ pub mod to_completions {
 		let typed = build_response(&resp);
 		let inner =
 			json::convert::<_, types::completions::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(inner))
+		Ok(Box::new(super::super::ProviderResponse {
+			response: inner,
+			usage: None,
+			id: resp.response_id.as_deref().map(strng::new),
+			finish_reasons: resp.finish_reasons(),
+		}))
 	}
 
 	#[derive(Default)]
@@ -1590,6 +1598,7 @@ pub mod to_completions {
 					}
 				});
 			}
+			record_provider_chunk(&log, &chunk);
 			if let Some(um) = &chunk.usage_metadata {
 				let (prompt, completion, total) = um.counts();
 				log.update(|r| {

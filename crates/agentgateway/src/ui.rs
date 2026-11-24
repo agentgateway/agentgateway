@@ -263,6 +263,13 @@ enum GatewayRuntimeMode {
 	Xds,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ConfigResourceSource {
+	File,
+	Database,
+}
+
 /// A configuration resource.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -275,6 +282,7 @@ struct UiConfigResource {
 	/// non-policy kinds. For policy kinds, it has the policy's configuration shape, which can be an
 	/// array or null for some IDs.
 	value: Value,
+	source: ConfigResourceSource,
 	/// The stored revision, incremented on each change. Present only for stored resources.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	revision: Option<i64>,
@@ -305,6 +313,7 @@ impl From<ConfigResource> for UiConfigResource {
 			kind: resource.kind,
 			id: resource.id,
 			value: resource.value,
+			source: ConfigResourceSource::Database,
 			revision: Some(resource.revision),
 			created_at: Some(resource.created_at),
 			updated_at: Some(resource.updated_at),
@@ -319,6 +328,7 @@ impl From<PreparedResource> for UiConfigResource {
 			kind: resource.kind,
 			id: resource.id,
 			value: resource.value,
+			source: ConfigResourceSource::File,
 			revision: None,
 			created_at: None,
 			updated_at: None,
@@ -644,7 +654,7 @@ async fn write_validated_config(
 async fn list_config_resources(
 	State(app): State<App>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
-	list_stored_config_resources(&app, None).await.map(Json)
+	list_resources(&app, None).await.map(Json)
 }
 
 async fn list_config_resources_by_kind(
@@ -652,34 +662,34 @@ async fn list_config_resources_by_kind(
 	Path(kind): Path<String>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
 	let kind = parse_api_kind(&kind)?;
-	list_stored_config_resources(&app, Some(kind))
-		.await
-		.map(Json)
+	list_resources(&app, Some(kind)).await.map(Json)
 }
 
-async fn list_stored_config_resources(
+async fn list_resources(
 	app: &App,
 	kind: Option<ConfigResourceKind>,
 ) -> Result<UiConfigResourcesResponse, ErrorResponse> {
-	if app.state.storage.mode != ConfigStoreMode::Hybrid {
-		let resources = if app.state.xds.local_config.is_some() {
-			let config = read_file_config(app).await?;
+	let mut resources = Vec::new();
+	if app.state.xds.local_config.is_some() {
+		let config = read_file_config(app).await?;
+		resources.extend(
 			crate::config_store::file_config_resources(&config, kind)
-		} else {
-			Vec::new()
-		};
-		return Ok(UiConfigResourcesResponse {
-			resources: resources.into_iter().map(UiConfigResource::from).collect(),
-		});
+				.into_iter()
+				.map(UiConfigResource::from),
+		);
 	}
-	let resources = app
-		.config_resource_store()?
-		.list(kind)
-		.await
-		.map_err(resource_api_error)?;
-	Ok(UiConfigResourcesResponse {
-		resources: resources.into_iter().map(UiConfigResource::from).collect(),
-	})
+	if app.state.storage.mode == ConfigStoreMode::Hybrid {
+		resources.extend(
+			app
+				.config_resource_store()?
+				.list(kind)
+				.await
+				.map_err(resource_api_error)?
+				.into_iter()
+				.map(UiConfigResource::from),
+		);
+	}
+	Ok(UiConfigResourcesResponse { resources })
 }
 
 async fn read_file_config(app: &App) -> Result<Value, ErrorResponse> {
@@ -993,8 +1003,10 @@ async fn validate_materialized_config(
 
 async fn validate_config_in_task(app: &App, config: String) -> anyhow::Result<()> {
 	let state = app.state.clone();
-	let resources =
-		crate::resource_manager::ResourceFetcher::cached_or_direct(app.resource_manager.clone());
+	let resources = crate::resource_manager::ResourceFetcher::cached_or_direct(
+		app.resource_manager.clone(),
+		state.file_access.clone(),
+	);
 	let gateway = state.gateway();
 
 	// Boxing these futures keeps their state on the heap, but each nested `poll` still adds its

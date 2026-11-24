@@ -103,6 +103,178 @@ fn unvalidated_jwt_payload() {
 }
 
 #[test]
+fn recurse() {
+	let chain = r#"{"v": 1, "next": {"v": 2, "next": {"v": 3}}}"#;
+	assert(json!([{"v": 1}]), r#"{"v": 1}.recurse("next")"#);
+	assert(
+		json!([
+			{"v": 1, "next": {"v": 2, "next": {"v": 3}}},
+			{"v": 2, "next": {"v": 3}},
+			{"v": 3},
+		]),
+		&format!(r#"{chain}.recurse("next")"#),
+	);
+	assert(
+		json!([1, 2, 3]),
+		&format!(r#"{chain}.recurse("next").map(n, n.v)"#),
+	);
+	assert(
+		json!(true),
+		&format!(r#"{chain}.recurse("next").all(n, n.v < 4)"#),
+	);
+	assert(
+		json!(false),
+		&format!(r#"{chain}.recurse("next").all(n, n.v < 3)"#),
+	);
+
+	let deep = (1..40).fold(r#"{"v": 0}"#.to_string(), |inner, i| {
+		format!(r#"{{"v": {i}, "next": {inner}}}"#)
+	});
+	assert(json!(40), &format!(r#"size({deep}.recurse("next"))"#));
+
+	assert_fails(r#"{"v": 1, "next": "x"}.recurse("next")"#);
+	assert_fails(r#"{"v": 1, "next": null}.recurse("next")"#);
+	assert_fails(r#"{"v": 1, "next": [{"v": 2}]}.recurse("next")"#);
+	assert_fails(r#""x".recurse("next")"#);
+	assert_fails(r#"{"v": 1}.recurse(1)"#);
+}
+
+#[test]
+fn recurse_dynamic() {
+	let eval_data = |data: serde_json::Value, expr: &str| {
+		let prog = Program::compile(expr).unwrap();
+		let mut c = Context::default();
+		insert_all(&mut c);
+		let resolver = context::SingleVarResolver::new(
+			&context::DefaultVariableResolver,
+			"data",
+			Value::Dynamic(DynamicValue::new(&data)),
+		);
+		Value::resolve(prog.expression(), &c, &resolver).map(|v| {
+			if expr.ends_with(".recurse(\"next\")") {
+				// Nodes are views over the input, not copies.
+				let Value::List(l) = &v else { panic!("{v:?}") };
+				assert!(l.as_ref().iter().all(|n| matches!(n, Value::Dynamic(_))));
+			}
+			v.json().unwrap()
+		})
+	};
+
+	let chain = json!({"v": 1, "next": {"v": 2, "next": {"v": 3}}});
+	assert_eq!(
+		json!([{"v": 1, "next": {"v": 2, "next": {"v": 3}}}, {"v": 2, "next": {"v": 3}}, {"v": 3}]),
+		eval_data(chain.clone(), r#"data.recurse("next")"#).unwrap()
+	);
+	assert_eq!(
+		json!([{"v": 1}]),
+		eval_data(json!({"v": 1}), r#"data.recurse("next")"#).unwrap()
+	);
+	assert_eq!(
+		json!([1, 2, 3]),
+		eval_data(chain.clone(), r#"data.recurse("next").map(n, n.v)"#).unwrap()
+	);
+	assert_eq!(
+		json!([2, 3]),
+		eval_data(chain, r#"data.next.recurse("next").map(n, n.v)"#).unwrap()
+	);
+
+	let deep = (1..200).fold(json!({"v": 0}), |inner, i| json!({"v": i, "next": inner}));
+	assert_eq!(
+		json!(200),
+		eval_data(deep, r#"size(data.recurse("next"))"#).unwrap()
+	);
+
+	let err = eval_data(
+		json!({"v": 1, "next": [{"v": 2}]}),
+		r#"data.recurse("next")"#,
+	)
+	.unwrap_err();
+	assert!(err.to_string().contains("got 'list'"), "{err}");
+	for data in [
+		json!({"v": 1, "next": "x"}),
+		json!({"v": 1, "next": null}),
+		json!("x"),
+		json!([{"v": 1}]),
+	] {
+		assert!(
+			eval_data(data.clone(), r#"data.recurse("next")"#).is_err(),
+			"{data}"
+		);
+	}
+}
+
+#[test]
+fn recurse_materializes_only_last_dynamic_node() {
+	let chain = Node::chain(3);
+	let prog = Program::compile(r#"data.recurse("next")"#).unwrap();
+	let mut c = Context::default();
+	insert_all(&mut c);
+	let resolver = context::SingleVarResolver::new(
+		&context::DefaultVariableResolver,
+		"data",
+		Value::Dynamic(DynamicValue::new(&chain)),
+	);
+	let Value::List(l) = Value::resolve(prog.expression(), &c, &resolver).unwrap() else {
+		panic!("expected a list");
+	};
+	assert_eq!(3, l.as_ref().len());
+	assert_eq!(vec![0, 0, 1], chain.materialize_counts());
+}
+
+/// A dynamic linked list that counts how often each node is materialized.
+#[derive(Debug)]
+struct Node {
+	v: i64,
+	next: Option<Box<Node>>,
+	materialized: std::sync::atomic::AtomicUsize,
+}
+
+impl Node {
+	fn chain(len: i64) -> Node {
+		(0..len)
+			.rev()
+			.fold(None, |next, v| {
+				Some(Node {
+					v,
+					next: next.map(Box::new),
+					materialized: Default::default(),
+				})
+			})
+			.unwrap()
+	}
+
+	fn materialize_counts(&self) -> Vec<usize> {
+		let mut counts = Vec::new();
+		let mut node = Some(self);
+		while let Some(n) = node {
+			counts.push(n.materialized.load(std::sync::atomic::Ordering::Relaxed));
+			node = n.next.as_deref();
+		}
+		counts
+	}
+}
+
+impl cel::types::dynamic::DynamicType for Node {
+	fn materialize(&self) -> Value<'_> {
+		self
+			.materialized
+			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+		cel::to_value(json!({"v": self.v})).unwrap()
+	}
+
+	fn field(&self, field: &str) -> Option<Value<'_>> {
+		match field {
+			"v" => Some(Value::Int(self.v)),
+			"next" => self
+				.next
+				.as_deref()
+				.map(|n| Value::Dynamic(DynamicValue::new(n))),
+			_ => None,
+		}
+	}
+}
+
+#[test]
 fn random() {
 	let expr = r#"int(random() * 10.0)"#;
 	let v = eval_with_optimizations_check(expr, false)
