@@ -832,10 +832,16 @@ pub mod from_messages {
 		// Explicit prompt-cache breakpoints are accepted only by GPT 5.6 and newer models.
 		let supports_prompt_cache_breakpoint =
 			crate::conversion::supports_prompt_cache_breakpoint(&model);
+		// Set once any breakpoint is emitted: the request then needs explicit mode (see below).
+		let breakpoint_emitted = std::cell::Cell::new(false);
 		let cache_breakpoint = |cache_control: Option<messages::CacheControlEphemeral>| {
-			cache_control
+			let breakpoint = cache_control
 				.filter(|_| supports_prompt_cache_breakpoint)
-				.map(Into::into)
+				.map(Into::into);
+			if breakpoint.is_some() {
+				breakpoint_emitted.set(true);
+			}
+			breakpoint
 		};
 
 		let output_effort = output_config
@@ -995,6 +1001,7 @@ pub mod from_messages {
 											}
 										}
 										if let Some(cache_control) = trailing_cache_control {
+											breakpoint_emitted.set(true);
 											let breakpoint = Some(cache_control.into());
 											if let Some(completions::RequestToolMessageContentPart::Text(part)) =
 												tool_parts.last_mut()
@@ -1290,6 +1297,12 @@ pub mod from_messages {
 			service_tier: None,
 			parallel_tool_calls,
 			web_search_options: None,
+			// Messages caches only at the breakpoints the client marks. Without explicit mode OpenAI
+			// also adds its implicit breakpoint at the end of the prompt, so every request would
+			// write its whole prompt to the cache.
+			prompt_cache_options: breakpoint_emitted
+				.get()
+				.then(|| serde_json::json!({"mode": "explicit"})),
 		}
 	}
 }

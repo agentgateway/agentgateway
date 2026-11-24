@@ -33,6 +33,19 @@ impl RawInputItem {
 		Self(item)
 	}
 
+	/// Whether any part of this item (message content, tool output) carries an explicit
+	/// `prompt_cache_breakpoint`.
+	pub(crate) fn has_prompt_cache_breakpoint(&self) -> bool {
+		fn walk(value: &Value) -> bool {
+			match value {
+				Value::Object(map) => map.contains_key("prompt_cache_breakpoint") || map.values().any(walk),
+				Value::Array(items) => items.iter().any(walk),
+				_ => false,
+			}
+		}
+		walk(&self.0)
+	}
+
 	fn from_user_text(text: String) -> Self {
 		Self::from_typed(InputItem::from(InputMessage {
 			content: vec![InputContent::InputText(InputTextContent {

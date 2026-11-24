@@ -47,7 +47,10 @@ info:
     ],
     "model": "gpt-5.6-terra",
     "max_completion_tokens": 1024,
-    "stream": false
+    "stream": false,
+    "prompt_cache_options": {
+      "mode": "explicit"
+    }
   },
   "parsed": {
     "input_format": "Messages",
