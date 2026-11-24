@@ -36,6 +36,12 @@ impl Client {
 		})
 	}
 
+	/// Shares `prev`'s upstream session and pinned endpoint.
+	pub fn adopt(&mut self, prev: &Client) {
+		self.session_id = prev.session_id.clone();
+		self.http_client.adopt(&prev.http_client);
+	}
+
 	pub fn get_session_state(&self) -> http::sessionpersistence::MCPSession {
 		let session_id = self.session_id.load().clone();
 		let backend = self.http_client.pinned_backend();

@@ -104,7 +104,7 @@ impl LegacySSEService {
 		let backend_id = inputs.backend_id.clone();
 		let (parts, _) = request.into_parts();
 		let ctx = crate::mcp::upstream::IncomingRequestContext::new(&parts);
-		let relay = inputs.build_new_connections(&ctx)?;
+		let relay = inputs.build(&ctx, None)?;
 
 		// GET requests establish an SSE stream.
 		// We will return the sessionId, and all future responses will get sent on the rx channel to send to this channel.

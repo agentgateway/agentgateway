@@ -205,7 +205,7 @@ impl StreamableHttpService {
 		}
 		let idle_ttl = inputs.backend.session_idle_ttl;
 		let backend_id = inputs.backend_id.clone();
-		let relay = inputs.build_new_connections(&ctx)?;
+		let relay = inputs.build(&ctx, None)?;
 		let mut session = self.session_manager.create_session(relay);
 		let mut resp = Box::pin(session.send(ctx, message)).await?;
 
@@ -213,9 +213,13 @@ impl StreamableHttpService {
 			return mcp::Error::InvalidSessionIdHeader.into();
 		};
 		resp.headers_mut().insert(HEADER_SESSION_ID, sid);
-		self
-			.session_manager
-			.insert_session(backend_id, session, idle_ttl);
+		// Only sessions whose upstreams hold connection state are kept; every other session is
+		// rebuilt from its session ID on each request, with that request's policies.
+		if session.has_connection_teardown() {
+			self
+				.session_manager
+				.insert_session(backend_id, session, idle_ttl);
+		}
 		Ok(resp)
 	}
 
@@ -226,7 +230,7 @@ impl StreamableHttpService {
 		message: ClientJsonRpcMessage,
 		protocol: RequestProtocol,
 	) -> Result<Response, ProxyError> {
-		let relay = inputs.build_new_connections(&part)?;
+		let relay = inputs.build(&part, None)?;
 		// Use stateless session - not registered in session manager
 		let mut session = self.session_manager.create_stateless_session(relay);
 		let initialize_upstream = protocol.uses_sessions();

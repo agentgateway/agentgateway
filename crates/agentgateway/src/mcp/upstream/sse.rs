@@ -35,7 +35,7 @@ pub struct Client {
 }
 
 struct SseClient {
-	client: ClientCore,
+	uri: Uri,
 
 	events: BoxedSseStream,
 }
@@ -68,8 +68,16 @@ impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
 		ctx: &IncomingRequestContext,
 	) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
 		let ctx = ctx.clone();
-		let client = self.client.clone();
-		Box::pin(async move { client.send_message(item, &ctx).map_err(Into::into).await })
+		let uri = self.uri.clone();
+		Box::pin(async move {
+			let http_client = ctx
+				.extensions()
+				.get::<super::McpHttpClient>()
+				.cloned()
+				.ok_or(UpstreamError::Send)?;
+			let client = ClientCore { http_client, uri };
+			client.send_message(item, &ctx).map_err(Into::into).await
+		})
 	}
 	async fn close(&mut self) -> Result<(), UpstreamError> {
 		Ok(())
@@ -155,6 +163,20 @@ impl Client {
 		}
 	}
 
+	/// Shares `prev`'s open stream and pinned endpoint.
+	pub fn adopt(&mut self, prev: &Client) {
+		self.active_stream = prev.active_stream.clone();
+		self.client.http_client.adopt(&prev.client.http_client);
+	}
+
+	/// The stream outlives the request that opened it, so each message carries the client that
+	/// sends it.
+	fn with_client(&self, ctx: &IncomingRequestContext) -> IncomingRequestContext {
+		let mut ctx = ctx.clone();
+		ctx.extensions_mut().insert(self.client.http_client.clone());
+		ctx
+	}
+
 	pub fn get_session_state(&self) -> http::sessionpersistence::MCPSession {
 		http::sessionpersistence::MCPSession {
 			target_name: Some(self.client.http_client.target_name().to_string()),
@@ -188,10 +210,7 @@ impl Client {
 
 		let (post_uri, sse) = self.establish_sse(ctx).await?;
 		let transport = SseClient {
-			client: ClientCore {
-				uri: post_uri,
-				..self.client.clone()
-			},
+			uri: post_uri,
 			events: sse,
 		};
 
@@ -235,7 +254,7 @@ impl Client {
 		ctx: &IncomingRequestContext,
 	) -> Result<ServerJsonRpcMessage, UpstreamError> {
 		let stream = self.get_stream(ctx).await?;
-		stream.send_message(req, ctx).await
+		stream.send_message(req, &self.with_client(ctx)).await
 	}
 
 	pub async fn send_notification(
@@ -244,7 +263,7 @@ impl Client {
 		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError> {
 		let stream = self.get_stream(ctx).await?;
-		stream.send_notification(req, ctx).await
+		stream.send_notification(req, &self.with_client(ctx)).await
 	}
 
 	pub async fn send_client_message(
@@ -253,7 +272,9 @@ impl Client {
 		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError> {
 		let stream = self.get_stream(ctx).await?;
-		stream.send_client_message(message, ctx).await
+		stream
+			.send_client_message(message, &self.with_client(ctx))
+			.await
 	}
 }
 

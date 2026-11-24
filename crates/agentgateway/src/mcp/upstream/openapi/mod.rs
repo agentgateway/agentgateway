@@ -605,6 +605,11 @@ impl Handler {
 		}
 	}
 
+	/// Shares `prev`'s pinned endpoint.
+	pub fn adopt(&mut self, prev: &Handler) {
+		self.http_client.adopt(&prev.http_client);
+	}
+
 	pub fn get_session_state(&self) -> sessionpersistence::MCPSession {
 		sessionpersistence::MCPSession {
 			target_name: Some(self.http_client.target_name().to_string()),

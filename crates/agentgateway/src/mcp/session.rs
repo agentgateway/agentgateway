@@ -220,9 +220,13 @@ impl Session {
 		}
 	}
 
-	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
-		self.relay = Arc::new(self.relay.with_inputs(inputs));
-		self
+	pub fn with_inputs(
+		mut self,
+		inputs: RelayInputs,
+		ctx: &IncomingRequestContext,
+	) -> Result<Self, mcp::Error> {
+		self.relay = Arc::new(inputs.build(ctx, Some(&self.relay))?);
+		Ok(self)
 	}
 
 	async fn authorize_prompt_request<'a, 'b: 'a>(
@@ -1037,7 +1041,8 @@ impl SessionManager {
 			return None;
 		}
 		entry.last_access = Instant::now();
-		Some(entry.session.clone().with_inputs(builder))
+		entry.session = entry.session.clone().with_inputs(builder, ctx).ok()?;
+		Some(entry.session.clone())
 	}
 
 	pub fn get_or_resume_session(
@@ -1057,9 +1062,9 @@ impl SessionManager {
 				return Ok(None);
 			}
 			s.last_access = Instant::now();
-			return Ok(Some(s.session.clone().with_inputs(builder)));
+			s.session = s.session.clone().with_inputs(builder, ctx)?;
+			return Ok(Some(s.session.clone()));
 		}
-		let idle_ttl = builder.backend.session_idle_ttl;
 		let backend_id = builder.backend_id.clone();
 		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder)
 			.map_err(|_| mcp::Error::UnknownSession)?;
@@ -1073,30 +1078,19 @@ impl SessionManager {
 		{
 			return Ok(None);
 		}
-		let relay = builder.build_new_connections(ctx)?;
+		let relay = builder.build(ctx, None)?;
 		if let Err(err) = relay.set_sessions(state.sessions) {
 			warn!("failed to resume session: {err}");
 			return Ok(None);
 		}
 
-		let sess = Session {
+		Ok(Some(Session {
 			id: id.into(),
 			relay: Arc::new(relay),
 			tx: None,
 			synthetic: false,
 			encoder: self.encoder.clone(),
-		};
-		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(
-			id.to_string(),
-			SessionEntry {
-				session: sess.clone(),
-				backend_id,
-				last_access: Instant::now(),
-				idle_ttl,
-			},
-		);
-		Ok(Some(sess))
+		}))
 	}
 
 	/// create_session establishes an MCP session.
