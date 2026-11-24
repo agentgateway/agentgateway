@@ -1089,6 +1089,19 @@
           "required": [
             "id"
           ]
+        },
+        "costStatus": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "exact",
+            "unpriced",
+            "missing",
+            "noCatalog",
+            null
+          ]
         }
       },
       "additionalProperties": false,

@@ -149,6 +149,7 @@
 |`llm.model.reasoning.budgetTokens`|object|Accepted reasoning token budget range.|
 |`llm.model.reasoning.budgetTokens.min`|integer|Minimum reasoning token budget.|
 |`llm.model.reasoning.budgetTokens.max`|integer|Maximum reasoning token budget.|
+|`llm.costStatus`|enum|Possible values: `exact`, `unpriced`, `missing`, `noCatalog`, `null`.|
 |`llmRequest`|any|`llmRequest` contains the raw JSON LLM request during route and LLM policies.<br>Policies occurring after LLM processing, such as logs, will not have this field present.|
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
