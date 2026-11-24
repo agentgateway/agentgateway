@@ -14,9 +14,10 @@ use rmcp::model::{
 	CacheScope, CallToolRequestMethod, ClientJsonRpcMessage, ClientNotification, ClientRequest,
 	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, GetMeta, Implementation,
 	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
-	ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, RequestId,
-	RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerJsonRpcMessage,
-	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
+	ListResourcesResult, ListSkillsRequestMethod, ListSkillsResult, ListToolsResult,
+	PaginatedRequestParams, ProtocolVersion, ReadResourceDirectoryRequestMethod, RequestId,
+	RequestMetaObject, ResultType, SKILLS_EXTENSION_ID, ServerCapabilities, ServerConfig,
+	ServerJsonRpcMessage, ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
 
@@ -756,12 +757,7 @@ impl Relay {
 		ctx: &mut IncomingRequestContext,
 	) -> Result<(), UpstreamError>
 	where
-		P: serde::Serialize
-			+ serde::de::DeserializeOwned
-			+ std::fmt::Debug
-			+ Send
-			+ Sync
-			+ rmcp::model::RequestParamsMeta,
+		P: mcp::guardrails::GuardrailParams,
 	{
 		let Some(ext) = self.mcp_guardrails.as_ref() else {
 			return Ok(());
@@ -862,6 +858,7 @@ impl Relay {
 		// backend is stateful. Compare `merge_discover`, where `stateful` does not apply.
 		let stateful = self.upstreams.stateful();
 		let upstreams = self.upstreams.clone();
+		let skills_routable = self.upstreams.default_target_name.is_some();
 		Box::new(move |s, _cel| {
 			if !multiplexing {
 				// Happy case: we can forward everything
@@ -872,6 +869,9 @@ impl Relay {
 					return Err(incompatible_upstream_result("initialize"));
 				};
 				upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
+				if !skills_routable && let Some(ext) = ir.capabilities.extensions.as_mut() {
+					ext.remove(SKILLS_EXTENSION_ID);
+				}
 				if !stateful {
 					let caps = &mut ir.capabilities;
 					if let Some(c) = caps.tools.as_mut() {
@@ -928,6 +928,7 @@ impl Relay {
 
 	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
 		let upstreams = self.upstreams.clone();
+		let skills_routable = self.upstreams.default_target_name.is_some();
 		Box::new(move |s, _cel| {
 			// Single server: forward the upstream's advertised versions untouched. The gateway
 			// does no version translation, so an old-only upstream must surface as-is and let
@@ -936,9 +937,13 @@ impl Relay {
 				let Some((_, result)) = s.into_iter().next() else {
 					return Err(incompatible_upstream_result("server/discover"));
 				};
-				let ServerResult::DiscoverResult(dr) = result else {
+				let ServerResult::DiscoverResult(mut dr) = result else {
 					return Err(incompatible_upstream_result("server/discover"));
 				};
+				// Skills requests are only routed when skill URIs pass through unprefixed.
+				if !skills_routable && let Some(ext) = dr.capabilities.extensions.as_mut() {
+					ext.remove(SKILLS_EXTENSION_ID);
+				}
 				// Cache hints describe the gateway's presented server, not the upstream.
 				// Gateway routing/backend config can change without client invalidation.
 				return Ok(
@@ -1031,6 +1036,55 @@ impl Relay {
 			)
 		})
 	}
+
+	pub fn merge_skills(&self) -> Box<MergeFn> {
+		let policies = self.policies.clone();
+		Box::new(move |streams, cel| {
+			let (server_name, mut list) = match streams.into_iter().next() {
+				Some((server_name, ServerResult::ListSkillsResult(list))) => (server_name, list),
+				Some(_) => return Err(incompatible_upstream_result(ListSkillsRequestMethod::VALUE)),
+				None => return Ok(ListSkillsResult::default().into()),
+			};
+			// Authorization is per skill. A listed skill's `resources` manifest is passed through
+			// whole, so it can name files that `resources/read` will deny.
+			list.skills.retain(|skill| {
+				policies.validate(
+					&rbac::ResourceType::Resource(rbac::ResourceId::new(
+						server_name.to_string(),
+						skill.uri.clone(),
+					)),
+					&crate::mcp::guardrails::methods::SKILLS_LIST,
+					cel,
+				)
+			});
+			Ok(list.into())
+		})
+	}
+
+	pub fn merge_resource_directory(&self) -> Box<MergeFn> {
+		let policies = self.policies.clone();
+		Box::new(move |streams, cel| {
+			let Some((server_name, ServerResult::ListResourcesResult(mut dir))) =
+				streams.into_iter().next()
+			else {
+				return Err(incompatible_upstream_result(
+					ReadResourceDirectoryRequestMethod::VALUE,
+				));
+			};
+			dir.resources.retain(|r| {
+				policies.validate(
+					&rbac::ResourceType::Resource(rbac::ResourceId::new(
+						server_name.to_string(),
+						r.uri.to_string(),
+					)),
+					&crate::mcp::guardrails::methods::RESOURCES_DIRECTORY_READ,
+					cel,
+				)
+			});
+			Ok(dir.into())
+		})
+	}
+
 	pub fn merge_resources(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
@@ -2112,6 +2166,14 @@ fn normalize_outbound_for_protocol(
 			normalize_result_type(&mut r.result_type, downstream_modern);
 			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
+		ServerResult::ListSkillsResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::GetSkillResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
 		ServerResult::CompleteResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
 		ServerResult::GetPromptResult(r) => {
 			normalize_result_type(&mut r.result_type, downstream_modern)
@@ -2172,6 +2234,14 @@ fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMess
 			r.cache_scope = Some(CacheScope::Private);
 		},
 		ServerResult::ListPromptsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListSkillsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::GetSkillResult(r) => {
 			r.ttl_ms = Some(0);
 			r.cache_scope = Some(CacheScope::Private);
 		},

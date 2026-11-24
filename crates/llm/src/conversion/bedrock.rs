@@ -4009,7 +4009,7 @@ pub mod from_anthropic_token_count {
 pub use helpers::filter_native_beta_header;
 
 mod helpers {
-	use std::collections::HashMap;
+	use std::collections::{HashMap, HashSet};
 	use std::sync::LazyLock;
 
 	use crate::AIError;
@@ -4018,13 +4018,15 @@ mod helpers {
 	use crate::types::responses::typed::PromptCacheBreakpointConfig;
 
 	// Betas Bedrock accepts (Runtime, Mantle, and Converse); it rejects any other value. Checked
-	// against Bedrock 2026-10-19. Native Anthropic Messages requests pass betas through unless
+	// against Bedrock 2026-11-15. Native Anthropic Messages requests pass betas through unless
 	// AGENTGATEWAY_BEDROCK_ANTHROPIC_BETA_HEADERS is set; Converse always filters.
-	const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
+	pub(super) const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
 		"afk-mode-2026-01-31",
 		"auto-mode-classifier-2026-07-16",
 		"claude-code-20250219",
 		"compact-2026-01-12",
+		"compact-2026-09-04",
+		"computer-use-2024-10-22",
 		"computer-use-2025-01-24",
 		"computer-use-2025-11-24",
 		"context-1m-2025-08-07",
@@ -4033,11 +4035,15 @@ mod helpers {
 		"dev-full-thinking-2025-05-14",
 		"effort-2025-11-24",
 		"fallback-credit-2026-06-01",
+		"fallback-credit-2026-07-01",
 		"fine-grained-tool-streaming-2025-05-14",
+		"inline-tools-2026-09-15",
 		"interleaved-thinking-2025-05-14",
 		"mid-conversation-output-config-2026-07-01",
 		"mid-conversation-system-2026-04-07",
+		"mid-conversation-system-clear-at-2026-08-21",
 		"mid-conversation-tool-changes-2026-07-01",
+		"model-context-window-exceeded-2025-08-26",
 		"output-128k-2025-02-19",
 		"pdfs-2024-09-25",
 		"per-turn-control-2026-07-01",
@@ -4045,6 +4051,8 @@ mod helpers {
 		"structured-outputs-2025-11-13",
 		"structured-outputs-2025-12-15",
 		"task-budgets-2026-03-13",
+		"thinking-binding-controls-2026-08-01",
+		"thinking-display-updates-2026-08-18",
 		"thinking-token-count-2026-05-13",
 		"token-counting-2024-11-01",
 		"token-efficient-tools-2025-02-19",
@@ -4053,8 +4061,17 @@ mod helpers {
 		"web-search-2025-03-05",
 	];
 	// Accepted on the Anthropic Messages APIs, but rejected by Converse.
-	const CONVERSE_UNSUPPORTED_BETA_HEADERS: &[&str] =
-		&["compact-2026-01-12", "tool-search-tool-2025-10-19"];
+	const CONVERSE_UNSUPPORTED_BETA_HEADERS: &[&str] = &[
+		"compact-2026-01-12",
+		"compact-2026-09-04",
+		"tool-search-tool-2025-10-19",
+	];
+	// First-party Anthropic betas that Bedrock splits into its own: advanced tool use is tool search
+	// plus tool use examples there (programmatic tool calling has no Bedrock beta).
+	const BEDROCK_BETA_HEADER_NAMES: &[(&str, &[&str])] = &[(
+		"advanced-tool-use-2025-11-20",
+		&["tool-search-tool-2025-10-19", "tool-examples-2025-10-29"],
+	)];
 	const ALLOWED_BETA_HEADERS_ENV: &str = "AGENTGATEWAY_BEDROCK_ANTHROPIC_BETA_HEADERS";
 	const DEFAULT_SENTINEL: &str = "default";
 
@@ -4419,10 +4436,18 @@ mod helpers {
 	/// OAuth logins), which Bedrock rejects, and, when the allowlist is explicitly configured, values
 	/// outside it.
 	pub fn filter_native_beta_header(headers: &mut http::HeaderMap) -> Result<(), AIError> {
+		let allowlist = FILTER_NATIVE_BETA_HEADERS.then(|| ALLOWED_BETA_HEADERS.as_slice());
+		filter_native_beta_header_with(headers, allowlist)
+	}
+
+	pub(super) fn filter_native_beta_header_with(
+		headers: &mut http::HeaderMap,
+		allowlist: Option<&[String]>,
+	) -> Result<(), AIError> {
 		let joined = beta_headers(headers, |f| {
 			!f.is_empty()
 				&& !f.starts_with("oauth-")
-				&& (!*FILTER_NATIVE_BETA_HEADERS || ALLOWED_BETA_HEADERS.iter().any(|a| a == f))
+				&& allowlist.is_none_or(|allowed| allowed.iter().any(|a| a == f))
 		})?
 		.join(",");
 		headers.remove("anthropic-beta");
@@ -4445,24 +4470,36 @@ mod helpers {
 		})
 	}
 
-	/// Comma-separated `anthropic-beta` values, across all headers, that pass `filter`.
+	/// Comma-separated `anthropic-beta` values, across all headers, mapped to their Bedrock names,
+	/// deduplicated, and passing `filter`.
 	fn beta_headers(
 		headers: &http::HeaderMap,
 		filter: impl Fn(&str) -> bool,
 	) -> Result<Vec<&str>, AIError> {
 		let mut features = Vec::new();
+		let mut seen = HashSet::new();
 		for value in headers.get_all("anthropic-beta") {
 			let header_str = value
 				.to_str()
 				.map_err(|_| AIError::MissingField("Invalid anthropic-beta header value".into()))?;
-			features.extend(
-				header_str
-					.split(',')
-					.map(str::trim)
-					.filter(|feature| filter(feature)),
-			);
+			for feature in header_str.split(',').map(str::trim) {
+				for feature in bedrock_beta_header_names(feature) {
+					if filter(feature) && seen.insert(feature) {
+						features.push(feature);
+					}
+				}
+			}
 		}
 		Ok(features)
+	}
+
+	fn bedrock_beta_header_names(feature: &str) -> impl Iterator<Item = &str> {
+		let mapped: Option<&[&str]> = BEDROCK_BETA_HEADER_NAMES
+			.iter()
+			.find(|(anthropic, _)| *anthropic == feature)
+			.map(|(_, bedrock)| *bedrock);
+		let unmapped = mapped.is_none().then_some(feature);
+		mapped.unwrap_or_default().iter().copied().chain(unmapped)
 	}
 
 	pub fn generate_anthropic_message_id() -> String {

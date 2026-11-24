@@ -190,6 +190,58 @@ async fn sse_transport_preserves_metadata_usage_and_flushes_incomplete_token() {
 }
 
 #[tokio::test]
+async fn sse_transport_preserves_fields_across_line_endings_and_read_boundaries() {
+	let (tokens, token) = tokenize("alice@example.org");
+	let event =
+		json!({"choices":[{"index":0,"delta":{"content":token},"finish_reason":"stop"}]}).to_string();
+	for ending in ["\n", "\r\n", "\r"] {
+		let wire = format!(
+			"\u{feff}: heartbeat{ending}{ending}event: message{ending}id: 7{ending}retry: 1000{ending}x-custom: preserved{ending}data: {{{ending}data: {}{ending}{ending}data: [DONE]",
+			&event[1..]
+		);
+		for chunk_size in [1, wire.len()] {
+			let chunks: Vec<_> = wire
+				.as_bytes()
+				.chunks(chunk_size)
+				.map(|chunk| Ok::<_, std::io::Error>(Bytes::copy_from_slice(chunk)))
+				.collect();
+			let output = tokens
+				.clone()
+				.restore_stream(
+					agent_http::RawBody::from_stream(futures_util::stream::iter(chunks)),
+					65536,
+				)
+				.collect()
+				.await
+				.unwrap()
+				.to_bytes();
+			let output = String::from_utf8(output.to_vec()).unwrap();
+			assert!(output.starts_with("\u{feff}: heartbeat"));
+			for field in [
+				"event: message",
+				"id: 7",
+				"retry: 1000",
+				"x-custom: preserved",
+			] {
+				assert!(output.contains(&format!("{field}{ending}")), "{output}");
+			}
+			let normalized = output.replace("\r\n", "\n").replace('\r', "\n");
+			let data: Vec<_> = normalized
+				.lines()
+				.filter_map(|line| line.strip_prefix("data: "))
+				.collect();
+			assert_eq!(data.len(), 2);
+			assert_eq!(
+				serde_json::from_str::<Value>(data[0]).unwrap()["choices"][0]["delta"]["content"],
+				"alice@example.org"
+			);
+			assert_eq!(data[1], "[DONE]");
+			assert!(normalized.ends_with("\n\n"));
+		}
+	}
+}
+
+#[tokio::test]
 async fn stream_emits_before_upstream_finishes_and_errors_on_truncation() {
 	let (tokens, token) = tokenize("alice@example.org");
 	let wire = format!(
@@ -423,6 +475,10 @@ async fn malformed_and_oversized_streams_fail_without_panicking() {
 		format!(
 			"data: {}\n\n",
 			json!({"choices":[{"index":0,"delta":{"content":token}}]})
+		),
+		format!(
+			"data: {}\n\ndata: {{\"choices\":[]}}\n\ndata: [DONE]\n\n",
+			"x".repeat(65)
 		),
 	] {
 		assert!(

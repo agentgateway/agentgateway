@@ -20,7 +20,12 @@ export function policySummary(
 	if (!policyEnabled(policies, key)) return '';
 	if (key === 'cors') {
 		const cors = value as CorsPolicy;
-		return `${cors.allowOrigins?.length ?? 0} origins, ${(cors.allowMethods ?? []).join(', ') || 'no methods'}`;
+		const origins = cors.allowOrigins ?? [];
+		if (origins.includes('*')) return 'Any origin';
+		if (origins.length === 0) return 'No origins';
+		return origins.length === 1
+			? origins[0].replace(/^https?:\/\//, '')
+			: `${origins.length} origins`;
 	}
 	if (key === 'jwtAuth') {
 		const jwt = value as { mode?: string; issuer?: string };
@@ -38,7 +43,10 @@ export function policySummary(
 		const limits = value as LocalRateLimitConfig;
 		if (!Array.isArray(limits)) return 'Conditional limits';
 		const first = limits[0];
-		return first ? `${first.type ?? 'requests'} every ${first.fillInterval}` : 'Configured';
+		if (!first) return 'Configured';
+		const amount = first.tokensPerFill ?? 1;
+		const unit = (first.type ?? 'requests').replace(/s$/, amount === 1 ? '' : 's');
+		return `${amount} ${unit} per ${first.fillInterval}, burst ${first.maxTokens}`;
 	}
 	if (key === 'authorization') {
 		const authorization = value as {
@@ -60,6 +68,10 @@ export function policySummary(
 			(grouped.require?.length ?? 0) +
 			ordered.filter(rule => Boolean(rule && typeof rule === 'object' && 'require' in rule)).length;
 		return `${allow} allow, ${deny} deny, ${require} require`;
+	}
+	if (key === 'mcpAuthorization') {
+		const rules = (value as { rules?: unknown[] }).rules ?? [];
+		return `${rules.length} ${rules.length === 1 ? 'rule' : 'rules'}`;
 	}
 	if (key === 'backendAuth') {
 		return backendAuthSummary(value);

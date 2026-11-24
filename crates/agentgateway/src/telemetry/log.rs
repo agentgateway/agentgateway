@@ -865,9 +865,10 @@ impl DropOnLog {
 		log: &RequestLog,
 		status: Option<crate::http::StatusCode>,
 		cel_exec: &CelLoggingExecutor<'_>,
+		health_policy: &Option<health::Policy>,
 	) -> bool {
 		let default_unhealthy = Self::default_unhealthy_for_status(log, status);
-		let Some(policy) = &log.health_policy else {
+		let Some(policy) = health_policy else {
 			return default_unhealthy;
 		};
 		let Some(expr) = &policy.unhealthy_expression else {
@@ -1157,6 +1158,7 @@ impl RequestLog {
 			reason: None,
 			retry_after: None,
 			health_policy: None,
+			delegated_provider_health_policy: None,
 			retry_backoff: None,
 			jwt_sub: None,
 			retry_attempt: None,
@@ -1165,6 +1167,7 @@ impl RequestLog {
 			mcp_status: Default::default(),
 			incoming_span: None,
 			outgoing_span: None,
+			model_discovery: false,
 			llm_request: None,
 			llm_response: Default::default(),
 			original_model: None,
@@ -1181,6 +1184,7 @@ impl RequestLog {
 			ate_router_route_duration: None,
 			ate_router_outcome: None,
 			request_handle: None,
+			delegated_provider_request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
 			source_context: None,
@@ -1226,8 +1230,16 @@ impl RequestLog {
 		rh: ActiveHandle,
 		end_time: Timestamp,
 		cel_exec: &CelLoggingExecutor<'_>,
+		health_policy: &Option<health::Policy>,
 	) {
-		self.finish_request_handle_with_attempt(rh, end_time, self.status, self.retry_after, cel_exec);
+		self.finish_request_handle_with_attempt(
+			rh,
+			end_time,
+			self.status,
+			self.retry_after,
+			cel_exec,
+			health_policy,
+		);
 	}
 
 	fn finish_request_handle_with_attempt(
@@ -1237,10 +1249,11 @@ impl RequestLog {
 		status: Option<crate::http::StatusCode>,
 		retry_after: Option<Duration>,
 		cel_exec: &CelLoggingExecutor<'_>,
+		health_policy: &Option<health::Policy>,
 	) {
-		let unhealthy = DropOnLog::eviction_unhealthy(self, status, cel_exec);
+		let unhealthy = DropOnLog::eviction_unhealthy(self, status, cel_exec, health_policy);
 		let (health, eviction_duration, restore_health) = DropOnLog::eviction_decision(
-			&self.health_policy,
+			health_policy,
 			self.retry_backoff,
 			retry_after,
 			rh.health_score(),
@@ -1253,6 +1266,36 @@ impl RequestLog {
 			end_time.duration_since(&self.start),
 			eviction_duration,
 			restore_health,
+		);
+	}
+
+	fn finish_delegated_provider_handle_with_attempt(
+		&self,
+		rh: ActiveHandle,
+		end_time: Timestamp,
+		status: Option<crate::http::StatusCode>,
+		retry_after: Option<Duration>,
+		cel_exec: &CelLoggingExecutor<'_>,
+		endpoint_selected: bool,
+	) {
+		// Once an endpoint is selected, its failures feed the provider's aggregate
+		// Service health. Do not also penalize the provider for the same failure.
+		if endpoint_selected
+			&& DropOnLog::eviction_unhealthy(
+				self,
+				status,
+				cel_exec,
+				&self.delegated_provider_health_policy,
+			) {
+			return;
+		}
+		self.finish_request_handle_with_attempt(
+			rh,
+			end_time,
+			status,
+			retry_after,
+			cel_exec,
+			&self.delegated_provider_health_policy,
 		);
 	}
 
@@ -1279,10 +1322,26 @@ impl RequestLog {
 			upstream_calls: None,
 			proxy: Some(&proxy_timing),
 		});
-		let Some(rh) = self.request_handle.take() else {
-			return;
-		};
-		self.finish_request_handle_with_attempt(rh, end_time, status, retry_after, &cel_exec);
+		if let Some(rh) = self.delegated_provider_request_handle.take() {
+			self.finish_delegated_provider_handle_with_attempt(
+				rh,
+				end_time,
+				status,
+				retry_after,
+				&cel_exec,
+				self.request_handle.is_some(),
+			);
+		}
+		if let Some(rh) = self.request_handle.take() {
+			self.finish_request_handle_with_attempt(
+				rh,
+				end_time,
+				status,
+				retry_after,
+				&cel_exec,
+				&self.health_policy,
+			);
+		}
 	}
 }
 
@@ -1340,8 +1399,10 @@ pub struct RequestLog {
 	pub reason: Option<ProxyResponseReason>,
 	pub retry_after: Option<Duration>,
 
-	/// Health policy for backend (e.g. AI provider) failover. Set from route policies when request_handle is used.
+	/// Health policy for the request handle's backend or endpoint.
 	pub health_policy: Option<health::Policy>,
+	/// Health policy for an AI provider that delegates endpoint selection to a Service or InferencePool.
+	pub delegated_provider_health_policy: Option<health::Policy>,
 	/// Retry backoff from route policy; used as fallback eviction duration when health_policy has no explicit duration.
 	pub retry_backoff: Option<Duration>,
 
@@ -1356,6 +1417,7 @@ pub struct RequestLog {
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,
 
+	pub model_discovery: bool,
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 	pub original_model: Option<String>,
@@ -1376,6 +1438,8 @@ pub struct RequestLog {
 	pub ate_router_outcome: Option<RouteOutcome>,
 
 	pub request_handle: Option<ActiveHandle>,
+	/// Retained while a delegated Service endpoint gets its own request handle.
+	pub delegated_provider_request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
 	pub response_snapshot: Option<cel::ResponseSnapshot>,
 	/// Source context for TCP connections (where we don't have an HTTP request)
@@ -1531,6 +1595,7 @@ impl Drop for DropOnLog {
 			let guardrails = log.guardrails.take().filter(|g| !g.is_empty());
 			let mcp_guardrails = log.mcp_guardrails.take();
 			let request_handle = log.request_handle.take();
+			let delegated_provider_request_handle = log.delegated_provider_request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
 			// The response snapshot is captured before the response body is drained, so
 			// Trailer-only grpc-status values are learned later by the body observer. Copy the final
@@ -1561,8 +1626,18 @@ impl Drop for DropOnLog {
 				source_context: log.source_context.as_ref(),
 				upstream_calls: Some(&upstream_calls),
 			});
+			if let Some(rh) = delegated_provider_request_handle {
+				log.finish_delegated_provider_handle_with_attempt(
+					rh,
+					end_time,
+					log.status,
+					log.retry_after,
+					&cel_exec,
+					request_handle.is_some(),
+				);
+			}
 			if let Some(rh) = request_handle {
-				log.finish_request_handle(rh, end_time, &cel_exec);
+				log.finish_request_handle(rh, end_time, &cel_exec, &log.health_policy);
 			}
 
 			let custom_metric_fields = CustomField::new(
@@ -1672,7 +1747,8 @@ impl Drop for DropOnLog {
 			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
 			let log_store_enabled = log_store::enabled()
-				&& (log.llm_request.is_some()
+				&& (log.model_discovery
+					|| log.llm_request.is_some()
 					|| llm_response.is_some()
 					|| log
 						.listener_name
@@ -1748,6 +1824,14 @@ impl Drop for DropOnLog {
 				.map(|id| id.trace_id());
 			let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
 			let fields = cel_exec.fields;
+			let operation_name = if log.model_discovery {
+				Some("model_discovery")
+			} else {
+				log
+					.llm_request
+					.as_ref()
+					.map(|request| gen_ai_operation_name(request.input_format))
+			};
 			let reason = log.reason.and_then(|r| match r {
 				ProxyResponseReason::Upstream => None,
 				_ => Some(r),
@@ -1923,13 +2007,7 @@ impl Drop for DropOnLog {
 					route_duration.map(Into::into),
 				),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
-				(
-					"gen_ai.operation.name",
-					log
-						.llm_request
-						.as_ref()
-						.map(|r| gen_ai_operation_name(r.input_format).into()),
-				),
+				("gen_ai.operation.name", operation_name.map(Into::into)),
 				(
 					"gen_ai.provider.name",
 					log.llm_request.as_ref().map(|l| display(&l.provider)),
@@ -2321,10 +2399,7 @@ impl Drop for DropOnLog {
 						span_id: span_id.map(|id| id.to_string()),
 						http_status: log.status.as_ref().map(|s| i64::from(s.as_u16())),
 						error: log.error.clone(),
-						gen_ai_operation_name: log
-							.llm_request
-							.as_ref()
-							.map(|request| gen_ai_operation_name(request.input_format).to_string()),
+						gen_ai_operation_name: operation_name.map(str::to_owned),
 						gen_ai_provider_name: log
 							.llm_request
 							.as_ref()
@@ -3747,6 +3822,101 @@ mod tests {
 
 		log.grpc_status.store(Some(0));
 		assert!(!DropOnLog::default_unhealthy(&log));
+	}
+
+	#[tokio::test]
+	async fn delegated_provider_is_evicted_when_endpoint_selection_fails() {
+		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
+		let provider = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+		let mut log = test_request_log();
+		log.delegated_provider_request_handle =
+			Some(endpoints.start_request("provider".into(), &provider));
+		log.delegated_provider_health_policy = Some(health::Policy {
+			eviction: Some(health::Eviction {
+				consecutive_failures: Some(1),
+				duration: Some(Duration::from_secs(30)),
+				..Default::default()
+			}),
+			..Default::default()
+		});
+		log.status = Some(http::StatusCode::SERVICE_UNAVAILABLE);
+		drop(DropOnLog::from(log));
+		assert_eq!(provider.consecutive_failures(), 1);
+		assert_eq!(provider.times_ejected(), 1);
+	}
+
+	#[tokio::test]
+	async fn delegated_provider_does_not_double_count_endpoint_failure() {
+		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
+		let provider = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+		let endpoint = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+		let mut log = test_request_log();
+		log.delegated_provider_request_handle =
+			Some(endpoints.start_request("provider".into(), &provider));
+		log.delegated_provider_health_policy = Some(health::Policy {
+			eviction: Some(health::Eviction {
+				consecutive_failures: Some(1),
+				..Default::default()
+			}),
+			..Default::default()
+		});
+		log.request_handle = Some(endpoints.start_request("endpoint".into(), &endpoint));
+		log.status = Some(http::StatusCode::SERVICE_UNAVAILABLE);
+		drop(DropOnLog::from(log));
+		assert_eq!(provider.consecutive_failures(), 0);
+		assert_eq!(provider.times_ejected(), 0);
+		assert_eq!(endpoint.consecutive_failures(), 1);
+	}
+
+	#[tokio::test]
+	async fn delegated_provider_stays_healthy_after_inference_fail_open() {
+		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
+		let provider = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+		let endpoint = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+		endpoints
+			.start_request("provider".into(), &provider)
+			.finish_request(false, Duration::ZERO, None, None);
+		assert_eq!(provider.consecutive_failures(), 1);
+		let mut log = test_request_log();
+		log.delegated_provider_request_handle =
+			Some(endpoints.start_request("provider".into(), &provider));
+		log.delegated_provider_health_policy = Some(health::Policy {
+			eviction: Some(health::Eviction {
+				consecutive_failures: Some(1),
+				..Default::default()
+			}),
+			..Default::default()
+		});
+		log.request_handle = Some(endpoints.start_request("endpoint".into(), &endpoint));
+		log.status = Some(http::StatusCode::OK);
+		drop(DropOnLog::from(log));
+		assert_eq!(provider.consecutive_failures(), 0);
+		assert_eq!(provider.times_ejected(), 0);
+		assert_eq!(endpoint.consecutive_failures(), 0);
+	}
+
+	#[tokio::test]
+	async fn delegated_provider_retry_attempt_is_recorded_once() {
+		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
+		let provider = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+		let endpoint = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+		let mut log = test_request_log();
+		log.delegated_provider_request_handle =
+			Some(endpoints.start_request("provider".into(), &provider));
+		log.request_handle = Some(endpoints.start_request("endpoint".into(), &endpoint));
+		log.finalize_request_handle_for_attempt(
+			Timestamp::now(),
+			Some(http::StatusCode::SERVICE_UNAVAILABLE),
+			None,
+			None,
+			None,
+			None,
+		);
+		assert_eq!(provider.consecutive_failures(), 0);
+		assert_eq!(endpoint.consecutive_failures(), 1);
+		drop(DropOnLog::from(log));
+		assert_eq!(provider.consecutive_failures(), 0);
+		assert_eq!(endpoint.consecutive_failures(), 1);
 	}
 
 	#[test]

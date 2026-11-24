@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
+use agent_llm::parse::sse_decoder::{SseDecoder, SseFrame};
 use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
 use http_body_util::BodyDataStream;
 use serde_json::{Value, json};
-use tokio_sse_codec::{Frame, SseDecoder, SseEncoder};
-use tokio_util::codec::{Decoder, Encoder};
+use tokio_util::codec::Decoder;
 
 use super::pii;
 use crate::llm::AIError;
@@ -132,9 +132,9 @@ impl EmailTokens {
 		}
 		let state = SseRestorer {
 			body: BodyDataStream::new(body),
-			decoder: SseDecoder::<Bytes>::with_max_size(limit.max(8)),
-			encoder: SseEncoder::new(),
+			decoder: SseDecoder::new(limit),
 			buffer: BytesMut::new(),
+			wire: BytesMut::new(),
 			tokens: StreamTokens {
 				tokens: self,
 				pending: BTreeMap::new(),
@@ -145,38 +145,42 @@ impl EmailTokens {
 			state,
 			move |mut state| async move {
 				loop {
+					let before = state.buffer.len();
 					let frame = if state.eof {
 						state.decoder.decode_eof(&mut state.buffer)
 					} else {
 						state.decoder.decode(&mut state.buffer)
 					}
 					.map_err(|_| stream_error())?;
-					if let Some(mut frame) = frame {
-						if let Frame::Event(event) = &mut frame {
-							if event.data.as_ref() == b"[DONE]" {
+					let wire = state.wire.split_to(before - state.buffer.len()).freeze();
+					match frame {
+						Some(SseFrame::TooLarge) => return Err(stream_error()),
+						Some(SseFrame::Event(data)) => {
+							let data = if data.as_ref() == b"[DONE]" {
 								state.tokens.check_finished()?;
+								data
 							} else {
-								let mut value: Value =
-									serde_json::from_slice(&event.data).map_err(|_| stream_error())?;
+								let mut value: Value = serde_json::from_slice(&data).map_err(|_| stream_error())?;
 								state.tokens.restore_event(&mut value)?;
-								event.data = serde_json::to_vec(&value)
+								serde_json::to_vec(&value)
 									.map_err(|_| stream_error())?
-									.into();
-							}
-						}
-						let mut encoded = BytesMut::new();
-						state
-							.encoder
-							.encode(frame, &mut encoded)
-							.map_err(|_| stream_error())?;
-						return Ok(Some((encoded.freeze(), state)));
+									.into()
+							};
+							let encoded = replace_sse_data(&wire, &data, state.eof);
+							return Ok(Some((encoded, state)));
+						},
+						None if !wire.is_empty() => return Ok(Some((wire, state))),
+						None => {},
 					}
 					if state.eof {
 						state.tokens.check_finished()?;
 						return Ok(None);
 					}
 					match state.body.next().await {
-						Some(Ok(bytes)) => state.buffer.extend_from_slice(&bytes),
+						Some(Ok(bytes)) => {
+							state.buffer.extend_from_slice(&bytes);
+							state.wire.extend_from_slice(&bytes);
+						},
 						Some(Err(_)) => return Err(stream_error()),
 						None => state.eof = true,
 					}
@@ -188,11 +192,48 @@ impl EmailTokens {
 
 struct SseRestorer {
 	body: BodyDataStream<agent_http::RawBody>,
-	decoder: SseDecoder<Bytes>,
-	encoder: SseEncoder,
+	decoder: SseDecoder,
 	buffer: BytesMut,
+	wire: BytesMut,
 	tokens: StreamTokens,
 	eof: bool,
+}
+
+fn replace_sse_data(mut wire: &[u8], data: &[u8], eof: bool) -> Bytes {
+	let mut output = BytesMut::new();
+	if let Some(rest) = wire.strip_prefix(b"\xEF\xBB\xBF") {
+		output.extend_from_slice(b"\xEF\xBB\xBF");
+		wire = rest;
+	}
+	let mut replaced = false;
+	while !wire.is_empty() {
+		let end = wire
+			.iter()
+			.position(|b| matches!(*b, b'\r' | b'\n'))
+			.unwrap_or(wire.len());
+		let ending = &wire[end..];
+		let length = if ending.starts_with(b"\r\n") {
+			2
+		} else {
+			usize::from(!ending.is_empty())
+		};
+		let next = end + length;
+		if wire[..end] == *b"data" || wire[..end].starts_with(b"data:") {
+			if !replaced {
+				output.extend_from_slice(b"data: ");
+				output.extend_from_slice(data);
+				output.extend_from_slice(&wire[end..next]);
+				replaced = true;
+			}
+		} else {
+			output.extend_from_slice(&wire[..next]);
+		}
+		wire = &wire[next..];
+	}
+	if eof {
+		output.extend_from_slice(b"\n\n");
+	}
+	output.freeze()
 }
 
 fn stream_error() -> std::io::Error {

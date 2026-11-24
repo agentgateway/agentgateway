@@ -35,6 +35,12 @@ spec:
               templateId: model-armor-template-id
               projectId: model-armor-project-id
               location: us-central1
+          - azureContentSafety:
+              failureMode: FailOpen
+              action: Audit
+              endpoint: my-resource.cognitiveservices.azure.com
+              analyzeText: {}
+              detectJailbreak: {}
           - webhook:
               action: Audit
               backendRef:
@@ -55,6 +61,11 @@ spec:
               action: Audit
               templateId: model-armor-template-id
               projectId: model-armor-project-id
+          - azureContentSafety:
+              failureMode: FailOpen
+              action: Audit
+              endpoint: my-resource.cognitiveservices.azure.com
+              analyzeText: {}
 ---
 apiVersion: v1
 kind: Service
@@ -100,6 +111,12 @@ output:
                 location: us-central1
                 projectId: model-armor-project-id
                 templateId: model-armor-template-id
+            - azureContentSafety:
+                action: REJECT_AUDIT_ACTION_AUDIT
+                analyzeText: {}
+                detectJailbreak: {}
+                endpoint: my-resource.cognitiveservices.azure.com
+                failureMode: FAIL_OPEN
             - webhook:
                 action: REJECT_AUDIT_ACTION_AUDIT
                 backend:
@@ -120,6 +137,11 @@ output:
                 location: us-central1
                 projectId: model-armor-project-id
                 templateId: model-armor-template-id
+            - azureContentSafety:
+                action: REJECT_AUDIT_ACTION_AUDIT
+                analyzeText: {}
+                endpoint: my-resource.cognitiveservices.azure.com
+                failureMode: FAIL_OPEN
       key: backend/default/agw-audit:ai:default/test
       name:
         kind: AgentgatewayPolicy

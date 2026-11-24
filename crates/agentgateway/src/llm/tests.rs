@@ -4458,6 +4458,141 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 	);
 }
 
+#[test]
+fn responses_to_completions_media_parts_per_provider() {
+	let image = json!({
+		"type": "input_image",
+		"image_url": "data:image/png;base64,AAAA",
+		"detail": "original"
+	});
+	let file = json!({
+		"type": "input_file",
+		"file_data": "data:application/pdf;base64,JVBERi0=",
+		"filename": "report.pdf",
+		"prompt_cache_breakpoint": {"mode": "explicit"}
+	});
+	let rendered: serde_json::Map<String, Value> = [
+		(
+			"gemini",
+			AIProvider::Gemini(gemini::Provider {
+				model_override: None,
+			}),
+		),
+		("vertex", vertex_provider("google/gemini-2.5-flash")),
+		(
+			"custom",
+			custom_provider(custom::ProviderFormat::Completions),
+		),
+	]
+	.into_iter()
+	.map(|(name, provider)| {
+		let parts = json!({
+			"image": render_as_completions_part(&provider, image.clone()).unwrap(),
+			"file": render_as_completions_part(&provider, file.clone()).unwrap(),
+		});
+		(name.to_string(), parts)
+	})
+	.collect();
+	insta::assert_json_snapshot!(rendered, @r#"
+	{
+	  "gemini": {
+	    "image": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:image/png;base64,AAAA",
+	        "detail": "original"
+	      }
+	    },
+	    "file": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:application/pdf;base64,JVBERi0="
+	      },
+	      "prompt_cache_breakpoint": {
+	        "mode": "explicit"
+	      }
+	    }
+	  },
+	  "vertex": {
+	    "image": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:image/png;base64,AAAA",
+	        "detail": "high"
+	      }
+	    },
+	    "file": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:application/pdf;base64,JVBERi0="
+	      },
+	      "prompt_cache_breakpoint": {
+	        "mode": "explicit"
+	      }
+	    }
+	  },
+	  "custom": {
+	    "image": {
+	      "type": "image_url",
+	      "image_url": {
+	        "url": "data:image/png;base64,AAAA",
+	        "detail": "original"
+	      }
+	    },
+	    "file": {
+	      "type": "file",
+	      "file": {
+	        "file_data": "data:application/pdf;base64,JVBERi0=",
+	        "filename": "report.pdf"
+	      },
+	      "prompt_cache_breakpoint": {
+	        "mode": "explicit"
+	      }
+	    }
+	  }
+	}
+	"#);
+}
+
+#[rstest::rstest]
+#[case::file_id_only(json!({"type": "input_file", "file_id": "file-abc"}))]
+#[case::base64_without_data_url(
+	json!({"type": "input_file", "file_data": "JVBERi0=", "filename": "report.pdf"})
+)]
+fn responses_to_completions_rejects_files_google_cannot_read(#[case] file: Value) {
+	let gemini = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let result = render_as_completions_part(&gemini, file);
+	assert!(
+		matches!(&result, Err(AIError::UnsupportedConversion(reason)) if reason.contains("data URL")),
+		"{result:?}"
+	);
+}
+
+fn render_as_completions_part(provider: &AIProvider, part: Value) -> Result<Value, AIError> {
+	let request = serde_json::from_value(json!({
+		"model": "m",
+		"input": [{"role": "user", "content": [part]}]
+	}))
+	.unwrap();
+	let rendered = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::OpenAICompletions,
+	}
+	.render_request(
+		types::ChatRequest::Responses(request),
+		&ChatRequestContext {
+			provider,
+			headers: &HeaderMap::new(),
+			prompt_caching: None,
+			catalog: None,
+		},
+	)?;
+	let body: Value = serde_json::from_slice(&rendered.body).unwrap();
+	Ok(body["messages"][0]["content"][0].clone())
+}
+
 fn vertex_provider(model: &str) -> AIProvider {
 	AIProvider::Vertex(vertex::Provider {
 		model_override: Some(strng::new(model)),
@@ -4747,4 +4882,233 @@ fn query_requests_sse_matches_alt_query_parameter() {
 	assert!(!query_requests_sse(&uri(
 		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?halt=sse"
 	)));
+}
+
+#[tokio::test]
+async fn provider_with_empty_service_fails_over_to_next_priority() {
+	use crate::test_helpers::proxymock::{
+		BIND_KEY, basic_named_route, body_mock, send_request_body, setup_proxy_test, simple_bind,
+	};
+	use crate::types::agent::{Backend, ResourceName};
+	use crate::types::discovery::{NamespacedHostname, Service};
+	use crate::types::loadbalancer::EndpointSet;
+
+	let upstream = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = |name: &str, provider_backend| NamedAIProvider {
+		name: name.into(),
+		provider: AIProvider::Custom(custom::Provider {
+			model_override: None,
+			provider_override: None,
+			formats: vec![custom::ProviderFormatConfig {
+				format: custom::ProviderFormat::Completions,
+				path: None,
+			}],
+		}),
+		provider_backend: Some(provider_backend),
+		host_override: None,
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		inline_policies: vec![],
+	};
+	let empty = NamespacedHostname {
+		namespace: "default".into(),
+		hostname: "empty.default.svc.cluster.local".into(),
+	};
+	let providers = EndpointSet::new(vec![
+		vec![(
+			"empty".into(),
+			provider(
+				"empty",
+				SimpleBackendReference::Service {
+					name: empty.clone(),
+					port: 80,
+				},
+			),
+		)],
+		vec![(
+			"backup".into(),
+			provider(
+				"backup",
+				SimpleBackendReference::Backend(strng::format!("/{}", upstream.address())),
+			),
+		)],
+	]);
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*upstream.address())
+		.with_bind(simple_bind())
+		.with_raw_backend(
+			Backend::AI(
+				ResourceName::new("llm".into(), "".into()),
+				AIBackend::new(providers),
+			)
+			.into(),
+		)
+		.with_route(basic_named_route(strng::literal!("/llm")));
+	t.pi
+		.stores
+		.discovery
+		.sync_local(
+			vec![Service {
+				name: "empty".into(),
+				namespace: empty.namespace.clone(),
+				hostname: empty.hostname.clone(),
+				ports: std::collections::HashMap::from([(80, 80)]),
+				..Default::default()
+			}],
+			vec![],
+			Default::default(),
+		)
+		.unwrap();
+
+	let res = send_request_body(
+		t.serve_http(BIND_KEY),
+		::http::Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn provider_health_tracks_epp_failure_and_fail_open() {
+	use std::collections::HashMap;
+
+	use crate::http::ext_proc::{FailureMode, InferenceRouting, InferenceRoutingDestinationMode};
+	use crate::store::LocalWorkload;
+	use crate::test_helpers::proxymock::{
+		BIND_KEY, basic_named_route, body_mock, send_request_body, setup_proxy_test, simple_bind,
+	};
+	use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
+	use crate::types::discovery::{NamespacedHostname, Service, Workload};
+	use crate::types::loadbalancer::EndpointSet;
+
+	for mode in [FailureMode::FailClosed, FailureMode::FailOpen] {
+		let primary = body_mock(include_bytes!(
+			"../../../llm/src/tests/response/completions/basic.json"
+		))
+		.await;
+		let backup = body_mock(include_bytes!(
+			"../../../llm/src/tests/response/completions/basic.json"
+		))
+		.await;
+		let service = NamespacedHostname {
+			namespace: "default".into(),
+			hostname: "model.default.svc.cluster.local".into(),
+		};
+		let provider = |name: &str, provider_backend, inline_policies| NamedAIProvider {
+			name: name.into(),
+			provider: AIProvider::Custom(custom::Provider {
+				model_override: None,
+				provider_override: None,
+				formats: vec![custom::ProviderFormatConfig {
+					format: custom::ProviderFormat::Completions,
+					path: None,
+				}],
+			}),
+			provider_backend: Some(provider_backend),
+			host_override: None,
+			path_override: None,
+			path_prefix: None,
+			tokenize: false,
+			inline_policies,
+		};
+		let providers = EndpointSet::new(vec![
+			vec![(
+				"primary".into(),
+				provider(
+					"primary",
+					SimpleBackendReference::Service {
+						name: service.clone(),
+						port: 8000,
+					},
+					vec![BackendTrafficPolicy::InferenceRouting(InferenceRouting {
+						target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+							"127.0.0.1:1".parse().unwrap(),
+						))),
+						destination_mode: InferenceRoutingDestinationMode::Validated,
+						failure_mode: mode,
+					})],
+				),
+			)],
+			vec![(
+				"backup".into(),
+				provider(
+					"backup",
+					SimpleBackendReference::Backend(strng::format!("/{}", backup.address())),
+					vec![],
+				),
+			)],
+		]);
+		let primary_info = providers
+			.find_endpoint(|provider, info| (provider.name.as_str() == "primary").then(|| info.clone()))
+			.unwrap();
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_backend(*backup.address())
+			.with_bind(simple_bind())
+			.with_raw_backend(
+				Backend::AI(
+					ResourceName::new("llm".into(), "".into()),
+					AIBackend::new(providers),
+				)
+				.into(),
+			)
+			.with_route(basic_named_route(strng::literal!("/llm")));
+		let backend_addr = *primary.address();
+		t.pi
+			.stores
+			.discovery
+			.sync_local(
+				vec![Service {
+					name: "model".into(),
+					namespace: service.namespace.clone(),
+					hostname: service.hostname.clone(),
+					ports: HashMap::from([(8000, backend_addr.port())]),
+					..Default::default()
+				}],
+				vec![LocalWorkload {
+					workload: Workload {
+						uid: "model-wl".into(),
+						workload_ips: vec![backend_addr.ip()],
+						..Default::default()
+					},
+					services: HashMap::from([(
+						format!("default/{}", service.hostname),
+						HashMap::from([(8000, backend_addr.port())]),
+					)]),
+				}],
+				Default::default(),
+			)
+			.unwrap();
+
+		let send = || {
+			send_request_body(
+				t.serve_http(BIND_KEY),
+				::http::Method::POST,
+				"http://lo/v1/chat/completions",
+				include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
+			)
+		};
+		let first = send().await;
+		if mode == FailureMode::FailOpen {
+			assert_eq!(first.status(), 200);
+			assert_eq!(primary.received_requests().await.unwrap().len(), 1);
+			assert_eq!(primary_info.consecutive_failures(), 0);
+			assert_eq!(primary_info.times_ejected(), 0);
+		} else {
+			assert!(first.status().is_server_error());
+			assert_eq!(primary_info.consecutive_failures(), 1);
+			assert_eq!(primary_info.times_ejected(), 1);
+			let second = send().await;
+			assert_eq!(second.status(), 200);
+			assert_eq!(backup.received_requests().await.unwrap().len(), 1);
+		}
+	}
 }

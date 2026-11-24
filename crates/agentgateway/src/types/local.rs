@@ -622,6 +622,43 @@ pub struct LocalSimpleMcpConfig {
 	/// Policies applied to MCP requests.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<FilterOrPolicy>,
+	/// endpoints serves MCP servers under their own paths. Endpoints inherit the top-level settings and
+	/// `policies`; a policy set on an endpoint replaces the top-level policy of the same type, except
+	/// `authorization` and `mcpAuthorization`, whose rules from both apply. The top-level
+	/// `targets` are the targets of the `/mcp` endpoint, which also serves `/sse`; list an endpoint with
+	/// path `/mcp` to give it its own settings or policies. Requires `gateways`.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	endpoints: Vec<LocalMcpEndpoint>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct LocalMcpEndpoint {
+	/// path the endpoint is served under, for example `/eng/mcp`. Clients connect with Streamable HTTP.
+	path: Strng,
+	/// MCP server targets to multiplex together.
+	#[serde(default)]
+	targets: Vec<Arc<LocalMcpTarget>>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	stateful_mode: Option<McpStatefulMode>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	prefix_mode: Option<McpPrefixMode>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	failure_mode: Option<FailureMode>,
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	sse_keep_alive: Option<Duration>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	dns_rebinding_protection: Option<bool>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	server: Option<McpServerOverrides>,
+	/// Policies applied to MCP requests for this endpoint, on top of the top-level `policies`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	policies: Option<FilterOrPolicy>,
 }
 
 #[apply(schema_de!)]
@@ -1275,6 +1312,35 @@ struct LocalBind {
 	mode: BindMode,
 }
 
+impl LocalBind {
+	fn key_and_port(&self) -> anyhow::Result<(Strng, u16)> {
+		// A standard bind requires a numeric port; an internal bind may omit the port to act as
+		// the wildcard fallback that serves any destination port via in-process routing.
+		if self.port.is_none() && self.mode != BindMode::Internal {
+			bail!("a bind without a port must set mode: internal");
+		}
+		// The runtime treats an internal bind with port 0 as the wildcard, whether the port was
+		// omitted or explicitly set to 0. Keep both representations on the single `bind/wildcard`
+		// key (and address port 0) so they are indistinguishable downstream.
+		let bind_port = self.port.unwrap_or(0);
+		let is_wildcard = self.mode == BindMode::Internal && bind_port == 0;
+		let bind_name = if is_wildcard {
+			strng::literal!("bind/wildcard")
+		} else {
+			strng::format!("bind/{bind_port}")
+		};
+		Ok((bind_name, bind_port))
+	}
+}
+
+fn default_bind_ip(config: &crate::Config) -> IpAddr {
+	if cfg!(target_family = "unix") && config.ipv6_enabled {
+		IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+	} else {
+		IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+	}
+}
+
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -1862,6 +1928,8 @@ impl LocalBackend {
 								None => crate::mcp::openapi_server_prefix(&openapi_schema)
 									.map_err(|e| anyhow!("openapi MCP target '{}': {e}", t.name))?,
 							};
+							crate::mcp::parse_openapi_schema(&openapi_schema)
+								.map_err(|e| anyhow!("openapi MCP target '{}': {e}", t.name))?;
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
 								schema: openapi_schema.into(),
@@ -2439,13 +2507,13 @@ where
 
 	Option::<BackendAuthCompat>::deserialize(deserializer)?
 		.map(|auth| match auth {
-			BackendAuthCompat::PlainKey { key } => Ok(LocalBackendAuth {
+			BackendAuthCompat::PlainKey { key, credentials } => Ok(LocalBackendAuth {
 				kind: Some(LocalBackendAuthKind::Key {
 					value: Some(key),
 					expression: None,
 					location: None,
 				}),
-				credentials: Vec::new(),
+				credentials,
 			}),
 			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(LocalBackendAuth {
 				kind: Some(validate_auth::<D::Error>(auth)?),
@@ -2464,12 +2532,14 @@ where
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 enum BackendAuthCompat {
 	PlainKey {
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
 		key: FileOrInline,
+		#[serde(default)]
+		credentials: Vec<LocalBackendAuthCredential>,
 	},
 	FullWithCredentials {
 		#[serde(flatten)]
@@ -3286,21 +3356,7 @@ async fn convert(
 	))
 	.await?;
 	for b in binds {
-		// A standard bind requires a numeric port; an internal bind may omit the port to act as
-		// the wildcard fallback that serves any destination port via in-process routing.
-		if b.port.is_none() && b.mode != BindMode::Internal {
-			bail!("a bind without a port must set mode: internal");
-		}
-		// The runtime treats an internal bind with port 0 as the wildcard, whether the port was
-		// omitted or explicitly set to 0. Keep both representations on the single `bind/wildcard`
-		// key (and address port 0) so they are indistinguishable downstream.
-		let bind_port = b.port.unwrap_or(0);
-		let is_wildcard = b.mode == BindMode::Internal && bind_port == 0;
-		let bind_name = if is_wildcard {
-			strng::literal!("bind/wildcard")
-		} else {
-			strng::format!("bind/{bind_port}")
-		};
+		let (bind_name, bind_port) = b.key_and_port()?;
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
 			let (l, routes, tcp_routes, pol, backends) = Box::pin(convert_listener(
@@ -3318,16 +3374,10 @@ async fn convert(
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
 		}
-		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), bind_port)
-		} else {
-			// Windows and IPv6 don't mix well apparently?
-			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), bind_port)
-		};
 		let b = BindSnapshot {
 			bind: Arc::new(Bind {
 				key: bind_name,
-				address: sockaddr,
+				address: SocketAddr::new(default_bind_ip(config), bind_port),
 				protocol: b
 					.protocol
 					.map(BindProtocol::from)
@@ -3456,6 +3506,41 @@ async fn convert(
 		}
 	}
 
+	// Built-in paths on the same listeners as the MCP endpoints, which an endpoint must not overlap.
+	let mut mcp_reserved_paths = vec![
+		(strng::literal!("/.well-known"), "built-in"),
+		(strng::literal!("/sse"), "built-in"),
+	];
+	if let Some(mcp) = &mcp
+		&& !mcp.endpoints.is_empty()
+	{
+		let mcp_listeners =
+			resolve_gateway_references(&gateway_refs, &mcp.gateways, GatewayRouteKind::Http)?;
+		let shares_listener = |gateways: &[Strng]| -> anyhow::Result<bool> {
+			Ok(
+				resolve_gateway_references(&gateway_refs, gateways, GatewayRouteKind::Http)?
+					.iter()
+					.any(|listener| mcp_listeners.contains(listener)),
+			)
+		};
+		if let Some(llm) = &llm
+			&& !llm.gateways.is_empty()
+			&& !llm.path_prefix.trim_end_matches('/').is_empty()
+			&& shares_listener(&llm.gateways)?
+		{
+			mcp_reserved_paths.push((strng::new(llm.path_prefix.trim_end_matches('/')), "LLM"));
+		}
+		if let Some(ui) = &ui
+			&& shares_listener(&ui.gateways)?
+		{
+			for m in ui_matches(None) {
+				if let PathMatch::PathPrefix(path) = m.path {
+					mcp_reserved_paths.push((path, "UI"));
+				}
+			}
+		}
+	}
+
 	if let Some(llm_config) = llm {
 		if llm_config.gateways.is_empty() {
 			let (llm_bind, llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
@@ -3501,16 +3586,17 @@ async fn convert(
 			all_policies.extend_from_slice(&mcp_policies);
 			all_backends.extend_from_slice(&mcp_backends);
 		} else {
-			Box::pin(convert_attached_mcp(
+			let mcp_backends = Box::pin(convert_attached_mcp(
 				resources,
 				config,
 				gateway.clone(),
 				mcp_config,
 				&gateway_refs,
+				&mcp_reserved_paths,
 				&mut all_listener_routes,
-				&mut all_backends,
 			))
 			.await?;
+			all_backends.extend(mcp_backends);
 		}
 	}
 	if let Some(ui_config) = ui {
@@ -3710,6 +3796,12 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 	{
 		bail!("mcp.gateways cannot be used with mcp.port");
 	}
+	if let Some(mcp) = &config.mcp
+		&& mcp.gateways.is_empty()
+		&& !mcp.endpoints.is_empty()
+	{
+		bail!("mcp.endpoints requires mcp.gateways");
+	}
 	if let Some(ui) = &config.ui
 		&& ui.gateways.is_empty()
 	{
@@ -3855,12 +3947,9 @@ async fn convert_gateways(
 			}
 			refs.insert(gateway_name, listener_keys);
 		}
-		let default_address = if cfg!(target_family = "unix") && config.ipv6_enabled {
-			IpAddr::V6(Ipv6Addr::UNSPECIFIED)
-		} else {
-			IpAddr::V4(Ipv4Addr::UNSPECIFIED)
-		};
-		let address = gateway_config.bind_address.unwrap_or(default_address);
+		let address = gateway_config
+			.bind_address
+			.unwrap_or_else(|| default_bind_ip(config));
 		all_binds.push(BindSnapshot {
 			bind: Arc::new(Bind {
 				key: strng::format!("bind/{port}"),
@@ -4162,20 +4251,163 @@ async fn convert_attached_mcp(
 	resources: &crate::resource_manager::ResourceFetcher,
 	config: &crate::Config,
 	gateway: ListenerTarget,
-	mcp_config: LocalSimpleMcpConfig,
+	mut mcp_config: LocalSimpleMcpConfig,
 	gateway_refs: &LocalGatewayReferences,
+	reserved_paths: &[(Strng, &str)],
 	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
-	all_backends: &mut Vec<BackendWithPolicies>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<BackendWithPolicies>> {
 	let listeners =
 		resolve_gateway_references(gateway_refs, &mcp_config.gateways, GatewayRouteKind::Http)?;
-	let (_bind, routes, policies, backends) = Box::pin(convert_mcp_config(
-		resources, config, gateway, mcp_config, true,
-	))
-	.await?;
-	if !policies.is_empty() {
-		bail!("internal error: attached mcp generated targeted policies");
+	let mut endpoints = std::mem::take(&mut mcp_config.endpoints);
+	let mut routes = Vec::new();
+	let mut mcp_backends = Vec::new();
+	// The top-level targets are the targets of the /mcp endpoint.
+	if !endpoints.is_empty() && !mcp_config.backend.targets.is_empty() {
+		let targets = std::mem::take(&mut mcp_config.backend.targets);
+		match endpoints
+			.iter_mut()
+			.find(|e| e.path.trim_end_matches('/') == "/mcp")
+		{
+			Some(endpoint) => {
+				endpoint.targets.splice(0..0, targets);
+			},
+			None => endpoints.insert(
+				0,
+				LocalMcpEndpoint {
+					path: strng::literal!("/mcp"),
+					targets,
+					..Default::default()
+				},
+			),
+		}
 	}
+	let shared_backend = mcp_config.backend.clone();
+	let shared_policies = mcp_config.policies.clone();
+	if endpoints.is_empty() {
+		let (_bind, default_routes, policies, backends) = Box::pin(convert_mcp_config(
+			resources, config, gateway, mcp_config, true,
+		))
+		.await?;
+		if !policies.is_empty() {
+			bail!("internal error: attached mcp generated targeted policies");
+		}
+		routes.extend(default_routes);
+		mcp_backends.extend(backends);
+	}
+
+	// Endpoint paths must not overlap each other or built-in paths; the longer prefix would win.
+	let overlaps = |a: &str, b: &str| {
+		a == b
+			|| a.strip_prefix(b).is_some_and(|rest| rest.starts_with('/'))
+			|| b.strip_prefix(a).is_some_and(|rest| rest.starts_with('/'))
+	};
+	let mut seen_paths: Vec<Strng> = Vec::new();
+	for endpoint in endpoints {
+		let LocalMcpEndpoint {
+			path,
+			targets,
+			stateful_mode,
+			prefix_mode,
+			failure_mode,
+			sse_keep_alive,
+			dns_rebinding_protection,
+			server,
+			policies,
+		} = endpoint;
+		let path = path.trim_end_matches('/');
+		if !path.starts_with('/')
+			|| path.contains(['?', '#'])
+			|| path.parse::<::http::uri::PathAndQuery>().is_err()
+		{
+			bail!("mcp endpoint path {path:?} must be a URL path starting with '/' and must not be '/'");
+		}
+		let path = strng::new(path);
+		if seen_paths.contains(&path) {
+			bail!("duplicate mcp endpoint path {path:?}");
+		}
+		if let Some(other) = seen_paths.iter().find(|other| overlaps(&path, other)) {
+			bail!("mcp endpoint path {path:?} overlaps the mcp endpoint path {other:?}");
+		}
+		if let Some((reserved, owner)) = reserved_paths.iter().find(|(p, _)| overlaps(&path, p)) {
+			bail!("mcp endpoint path {path:?} overlaps the {owner} path {reserved:?}");
+		}
+		seen_paths.push(path.clone());
+		let route_key = strng::format!("mcp:{path}");
+		let backend_name = strng::format!("mcp:{path}");
+		// The runtime merges the shared and endpoint policies like policies attached at different levels:
+		// the endpoint policy of a type wins, and authorization rules from both apply. Route policies are
+		// last-writer-wins, and backend policies first-writer-wins, so the two lists are ordered oppositely.
+		let mut resolved_policies = ResolvedPolicies::default();
+		for (pol, endpoint_policy) in [(shared_policies.clone(), false), (policies, true)] {
+			let Some(pol) = pol else { continue };
+			let split = split_policies(resources, pol, config.as_policy_context(&route_key)).await?;
+			resolved_policies
+				.route_policies
+				.extend(split.route_policies);
+			if endpoint_policy {
+				resolved_policies
+					.backend_policies
+					.splice(0..0, split.backend_policies);
+			} else {
+				resolved_policies
+					.backend_policies
+					.extend(split.backend_policies);
+			}
+		}
+		let prefix = |p: String| RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix(p.into()),
+			method: None,
+			query: vec![],
+		};
+		routes.push(Route {
+			key: route_key,
+			service_key: None,
+			service_port: 0,
+			name: RouteName {
+				name: path.clone(),
+				namespace: strng::new("internal"),
+				rule_name: None,
+				kind: None,
+			},
+			hostnames: vec![],
+			// Legacy SSE clients reach the /mcp endpoint at /sse.
+			matches: [Some(path.as_str()), (path == "/mcp").then_some("/sse")]
+				.into_iter()
+				.flatten()
+				.flat_map(|p| {
+					[
+						prefix(p.to_string()),
+						prefix(format!("/.well-known/oauth-protected-resource{p}")),
+						prefix(format!("/.well-known/oauth-authorization-server{p}")),
+					]
+				})
+				.collect(),
+			backends: vec![RouteBackendReference {
+				weight: 1,
+				target: BackendReference::Backend(strng::format!("/{backend_name}")).into(),
+				inline_policies: resolved_policies.backend_policies,
+			}],
+			llm_router: None,
+			inline_policies: resolved_policies.route_policies,
+		});
+		let backend = LocalMcpBackend {
+			targets,
+			stateful_mode: stateful_mode.unwrap_or_else(|| shared_backend.stateful_mode.clone()),
+			prefix_mode: prefix_mode.or(shared_backend.prefix_mode),
+			failure_mode: failure_mode.or(shared_backend.failure_mode),
+			sse_keep_alive: sse_keep_alive.or(shared_backend.sse_keep_alive),
+			dns_rebinding_protection: dns_rebinding_protection
+				.unwrap_or(shared_backend.dns_rebinding_protection),
+			server: server.or_else(|| shared_backend.server.clone()),
+		};
+		mcp_backends.extend(
+			LocalBackend::MCP(backend)
+				.as_backends(local_name(backend_name), resources, config.mcp.session_ttl)
+				.await?,
+		);
+	}
+
 	for listener_key in listeners {
 		push_listener_routes(
 			all_listener_routes,
@@ -4183,8 +4415,7 @@ async fn convert_attached_mcp(
 			scoped_routes(&listener_key, routes.clone()),
 		);
 	}
-	all_backends.extend_from_slice(&backends);
-	Ok(())
+	Ok(mcp_backends)
 }
 
 async fn convert_attached_ui(
@@ -5143,16 +5374,10 @@ async fn convert_llm_config(
 	listener_set.insert(listener);
 
 	// Create bind
-	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
-	} else {
-		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
-	};
-
 	let bind = BindSnapshot {
 		bind: Arc::new(Bind {
 			key: strng::format!("bind/{}", port),
-			address: sockaddr,
+			address: SocketAddr::new(default_bind_ip(config), port),
 			protocol: if tls_enabled {
 				BindProtocol::tls
 			} else {
@@ -5184,6 +5409,7 @@ async fn convert_mcp_config(
 		port,
 		backend,
 		policies,
+		endpoints: _,
 	} = mcp_config;
 	let port = port.unwrap_or(DEFAULT_MCP_PORT);
 	let route_key = strng::new("mcp:default");
@@ -5239,16 +5465,10 @@ async fn convert_mcp_config(
 	let mut listener_set = ListenerSet::default();
 	listener_set.insert(listener);
 
-	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
-	} else {
-		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
-	};
-
 	let bind = BindSnapshot {
 		bind: Arc::new(Bind {
 			key: strng::format!("bind/{}", port),
-			address: sockaddr,
+			address: SocketAddr::new(default_bind_ip(config), port),
 			protocol: BindProtocol::http,
 			tunnel_protocol: TunnelProtocol::Direct,
 			mode: BindMode::Standard,

@@ -312,13 +312,73 @@ type GoogleModelArmor struct {
 	Policies *GoogleModelArmorPolicy `json:"policies,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="has(self.analyzeText) || has(self.detectJailbreak)",message="at least one of analyzeText or detectJailbreak must be set"
+type AzureContentSafety struct {
+	// Behavior when the provider is unavailable or returns an error.
+	// `FailOpen` allows the request to continue; `FailClosed` (default) rejects it.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// Endpoint of the Azure AI Content Safety resource, for example
+	// `my-resource.cognitiveservices.azure.com`. An `https://` prefix is accepted
+	// and ignored.
+	// +required
+	Endpoint ShortString `json:"endpoint"`
+
+	// Action controls whether flagged content is rejected or only observed.
+	// `Reject` (the default) rejects flagged content; `Audit` records the
+	// would-be rejection without blocking.
+	// +optional
+	Action *RejectAuditAction `json:"action,omitempty"`
+
+	// Checks content with the Analyze Text API for harmful content categories
+	// (Hate, SelfHarm, Sexual, Violence) and blocklist matches.
+	// +optional
+	AnalyzeText *AzureContentSafetyAnalyzeText `json:"analyzeText,omitempty"`
+
+	// Checks content with the Detect Text Jailbreak API (Prompt Shields).
+	// Only supported on request guards.
+	// +optional
+	DetectJailbreak *AzureContentSafetyDetectJailbreak `json:"detectJailbreak,omitempty"`
+}
+
+type AzureContentSafetyAnalyzeText struct {
+	// Severity at or above which content is flagged (0-6). Defaults to 2.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=6
+	// +optional
+	SeverityThreshold *int32 `json:"severityThreshold,omitempty"`
+
+	// Analyze Text API version. Defaults to `2024-09-01`.
+	// +optional
+	APIVersion *ShortString `json:"apiVersion,omitempty"`
+
+	// Names of custom blocklists to check. Any blocklist match flags the content.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +listType=set
+	// +optional
+	BlocklistNames []ShortString `json:"blocklistNames,omitempty"`
+
+	// When true, further analysis stops if a blocklist is hit.
+	// +optional
+	HaltOnBlocklistHit *bool `json:"haltOnBlocklistHit,omitempty"`
+}
+
+type AzureContentSafetyDetectJailbreak struct {
+	// Detect Text Jailbreak API version. Defaults to `2024-02-15-preview`.
+	// +optional
+	APIVersion *ShortString `json:"apiVersion,omitempty"`
+}
+
 // Prompt guards to apply to requests sent by the client.
-// +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor;azureContentSafety
 // +kubebuilder:validation:XValidation:rule="!has(self.policies) || (!has(self.regex) && !has(self.webhook))",message="policies is not supported for regex or webhook guards"
 // +kubebuilder:validation:XValidation:rule="!has(self.policies) || ((!has(self.openAIModeration) || !has(self.openAIModeration.policies)) && (!has(self.bedrockGuardrails) || !has(self.bedrockGuardrails.policies)) && (!has(self.googleModelArmor) || !has(self.googleModelArmor.policies)))",message="policies may not be set together with the deprecated provider-level policies"
-// +kubebuilder:validation:XValidation:rule="!has(self.openAIModeration) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.aws) && !has(self.policies.auth.gcp))",message="openAIModeration policies.auth supports only key or secretRef"
-// +kubebuilder:validation:XValidation:rule="!has(self.bedrockGuardrails) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.gcp))",message="bedrockGuardrails policies.auth supports only key, secretRef, or aws"
-// +kubebuilder:validation:XValidation:rule="!has(self.googleModelArmor) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.key) && !has(self.policies.auth.secretRef) && !has(self.policies.auth.aws))",message="googleModelArmor policies.auth supports only gcp"
+// +kubebuilder:validation:XValidation:rule="!has(self.openAIModeration) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.aws) && !has(self.policies.auth.gcp) && !has(self.policies.auth.azure))",message="openAIModeration policies.auth supports only key or secretRef"
+// +kubebuilder:validation:XValidation:rule="!has(self.bedrockGuardrails) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.gcp) && !has(self.policies.auth.azure))",message="bedrockGuardrails policies.auth supports only key, secretRef, or aws"
+// +kubebuilder:validation:XValidation:rule="!has(self.googleModelArmor) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.key) && !has(self.policies.auth.secretRef) && !has(self.policies.auth.aws) && !has(self.policies.auth.azure))",message="googleModelArmor policies.auth supports only gcp"
+// +kubebuilder:validation:XValidation:rule="!has(self.azureContentSafety) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.aws) && !has(self.policies.auth.gcp))",message="azureContentSafety policies.auth supports only key, secretRef, or azure"
 // +kubebuilder:validation:XValidation:rule="!has(self.scope) || !has(self.webhook) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: webhook guards do not support scope; they always inspect SystemPrompt + Messages"
 type PromptguardRequest struct {
 	// Custom response message to return to the client. If not specified, defaults to
@@ -362,6 +422,10 @@ type PromptguardRequest struct {
 	// +optional
 	GoogleModelArmor *GoogleModelArmor `json:"googleModelArmor,omitempty"`
 
+	// Azure AI Content Safety settings for prompt guarding.
+	// +optional
+	AzureContentSafety *AzureContentSafety `json:"azureContentSafety,omitempty"`
+
 	// Policies for communicating with the prompt guard provider. Not supported
 	// for `regex` or `webhook` guards.
 	// +optional
@@ -369,11 +433,13 @@ type PromptguardRequest struct {
 }
 
 // Prompt guards to apply to responses returned by the LLM provider.
-// +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor;azureContentSafety
 // +kubebuilder:validation:XValidation:rule="!has(self.policies) || (!has(self.regex) && !has(self.webhook))",message="policies is not supported for regex or webhook guards"
 // +kubebuilder:validation:XValidation:rule="!has(self.policies) || ((!has(self.bedrockGuardrails) || !has(self.bedrockGuardrails.policies)) && (!has(self.googleModelArmor) || !has(self.googleModelArmor.policies)))",message="policies may not be set together with the deprecated provider-level policies"
-// +kubebuilder:validation:XValidation:rule="!has(self.bedrockGuardrails) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.gcp))",message="bedrockGuardrails policies.auth supports only key, secretRef, or aws"
-// +kubebuilder:validation:XValidation:rule="!has(self.googleModelArmor) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.key) && !has(self.policies.auth.secretRef) && !has(self.policies.auth.aws))",message="googleModelArmor policies.auth supports only gcp"
+// +kubebuilder:validation:XValidation:rule="!has(self.bedrockGuardrails) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.gcp) && !has(self.policies.auth.azure))",message="bedrockGuardrails policies.auth supports only key, secretRef, or aws"
+// +kubebuilder:validation:XValidation:rule="!has(self.googleModelArmor) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.key) && !has(self.policies.auth.secretRef) && !has(self.policies.auth.aws) && !has(self.policies.auth.azure))",message="googleModelArmor policies.auth supports only gcp"
+// +kubebuilder:validation:XValidation:rule="!has(self.azureContentSafety) || !has(self.policies) || !has(self.policies.auth) || (!has(self.policies.auth.aws) && !has(self.policies.auth.gcp))",message="azureContentSafety policies.auth supports only key, secretRef, or azure"
+// +kubebuilder:validation:XValidation:rule="!has(self.azureContentSafety) || !has(self.azureContentSafety.detectJailbreak)",message="azureContentSafety.detectJailbreak is only supported on request guards"
 // +kubebuilder:validation:XValidation:rule="!has(self.scope) || !has(self.webhook) || (self.scope.size() == 1 && 'Messages' in self.scope)",message="scope: webhook guards do not support a non-default scope; they always inspect the default (Messages)"
 type PromptguardResponse struct {
 	// Custom response message to return to the client. If not specified, defaults to
@@ -410,6 +476,11 @@ type PromptguardResponse struct {
 	// Google Model Armor settings for prompt guarding.
 	// +optional
 	GoogleModelArmor *GoogleModelArmor `json:"googleModelArmor,omitempty"`
+
+	// Azure AI Content Safety settings for response guarding. Only
+	// `analyzeText` is supported for responses.
+	// +optional
+	AzureContentSafety *AzureContentSafety `json:"azureContentSafety,omitempty"`
 
 	// Policies for communicating with the prompt guard provider. Not supported
 	// for `regex` or `webhook` guards.

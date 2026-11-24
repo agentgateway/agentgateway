@@ -638,6 +638,22 @@ mod gemini {
 		"gemini-3.8-flash",
 		send_streaming_responses_and_drain,
 	);
+	provider_model_test!(
+		responses_image,
+		"gemini",
+		"GEMINI_API_KEY",
+		"gemini-3.8-flash",
+		send_responses_with_image,
+		false
+	);
+	provider_model_test!(
+		responses_image_streaming,
+		"gemini",
+		"GEMINI_API_KEY",
+		"gemini-3.8-flash",
+		send_responses_with_image,
+		true
+	);
 
 	// NOTE: AsyncLog::non_atomic_mutate is racey be design.
 	// We need to drain the response to ensure flush is called.
@@ -685,6 +701,14 @@ mod vertex {
 		send_messages_with_image_url
 	);
 	send_messages_tool_tests!("vertex", "", "google/gemini-3.8-flash");
+	provider_model_test!(
+		responses_image,
+		"vertex",
+		"",
+		"google/gemini-3.8-flash",
+		send_responses_with_image,
+		false
+	);
 
 	// TODO(https://github.com/agentgateway/agentgateway/pull/909) support this
 	provider_env_model_test!(
@@ -1478,6 +1502,85 @@ async fn send_messages_with_image_url(gw: &AgentGateway) {
 	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
 	assert_eq!(status, StatusCode::OK, "response: {body}");
 	assert_log_with_output_range("/v1/messages", false, &test_id, 1, 300).await;
+}
+
+// A dropped image still returns 200, so check the model saw it.
+async fn send_responses_with_image(gw: &AgentGateway, stream: bool) {
+	use http_body_util::BodyExt;
+
+	const RED_16X16_PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAF0lEQVR4nGP4z8BAEiJN9aiGUQ1DSgMAkPn/Afnh+ngAAAAASUVORK5CYII=";
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/responses",
+			json!({
+				"max_output_tokens": 1024,
+				"input": [
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "input_text",
+								"text": "What colour is the attached image? Answer with one word, or 'none' if no image is attached."
+							},
+							{
+								"type": "input_image",
+								"image_url": format!("data:image/png;base64,{RED_16X16_PNG_B64}"),
+								"detail": "original"
+							}
+						]
+					}
+				],
+				"stream": stream,
+			}),
+		)
+		.await;
+
+	let test_id = test_id_from_response(&resp);
+	let status = resp.status();
+	let bytes = resp
+		.into_body()
+		.collect()
+		.await
+		.expect("collect body")
+		.to_bytes();
+	let body = String::from_utf8_lossy(&bytes);
+	assert_eq!(status, StatusCode::OK, "body: {body}");
+	let answer = if stream {
+		let mut answer = String::new();
+		let mut completed = false;
+		for event in body
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.filter_map(|data| serde_json::from_str::<serde_json::Value>(data).ok())
+		{
+			completed = event["type"] == "response.completed";
+			if event["type"] == "response.output_text.delta"
+				&& let Some(delta) = event["delta"].as_str()
+			{
+				answer.push_str(delta);
+			}
+		}
+		assert!(
+			completed,
+			"expected stream to end with response.completed, got: {body}"
+		);
+		answer
+	} else {
+		let body: serde_json::Value = serde_json::from_slice(&bytes).expect("parse json");
+		body["output"]
+			.as_array()
+			.expect("output array")
+			.iter()
+			.flat_map(|item| item["content"].as_array().cloned().unwrap_or_default())
+			.filter_map(|part| part["text"].as_str().map(str::to_owned))
+			.collect::<String>()
+	};
+	assert!(
+		answer.to_lowercase().contains("red"),
+		"expected the model to see a red image, got: {answer:?}"
+	);
+	assert_request_log("/v1/responses", stream, &test_id).await;
 }
 
 async fn send_messages_count_tokens(gw: &AgentGateway) {

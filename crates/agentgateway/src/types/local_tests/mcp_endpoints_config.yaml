@@ -1,0 +1,44 @@
+gateways:
+  default:
+    port: 3000
+mcp:
+  statefulMode: stateless
+  policies:
+    cors:
+      allowOrigins: ["*"]
+    requestHeaderModifier:
+      set:
+        x-shared: "true"
+    mcpAuthorization:
+      rules:
+      - deny: 'mcp.tool.name == "delete_db"'
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+      args: ["mcp-server-time"]
+  endpoints:
+  - path: /mcp
+    policies:
+      requestHeaderModifier:
+        set:
+          x-default: "true"
+  - path: /eng/mcp
+    targets:
+    - name: everything
+      stdio:
+        cmd: npx
+        args: ["@modelcontextprotocol/server-everything"]
+  - path: /sales/mcp/
+    statefulMode: stateful
+    targets:
+    - name: time
+      stdio:
+        cmd: uvx
+        args: ["mcp-server-time"]
+    policies:
+      cors:
+        allowOrigins: ["https://sales.example.com"]
+      mcpAuthorization:
+        rules:
+        - allow: 'jwt.team == "sales"'

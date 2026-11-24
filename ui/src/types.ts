@@ -28,6 +28,7 @@ import type {
 	LocalLLMPolicy,
 	LocalLLMProvider,
 	LocalLLMVirtualModel,
+	LocalMcpEndpoint,
 	LocalMcpTarget,
 	LocalOidcConfig,
 	LocalRoute,
@@ -108,8 +109,12 @@ export type McpTarget =
 	| ({ name: string; policies?: LocalMcpTarget['policies'] } & {
 			openapi: McpNetworkTarget & { schema: unknown };
 	  });
-export type McpConfig = Omit<LocalSimpleMcpConfig, 'targets'> & {
+export type McpEndpoint = Omit<LocalMcpEndpoint, 'targets'> & {
 	targets?: McpTarget[];
+};
+export type McpConfig = Omit<LocalSimpleMcpConfig, 'targets' | 'endpoints'> & {
+	targets?: McpTarget[];
+	endpoints?: McpEndpoint[];
 };
 export type GatewayConfig = Omit<LocalConfig, 'llm' | 'mcp'> & {
 	llm?: LlmConfig | null;

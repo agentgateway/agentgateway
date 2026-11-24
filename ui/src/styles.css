@@ -2668,6 +2668,20 @@ details summary {
 	flex: 0 0 auto;
 }
 
+.model-discovery-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+
+.model-discovery-icon svg {
+	width: 66%;
+	height: 66%;
+}
+
 .log-detail-title-text {
 	display: flex;
 	min-width: 0;
@@ -4557,6 +4571,36 @@ textarea {
 	color: var(--primary);
 }
 
+.mcp-endpoint-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.mcp-endpoint-header h3 {
+	margin: 0;
+	font-size: 15px;
+}
+
+.mcp-endpoint-header p {
+	margin: 2px 0 0;
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.mcp-endpoint-header + .mcp-server-table {
+	margin-top: 14px;
+}
+
+.mcp-endpoint-header .ant-btn .ant-tag {
+	margin-inline-end: 0;
+}
+
+.mcp-server-table .strong .ant-tag {
+	margin-left: 8px;
+}
+
 .api-key-input-row {
 	display: grid;
 	grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
@@ -6228,4 +6272,22 @@ textarea {
 
 .ant-table-wrapper .ant-table-thead > tr > th.log-td-num {
 	font-family: inherit;
+}
+
+.policy-scope {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--muted);
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.policy-scope .custom-select {
+	min-width: 200px;
+}
+
+.policy-tile-badges {
+	display: inline-flex;
+	gap: 6px;
 }

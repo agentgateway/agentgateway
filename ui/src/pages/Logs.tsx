@@ -10,6 +10,7 @@ import {
 	Copy,
 	Download,
 	Ellipsis,
+	List,
 	MessageSquare,
 	RefreshCw,
 	Settings,
@@ -20,7 +21,15 @@ import {
 	Wrench
 } from 'lucide-react';
 import { marked } from 'marked';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState
+} from 'react';
 
 import { analyticsSummary, getLog, searchLogs, streamLogs } from '@/api/logsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
@@ -1306,7 +1315,36 @@ function logStatusBad(entry: LogEntry) {
 	return Boolean(entry.error || (entry.httpStatus ?? 0) >= 400);
 }
 
+function isModelDiscoveryLog(entry: LogEntry) {
+	return entry.genAi.operationName === 'model_discovery';
+}
+
+function logRequestLine(entry: LogEntry) {
+	const method = stringValue(attributeValue(entry.attributes, 'http.method')) ?? 'GET';
+	const path = stringValue(attributeValue(entry.attributes, 'http.path')) ?? '';
+	return `${method} ${path}`;
+}
+
+function ModelDiscoveryIcon() {
+	return (
+		<span className="provider-icon model-discovery-icon" aria-hidden="true">
+			<List />
+		</span>
+	);
+}
+
 function LogModelCell(props: { entry: LogEntry }) {
+	if (isModelDiscoveryLog(props.entry)) {
+		return (
+			<span className="log-model-cell">
+				<ModelDiscoveryIcon />
+				<span className="log-cell-lines">
+					<span className="log-cell-primary">Model discovery</span>
+					<span className="log-cell-secondary log-model-name">{logRequestLine(props.entry)}</span>
+				</span>
+			</span>
+		);
+	}
 	const originalModel = originalModelForLog(props.entry);
 	const requestModel = props.entry.genAi.requestModel ?? null;
 	const responseModel = props.entry.genAi.responseModel ?? null;
@@ -1527,11 +1565,91 @@ function logUsageDetail(entry: LogEntry): LogUsageDetail {
 	};
 }
 
-function LogDetailView(props: {
+type LogDetailViewProps = {
 	entry: LogEntry;
 	promptLoggingEnabled: boolean;
 	onOpenSettings?: () => void;
-}) {
+};
+
+function LogDetailView(props: LogDetailViewProps) {
+	return isModelDiscoveryLog(props.entry) ? (
+		<ModelDiscoveryDetailView entry={props.entry} />
+	) : (
+		<LlmLogDetailView {...props} />
+	);
+}
+
+function LogDetailHeader(props: { entry: LogEntry; icon: ReactNode; title: ReactNode }) {
+	return (
+		<>
+			<div className="log-detail-top">
+				<div className="log-detail-title">
+					{props.icon}
+					<div className="log-detail-title-text">
+						<h3>{props.title}</h3>
+						<div className="log-detail-id-row">
+							<code>{props.entry.id}</code>
+							<CopyButton value={props.entry.id} />
+						</div>
+					</div>
+				</div>
+				<Button icon={<Download size={15} />} onClick={() => downloadJson(props.entry)}>
+					JSON
+				</Button>
+			</div>
+			{props.entry.error ? (
+				<StatusBanner state="bad" title="Gateway error">
+					{props.entry.error}
+				</StatusBanner>
+			) : null}
+		</>
+	);
+}
+
+function LogRawDetails(props: { entry: LogEntry }) {
+	return (
+		<details className="log-raw-details">
+			<summary>Raw log JSON</summary>
+			<JsonBlock value={props.entry} />
+		</details>
+	);
+}
+
+function ModelDiscoveryDetailView(props: { entry: LogEntry }) {
+	const identity = logIdentity(props.entry);
+	const userAgent = stringValue(attributeValue(props.entry.attributes, 'user_agent.name'));
+	return (
+		<div className="log-detail-view">
+			<LogDetailHeader
+				entry={props.entry}
+				icon={<ModelDiscoveryIcon />}
+				title={
+					<>
+						Model discovery
+						<span className="log-detail-title-sep">/</span>
+						<span className="log-detail-title-model">{logRequestLine(props.entry)}</span>
+					</>
+				}
+			/>
+			<div className="log-stat-row">
+				<LogStat label="Duration" value={formatDuration(props.entry.durationMs)} />
+				<LogStat label="HTTP status" value={String(props.entry.httpStatus ?? 'n/a')} />
+			</div>
+			<section className="log-detail-section">
+				<h4>Request</h4>
+				<div className="log-field-grid">
+					{userAgent ? <LogField label="Client" value={userAgent} /> : null}
+					{identity.user ? <LogField label="User" value={identity.user} /> : null}
+					{identity.group ? <LogField label="Group" value={identity.group} /> : null}
+					<LogField label="Completed" value={formatDate(props.entry.completedAt)} />
+				</div>
+			</section>
+			<LogRawDetails entry={props.entry} />
+		</div>
+	);
+}
+
+function LlmLogDetailView(props: LogDetailViewProps) {
 	const messages = logConversation(props.entry);
 	const trajectory = trajectoryEvents(messages);
 	const conversationRef = useRef<HTMLDetailsElement>(null);
@@ -1569,31 +1687,17 @@ function LogDetailView(props: {
 
 	return (
 		<div className="log-detail-view">
-			<div className="log-detail-top">
-				<div className="log-detail-title">
-					<ProviderIcon provider={providerIconName(provider)} />
-					<div className="log-detail-title-text">
-						<h3>
-							{providerDisplayName(provider ?? 'unknown')}
-							<span className="log-detail-title-sep">/</span>
-							<span className="log-detail-title-model">{primaryModel}</span>
-						</h3>
-						<div className="log-detail-id-row">
-							<code>{props.entry.id}</code>
-							<CopyButton value={props.entry.id} />
-						</div>
-					</div>
-				</div>
-				<Button icon={<Download size={15} />} onClick={() => downloadJson(props.entry)}>
-					JSON
-				</Button>
-			</div>
-
-			{props.entry.error ? (
-				<StatusBanner state="bad" title="Gateway error">
-					{props.entry.error}
-				</StatusBanner>
-			) : null}
+			<LogDetailHeader
+				entry={props.entry}
+				icon={<ProviderIcon provider={providerIconName(provider)} />}
+				title={
+					<>
+						{providerDisplayName(provider ?? 'unknown')}
+						<span className="log-detail-title-sep">/</span>
+						<span className="log-detail-title-model">{primaryModel}</span>
+					</>
+				}
+			/>
 
 			<div className="log-stat-row">
 				<LogStat label="Duration" value={formatDuration(props.entry.durationMs)} />
@@ -1701,10 +1805,7 @@ function LogDetailView(props: {
 				</StatusBanner>
 			)}
 
-			<details className="log-raw-details">
-				<summary>Raw log JSON</summary>
-				<JsonBlock value={props.entry} />
-			</details>
+			<LogRawDetails entry={props.entry} />
 		</div>
 	);
 }

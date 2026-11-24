@@ -859,4 +859,134 @@ CREATE TABLE budget_usage (
 			Decimal::from(3)
 		);
 	}
+
+	/// A stored window, a later write for another window, and the row that must remain.
+	pub(super) struct UpsertCase {
+		pub name: &'static str,
+		pub stored: (UnixDate, UnixDate),
+		pub incoming: (UnixDate, UnixDate),
+		pub want: ((UnixDate, UnixDate), i64),
+	}
+
+	pub(super) const UPSERT_STORED_AMOUNT: i64 = 100;
+	pub(super) const UPSERT_INCOMING_AMOUNT: i64 = 7;
+
+	/// Cases shared by the SQLite and Postgres upsert tests.
+	pub(super) fn upsert_cases() -> Vec<UpsertCase> {
+		const HOUR: Duration = Duration::from_secs(60 * 60);
+		// 22:13:20 UTC, so the 1h window is [22:00, 23:00) and the 2h window is [22:00, 24:00).
+		let now = UnixDate::from_timestamp(1_700_000_000, 0).unwrap();
+		let window = |at: UnixDate, rolling: Duration| budget_window(at, rolling).unwrap();
+		let hour = window(now, HOUR);
+		let previous_hour = window(now - HOUR, HOUR);
+		let next_hour = window(now + HOUR, HOUR);
+		let two_hours = window(now, 2 * HOUR);
+		let day = window(now, 24 * HOUR);
+		let lifetime = window(now, UNBOUNDED_WINDOW);
+		let case = |name, stored, incoming, want| UpsertCase {
+			name,
+			stored,
+			incoming,
+			want,
+		};
+		let kept = |stored| (stored, UPSERT_STORED_AMOUNT);
+		let replaced = |incoming| (incoming, UPSERT_INCOMING_AMOUNT);
+		vec![
+			case(
+				"same window adds usage",
+				hour,
+				hour,
+				(hour, UPSERT_STORED_AMOUNT + UPSERT_INCOMING_AMOUNT),
+			),
+			case("next window replaces", hour, next_hour, replaced(next_hour)),
+			case(
+				"previous window is ignored",
+				hour,
+				previous_hour,
+				kept(hour),
+			),
+			// The budget went from 1h to 2h windows, then a flush for the last 1h window landed late.
+			case(
+				"previous window of another length is ignored",
+				two_hours,
+				previous_hour,
+				kept(two_hours),
+			),
+			case("shorter window replaces", day, hour, replaced(hour)),
+			case("longer window replaces", hour, day, replaced(day)),
+			case(
+				"lifetime to rolling replaces",
+				lifetime,
+				hour,
+				replaced(hour),
+			),
+			case(
+				"rolling to lifetime replaces",
+				hour,
+				lifetime,
+				replaced(lifetime),
+			),
+		]
+	}
+
+	/// Runs every [`upsert_cases`] case on `$pool`: writes the stored row, then the incoming one, both
+	/// through the `$upsert` file, and checks the row `$select` reads back. This is a macro because
+	/// sqlx queries are typed per database.
+	macro_rules! assert_upsert_cases {
+		($pool:expr, $upsert:literal, $select:literal) => {{
+			use $crate::http::budget::tests::{
+				UPSERT_INCOMING_AMOUNT, UPSERT_STORED_AMOUNT, upsert_cases,
+			};
+			let pool = $pool;
+			for case in upsert_cases() {
+				for (window, amount) in [
+					(case.stored, UPSERT_STORED_AMOUNT),
+					(case.incoming, UPSERT_INCOMING_AMOUNT),
+				] {
+					sqlx::query(include_str!($upsert))
+						.bind(case.name)
+						.bind(window.0.timestamp_millis())
+						.bind(window.1.timestamp_millis())
+						.bind($crate::http::budget::BudgetLimitUnit::Tokens.as_str())
+						.bind(amount)
+						.bind(0_i64)
+						.execute(pool)
+						.await
+						.unwrap();
+				}
+				let row: (i64, i64, i64) = sqlx::query_as($select)
+					.bind(case.name)
+					.fetch_one(pool)
+					.await
+					.unwrap();
+				let ((start, end), amount) = case.want;
+				assert_eq!(
+					row,
+					(start.timestamp_millis(), end.timestamp_millis(), amount),
+					"{}",
+					case.name
+				);
+			}
+		}};
+	}
+	pub(super) use assert_upsert_cases;
+
+	#[tokio::test]
+	async fn sqlite_upsert_ignores_stale_windows_and_accepts_reconfigured_ones() {
+		let pool = sqlx::sqlite::SqlitePoolOptions::new()
+			.max_connections(1)
+			.connect("sqlite::memory:")
+			.await
+			.unwrap();
+		Arc::new(BudgetPolicy::default())
+			.initialize(crate::database::DatabasePool::Sqlite(pool.clone()))
+			.await
+			.unwrap();
+
+		assert_upsert_cases!(
+			&pool,
+			"sqlite_upsert.sql",
+			"SELECT window_start, window_end, used_amount FROM budget_usage WHERE budget_id = ?"
+		);
+	}
 }

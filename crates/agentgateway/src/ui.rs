@@ -278,6 +278,9 @@ struct UiConfigResource {
 	kind: ConfigResourceKind,
 	/// The resource id, unique within its kind.
 	id: String,
+	/// The stable UUID for a stored resource. Preserved across updates and renames.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	uid: Option<String>,
 	/// The resource, in the configuration file format of its kind. The value is an object for
 	/// non-policy kinds. For policy kinds, it has the policy's configuration shape, which can be an
 	/// array or null for some IDs.
@@ -312,6 +315,7 @@ impl From<ConfigResource> for UiConfigResource {
 		Self {
 			kind: resource.kind,
 			id: resource.id,
+			uid: resource.uid,
 			value: resource.value,
 			source: ConfigResourceSource::Database,
 			revision: Some(resource.revision),
@@ -327,6 +331,7 @@ impl From<PreparedResource> for UiConfigResource {
 		Self {
 			kind: resource.kind,
 			id: resource.id,
+			uid: None,
 			value: resource.value,
 			source: ConfigResourceSource::File,
 			revision: None,
@@ -919,20 +924,24 @@ fn remove_file_owned_settings(
 	file_config: &Value,
 	value: &mut Value,
 ) -> Result<(), ErrorResponse> {
-	let (section, fields) = kind.settings_fields().expect("settings resource");
 	let value = value.as_object_mut().ok_or_else(|| {
 		resource_api_error(ConfigResourceError::InvalidRequest(format!(
-			"{kind}/default must be an object"
+			"{kind} resources must be objects"
 		)))
 	})?;
-	let file_settings = file_config.get(section).and_then(Value::as_object);
+	let id = match value.get("endpoint").and_then(Value::as_str) {
+		Some(endpoint) if kind == ConfigResourceKind::McpSettings => endpoint.to_string(),
+		_ => "default".to_string(),
+	};
+	let (_, fields) = crate::config_store::settings_scope(kind, &id);
+	let file_settings = crate::config_store::file_settings(file_config, kind, &id);
 	for &field in fields {
 		let Some(file_value) = file_settings.and_then(|settings| settings.get(field)) else {
 			continue;
 		};
 		if value.get(field).is_some_and(|value| value != file_value) {
 			return Err(resource_api_error(ConfigResourceError::Conflict(format!(
-				"file-owned {kind}/default field cannot be updated in hybrid mode: {field}"
+				"file-owned {kind}/{id} field cannot be updated in hybrid mode: {field}"
 			))));
 		}
 		value.remove(field);
@@ -1455,8 +1464,8 @@ mod tests {
 			app.resource_manager.clone(),
 			&EMPTY_ASSETS_DIR,
 		);
+		let mut uid = None;
 		for (method, uri, body) in [
-			("GET", "/api/config/resources", ""),
 			(
 				"PUT",
 				"/api/config/resources/modelCatalog",
@@ -1467,6 +1476,8 @@ mod tests {
 				"/api/config/resources/modelCatalog/default",
 				r#"{"value":{"custom":{}}}"#,
 			),
+			("GET", "/api/config/resources", ""),
+			("GET", "/api/config/resources/modelCatalog", ""),
 			("DELETE", "/api/config/resources/modelCatalog/default", ""),
 		] {
 			let response = router
@@ -1489,6 +1500,11 @@ mod tests {
 			assert_eq!(status, StatusCode::OK, "{method} {uri}: {body:?}");
 			let value: Value = serde_json::from_slice(&body).unwrap();
 			assert!(value.get("generation").is_none(), "{method} {uri}: {value}");
+			if method != "DELETE" {
+				let returned_uid =
+					uuid::Uuid::parse_str(value["resources"][0]["uid"].as_str().unwrap()).unwrap();
+				assert_eq!(returned_uid, *uid.get_or_insert(returned_uid));
+			}
 		}
 	}
 
@@ -1762,8 +1778,8 @@ mod tests {
 		let app = test_app(false);
 		assert!(app.state.logging.database.is_none());
 		for (expression, jwt, expected_subject, can_logout) in [
-			(None, true, Some("jwt-user"), false),
-			(None, true, Some("jwt-user"), true),
+			(None, true, Some("user@example.com"), false),
+			(None, true, Some("user@example.com"), true),
 			(None, false, Some("basic-user"), false),
 			(
 				Some("request.headers['x-display-user']"),

@@ -257,31 +257,38 @@ impl Session {
 	}
 
 	// task_id here is the resolved upstream id, not the client-visible `target+id` form.
-	fn authorize_task_request(
+	#[allow(clippy::too_many_arguments)]
+	async fn authorize_task_request<P>(
 		&self,
 		service_name: &str,
 		task_id: &str,
 		method: &Strng,
+		params: &mut P,
+		extensions: &mut rmcp::model::Extensions,
+		ctx: &mut IncomingRequestContext,
 		log: &AsyncLog<mcp::MCPInfo>,
-		cel: &rbac::CelExecWrapper,
-	) -> Result<(), UpstreamError> {
+	) -> Result<(), UpstreamError>
+	where
+		P: mcp::guardrails::GuardrailParams,
+	{
 		log.non_atomic_mutate(|l| {
 			l.set_task(service_name.to_string(), task_id.to_string());
 		});
-		if !self.relay.policies.validate(
-			&rbac::ResourceType::Task(rbac::ResourceId::new(
-				service_name.to_string(),
-				task_id.to_string(),
-			)),
-			method,
-			cel,
-		) {
-			return Err(UpstreamError::Authorization {
-				resource_type: "task".to_string(),
-				resource_name: task_id.to_string(),
-			});
-		}
-		Ok(())
+		self
+			.authorize_with_ctx(
+				service_name,
+				method,
+				params,
+				extensions,
+				ctx,
+				rbac::ResourceType::Task(rbac::ResourceId::new(
+					service_name.to_string(),
+					task_id.to_string(),
+				)),
+				"task",
+				task_id,
+			)
+			.await
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -297,12 +304,7 @@ impl Session {
 		resource_name: &str,
 	) -> Result<(), UpstreamError>
 	where
-		P: serde::Serialize
-			+ serde::de::DeserializeOwned
-			+ std::fmt::Debug
-			+ Send
-			+ Sync
-			+ rmcp::model::RequestParamsMeta,
+		P: mcp::guardrails::GuardrailParams,
 	{
 		// run guardrails before other policies, as it may add context to CEL
 		self
@@ -742,23 +744,109 @@ impl Session {
 					ClientRequest::GetTaskRequest(gtr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &gtr.params.task_id)?;
-						self.authorize_task_request(service_name, &original_id, &method, &log, &cel)?;
-						gtr.params.task_id = original_id;
+						gtr.params.task_id = original_id.clone();
+						Box::pin(self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut gtr.params,
+							&mut gtr.extensions,
+							&mut ctx,
+							&log,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::UpdateTaskRequest(utr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &utr.params.task_id)?;
-						self.authorize_task_request(service_name, &original_id, &method, &log, &cel)?;
-						utr.params.task_id = original_id;
+						utr.params.task_id = original_id.clone();
+						Box::pin(self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut utr.params,
+							&mut utr.extensions,
+							&mut ctx,
+							&log,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::CancelTaskRequest(ctr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &ctr.params.task_id)?;
-						self.authorize_task_request(service_name, &original_id, &method, &log, &cel)?;
-						ctr.params.task_id = original_id;
+						ctr.params.task_id = original_id.clone();
+						Box::pin(self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut ctr.params,
+							&mut ctr.extensions,
+							&mut ctx,
+							&log,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+					},
+					ClientRequest::ListSkillsRequest(_) => {
+						if self.relay.upstreams.default_target_name.is_none() {
+							return Err(UpstreamError::InvalidMethod(method.to_string()));
+						}
+						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_skills())).await
+					},
+					ClientRequest::GetSkillRequest(req) => {
+						let Some(service_name) = self.relay.upstreams.default_target_name.as_deref() else {
+							return Err(UpstreamError::InvalidMethod(method.to_string()));
+						};
+						let uri = req.params.uri.clone();
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), uri.clone());
+						});
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							&method,
+							&mut req.params,
+							&mut req.extensions,
+							&mut ctx,
+							rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								uri.clone(),
+							)),
+							"resource",
+							&uri,
+						))
+						.await?;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+					},
+					ClientRequest::ReadResourceDirectoryRequest(req) => {
+						let Some(service_name) = self.relay.upstreams.default_target_name.as_deref() else {
+							return Err(UpstreamError::InvalidMethod(method.to_string()));
+						};
+						let uri = req.params.uri.clone();
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), uri.clone());
+						});
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							&method,
+							&mut req.params,
+							&mut req.extensions,
+							&mut ctx,
+							rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								uri.clone(),
+							)),
+							"resource",
+							&uri,
+						))
+						.await?;
+						Box::pin(
+							self
+								.relay
+								.send_fanout(r, ctx, self.relay.merge_resource_directory()),
+						)
+						.await
 					},
 					ClientRequest::CustomRequest(_) => {
 						let method = r.request.method();

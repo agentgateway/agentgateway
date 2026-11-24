@@ -246,7 +246,7 @@ fn selected_ai_provider(normalized: &NormalizedLocalConfig) -> Arc<NamedAIProvid
 		panic!("expected generated AI backend");
 	};
 	let (provider, _handle) = ai
-		.select_provider(None)
+		.select_provider(None, |_| Some(1.0))
 		.expect("expected selected provider");
 	provider
 }
@@ -1209,6 +1209,11 @@ llm:
 #[tokio::test]
 async fn test_mcp_simple_config() {
 	test_config_parsing("mcp_simple").await;
+}
+
+#[tokio::test]
+async fn test_mcp_endpoints_config() {
+	test_config_parsing("mcp_endpoints").await;
 }
 
 #[tokio::test]
@@ -2883,11 +2888,42 @@ fn test_de_backend_auth_accepts_each_shape() {
 	));
 	assert_eq!(full_with_credentials.credentials.len(), 1);
 
+	let plain_key_with_credentials = parse(serde_json::json!({
+		"key": "plain-secret",
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
+	}));
+	assert!(matches!(
+		plain_key_with_credentials.kind,
+		Some(super::LocalBackendAuthKind::Key { location: None, .. })
+	));
+	assert_eq!(plain_key_with_credentials.credentials.len(), 1);
+
 	let credentials_only = parse(serde_json::json!({
 		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
 	}));
 	assert!(credentials_only.kind.is_none());
 	assert_eq!(credentials_only.credentials.len(), 1);
+}
+
+#[test]
+fn test_de_backend_auth_rejects_unknown_fields() {
+	use serde::de::IntoDeserializer;
+
+	let cred = serde_json::json!([{"location": {"header": {"name": "x-token"}}, "key": "tok"}]);
+	let location = serde_json::json!({"header": {"name": "x-api-key"}});
+	for v in [
+		serde_json::json!({"key": "main-key", "credentials": [], "credentails": []}),
+		serde_json::json!({"key": "main-key", "credentials": cred, "credentails": cred}),
+		serde_json::json!({"key": "main-key", "credentials": cred, "location": location}),
+		serde_json::json!({"key": {"file": "/tmp/key"}, "credentials": cred, "location": location}),
+		serde_json::json!({"credentials": cred, "credentails": cred}),
+		serde_json::json!({"key": {"value": "main-key"}, "credentials": cred, "credentails": cred}),
+		serde_json::json!({"key": "plain-secret", "credentails": cred}),
+		serde_json::json!({"key": "plain-secret", "location": location}),
+	] {
+		let res = super::de_backend_auth::<serde_json::Value>(v.clone().into_deserializer());
+		assert!(res.is_err(), "expected {v} to be rejected");
+	}
 }
 
 /// A file-backed `backendAuth` key has to participate in config reloads, the

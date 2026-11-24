@@ -1330,11 +1330,11 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	await page.getByRole('button', { name: /MCP behavior/ }).click();
 	await expect(page.getByRole('combobox', { name: 'State mode' })).toBeEnabled();
 	await page.getByRole('combobox', { name: 'State mode' }).click();
-	await page.getByRole('option', { name: 'Stateful' }).click();
+	await page.getByRole('option', { name: 'Stateless' }).click();
 	await page.getByRole('button', { name: 'Save settings' }).click();
 
 	await expect.poll(() => writes.length).toBe(1);
-	expect(writes[0]).toMatchObject({ statefulMode: 'stateful' });
+	expect(writes[0]).toEqual({ statefulMode: 'stateless' });
 	expect(writes[0]).not.toHaveProperty('port');
 	expect(gateway.postedConfigs).toHaveLength(0);
 });

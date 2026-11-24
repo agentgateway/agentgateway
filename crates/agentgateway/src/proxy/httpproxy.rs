@@ -322,17 +322,10 @@ async fn apply_request_policies(
 	rp.response_compressor =
 		compression.and_then(|c| Some(c.response.as_ref()?.compress.as_ref()?.for_request(req)));
 
-	let mut route_retry = pol.retry.select("retry", req);
-	// Evaluate the retry precondition (if any) against the request before it is consumed.
-	if let Some(retry) = route_retry.as_ref()
-		&& let Some(pre) = retry.precondition.as_ref()
-	{
-		let exec = cel::Executor::new_request(req);
-		if !exec.eval_bool(pre.as_ref()) {
-			debug!("retry precondition not met, disabling retries");
-			route_retry = None;
-		}
-	}
+	let route_retry = pol
+		.retry
+		.select("retry", req)
+		.filter(|retry| retry.matches_request(req));
 	l.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
 
 	rp.llm_request_policies.local_rate_limit = pol
@@ -841,13 +834,11 @@ impl HTTPProxy {
 		}
 	}
 
-	#[allow(clippy::result_large_err)]
-	async fn proxy_internal(
+	fn prepare_request(
 		&self,
-		mut req: Request,
+		req: &mut Request,
 		log: &mut RequestLog,
-		response_policies: &mut ResponsePolicies,
-	) -> Result<Response, SnapshottedProxyError> {
+	) -> Result<BindSnapshot, ProxyError> {
 		log.tls_info = req.extensions().get::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::http);
 		if let Some(actor) = req.extensions().get::<ActorIdentity>() {
@@ -855,22 +846,39 @@ impl HTTPProxy {
 			log.ate_actor_uid = actor.actor_uid.clone();
 			log.ate_atespace = Some(actor.atespace.clone());
 		}
-		let selected_listener = self.selected_listener.clone();
-		let inputs = self.inputs.clone();
-		let bind_name = self.bind_name.clone();
+		let bind_name = &self.bind_name;
 		debug!(bind=%bind_name, "route for bind");
 
-		let Some(bind) = inputs.stores.read_binds().bind(&bind_name) else {
-			return Err(ProxyError::BindNotFound).snapshot_on_err(log, &mut req);
-		};
+		let bind = self
+			.inputs
+			.stores
+			.read_binds()
+			.bind(bind_name)
+			.ok_or(ProxyError::BindNotFound)?;
 		log.bind_name = Some(bind_name.clone());
-		cel::ProxyContext::mutate(&mut req, |ctx| {
+		cel::ProxyContext::mutate(req, |ctx| {
 			ctx.bind = Some(bind_name.clone());
 		});
 
-		crate::http::mark_sensitive_headers(&mut req, &self.inputs.cfg.sensitive_headers);
-		normalize_uri(log.tls_info.as_ref(), &mut req).snapshot_on_err(log, &mut req)?;
-		set_destination_hostname(&mut req);
+		crate::http::mark_sensitive_headers(req, &self.inputs.cfg.sensitive_headers);
+		normalize_uri(log.tls_info.as_ref(), req)?;
+		set_destination_hostname(req);
+		Ok(bind)
+	}
+
+	#[allow(clippy::result_large_err)]
+	async fn proxy_internal(
+		&self,
+		mut req: Request,
+		log: &mut RequestLog,
+		response_policies: &mut ResponsePolicies,
+	) -> Result<Response, SnapshottedProxyError> {
+		let bind = self
+			.prepare_request(&mut req, log)
+			.snapshot_on_err(log, &mut req)?;
+		let selected_listener = self.selected_listener.clone();
+		let inputs = self.inputs.clone();
+		let bind_name = self.bind_name.clone();
 		let connect_upgrade = if req.method() == ::http::Method::CONNECT {
 			req.extensions_mut().remove::<OnUpgrade>()
 		} else {
@@ -2591,7 +2599,8 @@ async fn make_backend_call(
 			log.add(|log| log.original_model = Some(original_model.0.clone()));
 		}
 		let resolved = match resolved {
-			model_router::ResolveResult::DirectResponse(resp) => {
+			model_router::ResolveResult::ModelDiscovery(resp) => {
+				log.add(|log| log.model_discovery = true);
 				return Err(ProxyError::direct_response(resp));
 			},
 			model_router::ResolveResult::Rejected(reason, resp) => {
@@ -2682,10 +2691,24 @@ async fn make_backend_call(
 				.session_affinity
 				.as_ref()
 				.and_then(|policy| policy.affinity_key(&req));
-			let (provider, handle) = ai
-				.select_provider(affinity_key)
-				.ok_or(ProxyError::NoHealthyEndpoints)?;
-			log.add(move |l| l.request_handle = Some(handle));
+			// A provider backed by a Service is scaled by the mean health of the Service's endpoints,
+			// and is unavailable when all of them are evicted.
+			let (provider, handle) = {
+				let discovery = inputs.stores.read_discovery();
+				ai.select_provider(affinity_key, |p| match &p.provider_backend {
+					Some(SimpleBackendReference::Service { name, .. }) => discovery
+						.services
+						.get_by_namespaced_host(name)
+						.and_then(|svc| svc.endpoints.mean_health()),
+					_ => Some(1.0),
+				})
+			}
+			.ok_or(ProxyError::NoHealthyEndpoints)?;
+			if provider.provider_backend.is_some() {
+				log.add(move |l| l.delegated_provider_request_handle = Some(handle));
+			} else {
+				log.add(move |l| l.request_handle = Some(handle));
+			}
 			let sub_backend_name = BackendTargetRef::Backend {
 				name: n.name.as_ref(),
 				namespace: n.namespace.as_ref(),
@@ -2703,6 +2726,13 @@ async fn make_backend_call(
 				..Default::default()
 			};
 			if let Some(provider_backend) = &provider.provider_backend {
+				let provider_policies = provider_defaults
+					.merge(policies.as_ref().clone())
+					.merge(sub_backend_policies);
+				log.add(|l| {
+					l.delegated_provider_health_policy = provider_policies.health.clone();
+					provider_policies.register_cel_expressions(l.cel.ctx());
+				});
 				let provider_backend =
 					super::resolve_simple_backend_with_policies(provider_backend, inputs.as_ref())?;
 				// Use backend_policies (not sub_backend_policies) so policies indexed without a
@@ -2713,10 +2743,7 @@ async fn make_backend_call(
 					&[&provider_backend.inline_policies],
 					None,
 				);
-				let effective_policies = provider_defaults
-					.merge(policies.as_ref().clone())
-					.merge(sub_backend_policies)
-					.merge(provider_backend_policies);
+				let effective_policies = provider_policies.merge(provider_backend_policies);
 
 				build_simple_backend_call(
 					&inputs,
@@ -3944,18 +3971,7 @@ fn should_retry(
 	req_snapshot: Option<&cel::RequestSnapshot>,
 ) -> bool {
 	match res {
-		Ok(resp) => {
-			if pol.codes.contains(&resp.status()) {
-				return true;
-			}
-			// A condition can match responses that status codes alone cannot, e.g. APIs that
-			// return a 200 but signal failure via a header.
-			if let Some(cond) = pol.condition.as_ref() {
-				let exec = cel::Executor::new_response(req_snapshot, resp);
-				return exec.eval_bool(cond.as_ref());
-			}
-			false
-		},
+		Ok(resp) => pol.matches_response(req_snapshot, resp),
 		Err(SnapshottedProxyError(e)) => e.is_retryable(),
 	}
 }

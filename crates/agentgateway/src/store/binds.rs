@@ -1162,7 +1162,7 @@ impl Store {
 					pol.cors.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::Buffer(p) => {
-					pol.buffer.set_if_unset(p);
+					pol.buffer.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::Compression(p) => {
 					pol.compression.merge_with_inheritance(p, lock_inheritance);

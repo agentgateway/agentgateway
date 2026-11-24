@@ -42,6 +42,27 @@ pub mod phase;
 
 pub use phase::Phase;
 
+/// Request params the request-phase hook can inspect and rewrite.
+pub trait GuardrailParams:
+	serde::Serialize
+	+ serde::de::DeserializeOwned
+	+ std::fmt::Debug
+	+ Send
+	+ Sync
+	+ rmcp::model::RequestParamsMeta
+{
+}
+
+impl<P> GuardrailParams for P where
+	P: serde::Serialize
+		+ serde::de::DeserializeOwned
+		+ std::fmt::Debug
+		+ Send
+		+ Sync
+		+ rmcp::model::RequestParamsMeta
+{
+}
+
 #[derive(Debug)]
 pub enum Outcome<T> {
 	Pass,

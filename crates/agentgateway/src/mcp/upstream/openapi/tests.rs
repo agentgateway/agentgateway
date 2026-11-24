@@ -1978,6 +1978,7 @@ async fn test_openapi_from_url() {
 			"/users/{user_id}": {
 				"get": {
 					"summary": "Get user details",
+					"operationId": "getUser",
 					"parameters": [
 						{
 							"name": "user_id",
@@ -2009,6 +2010,7 @@ async fn test_openapi_from_url() {
 			"/users": {
 				"post": {
 					"summary": "Create a new user",
+					"operationId": "createUser",
 					"requestBody": {
 						"required": true,
 						"content": {
