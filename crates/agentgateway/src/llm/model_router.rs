@@ -118,6 +118,15 @@ static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
 		template: path,
 	})
 	.collect::<Vec<_>>();
+	// Before the generic `:rawPredict` route, which would treat `count-tokens` as a model.
+	endpoints.push(ServingEndpoint {
+		matcher: EndpointMatch::Regex(regex::Regex::new(
+			r"^/(?P<version>v(?:[0-9]+|[0-9]+beta[0-9]+))/projects/[^/]+/locations/[^/]+/publishers/anthropic/models/count-tokens:rawPredict$"
+		).expect("valid Vertex count-tokens route regex")),
+		route_type: Some(AnthropicTokenCount),
+		operation: Some(Op::CountTokens),
+		template: "/${version}/projects/{project}/locations/{location}/publishers/anthropic/models/count-tokens:rawPredict",
+	});
 	for (suffix, route_type, operation, gemini) in [
 		("rawPredict|streamRawPredict", Messages, Op::Chat, false),
 		(
@@ -2515,6 +2524,10 @@ mod tests {
 		assert_eq!(
 			classify("/v1/projects/p/locations/us/publishers/anthropic/models/m:streamRawPredict"),
 			llm::RouteType::Messages
+		);
+		assert_eq!(
+			classify("/v1/projects/p/locations/us/publishers/anthropic/models/count-tokens:rawPredict"),
+			llm::RouteType::AnthropicTokenCount
 		);
 		assert_eq!(classify("/v1/messages"), llm::RouteType::Messages);
 		assert_eq!(
