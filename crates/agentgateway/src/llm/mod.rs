@@ -3007,8 +3007,17 @@ impl AIProvider {
 			));
 		}
 		let (bytes, count) = match self {
-			AIProvider::Anthropic(_) | AIProvider::Vertex(_) | AIProvider::Bedrock(_) => {
+			AIProvider::Anthropic(_) | AIProvider::Vertex(_) => {
 				types::count_tokens::Response::translate_response(bytes)?
+			},
+			AIProvider::Bedrock(_) => {
+				// Bedrock answers `{"inputTokens": N}`; clients expect the Anthropic shape.
+				let (_, count) = types::count_tokens::Response::translate_response(bytes)?;
+				let body = serde_json::to_vec(&types::count_tokens::Response {
+					input_tokens: count,
+				})
+				.map_err(AIError::ResponseMarshal)?;
+				(Bytes::from(body), count)
 			},
 			AIProvider::Azure(p)
 				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
