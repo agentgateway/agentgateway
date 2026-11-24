@@ -70,12 +70,9 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 		input_format: InputFormat::Completions,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "test-model".into(),
-		original_model: None,
 		provider: "test-provider".into(),
 		streaming: true,
-		params: Default::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	}
 }
 
@@ -1438,17 +1435,27 @@ async fn gemini_generate_content_forwards_unknown_top_level_fields() {
 }
 
 #[tokio::test]
-async fn gemini_stream_without_alt_sse_is_rejected_with_google_shaped_400() {
+async fn gemini_stream_without_alt_sse_is_a_json_stream() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		model_override: None,
 		region: None,
 		project_id: strng::new("test-project"),
 	});
-	for uri in [
-		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
-		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=json",
+	for (uri, json_stream) in [
+		(
+			"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
+			true,
+		),
+		(
+			"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=json",
+			true,
+		),
+		(
+			"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+			false,
+		),
 	] {
-		let RequestResult::Rejected(resp) = provider
+		let RequestResult::Success { llm_request, .. } = provider
 			.process_gemini_request(
 				&vertex_backend_info(),
 				None,
@@ -1458,22 +1465,12 @@ async fn gemini_stream_without_alt_sse_is_rejected_with_google_shaped_400() {
 				None,
 			)
 			.await
-			.expect("the non-SSE streaming variant is a client error, not a gateway failure")
+			.expect("streaming request should process")
 		else {
-			panic!("expected a direct response for {uri}");
+			panic!("expected forwarded request for {uri}");
 		};
-
-		assert_eq!(resp.status(), ::http::StatusCode::BAD_REQUEST);
-		let body = resp.into_body().collect().await.unwrap().to_bytes();
-		let body: Value = serde_json::from_slice(&body).expect("error body should be JSON");
-		assert_eq!(body["error"]["code"], json!(400));
-		assert_eq!(body["error"]["status"], json!("INVALID_ARGUMENT"));
-		assert!(
-			body["error"]["message"]
-				.as_str()
-				.is_some_and(|m| m.contains("alt=sse")),
-			"{body}"
-		);
+		assert!(llm_request.streaming, "{uri}");
+		assert_eq!(llm_request.gemini_json_stream, json_stream, "{uri}");
 	}
 }
 
@@ -1633,16 +1630,11 @@ fn gemini_count_tokens_response_reports_total_tokens() {
 		model_override: None,
 	});
 	let req = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::GeminiCountTokens,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "gemini-2.5-flash".into(),
-		original_model: None,
 		provider: "gcp.gemini".into(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	};
 	let body = br#"{"totalTokens":31,"promptTokensDetails":[{"modality":"TEXT","tokenCount":31}]}"#;
 	let buffered = BufferedResponse {
@@ -1672,16 +1664,11 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 		endpoint_preference: Default::default(),
 	});
 	let req = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::CountTokens,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
-		original_model: None,
 		provider: "aws.bedrock".into(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	};
 	let body =
 		bytes::Bytes::from_static(br#"{"message":"The provided model does not support CountTokens"}"#);
@@ -2514,16 +2501,11 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
 
 	let req = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Completions,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
-		original_model: None,
-		provider: Default::default(),
 		streaming: true,
-		params: Default::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	};
 
 	let body = Body::from(error_json.as_bytes().to_vec());
@@ -2809,16 +2791,11 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		.process_streaming(
 			client,
 			LLMRequest {
-				input_tokens: None,
 				input_format: InputFormat::Completions,
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: "input-model".into(),
-				original_model: None,
-				provider: Default::default(),
 				streaming: true,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
+				..Default::default()
 			},
 			LLMResponsePolicies::default(),
 			None,
@@ -2867,16 +2844,12 @@ async fn process_streaming_exposes_request_llm_context_to_response_cel() {
 		.process_streaming(
 			client,
 			LLMRequest {
-				input_tokens: None,
 				input_format: InputFormat::Completions,
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: "input-model".into(),
-				original_model: None,
 				provider: "openai".into(),
 				streaming: true,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
+				..Default::default()
 			},
 			LLMResponsePolicies::default(),
 			None,
@@ -3007,16 +2980,10 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 		}],
 	});
 	let llm_request = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Completions,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
-		original_model: None,
-		provider: Default::default(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://proxy.example.com/v1/chat/completions?trace=repro",
@@ -3044,16 +3011,10 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 #[test]
 fn setup_request_drops_inbound_query_only_when_translated() {
 	let llm_request = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Messages,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "model".into(),
-		original_model: None,
-		provider: Default::default(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	};
 	for (provider, route_type, expected_query) in [
 		(
@@ -3117,16 +3078,11 @@ fn setup_request_preserves_gemini_query_auth_with_host_override() {
 	let (_, state) = conversion::gemini::from_decisions::translate(&decision_request)
 		.expect("decision request should translate");
 	let llm_request = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Decisions,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "gemini-decision-1".into(),
-		original_model: None,
-		provider: Default::default(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
 		provider_state: Some(ProviderState::GeminiDecisions(state.into())),
+		..Default::default()
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1/decisions?key=client-key&foo=bar",
@@ -3165,16 +3121,11 @@ fn setup_request_drops_gemini_query_auth_when_api_key_header_is_present() {
 	let (_, state) = conversion::gemini::from_decisions::translate(&decision_request)
 		.expect("decision request should translate");
 	let llm_request = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Decisions,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "gemini-decision-1".into(),
-		original_model: None,
-		provider: Default::default(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
 		provider_state: Some(ProviderState::GeminiDecisions(state.into())),
+		..Default::default()
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1/decisions?key=client-key&foo=bar",
@@ -3206,16 +3157,11 @@ fn setup_request_drops_translated_query_with_host_override() {
 		model_override: None,
 	});
 	let llm_request = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Messages,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "gemini-2.5-flash".into(),
-		original_model: None,
-		provider: Default::default(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
 		provider_state: Some(ProviderState::VertexGemini),
+		..Default::default()
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1/messages?beta=true",
@@ -3258,16 +3204,12 @@ fn setup_request_custom_generate_content_defaults_to_the_native_path() {
 		),
 	] {
 		let llm_request = LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Gemini,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gemini-2.5-flash".into(),
-			original_model: None,
-			provider: Default::default(),
 			streaming,
-			params: Default::default(),
-			prompt: None,
 			provider_state: Some(ProviderState::VertexGemini),
+			..Default::default()
 		};
 		let mut req = crate::http::tests_common::request(
 			"https://gemini.example.com/v1beta/models/gemini-2.5-flash:generateContent",
@@ -3299,16 +3241,10 @@ fn setup_request_custom_count_tokens_defaults_to_the_native_path() {
 	// OpenAI default and land on /v1/chat/completions.
 	let provider = custom_provider(custom::ProviderFormat::GeminiCountTokens);
 	let llm_request = LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::GeminiCountTokens,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "gemini-2.5-flash".into(),
-		original_model: None,
-		provider: Default::default(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://gemini.example.com/v1beta/models/gemini-2.5-flash:countTokens",
@@ -3338,16 +3274,10 @@ fn setup_request_custom_count_tokens_defaults_to_the_native_path() {
 
 fn llm_request_for_path(request_model: &str) -> LLMRequest {
 	LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Messages,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: request_model.into(),
-		original_model: None,
-		provider: Default::default(),
-		streaming: false,
-		params: Default::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	}
 }
 
@@ -3383,16 +3313,12 @@ fn assert_prefixed_host_override_path(
 
 fn native_gemini_llm_request(request_model: &str, streaming: bool) -> LLMRequest {
 	LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Gemini,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: request_model.into(),
-		original_model: None,
-		provider: Default::default(),
 		streaming,
-		params: Default::default(),
-		prompt: None,
 		provider_state: Some(ProviderState::VertexGemini),
+		..Default::default()
 	}
 }
 
@@ -4011,16 +3937,12 @@ async fn bedrock_from_messages_stream_captures_completion() {
 	let log2 = log.clone();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
-			original_model: None,
 			provider: "bedrock".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};
@@ -4062,16 +3984,12 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 	let log2 = log.clone();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
-			original_model: None,
 			provider: "bedrock".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};
@@ -4110,16 +4028,12 @@ async fn bedrock_from_messages_stream_captures_tool_calls() {
 	let log2 = log.clone();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
-			original_model: None,
 			provider: "bedrock".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};
@@ -4170,16 +4084,12 @@ async fn messages_passthrough_stream_captures_completion() {
 	let log2 = log.clone();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
-			original_model: None,
 			provider: "anthropic".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};
@@ -4219,16 +4129,12 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 	let log2 = log.clone();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
-			original_model: None,
 			provider: "anthropic".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};
@@ -4264,16 +4170,12 @@ async fn messages_passthrough_stream_captures_tool_calls() {
 	let log2 = log.clone();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Messages,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
-			original_model: None,
 			provider: "anthropic".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};
@@ -4320,16 +4222,12 @@ async fn responses_passthrough_stream_captures_completion_and_tool_calls() {
 	let log2 = log.clone();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Responses,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-4.1-mini".into(),
-			original_model: None,
 			provider: "openai".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};
@@ -4384,16 +4282,12 @@ data: [DONE]
 	let log = AsyncLog::default();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Responses,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-5".into(),
-			original_model: None,
 			provider: "openai".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};
@@ -4422,16 +4316,12 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 	let log2 = log.clone();
 	let llmresp = LLMInfo {
 		request: LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Responses,
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-4.1-mini".into(),
-			original_model: None,
 			provider: "openai".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		},
 		response: LLMResponse::default(),
 	};

@@ -94,8 +94,6 @@ impl RequestType for Request {
 
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
 		Ok(LLMRequest {
-			// We never tokenize these, so always empty
-			input_tokens: None,
 			input_format: InputFormat::Detect(None),
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: match self {
@@ -103,7 +101,6 @@ impl RequestType for Request {
 				_ => self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			}
 			.unwrap_or_default(),
-			original_model: None,
 			provider,
 			streaming: self
 				.lookup(lookups::STREAM, |v| v.as_bool())
@@ -123,8 +120,7 @@ impl RequestType for Request {
 					.lookup(lookups::REASONING_EFFORT, |v| v.as_str())
 					.and_then(crate::ReasoningEffort::parse),
 			},
-			prompt: Default::default(),
-			provider_state: None,
+			..Default::default()
 		})
 	}
 
@@ -210,16 +206,11 @@ mod tests {
 
 	fn llm_request() -> LLMRequest {
 		LLMRequest {
-			input_tokens: None,
 			input_format: crate::InputFormat::Detect(None),
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new("unknown"),
-			original_model: None,
 			provider: strng::new("aws.bedrock"),
-			streaming: false,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		}
 	}
 

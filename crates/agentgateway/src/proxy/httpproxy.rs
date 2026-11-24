@@ -3146,13 +3146,9 @@ async fn make_backend_call(
 								input_format: InputFormat::Realtime,
 								cache_convention: llm::CacheTokenConvention::pending(),
 								request_model,
-								original_model: None,
 								streaming: true,
 								provider: llm.provider.provider(),
-								input_tokens: None,
-								params: Default::default(),
-								prompt: Default::default(),
-								provider_state: None,
+								..Default::default()
 							})
 						});
 					}
@@ -4123,16 +4119,12 @@ mod tests {
 
 	fn llm_request() -> llm::LLMRequest {
 		llm::LLMRequest {
-			input_tokens: None,
 			input_format: llm::InputFormat::Completions,
 			cache_convention: llm::CacheTokenConvention::pending(),
 			request_model: "test-model".into(),
-			original_model: None,
 			provider: "test-provider".into(),
 			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		}
 	}
 

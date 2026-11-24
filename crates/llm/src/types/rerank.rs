@@ -3,7 +3,7 @@ use agent_core::strng;
 use serde::{Deserialize, Serialize};
 
 use crate::types::RequestType;
-use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage};
+use crate::{AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage};
 
 /// Canonical rerank request, modeled on the Cohere `/v2/rerank` API.
 /// Unknown fields are preserved via `rest` for passthrough to compatible providers.
@@ -116,16 +116,11 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		Ok(LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Rerank,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
-			original_model: None,
 			provider,
-			streaming: false,
-			params: LLMRequestParams::default(),
-			prompt: Default::default(),
-			provider_state: None,
+			..Default::default()
 		})
 	}
 

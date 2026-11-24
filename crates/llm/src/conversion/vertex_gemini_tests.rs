@@ -1889,16 +1889,12 @@ mod passthrough {
 	fn captured_info() -> Arc<Mutex<LLMInfo>> {
 		Arc::new(Mutex::new(LLMInfo {
 			request: LLMRequest {
-				input_tokens: None,
 				input_format: InputFormat::Gemini,
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: "gemini-2.5-flash".into(),
-				original_model: None,
 				provider: "gcp.vertex_ai".into(),
 				streaming: true,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
+				..Default::default()
 			},
 			response: LLMResponse::default(),
 		}))

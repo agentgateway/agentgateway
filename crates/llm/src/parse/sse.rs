@@ -87,6 +87,26 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	})
 }
 
+/// Re-encode an SSE stream of JSON events as one streamed JSON array (`[{...},\r\n{...}]`), the
+/// shape Gemini's `:streamGenerateContent` returns without `?alt=sse`.
+pub fn to_json_array(b: Body, buffer_limit: usize) -> Body {
+	let decoder = WholeEvents(SseDecoder::new(buffer_limit));
+	let mut first = true;
+	transform_parser(b, decoder, BytesCodec::new(), move |event| {
+		let mut out = BytesMut::new();
+		match event {
+			TransformEvent::Item(data) => {
+				out.extend_from_slice(if first { b"[" } else { b",\r\n" });
+				out.extend_from_slice(&data);
+				first = false;
+			},
+			TransformEvent::Eof => out.extend_from_slice(if first { b"[]" } else { b"]" }),
+			TransformEvent::Error => return None,
+		}
+		Some(out.freeze())
+	})
+}
+
 #[derive(Debug)]
 pub enum SseJsonEvent<I> {
 	Data(anyhow::Result<I>),

@@ -896,16 +896,11 @@ mod responses {
 			.unwrap_or_else(|e| panic!("{relative_path}: failed to read streaming input file: {e}"));
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
-				input_tokens: None,
 				input_format: InputFormat::Detect(None),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
-				original_model: None,
-				provider: Default::default(),
 				streaming: true,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
+				..Default::default()
 			},
 			LLMResponse::default(),
 		)));
@@ -1944,16 +1939,11 @@ data: {"type":"message_stop"}
 			.expect("failed to read streaming input file");
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
-				input_tokens: None,
 				input_format: InputFormat::Detect(None),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
-				original_model: None,
-				provider: Default::default(),
 				streaming: true,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
+				..Default::default()
 			},
 			LLMResponse::default(),
 		)));
@@ -1980,16 +1970,11 @@ data: {"type":"message_stop"}
 			.expect("failed to read streaming input file");
 		let info = Arc::new(Mutex::new(LLMInfo::new(
 			LLMRequest {
-				input_tokens: None,
 				input_format: InputFormat::Detect(None),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: strng::literal!("input-model"),
-				original_model: None,
-				provider: Default::default(),
 				streaming: true,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
+				..Default::default()
 			},
 			LLMResponse::default(),
 		)));
