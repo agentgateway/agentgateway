@@ -1172,44 +1172,58 @@ pub mod to_responses {
 			message_item_id,
 		);
 
+		// Clients record items as their `output_item.done` arrives, so finish them in output
+		// order: a tool call the model made after writing text must not finish before that text.
 		let mut sorted_tools: Vec<_> = tool_calls.drain().collect();
 		sorted_tools.sort_by_key(|(_, (_, _, _, output_index))| *output_index);
+		let tools_after_message = sorted_tools.split_off(
+			sorted_tools
+				.partition_point(|(_, (_, _, _, output_index))| *output_index < message_output_index),
+		);
 
-		for (_, (item_id, name, buffer, output_index)) in sorted_tools {
-			*sequence_number += 1;
-			events.push((
-				"event",
-				ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
-					ResponseFunctionCallArgumentsDoneEvent {
+		let finish_tool_call =
+			|events: &mut Vec<(&'static str, ResponseStreamEvent)>,
+			 sequence_number: &mut u64,
+			 output: &mut Vec<(u32, OutputItem)>,
+			 (item_id, name, buffer, output_index): (String, String, String, u32)| {
+				*sequence_number += 1;
+				events.push((
+					"event",
+					ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
+						ResponseFunctionCallArgumentsDoneEvent {
+							sequence_number: *sequence_number,
+							output_index,
+							name: Some(name.clone()),
+							item_id: item_id.clone(),
+							arguments: buffer.clone(),
+						},
+					),
+				));
+
+				let item = OutputItem::FunctionCall(FunctionToolCall {
+					arguments: buffer,
+					call_id: item_id.clone(),
+					namespace: None,
+					name,
+					caller: None,
+					id: Some(item_id),
+					status: Some(OutputStatus::Completed),
+					r#async: None,
+				});
+				*sequence_number += 1;
+				events.push((
+					"event",
+					ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
 						sequence_number: *sequence_number,
 						output_index,
-						name: Some(name.clone()),
-						item_id: item_id.clone(),
-						arguments: buffer.clone(),
-					},
-				),
-			));
+						item: item.clone(),
+					}),
+				));
+				output.push((output_index, item));
+			};
 
-			let item = OutputItem::FunctionCall(FunctionToolCall {
-				arguments: buffer,
-				call_id: item_id.clone(),
-				namespace: None,
-				name,
-				caller: None,
-				id: Some(item_id),
-				status: Some(OutputStatus::Completed),
-				r#async: None,
-			});
-			*sequence_number += 1;
-			events.push((
-				"event",
-				ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
-					sequence_number: *sequence_number,
-					output_index,
-					item: item.clone(),
-				}),
-			));
-			output.push((output_index, item));
+		for (_, tool) in sorted_tools {
+			finish_tool_call(events, sequence_number, &mut output, tool);
 		}
 
 		let mut content = Vec::new();
@@ -1265,6 +1279,10 @@ pub mod to_responses {
 			}),
 		));
 		output.push((message_output_index, message));
+
+		for (_, tool) in tools_after_message {
+			finish_tool_call(events, sequence_number, &mut output, tool);
+		}
 		output.sort_by_key(|(output_index, _)| *output_index);
 		let output: Vec<OutputItem> = output.into_iter().map(|(_, item)| item).collect();
 
