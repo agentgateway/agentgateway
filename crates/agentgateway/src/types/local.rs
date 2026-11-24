@@ -344,8 +344,6 @@ pub struct NormalizedLocalConfig {
 	pub(crate) session_attribute: Option<Arc<crate::cel::Expression>>,
 	#[serde(skip)]
 	pub(crate) budget_registration: crate::http::budget::BudgetRegistration,
-	#[serde(skip)]
-	pub(crate) sections: crate::ConfigSections,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub model_catalog: Option<Vec<crate::ModelCatalogSource>>,
 	pub binds: Vec<BindSnapshot>,
@@ -3301,15 +3299,6 @@ async fn convert(
 	config: &crate::Config,
 	mut i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
-	let sections = crate::ConfigSections {
-		llm: i.llm.is_some(),
-		mcp: i.mcp.is_some(),
-		traffic: !i.binds.is_empty()
-			|| !i.gateways.is_empty()
-			|| !i.routes.is_empty()
-			|| !i.tcp_routes.is_empty(),
-		binds: !i.binds.is_empty(),
-	};
 	apply_implicit_default_gateway(&mut i);
 	validate_local_listener_ports(&i)?;
 	let LocalConfig {
@@ -3649,7 +3638,6 @@ async fn convert(
 		standard_attributes,
 		session_attribute,
 		budget_registration: Default::default(),
-		sections,
 		model_catalog,
 		binds: all_binds,
 		listener_routes: all_listener_routes,

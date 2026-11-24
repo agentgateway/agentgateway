@@ -824,18 +824,6 @@ pub struct StorageConfig {
 pub struct ConfigReloadStatus {
 	/// Error of the most recent failed reload, if any.
 	last_error: std::sync::RwLock<Option<String>>,
-	/// Sections set by the most recently applied config.
-	sections: std::sync::RwLock<Option<ConfigSections>>,
-}
-
-/// Which sections a local config sets.
-#[derive(serde::Serialize, Clone, Copy, Debug, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigSections {
-	pub llm: bool,
-	pub mcp: bool,
-	pub traffic: bool,
-	pub binds: bool,
 }
 
 impl ConfigReloadStatus {
@@ -844,14 +832,8 @@ impl ConfigReloadStatus {
 		self.last_error.read().unwrap().clone()
 	}
 
-	/// Sections set by the most recently applied config, if any was applied.
-	pub fn sections(&self) -> Option<ConfigSections> {
-		*self.sections.read().unwrap()
-	}
-
-	fn record_success(&self, sections: ConfigSections) {
+	fn record_success(&self) {
 		*self.last_error.write().unwrap() = None;
-		*self.sections.write().unwrap() = Some(sections);
 	}
 
 	fn record_failure(&self, error: String) {
