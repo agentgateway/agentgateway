@@ -43,7 +43,7 @@ impl ClientCertificate {
 		chain: Vec<CertificateDer<'static>>,
 		private_key: PrivateKeyDer<'static>,
 	) -> anyhow::Result<Self> {
-		use sha2::{Digest, Sha256};
+        use crate::crypto::digest::Sha256;
 		use x509_parser::prelude::FromDer;
 
 		let leaf = chain

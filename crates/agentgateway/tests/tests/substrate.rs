@@ -1856,12 +1856,24 @@ async fn open_actor_egress_tunnel_protocol(
 	port: u16,
 	http2: bool,
 ) -> tokio_util::either::Either<tokio::io::DuplexStream, TokioIo<hyper::upgrade::Upgraded>> {
+	open_named_actor_egress_tunnel(gateway, port, http2, "my-actor").await
+}
+
+async fn open_named_actor_egress_tunnel(
+	gateway: &TestBind,
+	port: u16,
+	http2: bool,
+	actor: &str,
+) -> tokio_util::either::Either<tokio::io::DuplexStream, TokioIo<hyper::upgrade::Upgraded>> {
 	let mut io = gateway.serve_tunnel_with_tls_info(
 		strng::literal!("outer"),
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
 				certificate: Some(
-					actor_certificate("spiffe://substrate-actor.local/worker-for-actor/demo/my-actor").into(),
+					actor_certificate(&format!(
+						"spiffe://substrate-actor.local/worker-for-actor/demo/{actor}"
+					))
+					.into(),
 				),
 				..Default::default()
 			}),
@@ -2221,6 +2233,16 @@ async fn substrate_tls_gateway(
 	})
 	.spawn()
 	.await;
+	let gateway = substrate_tls_gateway_for_api(api.address, upstream, root, vec![]).await;
+	(gateway, api)
+}
+
+async fn substrate_tls_gateway_for_api(
+	api: SocketAddr,
+	upstream: SocketAddr,
+	root: Option<Vec<u8>>,
+	credential_providers: Vec<Value>,
+) -> TestBind {
 	let mut outer = simple_bind();
 	outer.key = strng::literal!("outer");
 	outer.address = "127.0.0.1:15013".parse().unwrap();
@@ -2295,14 +2317,323 @@ async fn substrate_tls_gateway(
 		.with_connect_mode_on_port(agentgateway::types::frontend::ConnectMode::Tunnel, 15013);
 	gateway
 		.attach_frontend_policy(json!({
-				"substrateEgressActorResolution": { "host": api.address.to_string() },
+				"substrateEgressActorResolution": { "host": api.to_string() },
 				"tls": { "handshakeTimeout": "1s" }
 		}))
 		.await;
 	gateway
-		.attach_route_policy(json!({ "substrateEgress": { "host": api.address.to_string() } }))
+		.attach_route_policy(json!({
+			"substrateEgress": {
+				"host": api.to_string(),
+				"credentialProviders": credential_providers
+			}
+		}))
 		.await;
-	(gateway, api)
+	gateway
+}
+
+#[cfg(feature = "crypto-aws-lc")]
+#[rstest::rstest]
+#[case::actor_minted(true)]
+#[case::credential_provider(false)]
+#[tokio::test]
+async fn substrate_egress_presents_selected_client_certificate(#[case] actor_minted: bool) {
+	use agentgateway::crypto::digest::sha256;
+	use agentgateway::crypto::{jwt, provider};
+	use base64::Engine as _;
+	use base64::prelude::BASE64_URL_SAFE_NO_PAD as B64;
+	use protos::{ateapi as api, credprovider as creds};
+
+	const URI: &str = "ate-secret://kubernetes.io/default/ns/cert/client.pem";
+
+	#[derive(Clone)]
+	struct Issuer {
+		ca: Arc<rcgen::Issuer<'static, rcgen::KeyPair>>,
+		issued: Arc<StdMutex<std::collections::HashMap<String, Vec<u8>>>>,
+		policy: EgressPolicy,
+	}
+
+	#[async_trait::async_trait]
+	impl ateapimock::Handler for Issuer {
+		async fn get_actor(&mut self, req: &api::GetActorRequest) -> Result<Actor, tonic::Status> {
+			Ok(Actor {
+				metadata: Some(ResourceMetadata {
+					uid: req.actor.as_ref().unwrap().name.clone(),
+					..Default::default()
+				}),
+				status: Some(ActorStatus {
+					state: ActorState::Running as i32,
+					..Default::default()
+				}),
+			})
+		}
+
+		async fn get_actor_egress_policy(
+			&mut self,
+			_req: &api::GetActorEgressPolicyRequest,
+		) -> Result<EgressPolicy, tonic::Status> {
+			Ok(self.policy.clone())
+		}
+
+		async fn mint_actor_certificate(
+			&mut self,
+			req: &api::MintActorCertificateRequest,
+		) -> Result<api::MintActorCertificateResponse, tonic::Status> {
+			let actor = req.actor.as_ref().unwrap();
+			let mut csr = rcgen::CertificateSigningRequestParams::from_der(
+				&req.certificate_signing_request.as_slice().into(),
+			)
+			.unwrap();
+			csr.params.subject_alt_names.push(rcgen::SanType::URI(
+				format!("spiffe://substrate-actor.local/actor/demo/{}", actor.name)
+					.try_into()
+					.unwrap(),
+			));
+			csr.params.not_before = std::time::SystemTime::now().into();
+			csr.params.not_after = csr.params.not_before + Duration::from_secs(3600);
+			csr.params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+			csr
+				.params
+				.custom_extensions
+				.push(rcgen::CustomExtension::from_oid_content(
+					&[1, 3, 6, 1, 4, 1, 11129, 2, 12, 2],
+					serde_json::to_vec(&json!({
+						"Atespace": "demo",
+						"ActorName": actor.name,
+						"ActorUid": req.actor_uid,
+					}))
+					.unwrap(),
+				));
+			let der = csr.signed_by(&self.ca).unwrap().der().to_vec();
+			self
+				.issued
+				.lock()
+				.unwrap()
+				.insert(actor.name.clone(), der.clone());
+			Ok(api::MintActorCertificateResponse {
+				actor_certificates: vec![der],
+			})
+		}
+
+		async fn mint_actor_jwt(
+			&mut self,
+			req: &api::MintActorJwtRequest,
+		) -> Result<api::MintActorJwtResponse, tonic::Status> {
+			Ok(api::MintActorJwtResponse {
+				actor_jwt: jsonwebtoken::encode(
+					&jsonwebtoken::Header::default(),
+					&json!({ "cnf": { "x5t#S256": B64.encode(&req.client_certificate_sha256) } }),
+					&jsonwebtoken::EncodingKey::from_secret(b"substrate egress test signing key"),
+				)
+				.unwrap(),
+			})
+		}
+	}
+
+	#[async_trait::async_trait]
+	impl credprovidermock::Handler for Issuer {
+		async fn fetch_secret(
+			&mut self,
+			req: &creds::FetchSecretRequest,
+		) -> Result<creds::FetchSecretResponse, tonic::Status> {
+			assert_eq!(req.uri, URI);
+			let actor = req
+				.actor_spiffe_id
+				.strip_prefix("spiffe://substrate-actor.local/actor/demo/")
+				.unwrap();
+			let mut params = rcgen::CertificateParams::default();
+			params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+			let key = rcgen::KeyPair::generate().unwrap();
+			let cert = params.signed_by(&key, &self.ca).unwrap();
+			self
+				.issued
+				.lock()
+				.unwrap()
+				.insert(actor.to_owned(), cert.der().to_vec());
+			Ok(creds::FetchSecretResponse {
+				opaque_bytes: format!("{}{}", cert.pem(), key.serialize_pem()).into_bytes(),
+			})
+		}
+	}
+
+	jwt::init();
+	let mut ca_params = rcgen::CertificateParams::default();
+	ca_params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+	let ca_key = rcgen::KeyPair::generate().unwrap();
+	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
+	let ca = Arc::new(rcgen::Issuer::new(ca_params, ca_key));
+	let server_key = rcgen::KeyPair::generate().unwrap();
+	let server_cert = rcgen::CertificateParams::new(vec!["localhost".to_owned()])
+		.unwrap()
+		.signed_by(&server_key, &ca)
+		.unwrap();
+	let mut roots = rustls::RootCertStore::empty();
+	roots.add(ca_cert.der().clone()).unwrap();
+	let verifier =
+		rustls::server::WebPkiClientVerifier::builder_with_provider(Arc::new(roots), provider())
+			.build()
+			.unwrap();
+	let server_tls = rustls::ServerConfig::builder_with_provider(provider())
+		.with_safe_default_protocol_versions()
+		.unwrap()
+		.with_client_cert_verifier(verifier)
+		.with_single_cert(
+			vec![server_cert.der().clone()],
+			rustls_pki_types::PrivatePkcs8KeyDer::from(server_key.serialize_der()).into(),
+		)
+		.unwrap();
+	let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_tls));
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let upstream = listener.local_addr().unwrap();
+	let mut server = tokio::task::JoinSet::new();
+	server.spawn(async move {
+		let mut connections = tokio::task::JoinSet::new();
+		for connection_id in 0.. {
+			let (tcp, _) = listener.accept().await.unwrap();
+			let acceptor = acceptor.clone();
+			connections.spawn(async move {
+				let Ok(tls) = acceptor.accept(tcp).await else {
+					return;
+				};
+				let peer = B64.encode(&tls.get_ref().1.peer_certificates().unwrap()[0]);
+				let _ = hyper::server::conn::http1::Builder::new()
+					.serve_connection(
+						TokioIo::new(tls),
+						service_fn(|req: http::Request<hyper::body::Incoming>| {
+							let body = json!({
+								"peer": peer,
+								"authorization": req.headers().get(header::AUTHORIZATION).map(|h| h.to_str().unwrap()),
+								"connection": connection_id,
+							})
+							.to_string();
+							async move { Ok::<_, Infallible>(Response::new(Body::from(body))) }
+						}),
+					)
+					.await;
+			});
+		}
+	});
+
+	use api::client_certificate_source::Source;
+	let source = if actor_minted {
+		Source::ActorCertificate(api::ActorClientCertificateSource {})
+	} else {
+		Source::CredentialProvider(URI.to_owned())
+	};
+	let issuer = Issuer {
+		ca,
+		issued: Default::default(),
+		policy: EgressPolicy {
+			rules: vec![api::EgressRule {
+				https: Some(api::HttpsRule {
+					hostnames: vec!["localhost".to_owned()],
+					ports: Some(api::Ports {
+						numbers: vec![upstream.port().into()],
+						..Default::default()
+					}),
+					effects: Some(api::HttpRuleEffects {
+						replace_headers: vec![api::CredentialHeader {
+							header: "authorization".to_owned(),
+							prefix: "Bearer ".to_owned(),
+							actor_jwt: Some(api::ActorJwtSource {
+								audiences: vec!["https://localhost".to_owned()],
+								expiration_seconds: 600,
+							}),
+							..Default::default()
+						}],
+					}),
+					upstream_tls: Some(api::UpstreamTls {
+						client_certificate: Some(api::ClientCertificateSource {
+							source: Some(source),
+						}),
+					}),
+				}),
+				..Default::default()
+			}],
+			..Default::default()
+		},
+	};
+	let control = ateapimock::AteApiMock::new({
+		let issuer = issuer.clone();
+		move || issuer.clone()
+	})
+	.spawn()
+	.await;
+	let credential_provider = credprovidermock::CredentialProviderMock::new({
+		let issuer = issuer.clone();
+		move || issuer.clone()
+	})
+	.spawn()
+	.await;
+	let gateway = substrate_tls_gateway_for_api(
+		control.address,
+		upstream,
+		Some(ca_cert.pem().into_bytes()),
+		vec![json!({
+			"uriAuthority": "kubernetes.io",
+			"target": { "host": credential_provider.address.to_string() }
+		})],
+	)
+	.await;
+	let downstream_tls = agentgateway::http::backendtls::ResolvedBackendTLS {
+		root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
+		insecure_host: true,
+		alpn: Some(vec!["http/1.1".to_owned()]),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+	let connector = tokio_rustls::TlsConnector::from(downstream_tls.base_config().config);
+
+	let exchange = async |actor: &str| {
+		let io = open_named_actor_egress_tunnel(&gateway, upstream.port(), false, actor).await;
+		let io = connector
+			.connect("localhost".try_into().unwrap(), io)
+			.await
+			.unwrap();
+		let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(io))
+			.await
+			.unwrap();
+		let mut downstream = tokio::task::JoinSet::new();
+		downstream.spawn(connection);
+		let response = sender
+			.send_request(
+				http::Request::builder()
+					.uri("/client-certificate")
+					.header(header::HOST, format!("localhost:{}", upstream.port()))
+					.header(header::AUTHORIZATION, "Bearer placeholder")
+					.body(Body::empty())
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+		let status = response.status();
+		let body = response.into_body().collect().await.unwrap().to_bytes();
+		assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+		let observed: Value = serde_json::from_slice(&body).unwrap();
+		let peer = B64.decode(observed["peer"].as_str().unwrap()).unwrap();
+		assert_eq!(peer, issuer.issued.lock().unwrap()[actor]);
+		let token = observed["authorization"]
+			.as_str()
+			.unwrap()
+			.strip_prefix("Bearer ")
+			.unwrap();
+		let claims: Value =
+			serde_json::from_slice(&B64.decode(token.split('.').nth(1).unwrap()).unwrap()).unwrap();
+		assert_eq!(claims["cnf"]["x5t#S256"], B64.encode(sha256(&peer)));
+		(observed["connection"].as_u64().unwrap(), peer)
+	};
+
+	tokio::time::timeout(Duration::from_secs(10), async {
+		let first = exchange("my-actor").await;
+		assert_eq!(exchange("my-actor").await, first);
+		let second = exchange("other-actor").await;
+		assert_ne!(second.0, first.0);
+		assert_ne!(second.1, first.1);
+		assert_eq!(exchange("my-actor").await, first);
+	})
+	.await
+	.expect("timed out testing intercepted HTTPS with client authentication");
 }
 
 #[cfg(feature = "crypto-aws-lc")]

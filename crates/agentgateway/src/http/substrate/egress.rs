@@ -26,7 +26,7 @@ use crate::{cel, *};
 const DEFAULT_CREDENTIAL_CACHE_CAPACITY: usize = 8192;
 const DEFAULT_CREDENTIAL_CACHE_TTL: Duration = Duration::from_secs(300);
 const INVALID_CERTIFICATE_CACHE_TTL: Duration = Duration::from_secs(5);
-const CREDENTIAL_FETCH_TIMEOUT: Duration = Duration::from_secs(4);
+const CREDENTIAL_RPC_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// The inner HTTP transport, independent of the actor's CONNECT transport or URI scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -307,7 +307,9 @@ impl SubstrateEgress {
 		);
 		let mut control = protos::ateapi::control_client::ControlClient::new(channel);
 		let requested_at = Instant::now();
-		let response = control.mint_actor_jwt(request).await;
+		let response = tokio::time::timeout(CREDENTIAL_RPC_TIMEOUT, control.mint_actor_jwt(request))
+			.await
+			.unwrap_or_else(|_| Err(tonic::Status::deadline_exceeded("MintActorJwt timed out")));
 		if let Some(span) = span.as_deref_mut() {
 			span.record_grpc_result(&response);
 		}
@@ -368,7 +370,7 @@ impl SubstrateEgress {
 		);
 		let mut provider =
 			protos::credprovider::credential_provider_client::CredentialProviderClient::new(channel);
-		let response = tokio::time::timeout(CREDENTIAL_FETCH_TIMEOUT, provider.fetch_secret(request))
+		let response = tokio::time::timeout(CREDENTIAL_RPC_TIMEOUT, provider.fetch_secret(request))
 			.await
 			.unwrap_or_else(|_| Err(tonic::Status::deadline_exceeded("FetchSecret timed out")));
 		if let Some(span) = span.as_deref_mut() {
@@ -485,7 +487,16 @@ impl SubstrateEgress {
 			"/substrate.ateapi.v1.Control/MintActorCertificate",
 		);
 		let mut control = protos::ateapi::control_client::ControlClient::new(channel);
-		let response = control.mint_actor_certificate(request).await;
+		let response = tokio::time::timeout(
+			CREDENTIAL_RPC_TIMEOUT,
+			control.mint_actor_certificate(request),
+		)
+		.await
+		.unwrap_or_else(|_| {
+			Err(tonic::Status::deadline_exceeded(
+				"MintActorCertificate timed out",
+			))
+		});
 		if let Some(span) = span.as_deref_mut() {
 			span.record_grpc_result(&response);
 		}
@@ -914,6 +925,64 @@ mod tests {
 
 	use super::*;
 	use crate::test_helpers::{ateapimock, credprovidermock, policy_client};
+
+	#[tokio::test]
+	async fn actor_credential_minting_times_out_when_response_body_stalls() {
+		use hyper_util::rt::{TokioExecutor, TokioIo};
+
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let policy: SubstrateEgress = serde_json::from_value(serde_json::json!({
+			"host": listener.local_addr().unwrap().to_string()
+		}))
+		.unwrap();
+		let mut server = tokio::task::JoinSet::new();
+		server.spawn(async move {
+			let mut connections = tokio::task::JoinSet::new();
+			loop {
+				let (stream, _) = listener.accept().await.unwrap();
+				connections.spawn(async move {
+					let service = hyper::service::service_fn(|_| async {
+						let body = http_body_util::StreamBody::new(futures::stream::pending::<
+							Result<http_body::Frame<bytes::Bytes>, std::convert::Infallible>,
+						>());
+						Ok::<_, std::convert::Infallible>(
+							::http::Response::builder()
+								.header(::http::header::CONTENT_TYPE, "application/grpc")
+								.body(body)
+								.unwrap(),
+						)
+					});
+					hyper::server::conn::http2::Builder::new(TokioExecutor::new())
+						.serve_connection(TokioIo::new(stream), service)
+						.await
+				});
+			}
+		});
+		let client = policy_client();
+		let identity = ActorIdentity {
+			atespace: "demo".into(),
+			actor_name: "my-actor".into(),
+			actor_uid: Some("uid-1".into()),
+		};
+		let source = protos::ateapi::ActorJwtSource {
+			audiences: vec!["https://example.com".into()],
+			expiration_seconds: 600,
+		};
+		let (jwt, cert) = tokio::time::timeout(Duration::from_secs(10), async {
+			tokio::join!(
+				policy.actor_jwt(&client, &identity, &source, None),
+				policy.actor_client_certificate(&client, &identity),
+			)
+		})
+		.await
+		.expect("credential minting did not time out");
+		assert!(
+			matches!(jwt, Err(ProxyError::SubstrateEgressUnavailable(message)) if message.contains("MintActorJwt timed out"))
+		);
+		assert!(
+			matches!(cert, Err(ProxyError::SubstrateEgressUnavailable(message)) if message.contains("MintActorCertificate timed out"))
+		);
+	}
 
 	#[tokio::test]
 	async fn actor_jwt_cache_separates_bearer_and_rotated_certificates() {
