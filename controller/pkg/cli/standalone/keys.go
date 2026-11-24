@@ -1,12 +1,8 @@
 package standalone
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -86,66 +82,50 @@ func keysCommand(c *client) *cobra.Command {
 
 func keysCreateCommand(c *client) *cobra.Command {
 	var (
-		models  []string
-		budgets []string
-		action  string
+		models   []string
+		metadata string
 	)
 	cmd := &cobra.Command{
 		Use:   "create NAME",
 		Short: "Create an API key and print it",
 		Long: `Create an API key and print it. The key is stored as a SHA-256 hash and
-cannot be retrieved again.
-
-Budgets are written as AMOUNT[/WINDOW], where AMOUNT is in USD (10usd or $10)
-or tokens (1000000tokens), and WINDOW defaults to 30d.`,
+cannot be retrieved again.`,
 		Example: `  agctl standalone keys create alice
-  agctl standalone keys create ci --model 'openai/*' --budget 5usd/24h --budget-action block`,
+  agctl standalone keys create ci --model 'openai/*' --metadata '{"team": "platform"}'`,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			var existing resourceList
-			if err := c.do(cmd.Context(), http.MethodGet, "/api/config/resources/llm.apiKey", nil, &existing); err != nil {
-				return err
-			}
-			for _, r := range existing.Resources {
-				if strings.EqualFold(resourceName(r), name) {
-					return fmt.Errorf("API key %q already exists", name)
-				}
-			}
-			raw, err := generateKey()
-			if err != nil {
-				return err
-			}
-			hash := sha256.Sum256([]byte(raw))
+			// The gateway generates the secret for a key sent without one.
 			key := apiKey{
-				KeyHash: "sha256:" + hex.EncodeToString(hash[:]),
-				Metadata: map[string]any{
-					"name":                     name,
-					"agentgateway.dev/keyHint": raw[:7] + "..." + raw[len(raw)-4:],
-				},
+				Metadata:      map[string]any{},
 				AllowedModels: models,
 			}
-			for _, spec := range budgets {
-				b, err := parseBudget(spec, action)
-				if err != nil {
-					return err
+			if metadata != "" {
+				if err := json.Unmarshal([]byte(metadata), &key.Metadata); err != nil || key.Metadata == nil {
+					return fmt.Errorf("--metadata must be a JSON object")
 				}
-				key.Budgets = append(key.Budgets, b)
 			}
+			key.Metadata["name"] = name
 			body := map[string]any{"resources": []map[string]any{{"value": key}}}
-			if err := c.do(cmd.Context(), http.MethodPut, "/api/config/resources/llm.apiKey", body, nil); err != nil {
+			var result resourceList
+			if err := c.do(cmd.Context(), http.MethodPut, "/api/config/resources/llm.apiKey", body, &result); err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), raw)
+			var created apiKey
+			if len(result.Resources) == 1 {
+				_ = json.Unmarshal(result.Resources[0].Value, &created)
+			}
+			if created.Key == "" {
+				return fmt.Errorf("the gateway did not return a generated key")
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), created.Key)
 			fmt.Fprintf(cmd.ErrOrStderr(), "API key %q created. Save it now; it cannot be shown again.\n", name)
 			return nil
 		},
 	}
 	cmd.Flags().StringSliceVar(&models, "model", nil, "Model pattern the key may use (repeatable; default all)")
-	cmd.Flags().StringArrayVar(&budgets, "budget", nil, "Budget as AMOUNT[/WINDOW], for example 10usd/30d or 1000000tokens/24h (repeatable)")
-	cmd.Flags().StringVar(&action, "budget-action", "audit", "Action when a budget is exceeded: audit or block")
-	_ = cmd.RegisterFlagCompletionFunc("budget-action", cobra.FixedCompletions([]string{"audit", "block"}, cobra.ShellCompDirectiveNoFileComp))
+	cmd.Flags().StringVar(&metadata, "metadata", "", `Metadata to attach to the key, as a JSON object, for example '{"team": "platform"}'`)
 	return cmd
 }
 
@@ -207,55 +187,6 @@ func budgetsCommand(c *client) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&keyName, "key", "", "Only show budgets for this API key name")
 	return cmd
-}
-
-func generateKey() (string, error) {
-	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	var sb strings.Builder
-	sb.WriteString("agw_sk_")
-	for range 32 {
-		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(alphabet))))
-		if err != nil {
-			return "", err
-		}
-		sb.WriteByte(alphabet[n.Int64()])
-	}
-	return sb.String(), nil
-}
-
-func parseBudget(spec, action string) (budget, error) {
-	var b budget
-	amount, window, _ := strings.Cut(spec, "/")
-	if window == "" {
-		window = "30d"
-	}
-	lower := strings.ToLower(strings.TrimSpace(amount))
-	switch {
-	case strings.HasPrefix(lower, "$"):
-		b.Limit.Unit, lower = "USD", strings.TrimPrefix(lower, "$")
-	case strings.HasSuffix(lower, "usd"):
-		b.Limit.Unit, lower = "USD", strings.TrimSuffix(lower, "usd")
-	case strings.HasSuffix(lower, "tokens"):
-		b.Limit.Unit, lower = "Tokens", strings.TrimSuffix(lower, "tokens")
-	default:
-		return b, fmt.Errorf("budget %q: amount must end in usd or tokens, or start with $", spec)
-	}
-	value, err := strconv.ParseFloat(strings.TrimSpace(lower), 64)
-	if err != nil || value < 0 || (b.Limit.Unit == "Tokens" && value != float64(int64(value))) {
-		return b, fmt.Errorf("budget %q: invalid amount", spec)
-	}
-	switch strings.ToLower(action) {
-	case "audit":
-		b.OnBudgetExceeded = "Audit"
-	case "block":
-		b.OnBudgetExceeded = "Block"
-	default:
-		return b, fmt.Errorf("--budget-action must be audit or block")
-	}
-	b.Limit.Amount = value
-	b.Window.Rolling = window
-	b.Name = strings.ToLower(b.Limit.Unit) + "-" + window
-	return b, nil
 }
 
 func formatBudgetAmount(unit, amount string) string {

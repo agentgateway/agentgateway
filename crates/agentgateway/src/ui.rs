@@ -736,13 +736,22 @@ async fn upsert_config_resources_by_kind(
 	State(app): State<App>,
 	Extension(auth): Extension<AuthorizationContext>,
 	Path(kind): Path<String>,
-	Json(request): Json<ConfigResourceUpsertRequest>,
+	Json(mut request): Json<ConfigResourceUpsertRequest>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
 	app.ensure_writable()?;
 	let kind = parse_api_kind(&kind)?;
-	upsert_config_resources(&app, &auth, kind, request, None)
-		.await
-		.map(Json)
+	let generated = if kind == ConfigResourceKind::LlmApiKey {
+		crate::config_store::generate_api_keys(&mut request).map_err(resource_api_error)?
+	} else {
+		Vec::new()
+	};
+	let mut response = upsert_config_resources(&app, &auth, kind, request, None).await?;
+	for (resource, key) in response.resources.iter_mut().zip(generated) {
+		if let Some(key) = key {
+			resource.value["key"] = key.into();
+		}
+	}
+	Ok(Json(response))
 }
 
 async fn upsert_config_resources(
