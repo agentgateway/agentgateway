@@ -244,7 +244,8 @@ mod requests {
 		("codex-assistant-history", &[BEDROCK, GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
 		("structured-output", &[BEDROCK]),
-		("input-media", &[BEDROCK]),
+		("input-media", &[BEDROCK, COMPLETIONS]),
+		("input-images", &[COMPLETIONS]),
 		("cache_control", &[BEDROCK, GEMINI]),
 		("cache_control_tool_outputs", &[BEDROCK]),
 	];
@@ -462,7 +463,7 @@ mod requests {
 						conversion::bedrock::from_responses::translate(i, &bedrock, None, None, None)
 							.map(|r| r.body)
 					}),
-					GEMINI => test_request(GEMINI, &path, |i| {
+					provider @ (COMPLETIONS | GEMINI) => test_request(provider, &path, |i| {
 						conversion::openai_compat::from_responses::translate(i)
 					}),
 					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),

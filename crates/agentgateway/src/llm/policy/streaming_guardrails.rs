@@ -24,11 +24,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use ::http::HeaderMap;
+use agent_llm::parse::sse_decoder::{SseDecoder, SseFrame};
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use http_body::Frame;
 use pin_project_lite::pin_project;
-use tokio_sse_codec::{Event, Frame as SseFrame, SseDecoder};
 use tokio_util::codec::Decoder;
 use tracing::warn;
 
@@ -278,7 +278,7 @@ pin_project! {
 		held_bytes: usize,
 		pending_text: ResponseDelta,
 		overlap_tail: ResponseDelta,
-		sse_decoder: SseDecoder<Bytes>,
+		sse_decoder: SseDecoder,
 		decode_buffer: bytes::BytesMut,
 		state: GuardedBodyState,
 		// Owns the rate-limit logger; dropped only when this body is fully consumed,
@@ -328,18 +328,15 @@ impl GuardedSseBody {
 			held_bytes: 0,
 			pending_text: ResponseDelta::default(),
 			overlap_tail: ResponseDelta::default(),
-			sse_decoder: SseDecoder::with_max_size(buffer_limit),
+			sse_decoder: SseDecoder::new(buffer_limit),
 			decode_buffer: bytes::BytesMut::new(),
 			state: GuardedBodyState::Buffering,
 			logger,
 		})
 	}
 
-	/// Extract text and reasoning deltas from a parsed SSE frame if present.
-	fn extract_text_delta(frame: SseFrame<Bytes>) -> Option<ResponseDelta> {
-		let SseFrame::Event(Event { data, .. }) = frame else {
-			return None;
-		};
+	/// Extract text and reasoning deltas from an SSE event's data if present.
+	fn extract_text_delta(data: Bytes) -> Option<ResponseDelta> {
 		if data.as_ref() == b"[DONE]" {
 			return None;
 		}
@@ -487,23 +484,12 @@ impl http_body::Body for GuardedSseBody {
 							this.held_frames.push(raw.clone());
 
 							this.decode_buffer.extend_from_slice(&raw);
-							loop {
-								match this.sse_decoder.decode(this.decode_buffer) {
-									Ok(Some(sse_frame)) => {
-										if let Some(delta) = GuardedSseBody::extract_text_delta(sse_frame) {
-											this.pending_text.append(delta);
-										}
-									},
-									Ok(None) => break,
-									Err(e) => {
-										// Clear the buffer and reset the decoder so invalid bytes
-										// don't accumulate across chunks and cause repeated errors.
-										warn!("SSE decode error in streaming guardrail body, resetting decoder: {e}");
-										this.decode_buffer.clear();
-										*this.sse_decoder = SseDecoder::with_max_size(*this.buffer_limit);
-										break;
-									},
-								}
+							while let Some(sse_frame) = this
+								.sse_decoder
+								.decode(this.decode_buffer)
+								.expect("decoding SSE fails only at end of stream")
+							{
+								take_text_delta(sse_frame, this.pending_text);
 							}
 
 							let over_limit = *this.held_bytes >= *this.buffer_limit;
@@ -526,15 +512,10 @@ impl http_body::Body for GuardedSseBody {
 						Poll::Ready(None) => {
 							loop {
 								match this.sse_decoder.decode_eof(this.decode_buffer) {
-									Ok(Some(sse_frame)) => {
-										if let Some(delta) = GuardedSseBody::extract_text_delta(sse_frame) {
-											this.pending_text.append(delta);
-										}
-									},
+									Ok(Some(sse_frame)) => take_text_delta(sse_frame, this.pending_text),
 									Ok(None) => break,
 									Err(e) => {
 										warn!("SSE decode error at EOF in streaming guardrail body: {e}");
-										this.decode_buffer.clear();
 										break;
 									},
 								}
@@ -556,6 +537,20 @@ impl http_body::Body for GuardedSseBody {
 				},
 			}
 		}
+	}
+}
+
+/// An oversized event isn't evaluated, but its bytes are still forwarded.
+fn take_text_delta(frame: SseFrame, pending_text: &mut ResponseDelta) {
+	match frame {
+		SseFrame::Event(data) => {
+			if let Some(delta) = GuardedSseBody::extract_text_delta(data) {
+				pending_text.append(delta);
+			}
+		},
+		SseFrame::TooLarge => {
+			warn!("SSE event over the buffer limit in streaming guardrail body; not evaluated")
+		},
 	}
 }
 
@@ -725,6 +720,45 @@ mod tests {
 		assert!(!contains(&bytes, b"123-45-6789"));
 	}
 
+	#[tokio::test]
+	async fn test_crlf_split_between_reads_is_evaluated() {
+		let crlf = |chunk: Bytes| {
+			String::from_utf8(chunk.to_vec())
+				.unwrap()
+				.replace('\n', "\r\n")
+		};
+		let input = crlf(gemini_delta_bytes("my SSN", "")) + &crlf(gemini_delta_bytes(" is 1", ""));
+		let split = input.find("\r\n\r\n").unwrap() + 3;
+		let body = make_body(vec![
+			Bytes::from(input[..split].to_string()),
+			Bytes::from(input[split..].to_string()),
+		]);
+
+		let guarded = GuardedSseBody::new(
+			body,
+			vec![Box::new(pattern_evaluator("SSN is"))],
+			1024 * 1024,
+			None,
+		);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"SSN"));
+	}
+
+	#[tokio::test]
+	async fn test_text_after_an_oversized_event_is_evaluated() {
+		let mut chunk = delta_bytes(&"x".repeat(300)).to_vec();
+		chunk.extend_from_slice(&delta_bytes("my SSN is 1"));
+		let body = make_body(vec![Bytes::from(chunk)]);
+
+		let guarded = GuardedSseBody::new(body, vec![Box::new(pattern_evaluator("SSN is"))], 256, None);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"SSN"));
+	}
+
 	fn gemini_candidates_bytes(candidates: serde_json::Value) -> Bytes {
 		sse_bytes(&serde_json::json!({ "candidates": candidates }).to_string())
 	}
@@ -773,12 +807,8 @@ mod tests {
 	}
 
 	fn text_delta(chunk: serde_json::Value) -> Option<Vec<String>> {
-		GuardedSseBody::extract_text_delta(SseFrame::Event(Event {
-			id: None,
-			name: "message".into(),
-			data: Bytes::from(chunk.to_string()),
-		}))
-		.map(|mut delta| delta.take_windows(&mut ResponseDelta::default()))
+		GuardedSseBody::extract_text_delta(Bytes::from(chunk.to_string()))
+			.map(|mut delta| delta.take_windows(&mut ResponseDelta::default()))
 	}
 
 	#[test]

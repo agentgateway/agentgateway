@@ -1,6 +1,7 @@
 pub mod aws_sse;
 pub mod passthrough;
 pub mod sse;
+pub mod sse_decoder;
 pub mod transform;
 
 use bytes::{Bytes, BytesMut};

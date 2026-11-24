@@ -1,0 +1,172 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for mcp_endpoints: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      gateway/default:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: gateway/default
+        listenerName: default
+        protocol: HTTP
+listener_routes:
+  - - gateway/default
+    - - backends:
+          - backend: "/mcp:/mcp"
+            inlinePolicies:
+              - mcpAuthorization:
+                  rules:
+                    deny:
+                      - "mcp.tool.name == \"delete_db\""
+            weight: 1
+        inlinePolicies:
+          - requestHeaderModifier:
+              set:
+                x-shared: "true"
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "*"
+              maxAge: ~
+          - requestHeaderModifier:
+              set:
+                x-default: "true"
+        key: "gateway/default/mcp:/mcp"
+        matches:
+          - path:
+              pathPrefix: /mcp
+          - path:
+              pathPrefix: /.well-known/oauth-protected-resource/mcp
+          - path:
+              pathPrefix: /.well-known/oauth-authorization-server/mcp
+          - path:
+              pathPrefix: /sse
+          - path:
+              pathPrefix: /.well-known/oauth-protected-resource/sse
+          - path:
+              pathPrefix: /.well-known/oauth-authorization-server/sse
+        name: /mcp
+        namespace: internal
+      - backends:
+          - backend: "/mcp:/eng/mcp"
+            inlinePolicies:
+              - mcpAuthorization:
+                  rules:
+                    deny:
+                      - "mcp.tool.name == \"delete_db\""
+            weight: 1
+        inlinePolicies:
+          - requestHeaderModifier:
+              set:
+                x-shared: "true"
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "*"
+              maxAge: ~
+        key: "gateway/default/mcp:/eng/mcp"
+        matches:
+          - path:
+              pathPrefix: /eng/mcp
+          - path:
+              pathPrefix: /.well-known/oauth-protected-resource/eng/mcp
+          - path:
+              pathPrefix: /.well-known/oauth-authorization-server/eng/mcp
+        name: /eng/mcp
+        namespace: internal
+      - backends:
+          - backend: "/mcp:/sales/mcp"
+            inlinePolicies:
+              - mcpAuthorization:
+                  rules:
+                    allow:
+                      - "jwt.team == \"sales\""
+              - mcpAuthorization:
+                  rules:
+                    deny:
+                      - "mcp.tool.name == \"delete_db\""
+            weight: 1
+        inlinePolicies:
+          - requestHeaderModifier:
+              set:
+                x-shared: "true"
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "*"
+              maxAge: ~
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "https://sales.example.com"
+              maxAge: ~
+        key: "gateway/default/mcp:/sales/mcp"
+        matches:
+          - path:
+              pathPrefix: /sales/mcp
+          - path:
+              pathPrefix: /.well-known/oauth-protected-resource/sales/mcp
+          - path:
+              pathPrefix: /.well-known/oauth-authorization-server/sales/mcp
+        name: /sales/mcp
+        namespace: internal
+listener_tcp_routes:
+  - - gateway/default
+    - []
+policies: []
+backends:
+  - backend:
+      mcp:
+        name: "mcp:/mcp"
+        namespace: ""
+        target:
+          targets:
+            - name: time
+              stdio:
+                cmd: uvx
+                args:
+                  - mcp-server-time
+          stateful: false
+          prefixMode: conditional
+          failureMode: failClosed
+          sessionIdleTtl: 30m0s
+  - backend:
+      mcp:
+        name: "mcp:/eng/mcp"
+        namespace: ""
+        target:
+          targets:
+            - name: everything
+              stdio:
+                cmd: npx
+                args:
+                  - "@modelcontextprotocol/server-everything"
+          stateful: false
+          prefixMode: conditional
+          failureMode: failClosed
+          sessionIdleTtl: 30m0s
+  - backend:
+      mcp:
+        name: "mcp:/sales/mcp"
+        namespace: ""
+        target:
+          targets:
+            - name: time
+              stdio:
+                cmd: uvx
+                args:
+                  - mcp-server-time
+          stateful: true
+          prefixMode: conditional
+          failureMode: failClosed
+          sessionIdleTtl: 30m0s
+route_groups: []
+workloads: []
+services: []

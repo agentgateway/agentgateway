@@ -145,6 +145,7 @@ dependencies = [
  "indexmap 2.14.2",
  "insta",
  "itertools 0.15.0",
+ "memchr",
  "mime_guess",
  "percent-encoding",
  "pin-project-lite",
@@ -158,7 +159,6 @@ dependencies = [
  "tiktoken",
  "tokio",
  "tokio-util",
- "tokio_sse_codec",
  "tracing",
  "vector-map",
 ]
@@ -382,7 +382,6 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
- "tokio_sse_codec",
  "tonic",
  "tonic-types",
  "tower",
@@ -4346,36 +4345,13 @@ dependencies = [
 
 [[package]]
 name = "miette"
-version = "5.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59bb584eaeeab6bd0226ccf3509a69d7936d148cf3d036ad350abe35e8c6856e"
-dependencies = [
- "miette-derive 5.10.0",
- "once_cell",
- "thiserror 1.0.69",
- "unicode-width",
-]
-
-[[package]]
-name = "miette"
 version = "7.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f98efec8807c63c752b5bd61f862c165c115b0a35685bdcfd9238c7aeb592b7"
 dependencies = [
  "cfg-if",
- "miette-derive 7.6.0",
+ "miette-derive",
  "unicode-width",
-]
-
-[[package]]
-name = "miette-derive"
-version = "5.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -5511,7 +5487,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01b80ea363c31af2de2b92e3c07ed1156628f7838c4afb4df75ee78a37fedbd1"
 dependencies = [
  "logos 0.16.1",
- "miette 7.6.0",
+ "miette",
  "prost",
  "prost-types",
 ]
@@ -5645,7 +5621,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f25a07a73c6717f0b9bbbd685918f5df9815f7efba450b83d9c9dea41f0e3a1"
 dependencies = [
  "bytes",
- "miette 7.6.0",
+ "miette",
  "prost",
  "prost-reflect",
  "prost-types",
@@ -5660,7 +5636,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f43240d7f22cf77d1625885e547acf874dd63cd2790f29f4a38e86256f41996f"
 dependencies = [
  "bytes",
- "miette 7.6.0",
+ "miette",
  "prost",
  "prost-reflect",
  "prost-types",
@@ -5675,7 +5651,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "072eee358134396a4643dff81cfff1c255c9fbd3fb296be14bdb6a26f9156366"
 dependencies = [
  "logos 0.15.1",
- "miette 7.6.0",
+ "miette",
  "prost-types",
  "thiserror 2.0.21",
 ]
@@ -5687,7 +5663,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34efee6fad0cf6d71642d20a66bfe0c281919c9577e7c66d20360dfcb7549272"
 dependencies = [
  "logos 0.16.1",
- "miette 7.6.0",
+ "miette",
  "prost-types",
  "thiserror 2.0.21",
 ]
@@ -7832,19 +7808,6 @@ dependencies = [
  "libc",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "tokio_sse_codec"
-version = "0.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1ef88f1ff8829edd1484d977b86426b47e26ee47cc6680da6068977c1e64cd3"
-dependencies = [
- "bytes",
- "miette 5.10.0",
- "thiserror 1.0.69",
- "tokio-util",
- "tracing",
 ]
 
 [[package]]

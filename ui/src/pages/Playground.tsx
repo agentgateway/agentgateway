@@ -29,7 +29,7 @@ import {
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { WildcardModelSelector } from '@/components/WildcardModelSelector';
-import { providerLabel } from '@/config';
+import { mcpPolicies, providerLabel } from '@/config';
 import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy, waitForLlmCors } from '@/cors';
 import { hasKeyValue, keyLabel } from '@/credentialDisplay';
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from '@/gatewayUrls';
@@ -39,7 +39,14 @@ import {
 	useStoredStringState,
 	useUpsertPolicyResource
 } from '@/hooks';
-import { extractMcpTools, initializeMcpSession, type McpTool, nextRpcId } from '@/mcp';
+import {
+	extractMcpTools,
+	initializeMcpSession,
+	type McpTool,
+	mcpResourceId,
+	mcpServerEndpoints,
+	nextRpcId
+} from '@/mcp';
 import { modelLabel, modelMatchHeaders, modelOptionValue, modelSubtitle } from '@/modelLabel';
 import {
 	catalogProviderName,
@@ -167,12 +174,14 @@ export function PlaygroundPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [runSteps, setRunSteps] = useState<RunStep[]>([]);
-	const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data);
+	// Tools come from the first MCP endpoint: the top-level targets when there are any.
+	const firstMcpEndpoint = mcpServerEndpoints(mcpData.data?.mcp)[0];
+	const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data, firstMcpEndpoint?.path);
 	const derivedMcpBaseUrl = mcpEndpoint.baseUrl;
 	const [mcpEnabled, setMcpEnabled] = useState(false);
 	const [mcpSessionId, setMcpSessionId] = useState('');
 	const [mcpTools, setMcpTools] = useState<PlaygroundTool[]>([]);
-	const mcpServerCount = mcpData.data?.mcp?.targets?.length ?? 0;
+	const mcpServerCount = firstMcpEndpoint?.targets.length ?? 0;
 
 	useEffect(() => {
 		for (const key of legacySecretStorageKeys) localStorage.removeItem(key);
@@ -217,9 +226,15 @@ export function PlaygroundPage() {
 		}
 	});
 	const fileCorsOwned = Object.hasOwn(filePolicies, 'cors');
+	// An endpoint's own CORS policy replaces the shared one.
+	const endpointMcpCors = firstMcpEndpoint?.endpoint
+		? (mcpPolicies(mcpData.data?.mcp, firstMcpEndpoint.endpoint)?.cors as CorsPolicy | undefined)
+		: undefined;
+	const mcpCorsEndpoint = endpointMcpCors ? firstMcpEndpoint?.endpoint : undefined;
+	const mcpCors = endpointMcpCors ?? mcpData.data?.mcp?.policies?.cors;
+	const fileMcpCorsPolicies = mcpPolicies(mcpData.rawConfig.data?.mcp, mcpCorsEndpoint);
 	const fileMcpCorsOwned = Boolean(
-		mcpData.rawConfig.data?.mcp?.policies &&
-			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
+		fileMcpCorsPolicies && Object.hasOwn(fileMcpCorsPolicies, 'cors')
 	);
 	const needsCors =
 		applyCors.isPending ||
@@ -228,9 +243,7 @@ export function PlaygroundPage() {
 			? corsNeedsUpdate(llmCors, 'llm')
 			: false);
 	const needsMcpCors =
-		mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin
-			? corsNeedsUpdate(mcpData.data.mcp?.policies?.cors, 'mcp')
-			: false;
+		mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin ? corsNeedsUpdate(mcpCors, 'mcp') : false;
 	const sendBlockers = sendReadinessBlockers({
 		loading,
 		displayRequestModel,
@@ -252,8 +265,8 @@ export function PlaygroundPage() {
 	function applyMcpCors() {
 		upsertPolicy.mutate({
 			kind: 'mcp.policy',
-			id: 'cors',
-			value: playgroundCorsPolicy(mcpData.data?.mcp?.policies?.cors, 'mcp')
+			id: mcpResourceId('cors', mcpCorsEndpoint),
+			value: playgroundCorsPolicy(mcpCors, 'mcp')
 		});
 	}
 

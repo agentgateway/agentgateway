@@ -44,6 +44,26 @@ info:
             "prompt_cache_breakpoint": {
               "mode": "explicit"
             }
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,aGVsbG8=",
+              "detail": "auto"
+            },
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          },
+          {
+            "type": "file",
+            "file": {
+              "file_data": "aGVsbG8=",
+              "filename": "notes.txt"
+            },
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
           }
         ]
       },

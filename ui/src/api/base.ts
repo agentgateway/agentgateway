@@ -75,11 +75,3 @@ async function requestOk(path: string, init?: RequestInit): Promise<Response> {
 	}
 	return response;
 }
-
-export function parseJsonOrText(text: string) {
-	try {
-		return JSON.parse(text) as unknown;
-	} catch {
-		return text;
-	}
-}

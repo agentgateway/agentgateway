@@ -83,10 +83,25 @@ impl HboneAddress {
 		}
 	}
 
-	pub fn socket_addr(&self) -> Option<SocketAddr> {
+	pub fn gateway_socket_addr(
+		&self,
+		stores: &crate::store::DiscoveryStore,
+		ext: &Extension,
+	) -> anyhow::Result<SocketAddr> {
 		match self {
-			HboneAddress::SocketAddr(addr) => Some(*addr),
-			HboneAddress::SvcHostname(_, _) => None,
+			HboneAddress::SocketAddr(addr) => Ok(*addr),
+			HboneAddress::SvcHostname(hostname, port) => {
+				let Some(svc) = find_service_by_hostname(stores, hostname) else {
+					anyhow::bail!("no service found for hostname {hostname}");
+				};
+				let Some(target_port) = svc.ports.get(port).copied().filter(|p| *p != 0) else {
+					anyhow::bail!("service {hostname} has no numeric target port for port {port}");
+				};
+				let Some(tcp) = ext.get::<TCPConnectionInfo>() else {
+					anyhow::bail!("no local address for connection to {hostname}");
+				};
+				Ok(SocketAddr::new(tcp.local_addr.ip(), target_port))
+			},
 		}
 	}
 }
@@ -1661,12 +1676,9 @@ impl Gateway {
 		let address = HboneAddress::try_from(uri)
 			.map_err(|_| InboundError(anyhow::anyhow!("bad request"), StatusCode::BAD_REQUEST))
 			.and_then(|hbone_addr| {
-				let socket_addr = hbone_addr.socket_addr().ok_or_else(|| {
-					InboundError(
-						anyhow::anyhow!("hostname resolution not supported"),
-						StatusCode::BAD_REQUEST,
-					)
-				})?;
+				let socket_addr = hbone_addr
+					.gateway_socket_addr(&pi.stores.read_discovery(), &ext)
+					.map_err(|e| InboundError(e, StatusCode::BAD_REQUEST))?;
 				Ok((hbone_addr, socket_addr))
 			});
 		let (hbone_addr, socket_addr) = match address {

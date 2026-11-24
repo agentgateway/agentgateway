@@ -16,10 +16,20 @@ import {
 	Panel,
 	StatusBanner
 } from '@/components/Primitives';
+import { mcpPolicies } from '@/config';
 import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from '@/cors';
 import { mcpPlaygroundEndpoint } from '@/gatewayUrls';
 import { useMcpConfigData, useStoredStringState, useUpsertPolicyResource } from '@/hooks';
-import { extractMcpTools, type McpTool, nextRpcId, sendInitializedNotification } from '@/mcp';
+import {
+	extractMcpTools,
+	type McpTool,
+	mcpEndpointLabel,
+	mcpResourceId,
+	mcpServerEndpoints,
+	nextRpcId,
+	sendInitializedNotification
+} from '@/mcp';
+import type { CorsPolicy } from '@/types';
 
 type JsonSchema = {
 	type?: string | string[];
@@ -37,15 +47,26 @@ type McpResponse = {
 	body: unknown;
 };
 const storageKeys = {
-	tool: 'mcpPlaygroundTool'
+	tool: 'mcpPlaygroundTool',
+	endpoint: 'mcpPlaygroundEndpointPath'
 };
 
 export function McpPlaygroundPage() {
 	const mcpData = useMcpConfigData();
 	const effectiveConfig = mcpData.data;
 	const upsertPolicy = useUpsertPolicyResource();
-	const targets = useMemo(() => effectiveConfig?.mcp?.targets ?? [], [effectiveConfig]);
-	const mcpEndpoint = mcpPlaygroundEndpoint(effectiveConfig);
+	const endpoints = useMemo(() => mcpServerEndpoints(effectiveConfig?.mcp), [effectiveConfig]);
+	const [endpointPath, setEndpointPath] = useStoredStringState(storageKeys.endpoint, '');
+	const selectedEndpoint =
+		endpoints.find(endpoint => (endpoint.endpoint ?? '') === endpointPath) ?? endpoints[0];
+	const targets = selectedEndpoint?.targets ?? [];
+	const mcpEndpoint = mcpPlaygroundEndpoint(effectiveConfig, selectedEndpoint?.path);
+	// An endpoint's own CORS policy replaces the shared one.
+	const endpointCors = selectedEndpoint?.endpoint
+		? (mcpPolicies(effectiveConfig?.mcp, selectedEndpoint.endpoint)?.cors as CorsPolicy | undefined)
+		: undefined;
+	const corsEndpoint = endpointCors ? selectedEndpoint?.endpoint : undefined;
+	const cors = endpointCors ?? effectiveConfig?.mcp?.policies?.cors;
 	const derivedBaseUrl = mcpEndpoint.baseUrl;
 	const baseUrl = derivedBaseUrl;
 	const [initialized, setInitialized] = useState(false);
@@ -61,13 +82,9 @@ export function McpPlaygroundPage() {
 
 	const selectedTool = tools.find(tool => tool.name === toolName);
 	const needsCors =
-		effectiveConfig && !mcpEndpoint.sameOrigin
-			? corsNeedsUpdate(effectiveConfig.mcp?.policies?.cors, 'mcp')
-			: false;
-	const fileCorsOwned = Boolean(
-		mcpData.rawConfig.data?.mcp?.policies &&
-			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
-	);
+		effectiveConfig && !mcpEndpoint.sameOrigin ? corsNeedsUpdate(cors, 'mcp') : false;
+	const fileCorsPolicies = mcpPolicies(mcpData.rawConfig.data?.mcp, corsEndpoint);
+	const fileCorsOwned = Boolean(fileCorsPolicies && Object.hasOwn(fileCorsPolicies, 'cors'));
 
 	useEffect(() => {
 		localStorage.removeItem('mcpPlaygroundArgs');
@@ -184,8 +201,8 @@ export function McpPlaygroundPage() {
 								onClick={() => {
 									upsertPolicy.mutate({
 										kind: 'mcp.policy',
-										id: 'cors',
-										value: playgroundCorsPolicy(effectiveConfig?.mcp?.policies?.cors, 'mcp')
+										id: mcpResourceId('cors', corsEndpoint),
+										value: playgroundCorsPolicy(cors, 'mcp')
 									});
 								}}
 							>
@@ -243,6 +260,28 @@ export function McpPlaygroundPage() {
 							</Button>
 						)}
 					</div>
+
+					{endpoints.length > 1 ? (
+						<FieldGroup label="Endpoint">
+							<Dropdown
+								ariaLabel="Endpoint"
+								value={selectedEndpoint?.endpoint ?? ''}
+								disabled={loading !== null}
+								options={endpoints.map(endpoint => ({
+									value: endpoint.endpoint ?? '',
+									label: mcpEndpointLabel(endpoint)
+								}))}
+								onChange={value => {
+									setEndpointPath(value);
+									setInitialized(false);
+									setSessionId('');
+									setTools([]);
+									setResult(null);
+									setError(null);
+								}}
+							/>
+						</FieldGroup>
+					) : null}
 
 					<details className="schema-details mcp-auth-details">
 						<summary>Authorization header</summary>

@@ -86,6 +86,84 @@ binds:
 }
 
 #[tokio::test]
+async fn test_hbone_gateway_accepts_service_hostname() -> anyhow::Result<()> {
+	use http::{Method, Request, StatusCode};
+	use tokio::net::{TcpListener, TcpStream};
+
+	agent_core::telemetry::testing::setup_test_logging();
+
+	let ca_addr = start_mock_ca_server().await?;
+	let app_port = TcpListener::bind("127.0.0.1:0").await?.local_addr()?.port();
+	let backend_port = TcpListener::bind("127.0.0.1:0").await?.local_addr()?.port();
+
+	let gw_config = format!(
+		r#"config:
+  network: ""
+  namespace: default
+  serviceAccount: default
+  trustDomain: cluster.local
+  caAddress: "http://{ca_addr}"
+services:
+  - name: "gateway"
+    namespace: "default"
+    hostname: "gateway.default.svc.cluster.local"
+    vips:
+      - "/127.0.0.3"
+    ports:
+      80: {app_port}
+binds:
+- port: $PORT
+  tunnelProtocol: hboneGateway
+  listeners:
+  - name: hbone
+    protocol: TCP
+    tcpRoutes:
+    - name: default
+      backends:
+        - host: 127.0.0.1:{backend_port}
+- port: {app_port}
+  listeners:
+  - name: app
+    protocol: TCP
+    tcpRoutes:
+    - name: default
+      backends:
+        - host: 127.0.0.1:{backend_port}
+"#
+	);
+	let gw = AgentGateway::new(gw_config).await?;
+
+	let tcp = TcpStream::connect(("127.0.0.1", gw.port())).await?;
+	let tls = tokio_rustls::TlsConnector::from(Arc::new(client_tls_config("client")))
+		.connect(
+			rustls::pki_types::ServerName::IpAddress(std::net::Ipv4Addr::UNSPECIFIED.into()),
+			tcp,
+		)
+		.await?;
+	let (h2, conn) = h2::client::handshake(tls).await?;
+	tokio::spawn(conn);
+	let mut h2 = h2.ready().await?;
+
+	let mut connect = |authority: String| {
+		let req = Request::builder()
+			.method(Method::CONNECT)
+			.uri(authority)
+			.body(())
+			.unwrap();
+		h2.send_request(req, false).unwrap()
+	};
+
+	let (resp, _send) = connect("gateway.default.svc.cluster.local:80".to_string());
+	assert_eq!(resp.await?.status(), StatusCode::OK);
+
+	let (resp, _send) = connect("other.default.svc.cluster.local:80".to_string());
+	assert_eq!(resp.await?.status(), StatusCode::BAD_REQUEST);
+
+	gw.shutdown().await;
+	Ok(())
+}
+
+#[tokio::test]
 async fn test_hbone() -> anyhow::Result<()> {
 	agent_core::telemetry::testing::setup_test_logging();
 
