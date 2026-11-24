@@ -29,24 +29,11 @@ pub struct ResponseResource {
 
 struct Parser<IO> {
 	inner: IO,
-	frames: WsFrameAccumulator,
-	text_buffer: BytesMut,
-	buffer_limit: usize,
-	disabled: bool,
+	frames: Option<WsFrameAccumulator>,
 	log: AsyncLog<LLMInfo>,
 }
 
 impl<IO> Parser<IO> {
-	fn record_text_payload(&mut self, data: &[u8]) -> bool {
-		if self.text_buffer.len() + data.len() > self.buffer_limit {
-			self.text_buffer = Default::default();
-			self.disabled = true;
-			return false;
-		}
-		self.text_buffer.extend_from_slice(data);
-		true
-	}
-
 	fn emit(&self, data: Bytes) {
 		let Ok(data) = str::from_utf8(&data) else {
 			return;
@@ -141,18 +128,17 @@ impl<IO: AsyncRead + Unpin + 'static> AsyncRead for Parser<IO> {
 			// EOF
 			return Poll::Ready(Ok(()));
 		}
-		if self.disabled {
+		let Some(frames) = &mut self.frames else {
 			return Poll::Ready(Ok(()));
-		}
-		let new_bytes = &buf.filled()[orig..];
-		self.frames.push(new_bytes);
-		for frame in self.frames.drain_frames() {
+		};
+		frames.push(&buf.filled()[orig..]);
+		let Ok(completed) = frames.drain_frames() else {
+			self.frames = None;
+			return Poll::Ready(Ok(()));
+		};
+		for frame in completed {
 			if let WsCompletedFrame::Text { payload, .. } = frame {
-				if !self.record_text_payload(&payload) {
-					return Poll::Ready(Ok(()));
-				}
-				let got = self.text_buffer.split();
-				self.emit(got.freeze());
+				self.emit(payload);
 			}
 		}
 		Poll::Ready(Ok(()))
@@ -162,27 +148,14 @@ impl<IO: AsyncRead + Unpin + 'static> AsyncRead for Parser<IO> {
 pub async fn parser<IO>(
 	body: IO,
 	log: AsyncLog<LLMInfo>,
-) -> impl AsyncRead + AsyncWrite + Unpin + 'static
-where
-	IO: AsyncRead + AsyncWrite + Unpin + 'static,
-{
-	parser_with_limit(body, log, crate::defaults::max_buffer_size())
-}
-
-fn parser_with_limit<IO>(
-	body: IO,
-	log: AsyncLog<LLMInfo>,
-	buffer_limit: usize,
+	frame_limit: usize,
 ) -> impl AsyncRead + AsyncWrite + Unpin + 'static
 where
 	IO: AsyncRead + AsyncWrite + Unpin + 'static,
 {
 	Parser {
 		inner: body,
-		frames: WsFrameAccumulator::new(),
-		text_buffer: Default::default(),
-		buffer_limit,
-		disabled: false,
+		frames: Some(WsFrameAccumulator::new(frame_limit)),
 		log,
 	}
 }
@@ -260,6 +233,7 @@ fn response_cancel_event_bytes(mask: [u8; 4]) -> Bytes {
 
 struct WsFrameAccumulator {
 	decoder: websocket_sans_io::WebsocketFrameDecoder,
+	frame_limit: usize,
 	pending: BytesMut,
 	frame_raw: BytesMut,
 	frame_payload: BytesMut,
@@ -270,10 +244,13 @@ enum WsCompletedFrame {
 	Other { raw: Bytes },
 }
 
+struct FrameTooLarge;
+
 impl WsFrameAccumulator {
-	fn new() -> Self {
+	fn new(frame_limit: usize) -> Self {
 		Self {
 			decoder: websocket_sans_io::WebsocketFrameDecoder::new(),
+			frame_limit,
 			pending: BytesMut::new(),
 			frame_raw: BytesMut::new(),
 			frame_payload: BytesMut::new(),
@@ -284,7 +261,7 @@ impl WsFrameAccumulator {
 		self.pending.extend_from_slice(data);
 	}
 
-	fn drain_frames(&mut self) -> Vec<WsCompletedFrame> {
+	fn drain_frames(&mut self) -> Result<Vec<WsCompletedFrame>, FrameTooLarge> {
 		let mut result = Vec::new();
 		// The decoder unmasks payloads in place; preserve pending for raw forwarding.
 		let mut copy = self.pending.to_vec();
@@ -307,6 +284,11 @@ impl WsFrameAccumulator {
 			};
 			if ret.consumed_bytes == 0 && ret.event.is_none() {
 				break;
+			}
+			if let Some(WebsocketFrameEvent::Start { frame_info, .. }) = ret.event
+				&& frame_info.payload_length > self.frame_limit as u64
+			{
+				return Err(FrameTooLarge);
 			}
 
 			let raw_chunk = self.pending.split_to(ret.consumed_bytes).freeze();
@@ -342,7 +324,7 @@ impl WsFrameAccumulator {
 			}
 			remaining = &mut remaining[ret.consumed_bytes..];
 		}
-		result
+		Ok(result)
 	}
 }
 
@@ -365,6 +347,7 @@ impl WsFrameAccumulator {
 pub async fn guarded_realtime_proxy<C, S>(
 	client: C,
 	server: S,
+	frame_limit: usize,
 	guard: PromptGuard,
 	policy_client: PolicyClient,
 	log: AsyncLog<LLMInfo>,
@@ -395,7 +378,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 		let server_tx = server_tx.clone();
 		let client_tx_err = client_tx.clone();
 		async move {
-			let mut accum = WsFrameAccumulator::new();
+			let mut accum = WsFrameAccumulator::new(frame_limit);
 			let mut read_buf = [0u8; 4096];
 
 			loop {
@@ -405,7 +388,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 				};
 				accum.push(&read_buf[..n]);
 
-				for frame in accum.drain_frames() {
+				for frame in accum.drain_frames()? {
 					match frame {
 						WsCompletedFrame::Text { raw, payload } => {
 							if let Ok(text) = std::str::from_utf8(&payload)
@@ -449,13 +432,13 @@ pub async fn guarded_realtime_proxy<C, S>(
 					}
 				}
 			}
-			drop(server_tx);
+			Ok(())
 		}
 	};
 
 	let server_to_client = {
 		async move {
-			let mut accum = WsFrameAccumulator::new();
+			let mut accum = WsFrameAccumulator::new(frame_limit);
 			let mut read_buf = [0u8; 4096];
 			let mut evaluators = guard_clone.begin_streaming_response_guard(
 				&policy_client_clone,
@@ -475,7 +458,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 				};
 				accum.push(&read_buf[..n]);
 
-				for frame in accum.drain_frames() {
+				for frame in accum.drain_frames()? {
 					match frame {
 						WsCompletedFrame::Text { raw, payload } => {
 							let event = std::str::from_utf8(&payload)
@@ -601,7 +584,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 					}
 				}
 			}
-			drop(client_tx);
+			Ok(())
 		}
 	};
 
@@ -625,9 +608,13 @@ pub async fn guarded_realtime_proxy<C, S>(
 	});
 
 	// Exit when either reader closes; then wait for writers to drain remaining frames.
-	tokio::select! {
-		_ = client_to_server => {},
-		_ = server_to_client => {},
+	let result: Result<(), FrameTooLarge> = tokio::select! {
+		result = client_to_server => result,
+		result = server_to_client => result,
+	};
+	if result.is_err() {
+		client_writer_join.abort();
+		server_writer_join.abort();
 	}
 	let _ = tokio::join!(client_writer_join, server_writer_join);
 }
@@ -637,23 +624,27 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn record_text_payload_disables_after_limit() {
-		let (io, _) = tokio::io::duplex(1);
-		let mut parser = Parser {
-			inner: io,
-			frames: WsFrameAccumulator::new(),
-			text_buffer: Default::default(),
-			buffer_limit: 4,
-			disabled: false,
-			log: AsyncLog::default(),
+	fn checks_frame_limit_before_payload() {
+		let mut frames = WsFrameAccumulator::new(4);
+		let valid = encode_ws_text_frame_masked(b"test", [1, 2, 3, 4]);
+		frames.push(&valid);
+		let Ok(completed) = frames.drain_frames() else {
+			panic!("frame at the limit should be accepted");
 		};
+		assert!(matches!(
+			completed.as_slice(),
+			[WsCompletedFrame::Text { raw, payload }]
+				if raw == &valid && payload.as_ref() == b"test"
+		));
 
-		assert!(parser.record_text_payload(b"abc"));
-		assert_eq!(&parser.text_buffer[..], b"abc");
-		parser.text_buffer.reserve(1024);
-		assert!(!parser.record_text_payload(b"de"));
-		assert!(parser.disabled);
-		assert!(parser.text_buffer.is_empty());
-		assert_eq!(parser.text_buffer.capacity(), 0);
+		let header = WebsocketFrameEncoder::new().start_frame(&FrameInfo {
+			opcode: Opcode::Text,
+			payload_length: 5,
+			mask: Some([1, 2, 3, 4]),
+			fin: true,
+			reserved: 0,
+		});
+		frames.push(&header);
+		assert!(frames.drain_frames().is_err());
 	}
 }

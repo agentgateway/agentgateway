@@ -1737,6 +1737,7 @@ async fn handle_upgrade(
 		upgrade_type,
 		upgrade,
 	} = req_upgrade_type;
+	let buffer_limit = http::response_buffer_limit(&resp);
 	let resp_upgrade_type = get_upgrade_type(resp.headers());
 	// Case insensitive: https://www.rfc-editor.org/rfc/rfc6455.html#section-4.2.1
 	if !resp_upgrade_type
@@ -1774,6 +1775,7 @@ async fn handle_upgrade(
 				parse::websocket::guarded_realtime_proxy(
 					TokioIo::new(req),
 					server,
+					buffer_limit,
 					guard_context.prompt_guard,
 					guard_context.policy_client,
 					llm,
@@ -1784,7 +1786,7 @@ async fn handle_upgrade(
 				.await;
 				return;
 			}
-			let mut server = parse::websocket::parser(server, llm).await;
+			let mut server = parse::websocket::parser(server, llm, buffer_limit).await;
 			let _ = agent_core::copy::copy_bidirectional(
 				&mut TokioIo::new(req),
 				&mut server,
