@@ -33,16 +33,12 @@ fn gemini_provider(model: Option<&str>) -> AIProvider {
 /// native render is signalled by `ProviderState::VertexGemini`.
 fn native_chat_request(model: &str, streaming: bool) -> LLMRequest {
 	LLMRequest {
-		input_tokens: None,
 		input_format: InputFormat::Gemini,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: model.into(),
-		original_model: None,
-		provider: Default::default(),
 		streaming,
-		params: Default::default(),
-		prompt: None,
 		provider_state: Some(ProviderState::VertexGemini),
+		..Default::default()
 	}
 }
 

@@ -93,6 +93,9 @@ pub struct Request {
 	pub model: Option<String>,
 	/// Filled from the URI by the caller (`:streamGenerateContent`); there is no body flag.
 	pub streaming: bool,
+	/// Filled from the URI by the caller: a streaming request without `?alt=sse`, answered with a
+	/// JSON array of responses rather than SSE.
+	pub json_stream: bool,
 	pub inner: GenerateContentRequest,
 }
 
@@ -112,6 +115,7 @@ impl<'de> Deserialize<'de> for Request {
 		Ok(Request {
 			model,
 			streaming: false,
+			json_stream: false,
 			inner,
 		})
 	}
@@ -278,7 +282,6 @@ impl RequestType for Request {
 			input_format: InputFormat::Gemini,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
-			original_model: None,
 			provider,
 			streaming: self.streaming,
 			params: LLMRequestParams {
@@ -300,8 +303,8 @@ impl RequestType for Request {
 					.and_then(serde_json::Value::as_str)
 					.and_then(crate::ReasoningEffort::parse),
 			},
-			prompt: Default::default(),
-			provider_state: None,
+			gemini_json_stream: self.json_stream,
+			..Default::default()
 		})
 	}
 
@@ -461,17 +464,11 @@ impl RequestType for CountTokensRequest {
 
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
 		Ok(LLMRequest {
-			// We never tokenize these, so always empty
-			input_tokens: None,
 			input_format: InputFormat::GeminiCountTokens,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new(self.model.as_deref().unwrap_or_default()),
-			original_model: None,
 			provider,
-			streaming: false,
-			params: Default::default(),
-			prompt: Default::default(),
-			provider_state: None,
+			..Default::default()
 		})
 	}
 

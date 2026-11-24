@@ -939,7 +939,6 @@ impl RequestType for Request {
 			input_format: InputFormat::Responses,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
-			original_model: None,
 			provider,
 			streaming: self.stream.unwrap_or_default(),
 			params: LLMRequestParams {
@@ -957,8 +956,7 @@ impl RequestType for Request {
 					.and_then(|r| r.effort.as_deref())
 					.and_then(crate::ReasoningEffort::parse),
 			},
-			prompt: Default::default(),
-			provider_state: None,
+			..Default::default()
 		})
 	}
 

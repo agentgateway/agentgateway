@@ -542,3 +542,22 @@ async fn test_sse_json_transform_multi_accepts_unterminated_final_done() {
 		"{observed:?}"
 	);
 }
+
+#[rstest]
+#[case::empty(&[], "[]")]
+#[case::events(&["data: {\"a\":1}\n\n", "data: {\"a\":2}\n\n"], "[{\"a\":1},\r\n{\"a\":2}]")]
+#[tokio::test]
+async fn test_sse_to_json_array(#[case] chunks: &[&'static str], #[case] want: &str) {
+	let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+		chunks
+			.iter()
+			.map(|c| Ok::<_, Infallible>(http_body::Frame::data(Bytes::from_static(c.as_bytes()))))
+			.collect::<Vec<_>>(),
+	)));
+	let got = sse::to_json_array(body, 1024)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+	assert_eq!(std::str::from_utf8(&got).unwrap(), want);
+}

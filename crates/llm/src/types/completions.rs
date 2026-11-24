@@ -600,7 +600,6 @@ impl super::RequestType for Request {
 			input_format: InputFormat::Completions,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
-			original_model: None,
 			provider,
 			streaming: self.stream.unwrap_or_default(),
 			params: LLMRequestParams {
@@ -625,8 +624,7 @@ impl super::RequestType for Request {
 					typed::ReasoningEffort::Max => crate::ReasoningEffort::Max,
 				}),
 			},
-			prompt: Default::default(),
-			provider_state: None,
+			..Default::default()
 		};
 		Ok(llm)
 	}

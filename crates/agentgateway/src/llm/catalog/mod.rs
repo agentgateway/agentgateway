@@ -1234,16 +1234,11 @@ mod tests {
 	fn test_llm_info(request_model: &str, provider_model: Option<&str>) -> LLMInfo {
 		LLMInfo {
 			request: crate::llm::LLMRequest {
-				input_tokens: None,
 				input_format: crate::llm::InputFormat::Completions,
 				cache_convention: CacheTokenConvention::InputIncludesCache,
 				request_model: request_model.into(),
-				original_model: None,
 				provider: "openai".into(),
-				streaming: false,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
+				..Default::default()
 			},
 			response: LLMResponse {
 				input_tokens: Some(1_000_000),

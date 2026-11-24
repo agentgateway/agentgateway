@@ -3,7 +3,7 @@ use agent_core::strng;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{RequestType, responses};
-use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage};
+use crate::{AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage};
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Request {
@@ -44,16 +44,11 @@ impl RequestType for Request {
 
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
 		Ok(LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Decisions,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new(self.model.as_deref().unwrap_or_default()),
-			original_model: None,
 			provider,
-			streaming: false,
-			params: LLMRequestParams::default(),
-			prompt: Default::default(),
-			provider_state: None,
+			..Default::default()
 		})
 	}
 

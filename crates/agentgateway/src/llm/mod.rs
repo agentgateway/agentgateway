@@ -1891,18 +1891,12 @@ impl AIProvider {
 		// The Gemini wire body carries neither model nor a stream flag; both come from the
 		// URI: models/{model}:generateContent vs models/{model}:streamGenerateContent.
 		let streaming = req.uri().path().ends_with(":streamGenerateContent");
-		if streaming && !query_requests_sse(req.uri()) {
-			// Without alt=sse Google streams a JSON array, which we cannot parse incrementally.
-			// This can never succeed, so answer with a terminal client error rather than an
-			// AIError, which would surface as a retryable 503 and invite SDK retry storms.
-			return Ok(RequestResult::Rejected(google_invalid_argument(
-				"streamGenerateContent requires alt=sse; the JSON-array streaming variant is not supported",
-			)));
-		}
+		let json_stream = streaming && !query_requests_sse(req.uri());
 		let (parts, managed_body, mut req) = self
 			.read_gemini_body_and_default_model::<types::gemini::Request>(policies, req, log)
 			.await?;
 		req.streaming = streaming;
+		req.json_stream = json_stream;
 		self.apply_model_alias(policies, &mut req);
 
 		self
@@ -3286,6 +3280,7 @@ impl AIProvider {
 		} = logging;
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
+		let gemini_json_stream = req.gemini_json_stream;
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
 		let namespaces = namespace_tool_map(&req).cloned();
 		let chat_translation = if input_format.is_chat() {
@@ -3422,14 +3417,20 @@ impl AIProvider {
 			}
 		};
 
-		if !evaluators.is_empty() {
+		let mut resp = if evaluators.is_empty() {
+			translated
+		} else {
 			// `logger` is owned by the translated body; pass None to avoid double-logging.
-			return Ok(
-				translated
-					.map(|b| b.transform_stream(|b| GuardedSseBody::new(b, evaluators, buffer, None))),
+			translated.map(|b| b.transform_stream(|b| GuardedSseBody::new(b, evaluators, buffer, None)))
+		};
+		if gemini_json_stream {
+			resp.headers_mut().insert(
+				header::CONTENT_TYPE,
+				HeaderValue::from_static("application/json; charset=UTF-8"),
 			);
+			resp = resp.map(|b| agent_llm::parse::sse::to_json_array(b, buffer));
 		}
-		Ok(translated)
+		Ok(resp)
 	}
 
 	async fn read_body_and_default_model<T: RequestType + DeserializeOwned>(
@@ -3651,22 +3652,6 @@ fn query_requests_sse(uri: &::http::Uri) -> bool {
 	uri.query().is_some_and(|q| {
 		url::form_urlencoded::parse(q.as_bytes()).any(|(k, v)| k == "alt" && v == "sse")
 	})
-}
-
-/// Terminal 400 in the Google error shape, which the Gemini SDKs know how to parse.
-fn google_invalid_argument(message: &str) -> ::http::Response<Body> {
-	let body = serde_json::json!({
-		"error": {
-			"code": 400,
-			"message": message,
-			"status": "INVALID_ARGUMENT",
-		}
-	});
-	::http::Response::builder()
-		.status(::http::StatusCode::BAD_REQUEST)
-		.header(::http::header::CONTENT_TYPE, "application/json")
-		.body(Body::from(body.to_string()))
-		.expect("failed to build gemini error response")
 }
 
 fn strip_translated_query(provider: &AIProvider, req: &mut Request) -> anyhow::Result<()> {

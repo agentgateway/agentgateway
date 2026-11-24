@@ -3192,16 +3192,10 @@ mod tests {
 
 	fn metric_test_llm_request() -> llm::LLMRequest {
 		llm::LLMRequest {
-			input_tokens: None,
 			input_format: llm::InputFormat::Responses,
-			cache_convention: Default::default(),
 			request_model: "test-model".into(),
-			original_model: None,
 			provider: "test-provider".into(),
-			streaming: false,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		}
 	}
 
@@ -3339,19 +3333,14 @@ mod tests {
 
 	fn llm_context_with_content() -> LLMContext {
 		let request = llm::LLMRequest {
-			input_tokens: None,
 			input_format: llm::InputFormat::Responses,
-			cache_convention: Default::default(),
 			request_model: "test-model".into(),
-			original_model: None,
 			provider: "test-provider".into(),
-			streaming: false,
-			params: Default::default(),
 			prompt: Some(Arc::new(vec![llm::SimpleChatCompletionMessage {
 				role: "user".into(),
 				content: "hello".into(),
 			}])),
-			provider_state: None,
+			..Default::default()
 		};
 		let mut context = LLMContext::from(request);
 		context.completion = Some(vec!["world".to_string()]);
@@ -4107,16 +4096,11 @@ mod tests {
 	#[test]
 	fn llm_span_uses_cache_inclusive_input_tokens() {
 		let request = llm::LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Messages,
 			cache_convention: llm::CacheTokenConvention::InputExcludesCache,
 			request_model: strng::literal!("claude"),
-			original_model: None,
 			provider: strng::literal!("anthropic"),
-			streaming: false,
-			params: llm::LLMRequestParams::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		};
 		let response = llm::LLMResponse {
 			input_tokens: Some(50),
@@ -4208,16 +4192,11 @@ mod tests {
 		.await
 		.unwrap();
 		let request = llm::LLMRequest {
-			input_tokens: None,
 			input_format: InputFormat::Completions,
 			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
 			request_model: strng::literal!("my-model"),
-			original_model: None,
 			provider: strng::literal!("openai"),
-			streaming: false,
-			params: llm::LLMRequestParams::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		};
 		let response = llm::LLMResponse {
 			input_tokens: Some(1_000_000),
