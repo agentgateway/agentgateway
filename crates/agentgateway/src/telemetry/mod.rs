@@ -2,6 +2,8 @@ pub mod log;
 pub mod log_store;
 pub mod metrics;
 pub(crate) mod semconv;
+#[cfg(feature = "schema")]
+pub mod trace_attributes;
 pub mod trc;
 pub mod upstream;
 

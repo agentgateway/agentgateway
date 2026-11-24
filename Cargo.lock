@@ -9004,6 +9004,7 @@ dependencies = [
  "prometheus-client",
  "schemars 1.2.1",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

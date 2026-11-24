@@ -20,3 +20,7 @@ The schema for the configuration file (passed with `--file` to agentgateway).
 ## Metrics
 
 * [Prometheus metrics](./metrics.md)
+
+## Tracing
+
+* [Trace span attributes](./tracing.md)

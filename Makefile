@@ -139,6 +139,7 @@ refresh-model-catalog:
 generate-schema:
 	@cargo xtask schema
 	@cargo xtask metrics
+	@cargo xtask tracing
 
 # Code generation for xds apis
 .PHONY: generate-apis
