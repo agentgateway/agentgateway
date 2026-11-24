@@ -846,6 +846,9 @@ impl DropOnLog {
 		log: &RequestLog,
 		status: Option<crate::http::StatusCode>,
 	) -> bool {
+		if matches!(log.backend_protocol, Some(cel::BackendProtocol::tcp)) {
+			return log.backend_connect_failed;
+		}
 		status.is_none_or(|s| s.is_server_error())
 			|| log.grpc_status.load().is_some_and(|status| {
 				// Only codes indicating a backend failure; client-induced codes (INVALID_ARGUMENT,
@@ -1185,6 +1188,7 @@ impl RequestLog {
 			ate_router_outcome: None,
 			request_handle: None,
 			delegated_provider_request_handle: None,
+			backend_connect_failed: false,
 			request_snapshot: None,
 			response_snapshot: None,
 			source_context: None,
@@ -1261,12 +1265,10 @@ impl RequestLog {
 			rh.times_ejected(),
 			unhealthy,
 		);
-		rh.finish_request(
-			health,
-			end_time.duration_since(&self.start),
-			eviction_duration,
-			restore_health,
-		);
+		// A TCP connection's lifetime is not a response latency.
+		let latency = (!matches!(self.backend_protocol, Some(cel::BackendProtocol::tcp)))
+			.then(|| end_time.duration_since(&self.start));
+		rh.finish_request(health, latency, eviction_duration, restore_health);
 	}
 
 	fn finish_delegated_provider_handle_with_attempt(
@@ -1410,6 +1412,8 @@ pub struct RequestLog {
 
 	pub retry_attempt: Option<u8>,
 	pub error: Option<String>,
+	/// For TCP, whether the connection to the backend could not be established.
+	pub backend_connect_failed: bool,
 
 	pub grpc_status: AsyncLog<u8>,
 	pub mcp_status: AsyncLog<mcp::MCPInfo>,
@@ -1557,6 +1561,15 @@ impl Drop for DropOnLog {
 			};
 
 			let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
+			// HTTP requests record a status once the final response is produced, so a missing status
+			// means the request was dropped because the client went away.
+			let downstream_disconnect = !is_tcp && log.status.is_none();
+			if downstream_disconnect {
+				log.reason = Some(ProxyResponseReason::DownstreamDisconnect);
+				log
+					.error
+					.get_or_insert_with(|| "client disconnected before response".to_string());
+			}
 
 			let mut http_labels = HTTPLabels {
 				backend: log
@@ -1626,18 +1639,21 @@ impl Drop for DropOnLog {
 				source_context: log.source_context.as_ref(),
 				upstream_calls: Some(&upstream_calls),
 			});
-			if let Some(rh) = delegated_provider_request_handle {
-				log.finish_delegated_provider_handle_with_attempt(
-					rh,
-					end_time,
-					log.status,
-					log.retry_after,
-					&cel_exec,
-					request_handle.is_some(),
-				);
-			}
-			if let Some(rh) = request_handle {
-				log.finish_request_handle(rh, end_time, &cel_exec, &log.health_policy);
+			// A client disconnect says nothing about the backend's health, so no result is recorded.
+			if !downstream_disconnect {
+				if let Some(rh) = delegated_provider_request_handle {
+					log.finish_delegated_provider_handle_with_attempt(
+						rh,
+						end_time,
+						log.status,
+						log.retry_after,
+						&cel_exec,
+						request_handle.is_some(),
+					);
+				}
+				if let Some(rh) = request_handle {
+					log.finish_request_handle(rh, end_time, &cel_exec, &log.health_policy);
+				}
 			}
 
 			let custom_metric_fields = CustomField::new(
@@ -3875,7 +3891,7 @@ mod tests {
 		let endpoint = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
 		endpoints
 			.start_request("provider".into(), &provider)
-			.finish_request(false, Duration::ZERO, None, None);
+			.finish_request(false, Some(Duration::ZERO), None, None);
 		assert_eq!(provider.consecutive_failures(), 1);
 		let mut log = test_request_log();
 		log.delegated_provider_request_handle =
@@ -3917,6 +3933,31 @@ mod tests {
 		drop(DropOnLog::from(log));
 		assert_eq!(provider.consecutive_failures(), 0);
 		assert_eq!(endpoint.consecutive_failures(), 1);
+	}
+
+	#[test]
+	fn downstream_disconnect_does_not_affect_backend_health() {
+		let endpoints = crate::types::loadbalancer::EndpointSet::<()>::new_empty(1);
+		let info = Arc::new(crate::types::loadbalancer::EndpointInfo::new());
+
+		// The client went away while the upstream response was still being processed.
+		let (mut log, registry) = test_request_log_with_registry();
+		log.reason = Some(ProxyResponseReason::Upstream);
+		log.request_handle = Some(endpoints.start_request("ep".into(), &info));
+		drop(DropOnLog::from(log));
+		assert_eq!(info.consecutive_failures(), 0);
+		assert!(
+			encoded_metrics(&registry).contains("reason=\"DownstreamDisconnect\""),
+			"{}",
+			encoded_metrics(&registry)
+		);
+
+		let mut log = test_request_log();
+		log.status = Some(http::StatusCode::SERVICE_UNAVAILABLE);
+		log.reason = Some(ProxyResponseReason::Upstream);
+		log.request_handle = Some(endpoints.start_request("ep".into(), &info));
+		drop(DropOnLog::from(log));
+		assert_eq!(info.consecutive_failures(), 1);
 	}
 
 	#[test]
