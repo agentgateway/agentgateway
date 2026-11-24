@@ -846,9 +846,18 @@ async fn update_config_resource(
 		auth.authorize_write(&mut prepared, &id, old.map(|old| &old.value))?;
 
 		if old.is_none() && !is_policy {
-			return Err(resource_api_error(ConfigResourceError::Conflict(format!(
-				"file-owned config resource cannot be updated in hybrid mode: {kind}/{id}"
-			))));
+			let file_config = read_file_config(&app).await?;
+			return Err(resource_api_error(
+				if crate::config_store::file_config_resource(&file_config, kind, &id).is_some() {
+					ConfigResourceError::Conflict(format!(
+						"file-owned config resource cannot be updated in hybrid mode: {kind}/{id}"
+					))
+				} else {
+					ConfigResourceError::NotFound(format!(
+						"config resource not found: {kind}/{id}; create it with PUT /api/config/resources/{kind}"
+					))
+				},
+			));
 		}
 		let renamed = prepared.id != id;
 		let candidate = if renamed {
