@@ -434,7 +434,8 @@ fn decisions_image_media_types_are_forwarded_to_gemini() {
 		"model": "gemini-decision-1",
 		"input": [{"role": "user", "content": [
 			{"type": "input_image", "image_url": "data:image/avif;base64,aGk="},
-			{"type": "input_image", "image_url": "data:application/pdf;base64,aGk=", "detail": "original"}
+			{"type": "input_image", "image_url": "data:application/pdf;base64,aGk=", "detail": "original"},
+			{"type": "input_image", "image_url": "data:Application/PDF;base64,aGk="}
 		]}],
 		"questions": [{"type": "predicate", "instructions": "Is this a diagram?"}]
 	}))
@@ -446,7 +447,8 @@ fn decisions_image_media_types_are_forwarded_to_gemini() {
 		json!([
 			{"type": "text", "text": "user:"},
 			{"type": "image", "data": "aGk=", "mime_type": "image/avif"},
-			{"type": "document", "data": "aGk=", "mime_type": "application/pdf", "resolution": "high"}
+			{"type": "document", "data": "aGk=", "mime_type": "application/pdf", "resolution": "high"},
+			{"type": "document", "data": "aGk=", "mime_type": "Application/PDF"}
 		])
 	);
 }

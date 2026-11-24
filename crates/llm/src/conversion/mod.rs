@@ -86,7 +86,6 @@ fn decisions_text_instructions(
 	}
 }
 
-/// Text for a JSON value: strings as-is, everything else as compact JSON.
 /// A piece of Decisions input history. Images are kept for providers that accept them.
 enum HistoryPart {
 	Text(String),

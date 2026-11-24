@@ -452,7 +452,7 @@ pub mod from_decisions {
 			mime_type: mime_type.to_string(),
 		};
 		// OpenAI accepts PDFs as image inputs, but Google only takes them as document content.
-		if mime_type == "application/pdf" {
+		if mime_type.eq_ignore_ascii_case("application/pdf") {
 			return Ok(google::Content::Document { source, resolution });
 		}
 		Ok(google::Content::Image { source, resolution })
