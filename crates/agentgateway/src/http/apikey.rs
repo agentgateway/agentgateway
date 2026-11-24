@@ -554,10 +554,12 @@ impl LocalAPIKey {
 				"budget limit exceeds database integer range"
 			);
 		}
-		let budgets = (!budgets.is_empty()).then(|| MatchedBudgets {
-			api_key: api_key.expect("budget API keys have a name"),
-			api_key_id: key_hash.as_str().to_owned(),
-			budgets,
+		let budgets = (!budgets.is_empty()).then(|| {
+			MatchedBudgets::for_api_key(
+				api_key.expect("budget API keys have a name"),
+				key_hash.as_str(),
+				budgets,
+			)
 		});
 		Ok((
 			key_hash,

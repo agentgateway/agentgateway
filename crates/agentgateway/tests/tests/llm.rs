@@ -279,10 +279,12 @@ async fn llm_gemini_thought_signature_follows_provider(#[case] api: &str, #[case
 
 #[tokio::test]
 async fn llm_token_budget_persists_and_blocks_requests() {
-	let pool =
-		agentgateway::database::DatabasePool::connect_with_max_connections("sqlite::memory:", Some(1))
-			.await
-			.unwrap();
+	let sqlite = sqlx::sqlite::SqlitePoolOptions::new()
+		.max_connections(1)
+		.connect("sqlite::memory:")
+		.await
+		.unwrap();
+	let pool = agentgateway::database::DatabasePool::Sqlite(sqlite.clone());
 	let policy = json!({
 		"apiKey": {
 			"keys": [
@@ -291,6 +293,11 @@ async fn llm_token_budget_persists_and_blocks_requests() {
 					"metadata": {"name": "budgeted-key"},
 					"budgets": [{
 						"name": "tokens",
+						"limit": {"unit": "Tokens", "amount": 80},
+						"window": {"rolling": "1h"},
+						"onBudgetExceeded": "Block"
+					}, {
+						"name": "tokens:é",
 						"limit": {"unit": "Tokens", "amount": 40},
 						"window": {"rolling": "1h"},
 						"onBudgetExceeded": "Block"
@@ -353,6 +360,23 @@ async fn llm_token_budget_persists_and_blocks_requests() {
 	assert_eq!(response.status(), StatusCode::OK);
 	response.into_body().collect().await.unwrap();
 	budget_policy.flush().await.unwrap();
+
+	let key_hash = hex::encode(agentgateway::crypto::digest::sha256(b"sk-budget"));
+	let prefix = format!("api-key:64:{key_hash}:");
+	let rows: Vec<(String, i64)> = sqlx::query_as(
+		"SELECT budget_id, used_amount FROM budget_usage WHERE budget_id LIKE ? ORDER BY budget_id",
+	)
+	.bind(format!("{prefix}%"))
+	.fetch_all(&sqlite)
+	.await
+	.unwrap();
+	assert_eq!(
+		rows,
+		[
+			(format!("{prefix}6:tokens"), 40),
+			(format!("{prefix}9:tokens:é"), 40),
+		]
+	);
 
 	let mock = body_mock(include_bytes!(
 		"../../../llm/src/tests/response/completions/basic.json"
