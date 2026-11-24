@@ -57,8 +57,9 @@ processors' mutations; the first rejection stops the chain.
 
 - `mcp.params` contains the current request parameters, with the same structure as
   the `params` object in an MCP request.
-- `mcp.result` contains the current response result, with the same structure as
-  the `result` object in an MCP response.
+- `mcp.result` is the payload the response guardrail is inspecting. A normal
+  response uses the `result` object. An error uses the `error` object, and a
+  notification or server-initiated request uses `params`.
 - Each processor specifies exactly one of `reject` or `transform`.
 - `transform` returns a replacement body; returning `null` leaves it unchanged.
   Use `merge` to preserve fields you do not wish to mutate.

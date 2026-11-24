@@ -5,7 +5,7 @@ use std::time::Duration;
 use ::http::HeaderName;
 use bytes::Bytes;
 use prost_wkt_types::Struct;
-use rmcp::model::{ErrorCode, ErrorData, ServerResult};
+use rmcp::model::{ErrorCode, ErrorData};
 use serde_json::Value;
 use tracing::{debug, warn};
 
@@ -213,17 +213,20 @@ fn merge_metadata_into_extensions(
 	}
 }
 
-pub(crate) async fn check_response(
+pub(crate) async fn check_response<P>(
 	remote: &Remote,
 	method: &str,
 	backends: &[String],
-	body: &mut MCPBody<'_, ServerResult>,
+	body: &mut MCPBody<'_, P>,
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
-) -> Outcome<ServerResult> {
+) -> Outcome<P>
+where
+	P: serde::Serialize + serde::de::DeserializeOwned,
+{
 	let body = match body.wire() {
 		Ok(Some(body)) => body,
-		Ok(None) => unreachable!("response guardrails always have a result"),
+		Ok(None) => unreachable!("response guardrails always have a payload"),
 		Err(e) => {
 			warn!(error = %e, "mcpGuardrails: failed to serialize result");
 			return Outcome::Reject(ErrorData::internal_error("guardrail check failed", None));
@@ -267,14 +270,12 @@ pub(crate) async fn check_response(
 	};
 	match result {
 		Some(mcp_response_result::Result::Pass(_)) => Outcome::Pass,
-		Some(mcp_response_result::Result::Mutated(b)) => {
-			match serde_json::from_slice::<ServerResult>(&b) {
-				Ok(r) => {
-					*body = b;
-					Outcome::Mutated(r)
-				},
-				Err(e) => on_protocol_violation(remote, method, backends, &format!("mutated decode: {e}")),
-			}
+		Some(mcp_response_result::Result::Mutated(b)) => match serde_json::from_slice::<P>(&b) {
+			Ok(r) => {
+				*body = b;
+				Outcome::Mutated(r)
+			},
+			Err(e) => on_protocol_violation(remote, method, backends, &format!("mutated decode: {e}")),
 		},
 		Some(mcp_response_result::Result::Error(e)) => {
 			Outcome::Reject(translate_error(method, backends, e))
