@@ -3,7 +3,9 @@ use std::collections::HashSet;
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
+use super::{
+	JWTValidationOptions, JwkError, JwksSource, Jwt, LocalJwtConfig, Mode, Provider, TokenError,
+};
 use crate::telemetry::log::MetricsConfig;
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
@@ -13,6 +15,36 @@ fn bearer_location() -> crate::http::auth::AuthorizationLocation {
 }
 
 // Deserialization: missing jwtValidationOptions defaults required_claims to ["exp"]
+#[tokio::test]
+async fn jwks_max_age_requires_a_remote_source_and_exceeds_the_refresh_floor() {
+	let resources = crate::resource_manager::ResourceFetcher::files_only();
+	assert!(
+		serde_json::from_value::<JwksSource>(serde_json::json!({
+			"file": "jwks.json",
+			"maxAge": "70s",
+		}))
+		.is_err()
+	);
+	for age in ["0s", "60s"] {
+		let source: JwksSource = serde_json::from_value(serde_json::json!({
+			"url": "https://example.com/jwks",
+			"maxAge": age,
+		}))
+		.unwrap();
+		assert_eq!(
+			source.load(&resources).await.unwrap_err().to_string(),
+			"JWKS maxAge must be longer than one minute",
+		);
+	}
+	assert!(
+		serde_json::from_value::<JwksSource>(serde_json::json!({
+			"url": "https://example.com/jwks",
+			"maxAge": "-1s",
+		}))
+		.is_err()
+	);
+}
+
 #[test]
 fn test_deserialize_missing_jwt_validation_options_defaults_to_exp() {
 	let json = r#"{

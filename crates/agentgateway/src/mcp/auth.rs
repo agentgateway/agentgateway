@@ -164,6 +164,12 @@ pub(crate) fn create_auth_required_response(
 	req: &Request,
 	auth: &McpAuthentication,
 ) -> ProxyError {
+	if matches!(
+		inner,
+		ProxyError::JwtAuthenticationFailure(crate::http::jwt::TokenError::ExpiredSigningKeys)
+	) {
+		return inner;
+	}
 	ProxyError::McpAuthenticationFailure(Box::new(inner), McpResourceChallenge::new(req, auth))
 }
 

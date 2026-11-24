@@ -426,7 +426,10 @@ impl ProxyError {
 
 	pub fn is_client_bearer_token_rejection(&self) -> bool {
 		match self {
-			Self::JwtAuthenticationFailure(crate::http::jwt::TokenError::CredentialRemoval(_)) => false,
+			Self::JwtAuthenticationFailure(
+				crate::http::jwt::TokenError::CredentialRemoval(_)
+				| crate::http::jwt::TokenError::ExpiredSigningKeys,
+			) => false,
 			Self::JwtAuthenticationFailure(_) => true,
 			Self::McpAuthenticationFailure(inner, _) => inner.is_client_bearer_token_rejection(),
 			_ => false,
@@ -536,6 +539,9 @@ impl ProxyError {
 
 			ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::CredentialRemoval(_)) => {
 				StatusCode::INTERNAL_SERVER_ERROR
+			},
+			ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::ExpiredSigningKeys) => {
+				StatusCode::SERVICE_UNAVAILABLE
 			},
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::OidcFailure(ref error) => match error {
@@ -840,7 +846,7 @@ fn invalid_token_description(error: &http::jwt::TokenError) -> Option<&'static s
 		| TokenError::InvalidHeader(_)
 		| TokenError::MissingKeyId
 		| TokenError::UnknownKeyId(_) => Some("The bearer token is invalid"),
-		TokenError::Missing | TokenError::CredentialRemoval(_) => None,
+		TokenError::Missing | TokenError::CredentialRemoval(_) | TokenError::ExpiredSigningKeys => None,
 	}
 }
 

@@ -314,6 +314,131 @@ fn cli_jwt_auth_policy() -> Value {
 	})
 }
 
+#[rstest::rstest]
+#[case::jwt("jwtAuth", true, 503)]
+#[case::mcp("mcpAuthentication", true, 503)]
+#[case::without_max_age("jwtAuth", false, 200)]
+#[tokio::test]
+async fn remote_jwks_max_age(
+	#[case] policy_name: &str,
+	#[case] limit_age: bool,
+	#[case] expired_status: u16,
+) {
+	use std::sync::atomic::{AtomicBool, Ordering};
+	use std::time::{Duration, Instant};
+
+	use agentgateway::resource_manager::{ResourceFetcher, ResourceManager};
+	use agentgateway::types::agent::ListenerTarget;
+	use agentgateway::types::local::NormalizedLocalConfig;
+
+	let upstream = simple_mock().await;
+	let idp = MockServer::start().await;
+	let unavailable = Arc::new(AtomicBool::new(false));
+	let serving = unavailable.clone();
+	Mock::given(wiremock::matchers::path("/jwks"))
+		.respond_with(move |_: &wiremock::Request| {
+			let status = if serving.load(Ordering::Relaxed) {
+				503
+			} else {
+				200
+			};
+			ResponseTemplate::new(status)
+				.insert_header("cache-control", "max-age=60")
+				.set_body_json(test_jwks())
+		})
+		.mount(&idp)
+		.await;
+
+	let mut policy = cli_jwt_auth_policy();
+	policy["jwks"] = json!({"url": format!("{}/jwks", idp.uri())});
+	if limit_age {
+		policy["jwks"]["maxAge"] = json!("70s");
+	}
+	if policy_name == "mcpAuthentication" {
+		policy["resourceMetadata"] = json!({"mcpResourceUri": "mcp://test"});
+	}
+	let yaml = json!({
+		"binds": [{"port": 0, "listeners": [{"routes": [{
+			"policies": {(policy_name): policy},
+			"backends": [{"host": upstream.address().to_string()}]
+		}]}]}]
+	})
+	.to_string();
+
+	let bind = setup_proxy_test("{}").unwrap();
+	let resources = ResourceFetcher::managed(ResourceManager::new(bind.pi.upstream.clone()).unwrap());
+	let normalize = || {
+		NormalizedLocalConfig::from(
+			&bind.pi.cfg,
+			&resources,
+			ListenerTarget {
+				gateway_name: "default".into(),
+				gateway_namespace: "default".into(),
+				listener_name: None,
+				port: None,
+			},
+			&yaml,
+		)
+	};
+	let sync = |config: NormalizedLocalConfig, prev| {
+		bind
+			.pi
+			.stores
+			.binds
+			.sync_local(
+				config.binds,
+				config.listener_routes,
+				config.listener_tcp_routes,
+				config.policies,
+				config.backends,
+				config.route_groups,
+				prev,
+			)
+			.unwrap()
+	};
+
+	let config = normalize().await.unwrap();
+	let key = config.binds[0].bind.key.clone();
+	let prev = sync(config, Default::default());
+	let io = bind.serve_http(key);
+	let token = format!("Bearer {}", signed_cli_token());
+	let request = || async {
+		send_request_headers(
+			io.clone(),
+			Method::GET,
+			"http://lo/mcp",
+			&[("authorization", token.as_str())],
+		)
+		.await
+	};
+	assert_eq!(request().await.status(), 200);
+
+	tokio::time::pause();
+	let clock_guard = tokio::spawn(async {
+		loop {
+			tokio::task::yield_now().await;
+		}
+	});
+	unavailable.store(true, Ordering::Relaxed);
+	tokio::time::advance(Duration::from_secs(61)).await;
+	let deadline = Instant::now() + Duration::from_secs(5);
+	while idp.received_requests().await.unwrap().len() < 2 {
+		assert!(
+			Instant::now() < deadline,
+			"JWKS refresh did not reach the IdP"
+		);
+		tokio::task::yield_now().await;
+	}
+
+	sync(normalize().await.unwrap(), prev);
+	assert_eq!(request().await.status(), 200);
+	tokio::time::advance(Duration::from_secs(10)).await;
+	let response = request().await;
+	assert_eq!(response.status(), expired_status);
+	assert!(response.headers().get(header::WWW_AUTHENTICATE).is_none());
+	clock_guard.abort();
+}
+
 /// `gateway_oidc_policy` with `credentials: permissive`, merged with `siblings` into one policy
 /// document.
 fn permissive_oidc_policy(mock: &MockServer, siblings: Value) -> Value {

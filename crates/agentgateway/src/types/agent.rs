@@ -29,6 +29,7 @@ use crate::http::auth::{BackendAuth, BackendAuthCredential, BackendAuthKind};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
 use crate::http::ext_proc::GrpcReferenceChannel;
+use crate::http::jwt::JwksSource;
 use crate::http::{
 	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, health, remoteratelimit, retry,
 	timeout,
@@ -3205,7 +3206,7 @@ pub struct LocalMcpAuthentication {
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 	/// If omitted, the JWKS URL is derived from the issuer and provider.
 	#[serde(default)]
-	pub jwks: Option<FileInlineOrRemote>,
+	pub jwks: Option<JwksSource>,
 	/// Controls whether MCP requests must include a valid JWT.
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
@@ -3269,19 +3270,19 @@ impl LocalMcpAuthentication {
 
 	pub fn as_jwt(&self) -> anyhow::Result<http::jwt::LocalJwtConfig> {
 		let jwks = match &self.jwks {
-			None => FileInlineOrRemote::Remote {
+			None => JwksSource::Remote {
 				url: self.derived_jwks_url()?,
+				max_age: None,
 			},
-			Some(FileInlineOrRemote::Remote { url }) => FileInlineOrRemote::Remote {
+			Some(JwksSource::Remote { url, max_age }) => JwksSource::Remote {
 				url: if !url.to_string().is_empty() {
 					url.clone()
 				} else {
 					self.derived_jwks_url()?
 				},
+				max_age: *max_age,
 			},
-			Some(jwks @ (FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. })) => {
-				jwks.clone()
-			},
+			Some(jwks @ (JwksSource::Inline(_) | JwksSource::File { .. })) => jwks.clone(),
 		};
 
 		Ok(http::jwt::LocalJwtConfig::Single {
@@ -4067,7 +4068,7 @@ jwtValidationOptions:
 
 		match jwt_config {
 			http::jwt::LocalJwtConfig::Single { jwks, .. } => match jwks {
-				FileInlineOrRemote::Remote { url } => {
+				JwksSource::Remote { url, .. } => {
 					assert_eq!(
 						url.to_string(),
 						"https://authentik.example.com/application/o/mcp/jwks/"
