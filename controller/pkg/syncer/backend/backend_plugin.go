@@ -36,9 +36,15 @@ var logger = logging.New("agentgateway/backend")
 func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) plugins.AgwPlugin {
 	backends := map[schema.GroupKind]plugins.BackendPlugin{
 		wellknown.AgentgatewayBackendGVK.GroupKind(): {
-			BuildReferences: func() krt.Collection[*plugins.PolicyAttachment] {
+			BuildReferences: func(input plugins.PolicyPluginInput) krt.Collection[*plugins.PolicyAttachment] {
 				return krt.NewManyCollection(agw.Backends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []*plugins.PolicyAttachment {
-					return BuildAgwBackendReferences(backend)
+					pc := plugins.PolicyCtx{
+						Krt:         ctx,
+						Collections: agw,
+						Grants:      input.Grants,
+						SourceGVK:   wellknown.AgentgatewayBackendGVK,
+					}
+					return BuildAgwBackendReferences(pc, backend)
 				}, agw.KrtOpts.ToOptions("references/AgentgatewayBackendPolicyAttachments")...)
 			},
 			Build: func(input plugins.PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[agwir.AgwResource]) {
@@ -79,6 +85,7 @@ func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver,
 }
 
 func BuildAgwBackendReferences(
+	pc plugins.PolicyCtx,
 	backend *agentgateway.AgentgatewayBackend,
 ) []*plugins.PolicyAttachment {
 	var attachments []*plugins.PolicyAttachment
@@ -87,6 +94,10 @@ func BuildAgwBackendReferences(
 		Kind: wellknown.AgentgatewayBackendGVK.Kind,
 	}
 	app := func(ref gwv1.BackendObjectReference) {
+		gk := schema.GroupKind{Group: string(ptr.OrDefault(ref.Group, "")), Kind: string(ptr.OrDefault(ref.Kind, wellknown.ServiceKind))}
+		if plugins.CheckBackendRefGrant(pc, ref, backend.Namespace, gk) != nil {
+			return
+		}
 		attachments = append(attachments, &plugins.PolicyAttachment{
 			Target: self,
 			Backend: utils.TypedNamespacedName{

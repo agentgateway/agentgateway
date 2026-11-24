@@ -12,14 +12,14 @@ import (
 
 type BackendStatusCollections = map[schema.GroupKind]krt.StatusCollection[controllers.Object, any]
 
-func AgwBackendReferencesCollection(agwPlugins plugins.AgwPlugin, krtopts krtutil.KrtOptions) krt.Collection[*plugins.PolicyAttachment] {
+func AgwBackendReferencesCollection(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, grants plugins.ReferenceGrantChecker, krtopts krtutil.KrtOptions) krt.Collection[*plugins.PolicyAttachment] {
 	var allReferences []krt.Collection[*plugins.PolicyAttachment]
 
 	for _, plugin := range agwPlugins.ContributesBackends {
 		if plugin.BuildReferences == nil {
 			continue
 		}
-		refs := plugin.BuildReferences()
+		refs := plugin.BuildReferences(plugins.PolicyPluginInput{References: references, Grants: grants})
 		if refs != nil {
 			allReferences = append(allReferences, refs)
 		}

@@ -754,7 +754,7 @@ func (s *Syncer) buildAgwResources(
 	// policies. This ensures BackendTLSPolicy can look up gateways for backends that
 	// are only reachable via PolicyAttachments (like ext_proc processor Services).
 	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, refGrants, krtopts)
-	backendPolicyReferences := AgwBackendReferencesCollection(s.agwPlugins, krtopts)
+	backendPolicyReferences := AgwBackendReferencesCollection(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("references/PolicyAndBackendReferences")...)
 	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.Backend}

@@ -42,7 +42,7 @@ type PolicyPluginInput struct {
 
 type BackendPlugin struct {
 	Build           func(PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[ir.AgwResource])
-	BuildReferences func() krt.Collection[*PolicyAttachment]
+	BuildReferences func(input PolicyPluginInput) krt.Collection[*PolicyAttachment]
 	// GetStatus reads the live status of an object from the status collection, so an unchanged
 	// status isn't rewritten. Defaults to translator.GetStatus, which knows only the built-in kinds.
 	GetStatus func(controllers.Object) any
