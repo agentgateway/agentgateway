@@ -60,6 +60,22 @@ impl PostgresLogStore {
 		Ok(())
 	}
 
+	/// Deletes up to `limit` request logs completed before `before`, returning the number deleted.
+	/// Payloads are removed via ON DELETE CASCADE.
+	pub async fn delete_before_batch(
+		&self,
+		before: chrono::DateTime<chrono::Utc>,
+		limit: i64,
+	) -> anyhow::Result<u64> {
+		let rows = sqlx::query(DELETE_LOGS_BEFORE)
+			.bind(before)
+			.bind(limit)
+			.execute(&self.pool)
+			.await?
+			.rows_affected();
+		Ok(rows)
+	}
+
 	pub async fn search(&self, request: SearchRequest) -> anyhow::Result<SearchResponse> {
 		let limit = limit(request.limit);
 		let mut qb = QueryBuilder::<Postgres>::new(format!("{SELECT_LOGS} WHERE 1=1"));
@@ -672,6 +688,12 @@ COPY request_logs (
 
 const COPY_REQUEST_LOG_PAYLOADS: &str = r#"
 COPY request_log_payloads (log_id, request_prompt_json, response_completion_json) FROM STDIN
+"#;
+
+// Payloads are removed by the ON DELETE CASCADE on request_log_payloads.
+const DELETE_LOGS_BEFORE: &str = r#"
+DELETE FROM request_logs
+WHERE id IN (SELECT id FROM request_logs WHERE completed_at < $1 LIMIT $2)
 "#;
 
 const SELECT_LOGS: &str = r#"

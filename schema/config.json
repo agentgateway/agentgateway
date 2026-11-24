@@ -1319,6 +1319,14 @@
               "type": "null"
             }
           ]
+        },
+        "databaseRetention": {
+          "description": "How long request logs are kept in the database. Expired logs are pruned at startup\nand then hourly. Unset means keep forever.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         }
       },
       "additionalProperties": false

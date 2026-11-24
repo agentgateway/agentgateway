@@ -823,6 +823,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 		level: "info".to_string(),
 		format: crate::LoggingFormat::Text,
 		database: None,
+		database_retention: None,
 	};
 	let cel = log::CelLogging::new(log_cfg, MetricsConfig::default());
 	let mut prom = Registry::default();
