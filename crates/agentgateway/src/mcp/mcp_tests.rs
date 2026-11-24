@@ -2644,7 +2644,8 @@ fn skills_result(method: &str) -> serde_json::Value {
 			"frontmatter": {"name": name, "description": "A skill.", "license": "MIT"},
 			"resources": [
 				{"uri": format!("skill://{name}/SKILL.md"), "digest": "sha256:d248", "size": 149},
-				{"uri": format!("skill://{name}/references/checklist.md"), "digest": "sha256:dbab", "size": 65}
+				{"uri": format!("skill://{name}/references/checklist.md"), "digest": "sha256:dbab", "size": 65},
+				{"uri": format!("skill://{name}/references/private.md"), "digest": "sha256:91c0", "size": 12}
 			],
 			"_meta": {"example.com/owner": "team-a"}
 		})
@@ -2739,24 +2740,58 @@ async fn modern_skills_methods_single_target_authorization() {
 		async move { read_response_message(req.send().await.unwrap()).await }
 	};
 
-	// The denied skill is filtered out; the filtered listing is no longer shareable.
+	// The upstream serves `skills_result`: skills `code-review` and `secret`, each with a
+	// `references/private.md`. Everything the deny rule matches disappears, and cache hints
+	// become private because the result is now specific to this caller.
 	let list = send("skills/list", serde_json::json!({"cursor": "page1"})).await;
-	let mut expected = skills_result("skills/list");
-	expected["skills"].as_array_mut().unwrap().pop();
-	expected["ttlMs"] = 0.into();
-	expected["cacheScope"] = "private".into();
-	assert_eq!(list["result"], expected);
+	assert_eq!(
+		list["result"],
+		serde_json::json!({
+			"resultType": "complete",
+			// `secret` skill is dropped
+			"skills": [{
+				"uri": "skill://code-review/SKILL.md",
+				"frontmatter": {"name": "code-review", "description": "A skill.", "license": "MIT"},
+				// `references/private.md` is dropped from the manifest
+				"resources": [
+					{"uri": "skill://code-review/SKILL.md", "digest": "sha256:d248", "size": 149},
+					{"uri": "skill://code-review/references/checklist.md", "digest": "sha256:dbab", "size": 65}
+				],
+				"_meta": {"example.com/owner": "team-a"}
+			}],
+			"nextCursor": "page2",
+			"ttlMs": 0,
+			"cacheScope": "private",
+			"_meta": {"example.com/trace": "abc"}
+		})
+	);
 
 	let get = send(
 		"skills/get",
 		serde_json::json!({"uri": "skill://code-review/SKILL.md"}),
 	)
 	.await;
-	let mut expected = skills_result("skills/get");
-	expected["ttlMs"] = 0.into();
-	expected["cacheScope"] = "private".into();
-	assert_eq!(get["result"], expected);
+	assert_eq!(
+		get["result"],
+		serde_json::json!({
+			"resultType": "complete",
+			"skill": {
+				"uri": "skill://code-review/SKILL.md",
+				"frontmatter": {"name": "code-review", "description": "A skill.", "license": "MIT"},
+				// `references/private.md` is dropped from the manifest
+				"resources": [
+					{"uri": "skill://code-review/SKILL.md", "digest": "sha256:d248", "size": 149},
+					{"uri": "skill://code-review/references/checklist.md", "digest": "sha256:dbab", "size": 65}
+				],
+				"_meta": {"example.com/owner": "team-a"}
+			},
+			"ttlMs": 0,
+			"cacheScope": "private",
+			"_meta": {"example.com/trace": "abc"}
+		})
+	);
 
+	// A denied skill cannot be fetched directly.
 	let denied = send(
 		"skills/get",
 		serde_json::json!({"uri": "skill://secret/SKILL.md"}),
@@ -2764,17 +2799,25 @@ async fn modern_skills_methods_single_target_authorization() {
 	.await;
 	assert_eq!(denied["error"]["code"], -32602, "{denied}");
 
-	// The directory itself is allowed, but its denied child must not be listed.
+	// The directory itself is allowed; `private.md` is dropped from its entries.
 	let dir = send(
 		"resources/directory/read",
 		serde_json::json!({"uri": "skill://code-review/references"}),
 	)
 	.await;
-	let mut expected = skills_result("resources/directory/read");
-	expected["resources"].as_array_mut().unwrap().pop();
-	expected["ttlMs"] = 0.into();
-	expected["cacheScope"] = "private".into();
-	assert_eq!(dir["result"], expected);
+	assert_eq!(
+		dir["result"],
+		serde_json::json!({
+			"resultType": "complete",
+			"resources": [
+				{"uri": "skill://code-review/references/checklist.md", "name": "checklist.md", "mimeType": "text/markdown"}
+			],
+			"ttlMs": 0,
+			"cacheScope": "private"
+		})
+	);
+
+	// The guardrails hook sees the directory read once per phase, with typed params.
 	let requests = directory_requests.lock().unwrap();
 	assert_eq!(requests.len(), 1);
 	let params: serde_json::Value = serde_json::from_slice(requests[0].as_deref().unwrap()).unwrap();

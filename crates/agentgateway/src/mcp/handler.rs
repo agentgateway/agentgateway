@@ -198,38 +198,39 @@ pub(super) fn rewrite_resource_messages(
 			resource_updated.params.uri.as_str(),
 		);
 	}
-	if let ServerJsonRpcMessage::Response(resp) = &mut message {
-		match &mut resp.result {
-			ServerResult::ReadResourceResult(read) => {
-				for content in &mut read.contents {
-					match content {
-						rmcp::model::ResourceContents::TextResourceContents { uri, .. }
-						| rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => {
-							*uri = resource_uri(default_target_name, target, uri);
-						},
-						_ => {},
-					}
-				}
-			},
-			ServerResult::GetSkillResult(get) => {
-				rewrite_skill_uris(default_target_name, target, &mut get.skill);
-			},
-			_ => {},
+	if let ServerJsonRpcMessage::Response(resp) = &mut message
+		&& let ServerResult::ReadResourceResult(read) = &mut resp.result
+	{
+		for content in &mut read.contents {
+			match content {
+				rmcp::model::ResourceContents::TextResourceContents { uri, .. }
+				| rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => {
+					*uri = resource_uri(default_target_name, target, uri);
+				},
+				_ => {},
+			}
 		}
 	}
 	message
 }
 
-fn rewrite_skill_uris(
+/// Rewrites a skill's URIs for the client, keeping only the manifest files that
+/// `allowed` accepts by their upstream URI.
+fn rewrite_skill(
 	default_target_name: Option<&String>,
 	target: &str,
 	skill: &mut rmcp::model::Skill,
+	mut allowed: impl FnMut(&str) -> bool,
 ) {
 	skill.uri = resource_uri(default_target_name, target, &skill.uri);
 	if let rmcp::model::SkillResources::Files(resources) = &mut skill.resources {
-		for resource in resources {
+		resources.retain_mut(|resource| {
+			if !allowed(&resource.uri) {
+				return false;
+			}
 			resource.uri = resource_uri(default_target_name, target, &resource.uri);
-		}
+			true
+		});
 	}
 }
 
@@ -431,7 +432,23 @@ impl Relay {
 		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
 			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
-			let message = rewrite_task_messages(default_target_name.as_ref(), &target, message);
+			let mut message = rewrite_task_messages(default_target_name.as_ref(), &target, message);
+			if let ServerJsonRpcMessage::Response(resp) = &mut message
+				&& let ServerResult::GetSkillResult(get) = &mut resp.result
+			{
+				rewrite_skill(
+					default_target_name.as_ref(),
+					&target,
+					&mut get.skill,
+					|uri| {
+						policies.validate(
+							&rbac::ResourceType::Resource(rbac::ResourceId::new(target.clone(), uri.to_string())),
+							&crate::mcp::guardrails::methods::SKILLS_GET,
+							&cel,
+						)
+					},
+				);
+			}
 
 			let mut resource_allowed = |uri: &str| {
 				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against
@@ -1098,10 +1115,20 @@ impl Relay {
 								cel,
 							)
 							.then(|| {
-								rewrite_skill_uris(
+								rewrite_skill(
 									default_target_name.as_ref(),
 									server_name.as_str(),
 									&mut skill,
+									|uri| {
+										policies.validate(
+											&rbac::ResourceType::Resource(rbac::ResourceId::new(
+												server_name.to_string(),
+												uri.to_string(),
+											)),
+											&crate::mcp::guardrails::methods::SKILLS_LIST,
+											cel,
+										)
+									},
 								);
 								skill
 							})

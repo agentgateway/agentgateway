@@ -1,9 +1,10 @@
 use agent_core::strng::{self, Strng};
 use rmcp::model::{
 	CallToolRequestMethod, CompleteRequestMethod, ConstString, GetPromptRequestMethod,
-	ListPromptsRequestMethod, ListResourceTemplatesRequestMethod, ListResourcesRequestMethod,
-	ListSkillsRequestMethod, ListToolsRequestMethod, ReadResourceDirectoryRequestMethod,
-	ReadResourceRequestMethod, SubscribeRequestMethod, UnsubscribeRequestMethod,
+	GetSkillRequestMethod, ListPromptsRequestMethod, ListResourceTemplatesRequestMethod,
+	ListResourcesRequestMethod, ListSkillsRequestMethod, ListToolsRequestMethod,
+	ReadResourceDirectoryRequestMethod, ReadResourceRequestMethod, SubscribeRequestMethod,
+	UnsubscribeRequestMethod,
 };
 
 // Method names for the non-fanout requests that carry a mutable body. The
@@ -22,6 +23,8 @@ pub const RESOURCES_LIST: Strng = strng::literal!(ListResourcesRequestMethod::VA
 pub const RESOURCES_TEMPLATES_LIST: Strng =
 	strng::literal!(ListResourceTemplatesRequestMethod::VALUE);
 pub const SKILLS_LIST: Strng = strng::literal!(ListSkillsRequestMethod::VALUE);
+// A single-target get, but its manifest is filtered per file like the lists above.
+pub const SKILLS_GET: Strng = strng::literal!(GetSkillRequestMethod::VALUE);
 // A single-target read, but its result is a listing filtered per child like the lists above.
 pub const RESOURCES_DIRECTORY_READ: Strng =
 	strng::literal!(ReadResourceDirectoryRequestMethod::VALUE);
