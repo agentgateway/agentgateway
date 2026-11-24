@@ -197,3 +197,107 @@ fn gemini_thought_signature_pairs_with_the_next_call_when_call_ids_repeat() {
 		.collect();
 	assert_eq!(sigs, ["sig1", "sig2"]);
 }
+
+struct NoopReporter;
+
+impl crate::StreamingUsageReporter for NoopReporter {
+	fn update(&self, _: &mut dyn FnMut(&mut crate::LLMInfo)) {}
+	fn report_usage(&mut self) {}
+}
+
+fn chunk(delta: Value, finish_reason: Option<&str>) -> String {
+	let chunk = json!({
+		"id": "chatcmpl-text-then-tool",
+		"object": "chat.completion.chunk",
+		"created": 1772656915,
+		"model": "gpt-5.1",
+		"choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+	});
+	format!("data: {chunk}\n\n")
+}
+
+/// The `response.output_item.done` items in the order a streaming client receives them.
+async fn streamed_done_items(chunks: &[String]) -> Vec<Value> {
+	use http_body_util::BodyExt;
+
+	let body = agent_http::Body::from(format!("{}data: [DONE]\n\n", chunks.concat()));
+	let translated = to_responses::translate_stream(
+		body,
+		1024 * 1024,
+		crate::StreamingUsageGuard::new(Box::new(NoopReporter)),
+		crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+		None,
+	);
+	let bytes = translated.collect().await.unwrap().to_bytes();
+	String::from_utf8(bytes.to_vec())
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data: "))
+		.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+		.filter(|event| event["type"] == "response.output_item.done")
+		.collect()
+}
+
+// Responses clients such as Codex append each item to the conversation as its
+// `response.output_item.done` arrives, then send that history back. When a model
+// writes text before calling a tool, the message must finish before the call,
+// or the replayed history puts the text between the call and its result, which
+// Chat Completions rejects.
+#[tokio::test]
+async fn streamed_text_and_tool_call_finish_in_output_order() {
+	let chunks = [
+		chunk(json!({"role": "assistant", "content": "Running it."}), None),
+		chunk(
+			json!({"tool_calls": [{"index": 0, "id": "call_1", "type": "function",
+				"function": {"name": "shell", "arguments": ""}}]}),
+			None,
+		),
+		chunk(
+			json!({"tool_calls": [{"index": 0, "function": {"arguments": "{\"cmd\":\"echo hi\"}"}}]}),
+			None,
+		),
+		chunk(json!({}), Some("tool_calls")),
+	];
+
+	let done = streamed_done_items(&chunks).await;
+	let order: Vec<_> = done
+		.iter()
+		.map(|event| (event["output_index"].clone(), event["item"]["type"].clone()))
+		.collect();
+	assert_eq!(
+		order,
+		[
+			(json!(0), json!("message")),
+			(json!(1), json!("function_call")),
+		]
+	);
+
+	let mut input: Vec<Value> = done
+		.into_iter()
+		.map(|event| event["item"].clone())
+		.collect();
+	input.push(json!({"type": "function_call_output", "call_id": "call_1", "output": "hi"}));
+	let request: crate::types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-5.1",
+		"input": input,
+		"tools": [],
+		"store": false
+	}))
+	.unwrap();
+	let translated = from_responses::translate_request(&request).unwrap();
+	let next_request = serde_json::to_value(&translated.request).unwrap();
+	let messages = next_request["messages"].as_array().unwrap();
+	let roles: Vec<_> = messages.iter().map(|message| &message["role"]).collect();
+	let call = messages
+		.iter()
+		.position(|message| message["tool_calls"].is_array())
+		.expect("history should carry the tool call");
+	assert_eq!(
+		roles[call + 1],
+		"tool",
+		"tool result must follow its call: {roles:?}"
+	);
+}
