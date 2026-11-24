@@ -853,15 +853,31 @@ pub(crate) fn file_config_resources(
 			},
 			None => kind
 				.settings_fields()
-				.and_then(|(section, fields)| {
-					let section = config.get(section)?.as_object()?;
-					let settings: serde_json::Map<_, _> = fields
-						.iter()
-						.filter_map(|&field| Some((field.to_string(), section.get(field)?.clone())))
-						.collect();
-					(!settings.is_empty()).then(|| ("default".to_string(), Value::Object(settings)))
-				})
 				.into_iter()
+				.flat_map(|(section, _)| {
+					let endpoints = array(&["mcp", "endpoints"])
+						.filter(|_| kind == ConfigResourceKind::McpSettings)
+						.filter_map(|value| Some((file_mcp_endpoint_path(value)?, value)));
+					config
+						.get(section)
+						.map(|value| ("default", value))
+						.into_iter()
+						.chain(endpoints)
+				})
+				.filter_map(|(id, value)| {
+					let (endpoint, fields) = settings_scope(kind, id);
+					let mut settings: serde_json::Map<_, _> = fields
+						.iter()
+						.filter_map(|&field| Some((field.to_string(), value.get(field)?.clone())))
+						.collect();
+					if settings.is_empty() {
+						return None;
+					}
+					if let Some(endpoint) = endpoint {
+						settings.insert("endpoint".to_string(), Value::String(endpoint.to_string()));
+					}
+					Some((id.to_string(), Value::Object(settings)))
+				})
 				.collect(),
 		};
 		for (id, mut value) in items {
