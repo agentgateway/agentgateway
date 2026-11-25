@@ -187,6 +187,9 @@ pub async fn run_with_ui_assets(
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());
 
+	// Wait for telemetry to flush before shutting down
+	let (telemetry_flushed, wait_telemetry_flushed) = tokio::sync::oneshot::channel::<()>();
+
 	// Run the agentgateway in the data plane worker pool.
 	let mut xds_rx_for_proxy = xds_rx.clone();
 	data_plane_pool.send(DataPlaneTask {
@@ -196,6 +199,7 @@ pub async fn run_with_ui_assets(
 			let _ = xds_rx_for_proxy.changed().await;
 			// Now run
 			gw.run().in_current_span().await;
+			let _ = wait_telemetry_flushed.await;
 			Ok(())
 		}),
 	})?;
@@ -212,6 +216,7 @@ pub async fn run_with_ui_assets(
 		shutdown,
 		stores,
 		ready,
+		telemetry_flushed,
 	})
 }
 
@@ -293,6 +298,7 @@ pub struct Bound {
 	drain_tx: drain::DrainTrigger,
 	ready: readiness::Ready,
 	stores: crate::store::Stores,
+	telemetry_flushed: tokio::sync::oneshot::Sender<()>,
 }
 
 impl Bound {
@@ -326,6 +332,8 @@ impl Bound {
 			flushes.spawn_blocking(p);
 		}
 		while flushes.join_next().await.is_some() {}
+
+		drop(self.telemetry_flushed);
 
 		Ok(())
 	}
