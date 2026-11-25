@@ -16,7 +16,12 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { CatalogModelSelector } from '@/components/CatalogModelSelector';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
-import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
+import {
+	LostFieldsWarning,
+	UnsupportedInForm,
+	useMergedEdits,
+	useRowKeys
+} from '@/components/EditorContracts';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import {
 	ButtonLink,
@@ -114,6 +119,7 @@ type VirtualRoutingStrategy = 'weighted' | 'failover' | 'conditional';
 type ConditionalVirtualTarget = NonNullable<
 	LlmVirtualModel['routing']['conditional']
 >['targets'][number];
+type FailoverVirtualTarget = NonNullable<LlmVirtualModel['routing']['failover']>['targets'][number];
 
 export function ModelsPage() {
 	const mode = useConfigDumpMode();
@@ -1299,6 +1305,9 @@ function VirtualModelEditor(props: {
 			(target, index) => !target.when?.trim() && index !== conditionalTargets.length - 1
 		);
 	const failoverGroups = failoverTargetGroups(failoverTargets);
+	const weightedRows = useRowKeys(weightedTargets.length);
+	const failoverRows = useRowKeys(failoverGroups.length);
+	const conditionalRows = useRowKeys(conditionalTargets.length);
 	const defaultTarget = defaultVirtualTargetModel(props.baseModels);
 	const saveDisabled =
 		props.saving ||
@@ -1362,9 +1371,7 @@ function VirtualModelEditor(props: {
 		});
 	}
 
-	function updateFailoverGroups(
-		groups: Array<Array<NonNullable<LlmVirtualModel['routing']['failover']>['targets'][number]>>
-	) {
+	function updateFailoverGroups(groups: FailoverVirtualTarget[][]) {
 		setModel(current => ({
 			...current,
 			routing: {
@@ -1459,8 +1466,7 @@ function VirtualModelEditor(props: {
 				>
 					<div className="target-list">
 						{weightedTargets.map((target, index) => (
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							<div className="target-row weighted" key={index}>
+							<div className="target-row weighted" key={weightedRows.keys[index]}>
 								<VirtualTargetSelector
 									label="Model"
 									targetModel={target.model}
@@ -1482,7 +1488,8 @@ function VirtualModelEditor(props: {
 								<Button
 									danger
 									aria-label="Remove target"
-									onClick={() =>
+									onClick={() => {
+										weightedRows.remove(index);
 										setModel(current => ({
 											...current,
 											routing: {
@@ -1492,8 +1499,8 @@ function VirtualModelEditor(props: {
 													)
 												}
 											}
-										}))
-									}
+										}));
+									}}
 									icon={<Trash2 size={16} />}
 								/>
 							</div>
@@ -1525,88 +1532,28 @@ function VirtualModelEditor(props: {
 				>
 					<div className="failover-group-list">
 						{failoverGroups.map((group, groupIndex) => (
-							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-							<section className="match-card" key={groupIndex}>
-								<div className="match-card-header">
-									<strong>
-										{groupIndex === 0 ? 'First attempt' : `Fallback group ${groupIndex + 1}`}
-									</strong>
-									<Tooltip content="Remove group">
-										<Button
-											danger
-											aria-label={`Remove failover group ${groupIndex + 1}`}
-											onClick={() =>
-												updateFailoverGroups(
-													failoverGroups.filter((_, itemIndex) => itemIndex !== groupIndex)
-												)
-											}
-											icon={<Trash2 size={15} />}
-										/>
-									</Tooltip>
-								</div>
-								<div className="match-card-body">
-									<div className="target-list">
-										{group.map((target, targetIndex) => (
-											// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-											<div className="target-row failover" key={targetIndex}>
-												<VirtualTargetSelector
-													label="Model"
-													targetModel={target.model}
-													baseModels={props.baseModels}
-													options={targetOptions}
-													providers={props.providers}
-													onChange={value =>
-														updateFailoverGroups(
-															failoverGroups.map((item, itemIndex) =>
-																itemIndex === groupIndex
-																	? item.map((groupTarget, groupTargetIndex) =>
-																			groupTargetIndex === targetIndex
-																				? { ...groupTarget, model: value }
-																				: groupTarget
-																		)
-																	: item
-															)
-														)
-													}
-												/>
-												<Button
-													danger
-													aria-label="Remove target"
-													onClick={() =>
-														updateFailoverGroups(
-															failoverGroups
-																.map((item, itemIndex) =>
-																	itemIndex === groupIndex
-																		? item.filter(
-																				(_, groupTargetIndex) => groupTargetIndex !== targetIndex
-																			)
-																		: item
-																)
-																.filter(item => item.length > 0)
-														)
-													}
-													icon={<Trash2 size={16} />}
-												/>
-											</div>
-										))}
-									</div>
-									<Button
-										size="small"
-										icon={<Plus size={16} />}
-										onClick={() =>
-											updateFailoverGroups(
-												failoverGroups.map((item, itemIndex) =>
-													itemIndex === groupIndex
-														? [...item, { model: defaultTarget, priority: groupIndex }]
-														: item
-												)
-											)
-										}
-									>
-										Add target
-									</Button>
-								</div>
-							</section>
+							<FailoverGroupCard
+								key={failoverRows.keys[groupIndex]}
+								group={group}
+								groupIndex={groupIndex}
+								baseModels={props.baseModels}
+								options={targetOptions}
+								providers={props.providers}
+								defaultTarget={defaultTarget}
+								onChange={next =>
+									updateFailoverGroups(
+										failoverGroups.map((item, itemIndex) =>
+											itemIndex === groupIndex ? next : item
+										)
+									)
+								}
+								onRemove={() => {
+									failoverRows.remove(groupIndex);
+									updateFailoverGroups(
+										failoverGroups.filter((_, itemIndex) => itemIndex !== groupIndex)
+									);
+								}}
+							/>
 						))}
 					</div>
 					<Button
@@ -1633,15 +1580,15 @@ function VirtualModelEditor(props: {
 						{conditionalTargets.map((target, index) => {
 							const isFallback = !target.when?.trim();
 							return (
-								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								<div className="conditional-target-card" key={index}>
+								<div className="conditional-target-card" key={conditionalRows.keys[index]}>
 									<div className="match-card-header">
 										<strong>{isFallback ? 'Fallback' : `Rule ${index + 1}`}</strong>
 										<Tooltip content="Remove rule">
 											<Button
 												danger
 												aria-label="Remove conditional target"
-												onClick={() =>
+												onClick={() => {
+													conditionalRows.remove(index);
 													setModel(current => ({
 														...current,
 														routing: {
@@ -1651,8 +1598,8 @@ function VirtualModelEditor(props: {
 																)
 															}
 														}
-													}))
-												}
+													}));
+												}}
 												icon={<Trash2 size={15} />}
 											/>
 										</Tooltip>
@@ -1724,7 +1671,10 @@ function VirtualModelEditor(props: {
 						</Button>
 						<Button
 							icon={<Plus size={16} />}
-							onClick={() =>
+							onClick={() => {
+								for (let index = conditionalTargets.length - 1; index >= 0; index--) {
+									if (!conditionalTargets[index].when?.trim()) conditionalRows.remove(index);
+								}
 								setModel(current => ({
 									...current,
 									routing: {
@@ -1737,8 +1687,8 @@ function VirtualModelEditor(props: {
 											]
 										}
 									}
-								}))
-							}
+								}));
+							}}
 						>
 							Add fallback
 						</Button>
@@ -1746,6 +1696,88 @@ function VirtualModelEditor(props: {
 				</FieldGroup>
 			)}
 		</Drawer>
+	);
+}
+
+function FailoverGroupCard(props: {
+	group: FailoverVirtualTarget[];
+	groupIndex: number;
+	baseModels: LlmModel[];
+	options: ReturnType<typeof modelTargetOptions>;
+	providers: LlmProvider[];
+	defaultTarget: string;
+	onChange: (group: FailoverVirtualTarget[]) => void;
+	onRemove: () => void;
+}) {
+	const rows = useRowKeys(props.group.length);
+	return (
+		<section className="match-card">
+			<div className="match-card-header">
+				<strong>
+					{props.groupIndex === 0 ? 'First attempt' : `Fallback group ${props.groupIndex + 1}`}
+				</strong>
+				<Tooltip content="Remove group">
+					<Button
+						danger
+						aria-label={`Remove failover group ${props.groupIndex + 1}`}
+						onClick={props.onRemove}
+						icon={<Trash2 size={15} />}
+					/>
+				</Tooltip>
+			</div>
+			<div className="match-card-body">
+				<div className="target-list">
+					{props.group.map((target, targetIndex) => (
+						<div className="target-row failover" key={rows.keys[targetIndex]}>
+							<VirtualTargetSelector
+								label="Model"
+								targetModel={target.model}
+								baseModels={props.baseModels}
+								options={props.options}
+								providers={props.providers}
+								onChange={value =>
+									props.onChange(
+										props.group.map((groupTarget, groupTargetIndex) =>
+											groupTargetIndex === targetIndex
+												? { ...groupTarget, model: value }
+												: groupTarget
+										)
+									)
+								}
+							/>
+							<Button
+								danger
+								aria-label="Remove target"
+								onClick={() => {
+									// A group without targets is removed.
+									if (props.group.length === 1) {
+										props.onRemove();
+										return;
+									}
+									rows.remove(targetIndex);
+									props.onChange(
+										props.group.filter((_, groupTargetIndex) => groupTargetIndex !== targetIndex)
+									);
+								}}
+								icon={<Trash2 size={16} />}
+							/>
+						</div>
+					))}
+				</div>
+				<Button
+					size="small"
+					icon={<Plus size={16} />}
+					onClick={() =>
+						props.onChange([
+							...props.group,
+							{ model: props.defaultTarget, priority: props.groupIndex }
+						])
+					}
+				>
+					Add target
+				</Button>
+			</div>
+		</section>
 	);
 }
 

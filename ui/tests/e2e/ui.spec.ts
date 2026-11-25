@@ -1731,6 +1731,63 @@ test('warns that API key budgets require the primary database', async ({ page })
 	await expect(warning).toContainText('API key budgets require config.database to be configured.');
 });
 
+test('clearing a budget rolling window saves a budget that never resets', async ({ page }) => {
+	const gateway = await mockGateway(page);
+	await page.goto('/llm/keys');
+
+	await page.getByRole('button', { name: 'Edit key' }).click();
+	await page.getByRole('button', { name: /^Budgets/ }).click();
+	await page.getByRole('button', { name: 'Add budget' }).click();
+	const budget = page.locator('.api-key-budget-card');
+	await budget.getByRole('textbox', { name: 'Name' }).fill('total-spend');
+	const rolling = budget.getByRole('textbox', { name: 'Rolling window' });
+	await expect(rolling).toHaveValue('30d');
+	await rolling.fill('');
+	await expect(rolling).toHaveValue('');
+	await page.getByRole('button', { name: 'Save key' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs[0] as {
+		llm?: {
+			policies?: { apiKey?: { keys?: Array<{ budgets?: Array<Record<string, unknown>> }> } };
+		};
+	};
+	const budgets = saved.llm?.policies?.apiKey?.keys?.[0].budgets;
+	expect(budgets).toHaveLength(1);
+	expect(budgets?.[0]).toMatchObject({ name: 'total-spend' });
+	expect(budgets?.[0]).not.toHaveProperty('window');
+});
+
+test('removing an earlier budget keeps the later budget row', async ({ page }) => {
+	const gateway = await mockGateway(page);
+	await page.goto('/llm/keys');
+
+	await page.getByRole('button', { name: 'Edit key' }).click();
+	await page.getByRole('button', { name: /^Budgets/ }).click();
+	const cards = page.locator('.api-key-budget-card');
+	for (const name of ['first', 'second']) {
+		await page.getByRole('button', { name: 'Add budget' }).click();
+		await cards.last().getByRole('textbox', { name: 'Name' }).fill(name);
+	}
+	// Index keys would reuse the first card for the second budget and drop the last card.
+	const second = await cards.nth(1).elementHandle();
+	await page.getByRole('button', { name: 'Remove budget 1' }).click();
+	await expect(cards).toHaveCount(1);
+	expect(await second?.evaluate(node => node.isConnected)).toBe(true);
+	await expect(cards.getByRole('textbox', { name: 'Name' })).toHaveValue('second');
+	await page.getByRole('button', { name: 'Save key' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs[0] as {
+		llm?: {
+			policies?: { apiKey?: { keys?: Array<{ budgets?: Array<Record<string, unknown>> }> } };
+		};
+	};
+	expect(saved.llm?.policies?.apiKey?.keys?.[0].budgets).toEqual([
+		expect.objectContaining({ name: 'second' })
+	]);
+});
+
 test('shows a banner when the last configuration reload failed', async ({ page }) => {
 	await mockGateway(page);
 	await page.route('**/api/runtime', route =>
@@ -2090,6 +2147,109 @@ test('edits listener and route policies from traffic drawers', async ({ page }) 
 	expect(routePolicy.binds?.[0].listeners[0].routes?.[0].policies?.cors?.allowOrigins).toContain(
 		'http://127.0.0.1:19100'
 	);
+});
+
+test('adds a route backend in the form editor', async ({ page }) => {
+	const gateway = await mockGateway(page);
+	await page.goto('/traffic/routes');
+
+	await page.getByRole('row', { name: /api/ }).getByRole('button', { name: 'Edit route' }).click();
+	await page.getByRole('button', { name: 'Add backend' }).click();
+	await expect(page.getByRole('button', { name: 'Raw' })).toHaveAttribute('aria-pressed', 'false');
+	const hosts = page.locator('.route-backend-row').getByRole('textbox', { name: 'Host' });
+	await expect(hosts).toHaveCount(2);
+	await expect(hosts.nth(1)).toBeVisible();
+	await hosts.nth(1).fill('localhost:9001');
+	await page.getByRole('button', { name: 'Save route' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs[0] as {
+		binds?: Array<{ listeners: Array<{ routes?: Array<{ backends?: unknown[] }> }> }>;
+	};
+	expect(saved.binds?.[0].listeners[0].routes?.[0].backends).toEqual([
+		{ host: 'localhost:9000' },
+		{ host: 'localhost:9001' }
+	]);
+});
+
+test('clearing a route method saves a route that matches any method', async ({ page }) => {
+	const config = populatedConfig();
+	const binds = config.binds as Array<{
+		listeners: Array<{ routes: Array<{ matches: Array<{ method?: string }> }> }>;
+	}>;
+	binds[0].listeners[0].routes[0].matches[0].method = 'GET';
+	const gateway = await mockGateway(page, config);
+	await page.goto('/traffic/routes');
+
+	await page.getByRole('row', { name: /api/ }).getByRole('button', { name: 'Edit route' }).click();
+	const method = page.getByRole('textbox', { name: 'Method' });
+	await expect(method).toHaveValue('GET');
+	await method.fill('');
+	await expect(method).toHaveValue('');
+	await page.getByRole('button', { name: 'Save route' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs[0] as {
+		binds?: Array<{
+			listeners: Array<{ routes?: Array<{ matches?: Array<Record<string, unknown>> }> }>;
+		}>;
+	};
+	const match = saved.binds?.[0].listeners[0].routes?.[0].matches?.[0];
+	expect(match).toEqual({ path: { pathPrefix: '/api' } });
+	expect(match).not.toHaveProperty('method');
+});
+
+test('removing an earlier route backend keeps the later backend row', async ({ page }) => {
+	const gateway = await mockGateway(page);
+	await page.goto('/traffic/routes');
+
+	await page.getByRole('row', { name: /api/ }).getByRole('button', { name: 'Edit route' }).click();
+	await page.getByRole('button', { name: 'Add backend' }).click();
+	const rows = page.locator('.route-backend-row');
+	await rows.nth(1).getByRole('textbox', { name: 'Host' }).fill('localhost:9001');
+	// Index keys would reuse the first row for the second backend and drop the last row.
+	const second = await rows.nth(1).elementHandle();
+	await rows.nth(0).getByRole('button', { name: 'Remove backend' }).click();
+	await expect(rows).toHaveCount(1);
+	expect(await second?.evaluate(node => node.isConnected)).toBe(true);
+	await expect(rows.getByRole('textbox', { name: 'Host' })).toHaveValue('localhost:9001');
+	await page.getByRole('button', { name: 'Save route' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs[0] as {
+		binds?: Array<{ listeners: Array<{ routes?: Array<{ backends?: unknown[] }> }> }>;
+	};
+	expect(saved.binds?.[0].listeners[0].routes?.[0].backends).toEqual([{ host: 'localhost:9001' }]);
+});
+
+test('removing an earlier authorization rule keeps the later rule cards', async ({ page }) => {
+	const config = populatedConfig();
+	(config.llm as { policies: Record<string, unknown> }).policies.authorization = {
+		rules: [{ allow: 'first' }, { deny: 'second' }, { allow: 'third' }]
+	};
+	const gateway = await mockGateway(page, config);
+	await page.goto('/llm/policies#authorization');
+
+	const cards = page.locator('.authz-rule-card');
+	await expect(cards).toHaveCount(3);
+	// Index keys would reuse the earlier cards for the later rules and drop the last card.
+	const third = await cards.nth(2).elementHandle();
+	await cards.nth(0).getByRole('button', { name: 'Delete' }).click();
+	await expect(cards).toHaveCount(2);
+	expect(await third?.evaluate(node => node.isConnected)).toBe(true);
+	await expect(cards.locator('code')).toHaveText(['second', 'third']);
+	await page
+		.getByRole('dialog', { name: 'Authorization' })
+		.getByRole('button', { name: 'Save' })
+		.click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs[0] as {
+		llm?: { policies?: { authorization?: unknown } };
+	};
+	expect(saved.llm?.policies?.authorization).toEqual({
+		rules: [{ deny: 'second' }, { allow: 'third' }]
+	});
 });
 
 test('Playground shows Claude subscription key warning', async ({ page }) => {

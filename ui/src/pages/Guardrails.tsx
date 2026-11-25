@@ -9,7 +9,7 @@ import googleCloudIcon from '@/assets/providers/googlecloud.svg';
 import openAiIcon from '@/assets/providers/openai.svg';
 import { CloudRegionCombobox } from '@/components/CloudRegionCombobox';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
-import { UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
+import { UnsupportedInForm, useMergedEdits, useRowKeys } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import {
 	ConfirmDialog,
@@ -396,6 +396,7 @@ function GuardrailSection(props: {
 			? 'Inspect prompts before they reach the upstream model.'
 			: 'Inspect model output before it is returned to the caller.';
 	const addOpen = guardDrawer === `${props.phase}:new`;
+	const rows = useRowKeys(props.guards.length);
 	const editingIndex = guardDrawerIndex(guardDrawer, props.phase, props.guards.length);
 
 	function closeGuardDrawer() {
@@ -421,8 +422,7 @@ function GuardrailSection(props: {
 				{props.guards.length === 0 ? <p className="muted-copy">No guards configured.</p> : null}
 				{props.guards.map((guard, index) => (
 					<GuardCard
-						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						key={index}
+						key={rows.keys[index]}
 						phase={props.phase}
 						guard={guard}
 						index={index}
@@ -461,6 +461,7 @@ function GuardrailSection(props: {
 						confirmLabel="Remove guardrail"
 						onCancel={() => setDeletingIndex(null)}
 						onConfirm={() => {
+							rows.remove(deletingIndex);
 							props.onChange(props.guards.filter((_, guardIndex) => guardIndex !== deletingIndex));
 							setDeletingIndex(null);
 						}}
@@ -1300,6 +1301,7 @@ function PatternList(props: {
 	patterns: string[];
 	onChange: (patterns: string[]) => void;
 }) {
+	const rows = useRowKeys(props.patterns.length);
 	return (
 		<FieldGroup
 			className="guardrail-pattern-list"
@@ -1308,8 +1310,7 @@ function PatternList(props: {
 			tooltip={props.help.field<RegexRules>('RegexRules', 'rules')}
 		>
 			{props.patterns.map((pattern, index) => (
-				// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
-				<div className="guardrail-pattern-row" key={index}>
+				<div className="guardrail-pattern-row" key={rows.keys[index]}>
 					<Input
 						className="mono-input"
 						value={pattern}
@@ -1327,9 +1328,10 @@ function PatternList(props: {
 						danger
 						aria-label="Remove pattern"
 						icon={<Trash2 size={16} />}
-						onClick={() =>
-							props.onChange(props.patterns.filter((_, itemIndex) => itemIndex !== index))
-						}
+						onClick={() => {
+							rows.remove(index);
+							props.onChange(props.patterns.filter((_, itemIndex) => itemIndex !== index));
+						}}
 					/>
 				</div>
 			))}
