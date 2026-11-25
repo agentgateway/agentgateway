@@ -19,6 +19,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
@@ -52,7 +53,7 @@ func NewBackendTLSPluginWithTargetBuilders(agw *AgwCollections, targetBuilders m
 			wellknown.BackendTLSPolicyGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					st, o := krt.NewStatusManyCollection(agw.BackendTLSPolicies, func(krtctx krt.HandlerContext, btls *gwv1.BackendTLSPolicy) (*gwv1.PolicyStatus, []AgwPolicy) {
-						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.References, agw.ConfigMaps, agw.ClusterTrustBundles, agw.Secrets, agw.Services, targetBuilders, backendTLSTarget, agw.Gateways, btls)
+						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.References, agw.ConfigMaps, agw.ClusterTrustBundles, agw.Secrets, agw.Services, agw.Backends, targetBuilders, backendTLSTarget, agw.Gateways, btls)
 					}, agw.KrtOpts.ToOptions("policies/BackendTLS")...)
 					return ConvertStatusCollection(st, agw.KrtOpts.ToOptions, "policies/BackendTLS"), o
 				},
@@ -70,6 +71,7 @@ func translatePoliciesForBackendTLS(
 	clusterTrustBundles krt.Collection[*certificatesv1.ClusterTrustBundle],
 	secrets krt.Collection[*corev1.Secret],
 	svcs krt.Collection[*corev1.Service],
+	backends krt.Collection[*agentgateway.AgentgatewayBackend],
 	targetBuilders map[schema.GroupKind]BackendTLSTargetBuilder,
 	targetIndex krt.IndexCollection[utils.TypedNamespacedName, *gwv1.BackendTLSPolicy],
 	gateways krt.Collection[*gwv1.Gateway],
@@ -78,10 +80,8 @@ func translatePoliciesForBackendTLS(
 	logger := logger.With("plugin_kind", "backendtls")
 	var policies []AgwPolicy
 	status := btls.Status.DeepCopy()
+	controller := gwv1.GatewayController(controllerName)
 
-	// Condition reporting for BackendTLSPolicy is tricky. The references are to Service (or other backends), but we report
-	// per-gateway.
-	// This means most of the results are aggregated.
 	conds := map[string]*Condition{
 		string(gwv1.PolicyConditionAccepted): {
 			Reason:  string(gwv1.PolicyReasonAccepted),
@@ -111,9 +111,6 @@ func translatePoliciesForBackendTLS(
 		return nil
 	})
 
-	// Ideally we would report status for an unknown reference. However, Gateway API has decided we should report 1 status
-	// per Gateway, instead of per-Backend. This is questionable for users, but also means we don't have to worry about
-	// telling users if a reference is invalid and should just silently fail...
 	uniqueGateways := sets.New[types.NamespacedName]()
 	gatewayClientCertErrors := map[types.NamespacedName]*ConfigError{}
 	for _, target := range btls.Spec.TargetRefs {
@@ -230,7 +227,26 @@ func translatePoliciesForBackendTLS(
 			gatewayConds = copyConditionMap(conds)
 			gatewayConds[string(gwv1.PolicyConditionAccepted)].Error = err
 		}
-		ancestorStatus = append(ancestorStatus, SetAncestorStatus(pr, status, btls.Generation, gatewayConds, gwv1.GatewayController(controllerName)))
+		ancestorStatus = append(ancestorStatus, SetAncestorStatus(pr, status, btls.Generation, gatewayConds, controller))
+	}
+	if uniqueGateways.Len() == 0 {
+		for _, target := range btls.Spec.TargetRefs {
+			targetGK := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
+			if targetGK != wellknown.AgentgatewayBackendGVK.GroupKind() {
+				continue
+			}
+			backend := types.NamespacedName{Namespace: btls.Namespace, Name: string(target.Name)}
+			if krt.FetchOne(krtctx, backends, krt.FilterObjectName(backend)) == nil {
+				continue
+			}
+			pr := gwv1.ParentReference{
+				Group:       new(target.Group),
+				Kind:        new(target.Kind),
+				Name:        target.Name,
+				SectionName: target.SectionName,
+			}
+			ancestorStatus = append(ancestorStatus, SetAncestorStatus(pr, status, btls.Generation, conds, controller))
+		}
 	}
 	status.Ancestors = MergeAncestors(controllerName, status.Ancestors, ancestorStatus)
 	return status, policies
