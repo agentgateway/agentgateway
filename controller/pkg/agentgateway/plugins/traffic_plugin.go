@@ -2229,6 +2229,17 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 		transform.Remove = cast(spec.Remove)
 	}
 
+	if spec.Replace != nil {
+		replaceValue := *spec.Replace
+		if !isCEL(replaceValue) {
+			errs = append(errs, fmt.Errorf("replace value is not a valid CEL expression: %s", replaceValue))
+		}
+		if transform == nil {
+			transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
+		}
+		transform.Replace = new(string(replaceValue))
+	}
+
 	if spec.Body != nil {
 		// Handle body transformation if present
 		bodyValue := *spec.Body

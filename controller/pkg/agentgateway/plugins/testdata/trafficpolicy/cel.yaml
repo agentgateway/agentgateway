@@ -20,6 +20,7 @@ spec:
           - x-internal-header
       request:
         body: "json({'modified': true, 'original': json(request.body)})"
+        replace: "request.headers.filterKeys(k, k in ['content-type', 'authorization'])"
         set:
           - name: x-custom-header
             value: request.headers['x-forwarded-for']
@@ -47,6 +48,7 @@ output:
           request:
             body:
               expression: 'json({''modified'': true, ''original'': json(request.body)})'
+            replace: request.headers.filterKeys(k, k in ['content-type', 'authorization'])
             set:
             - expression: request.headers['x-forwarded-for']
               name: x-custom-header
