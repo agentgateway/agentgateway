@@ -135,6 +135,35 @@ fn system_tokens(system: &types::messages::TextBlock) -> usize {
 	}
 }
 
+fn normalize_output_schema(schema: &mut serde_json::Value) {
+	let Some(node) = schema.as_object_mut() else {
+		return;
+	};
+	if node.get("type").and_then(serde_json::Value::as_str) == Some("object") {
+		node
+			.entry("additionalProperties")
+			.or_insert(serde_json::Value::Bool(false));
+		node.remove("propertyOrdering");
+	}
+	for key in ["properties", "$defs", "definitions"] {
+		if let Some(serde_json::Value::Object(children)) = node.get_mut(key) {
+			for child in children.values_mut() {
+				normalize_output_schema(child);
+			}
+		}
+	}
+	for key in ["anyOf", "allOf"] {
+		if let Some(serde_json::Value::Array(children)) = node.get_mut(key) {
+			for child in children {
+				normalize_output_schema(child);
+			}
+		}
+	}
+	if let Some(child) = node.get_mut("items") {
+		normalize_output_schema(child);
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -145,6 +174,68 @@ mod tests {
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1024), None);
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1025), Some(1024));
 		assert_eq!(cap_thinking_budget_to_max_tokens(8192, 4096), Some(4095));
+	}
+
+	#[test]
+	fn from_completions_normalizes_anthropic_output_schema() {
+		let schema = serde_json::json!({
+			"type": "object",
+			"propertyOrdering": ["name"],
+			"properties": {
+				"name": {"type": "string"},
+				"propertyOrdering": {"type": "string"},
+				"child": {"type": "object", "properties": {"value": {"type": "string"}}},
+				"closed": {"type": "object", "additionalProperties": false},
+				"open": {"type": "object", "additionalProperties": true},
+				"map": {"type": "object", "additionalProperties": {"type": "object", "propertyOrdering": ["value"], "properties": {"value": {"type": "string"}}}},
+				"list": {"type": "array", "items": {"type": "object"}},
+			"annotated": {"type": "string", "default": {"type": "object", "propertyOrdering": ["data"]}}
+			},
+			"required": ["name"]
+		});
+		let req: types::completions::Request = serde_json::from_value(serde_json::json!({
+			"model": "claude-sonnet-4",
+			"messages": [{"role": "user", "content": "hello"}],
+			"response_format": {"type": "json_schema", "json_schema": {"name": "x", "schema": schema}}
+		}))
+		.unwrap();
+		let direct: serde_json::Value =
+			serde_json::from_slice(&from_completions::translate(&req, None, None).unwrap()).unwrap();
+		let vertex: serde_json::Value = serde_json::from_slice(
+			&crate::vertex::prepare_anthropic_message_body(serde_json::to_vec(&direct).unwrap()).unwrap(),
+		)
+		.unwrap();
+		let expected = serde_json::json!({
+			"type": "object", "additionalProperties": false,
+			"properties": {
+				"name": {"type": "string"}, "propertyOrdering": {"type": "string"},
+				"child": {"type": "object", "additionalProperties": false, "properties": {"value": {"type": "string"}}},
+				"closed": {"type": "object", "additionalProperties": false},
+				"open": {"type": "object", "additionalProperties": true},
+				"map": {"type": "object", "additionalProperties": {"type": "object", "propertyOrdering": ["value"], "properties": {"value": {"type": "string"}}}},
+				"list": {"type": "array", "items": {"type": "object", "additionalProperties": false}},
+				"annotated": {"type": "string", "default": {"type": "object", "propertyOrdering": ["data"]}}
+			}, "required": ["name"]
+		});
+		assert_eq!(direct["output_config"]["format"]["schema"], expected);
+		assert_eq!(vertex["output_config"]["format"]["schema"], expected);
+		assert_eq!(vertex["anthropic_version"], "vertex-2023-10-16");
+		assert!(vertex.get("model").is_none());
+		assert_eq!(
+			serde_json::to_value(&req).unwrap()["response_format"]["json_schema"]["schema"],
+			schema
+		);
+
+		let legacy: types::completions::Request = serde_json::from_value(serde_json::json!({
+			"messages": [{"role": "user", "content": "hello"}], "response_format": {"type": "json_object"}
+		}))
+		.unwrap();
+		let legacy: serde_json::Value =
+			serde_json::from_slice(&from_completions::translate(&legacy, None, None).unwrap()).unwrap();
+		assert_eq!(
+			legacy["output_config"]["format"]["schema"],
+			serde_json::json!({"type":"object", "additionalProperties": true})
+		);
 	}
 
 	fn apply(req: serde_json::Value, caching: &crate::PromptCachingConfig) -> serde_json::Value {
@@ -850,9 +941,9 @@ pub mod from_completions {
 
 		let response_format = match req.response_format {
 			Some(completions::ResponseFormat::JsonSchema { json_schema }) => {
-				Some(messages::OutputFormat::JsonSchema {
-					schema: json_schema.schema,
-				})
+				let mut schema = json_schema.schema;
+				super::normalize_output_schema(&mut schema);
+				Some(messages::OutputFormat::JsonSchema { schema })
 			},
 			Some(completions::ResponseFormat::JsonObject) => Some(messages::OutputFormat::JsonSchema {
 				schema: serde_json::json!({
