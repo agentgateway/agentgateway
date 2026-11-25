@@ -17,7 +17,6 @@ fn records_request_drops() {
 	let request: types::messages::Request = serde_json::from_value(json!({
 		"model": "gpt-5.6-terra",
 		"max_tokens": 1024,
-		"context_management": {"edits": [{"type": "clear_thinking_20251015"}]},
 		"stop_sequences": ["</end>"],
 		"top_k": 40,
 		"cache_control": {"type": "ephemeral"},
@@ -66,6 +65,15 @@ fn records_nothing_when_off() {
 	let mut dropped = ir::Drops::new(false);
 	let request = ir::messages::request::parse(&request, &mut dropped).expect("parses");
 	ir::responses::request::render(request, &mut dropped).expect("renders");
+	assert_eq!(dropped.list, []);
+}
+
+#[test]
+fn skips_path_when_off() {
+	let mut dropped = ir::Drops::new(false);
+	dropped.record(DropReason::Unsupported, || {
+		panic!("path built while not recording")
+	});
 	assert_eq!(dropped.list, []);
 }
 

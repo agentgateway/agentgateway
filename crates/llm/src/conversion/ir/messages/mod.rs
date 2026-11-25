@@ -187,29 +187,17 @@ pub mod request {
 		let parts = message
 			.content
 			.into_iter()
-			.map(read_part)
-			.collect::<Vec<_>>();
-		for (part_index, part) in parts.iter().enumerate() {
-			match part {
-				Part::Unread => dropped.record(DropReason::Unread, || {
+			.enumerate()
+			.map(|(part_index, block)| {
+				read_part(block, dropped, || {
 					format!("messages[{index}].content[{part_index}]")
-				}),
-				Part::ToolResult { content, .. } => {
-					for (result_index, result) in content.iter().enumerate() {
-						if matches!(result, ToolResultPart::Unread) {
-							dropped.record(DropReason::Unread, || {
-								format!("messages[{index}].content[{part_index}].content[{result_index}]")
-							});
-						}
-					}
-				},
-				_ => {},
-			}
-		}
+				})
+			})
+			.collect();
 		Message { role, parts }
 	}
 
-	fn read_part(block: wire::ContentBlock) -> Part {
+	fn read_part(block: wire::ContentBlock, dropped: &mut Drops, path: impl Fn() -> String) -> Part {
 		match block {
 			wire::ContentBlock::Text(text) => Part::Text(read_text(text)),
 			wire::ContentBlock::Image(wire::ContentImageBlock {
@@ -258,7 +246,7 @@ pub mod request {
 				is_error,
 			} => Part::ToolResult {
 				call_id: tool_use_id,
-				content: read_tool_result_content(content),
+				content: read_tool_result_content(content, dropped, path),
 				is_error,
 				cache: cache_control.map(read_cache),
 			},
@@ -266,7 +254,10 @@ pub mod request {
 			wire::ContentBlock::SearchResult(_)
 			| wire::ContentBlock::ServerToolUse { .. }
 			| wire::ContentBlock::WebSearchToolResult { .. }
-			| wire::ContentBlock::Unknown => Part::Unread,
+			| wire::ContentBlock::Unknown => {
+				dropped.record(DropReason::Unread, path);
+				Part::Unread
+			},
 		}
 	}
 
@@ -284,7 +275,11 @@ pub mod request {
 	}
 
 	/// A plain string reads as one text part; destinations render both shapes the same.
-	fn read_tool_result_content(content: wire::ToolResultContent) -> Vec<ToolResultPart> {
+	fn read_tool_result_content(
+		content: wire::ToolResultContent,
+		dropped: &mut Drops,
+		path: impl Fn() -> String,
+	) -> Vec<ToolResultPart> {
 		match content {
 			wire::ToolResultContent::Text(text) => vec![ToolResultPart::Text(TextPart {
 				text,
@@ -293,7 +288,8 @@ pub mod request {
 			})],
 			wire::ToolResultContent::Array(parts) => parts
 				.into_iter()
-				.map(|part| match part {
+				.enumerate()
+				.map(|(index, part)| match part {
 					wire::ToolResultContentPart::Text {
 						text,
 						citations,
@@ -331,7 +327,12 @@ pub mod request {
 						cache: cache_control.map(read_cache),
 					}),
 					wire::ToolResultContentPart::SearchResult { .. }
-					| wire::ToolResultContentPart::Unknown => ToolResultPart::Unread,
+					| wire::ToolResultContentPart::Unknown => {
+						dropped.record(DropReason::Unread, || {
+							format!("{}.content[{index}]", path())
+						});
+						ToolResultPart::Unread
+					},
 				})
 				.collect(),
 		}
