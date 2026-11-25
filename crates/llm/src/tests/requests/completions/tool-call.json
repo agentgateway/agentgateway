@@ -11,7 +11,7 @@
       "content": null,
       "tool_calls": [
         {
-          "id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+          "id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU__thought__AbC1/x+Yz==",
           "type": "function",
           "function": {
             "name": "get_weather",
@@ -30,7 +30,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+      "tool_call_id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU__thought__AbC1/x+Yz==",
       "name": "get_weather",
       "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
     },
