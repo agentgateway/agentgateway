@@ -23,12 +23,13 @@ const JWKS_TTL: Duration = Duration::from_mins(15);
 const OPENAPI_TTL: Duration = Duration::from_hours(24);
 const GENERIC_TTL: Duration = Duration::from_mins(15);
 const FAILED_HTTP_REFRESH: Duration = Duration::from_secs(15);
-const MIN_HTTP_REFRESH: Duration = Duration::from_secs(60);
+pub(crate) const MIN_HTTP_REFRESH: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ResourceKind {
 	Generic,
 	Jwks,
+	JwksWithMaxAge(Duration),
 	OpenApi,
 	OidcDiscovery,
 }
@@ -37,7 +38,7 @@ impl ResourceKind {
 	fn default_ttl(self) -> Duration {
 		match self {
 			ResourceKind::OpenApi => OPENAPI_TTL,
-			ResourceKind::Jwks => JWKS_TTL,
+			ResourceKind::Jwks | ResourceKind::JwksWithMaxAge(_) => JWKS_TTL,
 			ResourceKind::Generic | ResourceKind::OidcDiscovery => GENERIC_TTL,
 		}
 	}
@@ -183,6 +184,13 @@ impl ResourceFetcher {
 
 	/// Loads a normalized resource according to this fetcher's mode.
 	pub async fn fetch(&self, resource: ResourceRef) -> anyhow::Result<Bytes> {
+		Ok(self.fetch_content(resource).await?.bytes)
+	}
+
+	pub(crate) async fn fetch_content(
+		&self,
+		resource: ResourceRef,
+	) -> anyhow::Result<ResourceContent> {
 		let normalized = normalize_resource(resource)?;
 		match &self.mode {
 			ResourceFetcherMode::Managed(manager) => {
@@ -208,6 +216,7 @@ impl ResourceFetcher {
 					content
 						.with_context(|| format!("read resource file {}", path.display()))
 						.map(Bytes::from)
+						.map(ResourceContent::unstamped)
 				},
 				ResourceRef::Http { url, .. } => {
 					Err(anyhow!("resource fetcher cannot fetch HTTP resource {url}"))
@@ -327,8 +336,40 @@ struct Inner {
 }
 
 struct Entry {
-	content: Bytes,
+	content: ResourceContent,
 	next_refresh: Option<Instant>,
+}
+
+#[derive(Clone)]
+pub(crate) struct ResourceContent {
+	pub bytes: Bytes,
+	pub freshness: Option<ResourceFreshness>,
+}
+
+impl ResourceContent {
+	fn unstamped(bytes: Bytes) -> Self {
+		Self {
+			bytes,
+			freshness: None,
+		}
+	}
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ResourceFreshness {
+	fetched_at: Arc<Mutex<Instant>>,
+	max_age: Duration,
+}
+
+impl ResourceFreshness {
+	pub(crate) fn is_expired(&self) -> bool {
+		self
+			.fetched_at
+			.lock()
+			.expect("resource freshness mutex poisoned")
+			.elapsed()
+			>= self.max_age
+	}
 }
 
 struct FileWatch {
@@ -452,23 +493,25 @@ impl ResourceManager {
 		self.inner.change_tx.subscribe()
 	}
 
-	async fn fetch_and_wait_normalized(&self, resource: ResourceRef) -> anyhow::Result<Bytes> {
+	async fn fetch_and_wait_normalized(
+		&self,
+		resource: ResourceRef,
+	) -> anyhow::Result<ResourceContent> {
 		if let ResourceRef::File(path) = &resource {
 			self.watch_file(path)?;
 		}
 		if let Some(content) = self.cached(&resource) {
 			return Ok(content);
 		}
-		let FetchResult { content, next } = self.fetch(&resource).await?;
-		self.store(resource, content.clone(), next);
-		Ok(content)
+		let entry = self.fetch(&resource).await?;
+		Ok(self.store(resource, entry))
 	}
 
 	async fn fetch_cached_or_direct_normalized(
 		&self,
 		resource: ResourceRef,
 		file_access: &FileAccess,
-	) -> anyhow::Result<Bytes> {
+	) -> anyhow::Result<ResourceContent> {
 		if let ResourceRef::File(path) = &resource {
 			file_access.check(path)?;
 		}
@@ -531,7 +574,7 @@ impl ResourceManager {
 		self.inner.watched_files.retain_paths(&retained_files);
 	}
 
-	fn cached(&self, resource: &ResourceRef) -> Option<Bytes> {
+	fn cached(&self, resource: &ResourceRef) -> Option<ResourceContent> {
 		self
 			.inner
 			.entries
@@ -541,19 +584,24 @@ impl ResourceManager {
 			.map(|e| e.content.clone())
 	}
 
-	fn store(&self, resource: ResourceRef, content: Bytes, next: Option<Instant>) {
-		self
-			.inner
-			.entries
-			.lock()
-			.expect("resource cache mutex poisoned")
-			.insert(
-				resource.clone(),
-				Entry {
-					content,
-					next_refresh: next,
+	fn store(&self, resource: ResourceRef, entry: Entry) -> ResourceContent {
+		let next = entry.next_refresh;
+		let content = entry.content.clone();
+		{
+			let mut entries = self
+				.inner
+				.entries
+				.lock()
+				.expect("resource cache mutex poisoned");
+			match entries.entry(resource.clone()) {
+				std::collections::hash_map::Entry::Occupied(existing) => {
+					return existing.get().content.clone();
 				},
-			);
+				std::collections::hash_map::Entry::Vacant(slot) => {
+					slot.insert(entry);
+				},
+			}
+		}
 		if let Some(at) = next {
 			tracing::debug!(
 				resource = %resource_key(&resource),
@@ -565,6 +613,7 @@ impl ResourceManager {
 				.scheduler_tx
 				.send(ScheduledRefresh { at, resource });
 		}
+		content
 	}
 
 	async fn refetch_and_notify_if_changed(&self, resource: ResourceRef) {
@@ -574,7 +623,7 @@ impl ResourceManager {
 			return;
 		}
 		let result = self.fetch(&resource).await;
-		let FetchResult { content, next } = match result {
+		let entry = match result {
 			Ok(result) => result,
 			Err(e) => {
 				warn!(resource = %resource_key(&resource), "failed to refresh resource: {e}");
@@ -609,23 +658,34 @@ impl ResourceManager {
 			return;
 		}
 
+		let next = entry.next_refresh;
 		let changed = {
 			let mut entries = self
 				.inner
 				.entries
 				.lock()
 				.expect("resource cache mutex poisoned");
-			let changed = entries
-				.get(&resource)
-				.is_none_or(|entry| entry.content != content);
-			entries.insert(
-				resource.clone(),
-				Entry {
-					content,
-					next_refresh: next,
-				},
-			);
-			changed
+			let Some(current) = entries.get_mut(&resource) else {
+				return;
+			};
+			if current.content.bytes == entry.content.bytes {
+				if let (Some(current), Some(fetched)) =
+					(&current.content.freshness, entry.content.freshness)
+				{
+					*current
+						.fetched_at
+						.lock()
+						.expect("resource freshness mutex poisoned") = *fetched
+						.fetched_at
+						.lock()
+						.expect("resource freshness mutex poisoned");
+				}
+				current.next_refresh = next;
+				false
+			} else {
+				*current = entry;
+				true
+			}
 		};
 		if let Some(at) = next {
 			tracing::debug!(
@@ -643,7 +703,7 @@ impl ResourceManager {
 		}
 	}
 
-	async fn fetch(&self, resource: &ResourceRef) -> anyhow::Result<FetchResult> {
+	async fn fetch(&self, resource: &ResourceRef) -> anyhow::Result<Entry> {
 		fetch_direct(&self.inner.client, resource).await
 	}
 
@@ -743,11 +803,11 @@ impl ResourceManager {
 				.expect("resource cache mutex poisoned");
 			let changed = entries
 				.get(&resource)
-				.is_none_or(|entry| entry.content != content);
+				.is_none_or(|entry| entry.content.bytes != content);
 			entries.insert(
 				resource.clone(),
 				Entry {
-					content,
+					content: ResourceContent::unstamped(content),
 					next_refresh: None,
 				},
 			);
@@ -814,20 +874,15 @@ impl ResourceManager {
 	}
 }
 
-struct FetchResult {
-	content: Bytes,
-	next: Option<Instant>,
-}
-
-async fn fetch_direct(client: &Client, resource: &ResourceRef) -> anyhow::Result<FetchResult> {
+async fn fetch_direct(client: &Client, resource: &ResourceRef) -> anyhow::Result<Entry> {
 	match resource {
 		ResourceRef::File(path) => {
 			let content = fs_err::tokio::read(path)
 				.await
 				.with_context(|| format!("read resource file {}", path.display()))?;
-			Ok(FetchResult {
-				content: content.into(),
-				next: None,
+			Ok(Entry {
+				content: ResourceContent::unstamped(content.into()),
+				next_refresh: None,
 			})
 		},
 		ResourceRef::Http { url, kind } => {
@@ -840,11 +895,26 @@ async fn fetch_direct(client: &Client, resource: &ResourceRef) -> anyhow::Result
 				)
 				.await
 				.with_context(|| format!("fetch {url}"))?;
-			let ttl = ttl_from_headers(resp.headers(), kind.default_ttl());
-			let body = crate::http::read_resp_body(resp).await?;
-			Ok(FetchResult {
-				content: body,
-				next: Some(Instant::now() + ttl.max(MIN_HTTP_REFRESH)),
+			if matches!(kind, ResourceKind::Jwks | ResourceKind::JwksWithMaxAge(_))
+				&& !resp.status().is_success()
+			{
+				anyhow::bail!("fetch {url}: HTTP {}", resp.status());
+			}
+			let mut ttl = ttl_from_headers(resp.headers(), kind.default_ttl());
+			let bytes = crate::http::read_resp_body(resp).await?;
+			let now = Instant::now();
+			let freshness = if let ResourceKind::JwksWithMaxAge(max_age) = *kind {
+				ttl = ttl.min(max_age - (max_age / 10).min(Duration::from_secs(30)));
+				Some(ResourceFreshness {
+					fetched_at: Arc::new(Mutex::new(now)),
+					max_age,
+				})
+			} else {
+				None
+			};
+			Ok(Entry {
+				content: ResourceContent { bytes, freshness },
+				next_refresh: Some(now + ttl.max(MIN_HTTP_REFRESH)),
 			})
 		},
 	}
@@ -1135,8 +1205,10 @@ mod tests {
 		manager.retain_resources(HashSet::from([resource.clone()]));
 		manager.store(
 			resource.clone(),
-			Bytes::from_static(b"v1"),
-			Some(far_future),
+			Entry {
+				content: ResourceContent::unstamped(Bytes::from_static(b"v1")),
+				next_refresh: Some(far_future),
+			},
 		);
 
 		// This is the periodic scheduler's refresh attempt firing, exactly as
@@ -1152,7 +1224,7 @@ mod tests {
 			.expect("resource cache mutex poisoned");
 		let entry = entries.get(&resource).expect("entry should remain cached");
 		// A failed refresh must not touch the last-known-good content.
-		assert_eq!(entry.content, Bytes::from_static(b"v1"));
+		assert_eq!(entry.content.bytes, Bytes::from_static(b"v1"));
 		// The retry scheduled after the failure must be reflected in the cached
 		// entry's `next_refresh`, because `should_refresh` gates the scheduler's
 		// eventual retry on that value matching exactly. Before the fix,
@@ -1164,6 +1236,83 @@ mod tests {
 			scheduled_retry < far_future,
 			"failed refresh should reschedule sooner than the stale next_refresh from the last success"
 		);
+	}
+
+	#[tokio::test]
+	async fn jwks_refresh_renews_only_the_matching_generation() {
+		use std::sync::atomic::AtomicBool;
+
+		use wiremock::matchers::path;
+		use wiremock::{Mock, MockServer, ResponseTemplate};
+
+		crate::crypto::init();
+		let server = MockServer::start().await;
+		let changed = Arc::new(AtomicBool::new(false));
+		let rotate = changed.clone();
+		Mock::given(path("/jwks"))
+			.respond_with(move |_: &wiremock::Request| {
+				let body = if rotate.load(AtomicOrdering::Relaxed) {
+					"{\"keys\": []}"
+				} else {
+					"{\"keys\":[]}"
+				};
+				ResponseTemplate::new(200).set_body_string(body)
+			})
+			.mount(&server)
+			.await;
+		let manager = ResourceManager::new(test_client()).unwrap();
+		let resources = ResourceFetcher::managed(manager.clone());
+		let resource = ResourceRef::Http {
+			url: format!("{}/jwks", server.uri()).parse().unwrap(),
+			kind: ResourceKind::JwksWithMaxAge(Duration::from_secs(70)),
+		};
+		let scope = resources.scope_full_computation();
+		let original = resources.fetch_content(resource.clone()).await.unwrap();
+		scope.finish(true);
+		let original = original.freshness.unwrap();
+		let mut changes = manager.subscribe_changes();
+		let entries = &manager.inner.entries;
+		{
+			let next = entries
+				.lock()
+				.unwrap()
+				.get(&resource)
+				.unwrap()
+				.next_refresh
+				.unwrap();
+			let fetched_at = *original.fetched_at.lock().unwrap();
+			assert_eq!(next - fetched_at, Duration::from_secs(63));
+		}
+
+		async fn advance(seconds: u64) {
+			tokio::time::pause();
+			tokio::time::advance(Duration::from_secs(seconds)).await;
+			tokio::time::resume();
+		}
+
+		advance(40).await;
+		manager
+			.refetch_and_notify_if_changed(resource.clone())
+			.await;
+		assert!(!changes.has_changed().unwrap());
+		advance(35).await;
+		assert!(!original.is_expired());
+
+		changed.store(true, AtomicOrdering::Relaxed);
+		manager
+			.refetch_and_notify_if_changed(resource.clone())
+			.await;
+		assert!(changes.has_changed().unwrap());
+		changes.borrow_and_update();
+		let replacement = resources
+			.fetch_content(resource)
+			.await
+			.unwrap()
+			.freshness
+			.unwrap();
+		advance(36).await;
+		assert!(original.is_expired());
+		assert!(!replacement.is_expired());
 	}
 
 	#[tokio::test]
@@ -1188,7 +1337,10 @@ mod tests {
 		.await
 		.unwrap();
 
-		assert_eq!(manager.cached(&resource), Some(Bytes::from("cert")));
+		assert_eq!(
+			manager.cached(&resource).map(|e| e.bytes),
+			Some(Bytes::from("cert"))
+		);
 		assert!(manager.is_active(&resource));
 		assert!(manager.inner.watched_files.contains(&abspath));
 		PARSE_FETCHER.with(|f| assert!(f.borrow().is_none()));
@@ -1231,7 +1383,7 @@ mod tests {
 
 		tokio::time::timeout(Duration::from_secs(10), async {
 			loop {
-				if manager.cached(&resource) == Some(Bytes::from("new")) {
+				if manager.cached(&resource).map(|e| e.bytes) == Some(Bytes::from("new")) {
 					return;
 				}
 				changes.changed().await.unwrap();

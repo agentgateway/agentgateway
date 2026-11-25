@@ -1,6 +1,7 @@
 // Inspired by https://github.com/cdriehuys/axum-jwks/blob/main/axum-jwks/src/jwks.rs (MIT license)
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::time::Duration;
 
 use ::cel::types::dynamic::DynamicType;
 use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet, KeyAlgorithm};
@@ -11,6 +12,9 @@ use serde_json::{Map, Value};
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::dtrace::{self};
+use crate::resource_manager::{
+	MIN_HTTP_REFRESH, ResourceFetcher, ResourceFreshness, ResourceKind, ResourceRef,
+};
 use crate::telemetry::log::RequestLog;
 use crate::*;
 
@@ -33,6 +37,9 @@ pub enum TokenError {
 
 	#[error("the token header does not specify a `kid`")]
 	MissingKeyId,
+
+	#[error("the trusted signing keys have exceeded their maximum age")]
+	ExpiredSigningKeys,
 
 	#[error("token uses the unknown key {0:?}")]
 	UnknownKeyId(String),
@@ -80,6 +87,7 @@ pub struct Jwt {
 pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
+	freshness: Option<ResourceFreshness>,
 }
 
 // TODO: can we give anything useful here?
@@ -168,7 +176,7 @@ pub enum LocalJwtConfig {
 		/// Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.
 		audiences: Option<Vec<String>>,
 		/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
-		jwks: serdes::FileInlineOrRemote,
+		jwks: JwksSource,
 		/// Claim requirements to enforce after the token signature is verified.
 		#[cfg_attr(feature = "schema", schemars(default))]
 		jwt_validation_options: JWTValidationOptions,
@@ -196,7 +204,7 @@ struct LocalJwtSingleConfig {
 	preserve_token: bool,
 	issuer: String,
 	audiences: Option<Vec<String>>,
-	jwks: serdes::FileInlineOrRemote,
+	jwks: JwksSource,
 	#[serde(default)]
 	jwt_validation_options: JWTValidationOptions,
 }
@@ -241,10 +249,53 @@ pub struct ProviderConfig {
 	/// Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.
 	pub audiences: Option<Vec<String>>,
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
-	pub jwks: serdes::FileInlineOrRemote,
+	pub jwks: JwksSource,
 	/// Claim requirements to enforce after the token signature is verified.
 	#[serde(default)]
 	pub jwt_validation_options: JWTValidationOptions,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged, deny_unknown_fields)]
+pub enum JwksSource {
+	File {
+		/// Path to a file on disk to load the value from.
+		file: std::path::PathBuf,
+	},
+	Inline(String),
+	Remote {
+		#[serde(deserialize_with = "serdes::de_parse")]
+		#[cfg_attr(feature = "schema", schemars(with = "String"))]
+		url: ::http::Uri,
+		/// Maximum time since the last successful JWKS fetch. Must exceed one minute.
+		#[serde(default, rename = "maxAge", with = "crate::serde_dur_option")]
+		#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+		max_age: Option<Duration>,
+	},
+}
+
+impl JwksSource {
+	async fn load(
+		&self,
+		resources: &ResourceFetcher,
+	) -> anyhow::Result<(JwkSet, Option<ResourceFreshness>)> {
+		let resource = match self {
+			Self::Inline(jwks) => return Ok((serde_json::from_str(jwks)?, None)),
+			Self::File { file } => ResourceRef::File(file.clone()),
+			Self::Remote { url, max_age } => {
+				if max_age.is_some_and(|age| age <= MIN_HTTP_REFRESH) {
+					anyhow::bail!("JWKS maxAge must be longer than one minute");
+				}
+				ResourceRef::Http {
+					url: url.clone(),
+					kind: max_age.map_or(ResourceKind::Jwks, ResourceKind::JwksWithMaxAge),
+				}
+			},
+		};
+		let content = resources.fetch_content(resource).await?;
+		Ok((serde_json::from_slice(&content.bytes)?, content.freshness))
+	}
 }
 
 #[apply(schema_enum!)]
@@ -317,10 +368,7 @@ impl Default for JWTValidationOptions {
 }
 
 impl LocalJwtConfig {
-	pub async fn try_into(
-		self,
-		resources: &crate::resource_manager::ResourceFetcher,
-	) -> Result<Jwt, JwkError> {
+	pub async fn try_into(self, resources: &ResourceFetcher) -> Result<Jwt, JwkError> {
 		let (mode, authorization_location, preserve_token, providers_cfg) = match self {
 			LocalJwtConfig::Multi {
 				mode,
@@ -351,12 +399,14 @@ impl LocalJwtConfig {
 
 		let mut providers = Vec::with_capacity(providers_cfg.len());
 		for pc in providers_cfg {
-			let jwks: JwkSet = pc
+			let (jwks, freshness) = pc
 				.jwks
-				.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
+				.load(resources)
 				.await
 				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+			let mut provider =
+				Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+			provider.freshness = freshness;
 			providers.push(provider);
 		}
 		Ok(Jwt {
@@ -476,7 +526,11 @@ impl Provider {
 			);
 		}
 
-		Ok(Provider { issuer, keys })
+		Ok(Provider {
+			issuer,
+			keys,
+			freshness: None,
+		})
 	}
 }
 
@@ -602,7 +656,7 @@ impl Jwt {
 		};
 		let claims = match self.validate_claims(&token) {
 			Ok(claims) => claims,
-			Err(e) if self.mode == Mode::Permissive => {
+			Err(e) if self.mode == Mode::Permissive && e != TokenError::ExpiredSigningKeys => {
 				dtrace::pol_result!(
 					dtrace::Warn,
 					Skip,
@@ -678,16 +732,24 @@ impl Jwt {
 			let Some(key) = provider.keys.get(kid) else {
 				continue;
 			};
+			if provider
+				.freshness
+				.as_ref()
+				.is_some_and(ResourceFreshness::is_expired)
+			{
+				first_error.get_or_insert(TokenError::ExpiredSigningKeys);
+				continue;
+			}
 			match decode_with(key) {
 				Ok(claims) => return Ok(claims),
 				Err(error) => {
 					debug!(?error, issuer = %provider.issuer, "Token is malformed or does not pass validation.");
-					first_error.get_or_insert(error);
+					first_error.get_or_insert(TokenError::Invalid(error));
 				},
 			}
 		}
 		if let Some(error) = first_error {
-			return Err(TokenError::Invalid(error));
+			return Err(error);
 		}
 
 		// No provider has both the token's iss and kid.
