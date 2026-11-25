@@ -162,6 +162,7 @@ pub fn extract_model_from_path(path: &str) -> Option<Strng> {
 	} else if path.ends_with(":streamGenerateContent")
 		|| path.ends_with(":generateContent")
 		|| path.ends_with(":countTokens")
+		|| path.ends_with(":embedContent")
 	{
 		// Vertex nests models under publishers/{publisher}/models/; the Gemini API uses a
 		// bare /v1beta/models/{model}:suffix with no publisher segment.
@@ -341,6 +342,13 @@ mod tests {
 			)
 			.as_deref(),
 			Some("gemini-2.5-flash")
+		);
+		assert_eq!(
+			extract_model_from_path(
+				"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-2:embedContent"
+			)
+			.as_deref(),
+			Some("gemini-embedding-2")
 		);
 		assert_eq!(
 			extract_model_from_path(
