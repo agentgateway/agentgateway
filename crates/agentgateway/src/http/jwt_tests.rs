@@ -3,13 +3,125 @@ use std::collections::HashSet;
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
+use super::{
+	JWTValidationOptions, JwkError, JwksSource, Jwt, LocalJwtConfig, Mode, Provider, TokenError,
+};
 use crate::telemetry::log::MetricsConfig;
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
 
 fn bearer_location() -> crate::http::auth::AuthorizationLocation {
 	crate::http::auth::AuthorizationLocation::bearer_header()
+}
+
+/// Makes a provider behave as if its remote keys were last fetched longer ago than its maximum age.
+pub(crate) fn with_expired_signing_keys(mut provider: Provider) -> Provider {
+	provider.maximum_key_age = Some(std::time::Duration::from_secs(10));
+	provider.key_freshness = None;
+	provider
+}
+
+#[test]
+fn jwks_max_age_is_an_opt_in_remote_setting() {
+	let remote: JwksSource =
+		serde_json::from_value(json!({"url": "https://issuer.invalid/jwks", "maxAge": "10s"})).unwrap();
+	assert!(matches!(
+		remote,
+		JwksSource::Remote { max_age: Some(age), .. } if age == std::time::Duration::from_secs(10)
+	));
+	let unbounded: JwksSource =
+		serde_json::from_value(json!({"url": "https://issuer.invalid/jwks"})).unwrap();
+	assert!(matches!(
+		unbounded,
+		JwksSource::Remote { max_age: None, .. }
+	));
+	// Only remote key sets are refetched, so maxAge is not accepted on a file source.
+	assert!(
+		serde_json::from_value::<JwksSource>(json!({"file": "/jwks.json", "maxAge": "10s"})).is_err()
+	);
+}
+
+#[tokio::test]
+async fn jwks_max_age_must_be_positive() {
+	let config: LocalJwtConfig = serde_json::from_value(json!({
+		"mode": "strict", "issuer": "https://issuer.invalid",
+		"jwks": {"url": "https://issuer.invalid/jwks", "maxAge": "0s"}
+	}))
+	.unwrap();
+	let error = config
+		.try_into(&crate::resource_manager::ResourceFetcher::files_only())
+		.await
+		.unwrap_err();
+	assert!(error.to_string().contains("positive"), "{error}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn retained_validator_rejects_keys_after_maximum_age() {
+	let (mut verifier, kid, issuer, audience) = setup_test_jwt();
+	let token = build_signed_token(kid, issuer, audience, 4_000_000_000);
+	verifier.providers[0].maximum_key_age = Some(std::time::Duration::from_secs(10));
+	verifier.providers[0].key_freshness = Some(crate::resource_manager::ResourceFreshness::now());
+	assert!(verifier.validate_claims(&token).is_ok());
+	let retained = verifier.clone();
+	tokio::time::advance(std::time::Duration::from_secs(10)).await;
+	assert_eq!(
+		retained.validate_claims(&token).unwrap_err(),
+		TokenError::ExpiredSigningKeys
+	);
+}
+
+#[tokio::test(start_paused = true)]
+async fn unspecified_maximum_age_preserves_existing_validation() {
+	let (verifier, kid, issuer, audience) = setup_test_jwt();
+	let token = build_signed_token(kid, issuer, audience, 4_000_000_000);
+	tokio::time::advance(std::time::Duration::from_secs(86400)).await;
+	assert!(verifier.validate_claims(&token).is_ok());
+}
+
+#[test]
+fn expired_provider_does_not_disable_an_independent_fresh_provider() {
+	let (mut verifier, first, second) = setup_test_multi_jwt();
+	verifier.providers[0] = with_expired_signing_keys(verifier.providers[0].clone());
+	assert_eq!(
+		verifier
+			.validate_claims(&build_signed_token(
+				first.0,
+				first.1,
+				first.2,
+				4_000_000_000
+			))
+			.unwrap_err(),
+		TokenError::ExpiredSigningKeys
+	);
+	assert!(
+		verifier
+			.validate_claims(&build_signed_token(
+				second.0,
+				second.1,
+				second.2,
+				4_000_000_000
+			))
+			.is_ok()
+	);
+}
+
+#[test]
+fn expired_keys_of_another_issuer_keep_the_issuer_mismatch_error() {
+	let (mut verifier, first, _) = setup_test_multi_jwt();
+	verifier.providers[0] = with_expired_signing_keys(verifier.providers[0].clone());
+	// The kid matches the expired provider, but the issuer matches no provider.
+	let error = verifier
+		.validate_claims(&build_signed_token(
+			first.0,
+			"https://unknown-issuer.invalid",
+			first.2,
+			4_000_000_000,
+		))
+		.unwrap_err();
+	assert!(
+		matches!(&error, TokenError::Invalid(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::InvalidIssuer),
+		"{error:?}"
+	);
 }
 
 // Deserialization: missing jwtValidationOptions defaults required_claims to ["exp"]
