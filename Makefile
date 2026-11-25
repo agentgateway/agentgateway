@@ -88,6 +88,20 @@ lint:
 	cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
 	cargo clippy --all-targets -- -D clippy::disallowed_methods -D clippy::disallowed_fields
 
+include telemetry/versions.env
+
+WEAVER := telemetry/weaver.sh
+
+.PHONY: semconv-check
+semconv-check:
+	$(WEAVER) registry check -r telemetry/registry --v2 \
+		--policy '$(WEAVER_PACKAGES)[policies/check/stability]' \
+		--policy telemetry/policies
+
+.PHONY: semconv-policies-test
+semconv-policies-test:
+	telemetry/policies/test.sh
+
 .PHONY: clippy
 fix-clippy:
 	cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs

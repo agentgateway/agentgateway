@@ -1,0 +1,3 @@
+name: fixture
+description: A registry that one agentgateway policy must reject.
+schema_url: https://agentgateway.dev/schemas/telemetry-fixture/0.1.0

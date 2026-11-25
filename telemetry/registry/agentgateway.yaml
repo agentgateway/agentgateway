@@ -1,0 +1,147 @@
+file_format: definition/2
+attributes:
+  - key: agentgateway.outbound.kind
+    brief: Why agentgateway made an outbound call.
+    stability: development
+    type:
+      members:
+        - id: primary
+          value: Primary
+          brief: The call to the selected backend.
+          stability: development
+        - id: policy
+          value: Policy
+          brief: A callout made by a policy.
+          stability: development
+        - id: mirror
+          value: Mirror
+          brief: A mirrored copy of the request.
+          stability: development
+
+  - key: agentgateway.outbound.subtype
+    brief: What an outbound call is for. It is also the name of the outbound span.
+    stability: development
+    type:
+      members:
+        - id: http
+          value: Http
+          brief: A plain HTTP backend.
+          stability: development
+        - id: llm
+          value: Llm
+          brief: An LLM provider.
+          stability: development
+        - id: mcp
+          value: Mcp
+          brief: An MCP server.
+          stability: development
+        - id: ext_authz
+          value: ExtAuthz
+          brief: An external authorization service.
+          stability: development
+        - id: substrate
+          value: Substrate
+          brief: The Substrate router.
+          stability: development
+        - id: ext_proc
+          value: ExtProc
+          brief: An external processing service.
+          stability: development
+        - id: guardrail
+          value: Guardrail
+          brief: A guardrail service.
+          stability: development
+        - id: rate_limit
+          value: RateLimit
+          brief: A remote rate limit service.
+          stability: development
+        - id: oidc
+          value: Oidc
+          brief: An OIDC provider.
+          stability: development
+        - id: callout
+          value: Callout
+          brief: A generic callout.
+          stability: development
+
+  - key: agw.ai.original_model
+    brief: The model the client asked for, before routing rewrote it.
+    stability: development
+    type: string
+    examples: ["gpt-4o"]
+
+  - key: agw.ai.time_to_first_token
+    brief: Seconds from the request until the first output token arrived.
+    stability: development
+    type: double
+
+  - key: agw.ai.time_per_output_token
+    brief: Average seconds per output token after the first one.
+    stability: development
+    type: double
+
+  - key: agw.ai.guardrails
+    brief: The guardrails that ran on the request and what each one decided.
+    stability: development
+    type: any
+
+  - key: agw.ai.usage.cost.total
+    brief: Total USD cost of the request, as a decimal string.
+    stability: development
+    type: string
+    examples: ["0.00123"]
+
+  - key: agw.ai.usage.cost.input
+    brief: USD cost of the input tokens, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.output
+    brief: USD cost of the output tokens, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.cache_read
+    brief: USD cost of the cache read tokens, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.cache_write
+    brief: USD cost of the cache write tokens, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.reasoning
+    brief: USD cost of the reasoning tokens, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.input_audio
+    brief: USD cost of the audio input tokens, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.output_audio
+    brief: USD cost of the audio output tokens, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.pages
+    brief: USD cost of the processed document pages, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.audio_duration
+    brief: USD cost of the processed audio duration, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.cache_write_details.1h
+    brief: USD cost of cache writes with a one hour lifetime, as a decimal string.
+    stability: development
+    type: string
+
+  - key: agw.ai.usage.cost.cache_write_details.12h
+    brief: USD cost of cache writes with a twelve hour lifetime, as a decimal string.
+    stability: development
+    type: string

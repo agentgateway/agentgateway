@@ -1,0 +1,12 @@
+file_format: definition_manifest/2.0
+name: agentgateway
+description: The telemetry agentgateway emits.
+# An identifier for this registry version. Nothing is published there.
+schema_url: https://agentgateway.dev/schemas/telemetry/0.1.0
+stability: development
+dependencies:
+  - schema_url: https://opentelemetry.io/schemas/1.45.0
+    registry_path: https://github.com/open-telemetry/semantic-conventions.git@v1.45.0[model]
+  # semantic-conventions-genai has no releases yet, so it is pinned by commit.
+  - schema_url: https://opentelemetry.io/schemas/semconv-genai-dev/0.1.0-unreleased
+    registry_path: https://github.com/open-telemetry/semantic-conventions-genai.git@622b2b6073b15e5ed886c3c12a65a892b9cd5c70[model]

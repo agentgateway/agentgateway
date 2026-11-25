@@ -1,0 +1,263 @@
+file_format: definition/2
+spans:
+  - type: agentgateway.request
+    requirement_level: recommended
+    kind: server
+    name:
+      note: >
+        The MCP method for MCP requests, the gRPC service and method for gRPC
+        requests, and `{http.request.method} {path match}` otherwise. A
+        `span.name` field in the tracing config overrides it.
+    brief: One request agentgateway proxied.
+    note: >
+      The OTLP access log record of the request carries the same attributes, without
+      the `agw.ai.usage.cost.*` breakdown, plus `error`, which the span carries as its status description instead.
+    stability: development
+    attributes:
+      - ref: http.request.method
+        requirement_level: recommended
+      - ref: http.response.status_code
+        requirement_level:
+          conditionally_required: A response was sent.
+      - ref: url.scheme
+        requirement_level: required
+      - ref: url.path
+        requirement_level: recommended
+      - ref: url.query
+        requirement_level:
+          conditionally_required: The request target has a query.
+      - ref: server.address
+        requirement_level: recommended
+      - ref: server.port
+        requirement_level: recommended
+      - ref: client.address
+        requirement_level: recommended
+      - ref: network.protocol.version
+        requirement_level: recommended
+      - ref: error.type
+        requirement_level:
+          conditionally_required: The request failed.
+      - ref: gateway
+        requirement_level: recommended
+      - ref: listener
+        requirement_level: recommended
+      - ref: route
+        requirement_level: recommended
+      - ref: route_rule
+        requirement_level: recommended
+      - ref: endpoint
+        requirement_level: recommended
+      - ref: protocol
+        requirement_level: recommended
+      - ref: reason
+        requirement_level: recommended
+      - ref: duration
+        requirement_level: required
+      - ref: connection.id
+        requirement_level: opt_in
+      - ref: request.id
+        requirement_level: opt_in
+      - ref: src.identity
+        requirement_level:
+          conditionally_required: The client presented an mTLS certificate.
+      - ref: tls.sni
+        requirement_level:
+          conditionally_required: TLS without an HTTP host.
+      - ref: trace.id
+        requirement_level: recommended
+      - ref: span.id
+        requirement_level: recommended
+      - ref: jwt.sub
+        requirement_level:
+          conditionally_required: A JWT was validated.
+      - ref: retry.attempt
+        requirement_level:
+          conditionally_required: The request was retried.
+      - ref: grpc.status
+        requirement_level:
+          conditionally_required: The request is gRPC.
+      - ref: inferencepool.selected_endpoint
+        requirement_level:
+          conditionally_required: The backend is an inference pool.
+      - ref_group: agentgateway.request.a2a
+      - ref_group: agentgateway.request.mcp
+      - ref_group: agentgateway.request.gen_ai
+      - ref_group: agentgateway.request.substrate
+
+  - type: agentgateway.outbound
+    requirement_level: recommended
+    kind: client
+    name:
+      note: The value of `agentgateway.outbound.subtype`.
+    brief: One call agentgateway made to a backend or a policy service.
+    stability: development
+    attributes:
+      - ref: agentgateway.outbound.kind
+        requirement_level: required
+      - ref: agentgateway.outbound.subtype
+        requirement_level: required
+      - ref: http.status
+        requirement_level:
+          conditionally_required: The call got an HTTP response.
+      - ref: grpc.status
+        requirement_level:
+          conditionally_required: The call is gRPC.
+      - ref: error.type
+        requirement_level:
+          conditionally_required: The call failed.
+
+attribute_groups:
+  - id: agentgateway.request.a2a
+    visibility: internal
+    attributes:
+      - ref: a2a.method
+        requirement_level:
+          conditionally_required: The request is A2A.
+      - ref: a2a.response.outcome
+        requirement_level:
+          conditionally_required: The request is A2A.
+      - ref: a2a.response.error_code
+        requirement_level:
+          conditionally_required: The A2A response is an error.
+      - ref: a2a.result.kind
+        requirement_level:
+          conditionally_required: The A2A response has a result.
+      - ref: a2a.task.state
+        requirement_level:
+          conditionally_required: The A2A response has a task.
+      - ref: a2a.context.id
+        requirement_level:
+          conditionally_required: The A2A response has a context.
+
+  - id: agentgateway.request.mcp
+    visibility: internal
+    attributes:
+      - ref: mcp.method.name
+        requirement_level:
+          conditionally_required: The request is MCP.
+      - ref: mcp.session.id
+        requirement_level:
+          conditionally_required: The request is MCP and has a session.
+      - ref: mcp.target
+        requirement_level:
+          conditionally_required: The request is MCP.
+      - ref: mcp.resource.type
+        requirement_level:
+          conditionally_required: The MCP request addresses a resource.
+      - ref: mcp.resource.uri
+        requirement_level:
+          conditionally_required: The MCP request reads a resource.
+      - ref: gen_ai.tool.name
+        requirement_level:
+          conditionally_required: The MCP request calls a tool.
+      - ref: gen_ai.prompt.name
+        requirement_level:
+          conditionally_required: The MCP request gets a prompt.
+      - ref: mcp.error.code
+        requirement_level:
+          conditionally_required: The MCP response is an error.
+      - ref: mcp.error.message
+        requirement_level:
+          conditionally_required: The MCP response is an error.
+
+  - id: agentgateway.request.gen_ai
+    visibility: internal
+    attributes:
+      - ref: gen_ai.operation.name
+        requirement_level:
+          conditionally_required: The request is an LLM request.
+      - ref: gen_ai.provider.name
+        requirement_level:
+          conditionally_required: The request is an LLM request.
+      - ref: gen_ai.request.model
+        requirement_level:
+          conditionally_required: The request is an LLM request.
+      - ref: gen_ai.response.model
+        requirement_level: recommended
+      - ref: gen_ai.response.id
+        requirement_level: recommended
+      - ref: gen_ai.response.finish_reasons
+        requirement_level: recommended
+      - ref: gen_ai.request.temperature
+        requirement_level: recommended
+      - ref: gen_ai.request.top_p
+        requirement_level: recommended
+      - ref: gen_ai.request.max_tokens
+        requirement_level: recommended
+      - ref: gen_ai.request.frequency_penalty
+        requirement_level: recommended
+      - ref: gen_ai.request.presence_penalty
+        requirement_level: recommended
+      - ref: gen_ai.request.seed
+        requirement_level: recommended
+      - ref: gen_ai.request.encoding_formats
+        requirement_level: recommended
+      - ref: gen_ai.embeddings.dimension.count
+        requirement_level: recommended
+      - ref: gen_ai.usage.input_tokens
+        requirement_level: recommended
+      - ref: gen_ai.usage.output_tokens
+        requirement_level: recommended
+      - ref: gen_ai.usage.cache_read.input_tokens
+        requirement_level: recommended
+      - ref: gen_ai.usage.cache_creation.input_tokens
+        requirement_level: recommended
+      - ref: gen_ai.usage.reasoning_tokens
+        requirement_level: recommended
+      - ref: gen_ai.usage.input_audio_tokens
+        requirement_level: recommended
+      - ref: gen_ai.usage.output_audio_tokens
+        requirement_level: recommended
+      - ref: gen_ai.usage.output_image_tokens
+        requirement_level: recommended
+      - ref: gen_ai.usage.audio_seconds
+        requirement_level: recommended
+      - ref: agw.ai.original_model
+        requirement_level:
+          conditionally_required: Routing changed the model.
+      - ref: agw.ai.time_to_first_token
+        requirement_level: recommended
+      - ref: agw.ai.time_per_output_token
+        requirement_level: recommended
+      - ref: agw.ai.guardrails
+        requirement_level:
+          conditionally_required: A guardrail ran.
+      - ref: agw.ai.usage.cost.total
+        requirement_level:
+          conditionally_required: The model has a price.
+      - ref: agw.ai.usage.cost.input
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.output
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.cache_read
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.cache_write
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.reasoning
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.input_audio
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.output_audio
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.pages
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.audio_duration
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.cache_write_details.1h
+        requirement_level: recommended
+      - ref: agw.ai.usage.cost.cache_write_details.12h
+        requirement_level: recommended
+
+  - id: agentgateway.request.substrate
+    visibility: internal
+    attributes:
+      - ref: ate.actor.name
+        requirement_level: recommended
+      - ref: ate.actor.uid
+        requirement_level: recommended
+      - ref: ate.atespace
+        requirement_level: recommended
+      - ref: ate.router.resume
+        requirement_level: recommended
+      - ref: ate.router.route.duration
+        requirement_level: recommended
