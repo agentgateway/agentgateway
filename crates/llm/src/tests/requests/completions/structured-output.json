@@ -9,8 +9,13 @@
       "name": "person",
       "schema": {
         "type": "object",
+        "propertyOrdering": ["person"],
         "properties": {
-          "person": { "$ref": "#/$defs/Person" }
+          "person": { "$ref": "#/$defs/Person" },
+          "propertyOrdering": { "type": "string" },
+          "children": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" } } } },
+          "annotation": { "type": "string", "default": { "type": "object", "propertyOrdering": ["kept"] } },
+          "closed": { "type": "object", "additionalProperties": false }
         },
         "required": ["person"],
         "$defs": {

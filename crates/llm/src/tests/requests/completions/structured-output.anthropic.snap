@@ -1,0 +1,143 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/structured-output.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: user
+      content: "Extract the person from: Ada Lovelace, age 36."
+  response_format:
+    type: json_schema
+    json_schema:
+      name: person
+      schema:
+        type: object
+        propertyOrdering:
+          - person
+        properties:
+          person:
+            $ref: "#/$defs/Person"
+          propertyOrdering:
+            type: string
+          children:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+          annotation:
+            type: string
+            default:
+              type: object
+              propertyOrdering:
+                - kept
+          closed:
+            type: object
+            additionalProperties: false
+        required:
+          - person
+        $defs:
+          Person:
+            type: object
+            properties:
+              name:
+                type: string
+              age:
+                type: integer
+            required:
+              - name
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Extract the person from: Ada Lovelace, age 36."
+          }
+        ]
+      }
+    ],
+    "model": "gemini-2.5-pro",
+    "max_tokens": 4096,
+    "output_config": {
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "person": {
+              "$ref": "#/$defs/Person"
+            },
+            "propertyOrdering": {
+              "type": "string"
+            },
+            "children": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "annotation": {
+              "type": "string",
+              "default": {
+                "type": "object",
+                "propertyOrdering": [
+                  "kept"
+                ]
+              }
+            },
+            "closed": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "person"
+          ],
+          "$defs": {
+            "Person": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "age": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-2.5-pro",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Extract the person from: Ada Lovelace, age 36."
+      }
+    ]
+  }
+}
