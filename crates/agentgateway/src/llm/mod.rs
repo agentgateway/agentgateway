@@ -1621,7 +1621,10 @@ impl AIProvider {
 	) -> anyhow::Result<()> {
 		match self {
 			AIProvider::Copilot(_) => {
-				copilot::Provider::set_required_headers(req.headers_mut());
+				req.headers_mut().insert(
+					header::CONTENT_TYPE,
+					HeaderValue::from_static("application/json"),
+				);
 				Ok(())
 			},
 			AIProvider::Anthropic(_) => {

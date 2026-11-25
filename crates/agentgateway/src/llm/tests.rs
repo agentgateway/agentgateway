@@ -2238,6 +2238,7 @@ fn copilot_required_fields() {
 		.body(Body::empty())
 		.unwrap();
 
+	copilot::Provider::set_client_headers(req.headers_mut());
 	provider
 		.set_required_fields(&mut req, RouteType::Completions, None, None)
 		.unwrap();

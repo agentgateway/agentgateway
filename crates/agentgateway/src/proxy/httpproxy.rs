@@ -430,8 +430,7 @@ async fn apply_backend_policies(
 		tcp: _,
 		// Applied elsewhere
 		tunnel: _,
-		// Applied elsewhere
-		llm_provider: _,
+		llm_provider,
 		// Applied elsewhere
 		llm: _,
 		// Applied elsewhere
@@ -475,6 +474,11 @@ async fn apply_backend_policies(
 	rp.backend_transformation = transformation
 		.apply("backend transformation", &client, log, req, rp.headers())
 		.await?;
+	if let Some(provider) = llm_provider
+		&& matches!(provider.provider, llm::AIProvider::Copilot(_))
+	{
+		llm::copilot::Provider::set_client_headers(req.headers_mut());
+	}
 	if let Some(rhm) = request_header_modifier {
 		rhm.apply_request(req).map_err(ProxyError::from)?;
 		dtrace::snapshot!(Request, "backend request header modifier", &req);
