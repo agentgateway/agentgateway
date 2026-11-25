@@ -60,7 +60,7 @@ policies:
             header:
               name: authorization
               prefix: "Bearer "
-          mode: optional
+          mode: strict
           providers:
             - issuer: agentgateway.dev
               keys: []

@@ -255,3 +255,12 @@ async fn test_ordinary_request_still_returns_401() {
 			.is_none()
 	);
 }
+
+#[test]
+fn test_missing_mode_defaults_to_strict() {
+	let local: LocalBasicAuth = serde_json::from_value(serde_json::json!({
+		"htpasswd": create_test_htpasswd()
+	}))
+	.unwrap();
+	assert_eq!(local.mode, Mode::Strict);
+}

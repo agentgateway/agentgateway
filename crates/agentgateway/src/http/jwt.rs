@@ -140,7 +140,7 @@ impl Debug for Jwt {
 pub enum LocalJwtConfig {
 	/// Validate JWTs against one or more trusted token issuers.
 	Multi {
-		/// Controls whether requests must include a JWT and how validation failures are handled.
+		/// Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.
 		#[cfg_attr(feature = "schema", schemars(default))]
 		mode: Mode,
 		/// Where to read the JWT from in incoming requests.
@@ -154,7 +154,7 @@ pub enum LocalJwtConfig {
 	},
 	/// Validate JWTs against a single trusted token issuer.
 	Single {
-		/// Controls whether requests must include a JWT and how validation failures are handled.
+		/// Controls whether requests must include a JWT and how validation failures are handled. Defaults to `strict`.
 		#[cfg_attr(feature = "schema", schemars(default))]
 		mode: Mode,
 		/// Where to read the JWT from in incoming requests.
@@ -251,11 +251,11 @@ pub struct ProviderConfig {
 #[derive(Default)]
 pub enum Mode {
 	/// Require a valid JWT from a configured issuer.
+	/// This is the default option.
+	#[default]
 	Strict,
 	/// Validate the JWT when present.
-	/// This is the default option.
 	/// Warning: this allows requests without a JWT.
-	#[default]
 	Optional,
 	/// Decode valid JWTs for later policy use.
 	/// Warning: this allows requests with missing or invalid JWTs.
