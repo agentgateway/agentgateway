@@ -1119,7 +1119,7 @@ impl Policy {
 		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let (content, _) = Self::scoped_request_texts(req, guard_scope);
-		if content.is_empty() {
+		if Self::is_blank(&content) {
 			return Ok((GuardrailOutcome::None, None));
 		}
 		let resp = moderation::send_request(content, claims, client, moderation).await?;
@@ -1179,7 +1179,7 @@ impl Policy {
 		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let (content, in_scope) = Self::scoped_request_texts(req, guard_scope);
-		if content.is_empty() {
+		if Self::is_blank(&content) {
 			return Ok((GuardrailOutcome::None, None));
 		}
 		let sent_count = content.len();
@@ -1212,7 +1212,7 @@ impl Policy {
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		let (content, in_scope) = Self::scoped_response_texts(resp, guard_scope);
 
-		if content.is_empty() {
+		if Self::is_blank(&content) {
 			return Ok((GuardrailOutcome::None, None));
 		}
 		let sent_count = content.len();
@@ -1295,7 +1295,7 @@ impl Policy {
 		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let (content, _) = Self::scoped_request_texts(req, guard_scope);
-		if content.is_empty() {
+		if Self::is_blank(&content) {
 			return Ok((GuardrailOutcome::None, None));
 		}
 		let resp = google_model_armor::send_request(content, claims, client, model_armor).await?;
@@ -1330,7 +1330,7 @@ impl Policy {
 		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let (content, _) = Self::scoped_request_texts(req, guard_scope);
-		if content.is_empty() {
+		if Self::is_blank(&content) {
 			return Ok((GuardrailOutcome::None, None));
 		}
 		let content = content.join("\n");
@@ -1409,7 +1409,7 @@ impl Policy {
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		let (content, _) = Self::scoped_response_texts(resp, guard_scope);
 
-		if content.is_empty() {
+		if Self::is_blank(&content) {
 			return Ok((GuardrailOutcome::None, None));
 		}
 
@@ -1432,7 +1432,7 @@ impl Policy {
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		let (content, _) = Self::scoped_response_texts(resp, guard_scope);
 
-		if content.is_empty() {
+		if Self::is_blank(&content) {
 			return Ok((GuardrailOutcome::None, None));
 		}
 
@@ -1510,6 +1510,10 @@ impl Policy {
 			}
 		});
 		(texts, in_scope)
+	}
+
+	fn is_blank(texts: &[String]) -> bool {
+		texts.iter().all(|t| t.trim().is_empty())
 	}
 
 	#[cfg(test)]

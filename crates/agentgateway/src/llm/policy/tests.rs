@@ -304,6 +304,64 @@ fn model_armor_blocked_records_guardrail_info() {
 	);
 }
 
+#[rstest::rstest]
+#[case::no_texts(&[], true)]
+#[case::empty(&[""], true)]
+#[case::whitespace(&["", " \n\t"], true)]
+#[case::has_text(&["", "hello"], false)]
+fn is_blank_detects_texts_with_nothing_to_scan(#[case] texts: &[&str], #[case] expected: bool) {
+	let texts: Vec<String> = texts.iter().map(|t| t.to_string()).collect();
+
+	assert_eq!(Policy::is_blank(&texts), expected);
+}
+
+#[tokio::test]
+async fn model_armor_response_skips_tool_call_with_empty_reasoning() {
+	let mut resp: crate::llm::types::completions::Response =
+		serde_json::from_value(serde_json::json!({
+			"model": "claude-sonnet-5",
+			"usage": null,
+			"choices": [{
+				"index": 0,
+				"finish_reason": "tool_calls",
+				"message": {
+					"role": "assistant",
+					"content": null,
+					"reasoning_content": "",
+					"tool_calls": [{
+						"id": "call_1",
+						"type": "function",
+						"function": {"name": "get_weather", "arguments": "{\"city\":\"Paris\"}"}
+					}]
+				}
+			}]
+		}))
+		.unwrap();
+	let config = GoogleModelArmor {
+		failure_mode: FailureMode::FailClosed,
+		template_id: strng::new("templates/my-template"),
+		project_id: strng::new("proj"),
+		location: None,
+		policies: vec![],
+		action: Default::default(),
+	};
+	let client = crate::test_helpers::policy_client();
+
+	let (outcome, detail) = Policy::evaluate_google_model_armor_response(
+		&mut resp,
+		None,
+		&client,
+		&config,
+		&RequestRejection::default(),
+		&default_response_scope(),
+	)
+	.await
+	.unwrap();
+
+	assert!(matches!(outcome, GuardrailOutcome::None));
+	assert!(detail.is_none());
+}
+
 #[test]
 fn moderation_flagged_records_guardrail_info() {
 	let cats = [
