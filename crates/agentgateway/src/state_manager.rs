@@ -158,7 +158,6 @@ impl LocalClient {
 		info!("Watching config file: {}", path.display());
 
 		let lc: LocalClient = self.to_owned();
-		let path = path.to_path_buf();
 		let mut resource_changes = lc.resource_manager.subscribe_changes();
 		let mut config_store_changes = lc
 			.config_resource_store
@@ -167,20 +166,14 @@ impl LocalClient {
 		tokio::task::spawn(async move {
 			loop {
 				tokio::select! {
-					changed = watched.changed_invalidated() => {
-						let Some(invalidated) = changed else {
+					// The watch is re-registered before the reload, not after: reloading a large
+					// config takes long enough that an atomic replacement landing meanwhile
+					// would otherwise find no watch at all and never be loaded.
+					changed = watched.changed_rearmed() => {
+						if !changed {
 							break;
-						};
-						next_state = lc.reload_config_after_change(next_state).await;
-						if invalidated {
-							match crate::util::watch_files_with_options(vec![path.clone()], watch_options) {
-								Ok(new_watched) => watched = new_watched,
-								Err(e) => {
-									warn!("failed to re-watch config file {}: {e}", path.display());
-									break;
-								},
-							}
 						}
+						next_state = lc.reload_config_after_change(next_state).await;
 					}
 					changed = resource_changes.changed() => {
 						if changed.is_err() {
