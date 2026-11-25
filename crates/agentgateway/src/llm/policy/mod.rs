@@ -2344,12 +2344,12 @@ pub struct Moderation {
 	/// Backend policies used when calling the moderation provider.
 	#[serde(
 		default,
-		deserialize_with = "crate::types::local::de_from_local_backend_policy",
+		deserialize_with = "crate::types::local::de_from_local_callout_backend_policy",
 		skip_serializing_if = "Vec::is_empty"
 	)]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+		schemars(with = "Option<crate::types::local::CalloutLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
 }
@@ -2381,12 +2381,12 @@ pub struct BedrockGuardrails {
 	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
 	#[serde(
 		default,
-		deserialize_with = "crate::types::local::de_from_local_backend_policy",
+		deserialize_with = "crate::types::local::de_from_local_callout_backend_policy",
 		skip_serializing_if = "Vec::is_empty"
 	)]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+		schemars(with = "Option<crate::types::local::CalloutLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
 }
@@ -2412,12 +2412,12 @@ pub struct GoogleModelArmor {
 	/// Backend policies for GCP authentication (optional, defaults to implicit GCP auth)
 	#[serde(
 		default,
-		deserialize_with = "crate::types::local::de_from_local_backend_policy",
+		deserialize_with = "crate::types::local::de_from_local_callout_backend_policy",
 		skip_serializing_if = "Vec::is_empty"
 	)]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+		schemars(with = "Option<crate::types::local::CalloutLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
 }
@@ -2443,12 +2443,12 @@ pub struct AzureContentSafety {
 	/// Key auth without a location uses the `Ocp-Apim-Subscription-Key` header.
 	#[serde(
 		default,
-		deserialize_with = "crate::types::local::de_from_local_backend_policy",
+		deserialize_with = "crate::types::local::de_from_local_callout_backend_policy",
 		skip_serializing_if = "Vec::is_empty"
 	)]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+		schemars(with = "Option<crate::types::local::CalloutLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
 	/// Cached implicit Azure auth credential, shared across requests.

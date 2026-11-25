@@ -1925,6 +1925,8 @@ message BackendPolicySpec {
     TrafficPolicySpec.RBAC authorization = 19;
     SessionAffinity session_affinity = 20;
     UrlRewrite url_rewrite = 21;
+    // Retries for policy callouts. Ignored on the main request path.
+    Retry retry = 22;
   }
 }
 

@@ -23,8 +23,12 @@ pub struct Policy {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub backoff: Option<Duration>,
-	/// HTTP response status codes that should be retried.
-	#[serde(serialize_with = "ser_display_iter", deserialize_with = "de_codes")]
+	/// HTTP response status codes that should be retried. Defaults to none.
+	#[serde(
+		default,
+		serialize_with = "ser_display_iter",
+		deserialize_with = "de_codes"
+	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<std::num::NonZeroU16>"))]
 	pub codes: Box<[http::StatusCode]>,
 	/// CEL expression evaluated against the request before any attempt; when `false`,

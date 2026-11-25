@@ -750,6 +750,26 @@ func translatePolicyInheritance(strategy *agentgateway.PolicyStrategy) api.Polic
 }
 
 func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
+	translatedRetry, err := translateRetry(retry)
+
+	retryPolicy := &api.Policy{
+		Key:  basePolicyName + retryPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Retry{Retry: translatedRetry},
+			},
+		},
+	}
+
+	logger.Debug("generated Retry policy",
+		"policy", basePolicyName,
+		"agentgateway_policy", retryPolicy.Name)
+
+	return retryPolicy, err
+}
+
+func translateRetry(retry *agentgateway.Retry) (*api.Retry, error) {
 	translatedRetry := &api.Retry{}
 	var errs []error
 
@@ -787,21 +807,7 @@ func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, poli
 		translatedRetry.Condition = string(*retry.Condition)
 	}
 
-	retryPolicy := &api.Policy{
-		Key:  basePolicyName + retryPolicySuffix,
-		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Kind: &api.Policy_Traffic{
-			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Retry{Retry: translatedRetry},
-			},
-		},
-	}
-
-	logger.Debug("generated Retry policy",
-		"policy", basePolicyName,
-		"agentgateway_policy", retryPolicy.Name)
-
-	return retryPolicy, errors.Join(errs...)
+	return translatedRetry, errors.Join(errs...)
 }
 
 func processDirectResponseTraffic(_ PolicyCtx, directResponse *agentgateway.DirectResponse, _ types.NamespacedName) (*api.Policy_Traffic, error) {

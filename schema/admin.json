@@ -1239,7 +1239,7 @@
           "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+              "$ref": "#/$defs/CalloutLocalBackendPolicies"
             },
             {
               "type": "null"
@@ -1351,7 +1351,8 @@
         "failureMode"
       ]
     },
-    "SimpleLocalBackendPolicies": {
+    "CalloutLocalBackendPolicies": {
+      "description": "Backend policies for a policy callout (guardrails, ext_authz, webhooks, ...): the simple\nbackend policies plus callout-only settings.",
       "type": "object",
       "properties": {
         "requestHeaderModifier": {
@@ -1435,6 +1436,18 @@
             }
           ],
           "default": null
+        },
+        "retry": {
+          "description": "Retry the callout. Only HTTP callouts with a request body of known size are retried;\ngRPC and streaming callouts ignore this. The callout's request timeout (10s by default)\nbounds all attempts and backoffs, so an attempt that times out is not retried. Retries\nmultiply with route retries, since each route attempt re-runs its callouts.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetryPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
@@ -1445,7 +1458,8 @@
         "backendAuth",
         "http",
         "tcp",
-        "backendTunnel"
+        "backendTunnel",
+        "retry"
       ]
     },
     "HeaderModifier": {
@@ -2523,7 +2537,7 @@
           "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+              "$ref": "#/$defs/CalloutLocalBackendPolicies"
             },
             {
               "type": "null"
@@ -2975,7 +2989,7 @@
           "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+              "$ref": "#/$defs/CalloutLocalBackendPolicies"
             },
             {
               "type": "null"
@@ -3437,6 +3451,161 @@
           "type": "string",
           "const": "connect"
         }
+      ]
+    },
+    "SimpleLocalBackendPolicies": {
+      "type": "object",
+      "properties": {
+        "requestHeaderModifier": {
+          "description": "Modify request headers before forwarding to this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transformations": {
+          "description": "Modify request and response data for this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTLS": {
+          "description": "TLS settings used when connecting to this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backendAuth": {
+          "description": "Authentication credentials sent to this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackendAuthCompat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "http": {
+          "description": "HTTP protocol settings for this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HTTP"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tcp": {
+          "description": "TCP protocol settings for this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TCP"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTunnel": {
+          "description": "Tunnel settings used when connecting to this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "requestHeaderModifier",
+        "transformations",
+        "backendTLS",
+        "backendAuth",
+        "http",
+        "tcp",
+        "backendTunnel"
+      ]
+    },
+    "RetryPolicy": {
+      "type": "object",
+      "properties": {
+        "attempts": {
+          "description": "Maximum number of retries after the original request. `0` disables retries.",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255,
+          "default": 1
+        },
+        "backoff": {
+          "description": "Delay between retry attempts.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "codes": {
+          "description": "HTTP response status codes that should be retried. Defaults to none.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "default": []
+        },
+        "precondition": {
+          "description": "CEL expression evaluated against the request before any attempt; when `false`,\nretries are disabled (only the initial attempt is made), e.g. `request.method == \"GET\"`.\nRetrying requires buffering the request body in memory for replay, so this lets us skip\nthat cost when the request is known to be non-retriable (e.g. streaming or websockets).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "condition": {
+          "description": "CEL expression evaluated against each response to decide whether to retry. A response\nis retried when its status code is in `codes` *or* this expression evaluates to `true`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "attempts",
+        "codes"
       ]
     },
     "VirtualModelCalloutFailureMode": {

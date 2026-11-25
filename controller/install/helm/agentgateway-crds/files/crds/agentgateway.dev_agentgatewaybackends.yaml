@@ -3406,6 +3406,87 @@ spec:
                                                           - HTTP2
                                                           type: string
                                                       type: object
+                                                    retry:
+                                                      description: |-
+                                                        Retry calls to the prompt guard provider. All attempts and backoffs share
+                                                        the request timeout (`http.requestTimeout`, 10s by default), so an attempt
+                                                        that times out is not retried. Retries multiply with route retries.
+                                                      properties:
+                                                        attempts:
+                                                          default: 1
+                                                          description: |-
+                                                            Attempts specifies the maximum number of times an individual request
+                                                            from the Gateway to a backend should be retried in addition to the
+                                                            initial request.
+
+                                                            If the maximum number of retries has been attempted without a successful
+                                                            response from the backend, the Gateway MUST return an error.
+
+                                                            An explicit zero value MUST disable retries.
+
+                                                            Support: Extended
+                                                          minimum: 0
+                                                          type: integer
+                                                        backoff:
+                                                          description: 'Minimum duration
+                                                            to wait between retry
+                                                            attempts, in Gateway API
+                                                            Duration format. Implementations
+                                                            may add jitter or use
+                                                            exponential backoff, and
+                                                            must not exceed a configured
+                                                            request timeout. Support:
+                                                            Extended'
+                                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                                          type: string
+                                                        codes:
+                                                          description: |-
+                                                            Codes defines the HTTP response status codes for which a backend request
+                                                            should be retried.
+
+                                                            Support: Extended
+                                                          items:
+                                                            description: |-
+                                                              HTTPRouteRetryStatusCode defines an HTTP response status code for
+                                                              which a backend request should be retried.
+
+                                                              Implementations MUST support the following status codes as retriable:
+
+                                                              * 500
+                                                              * 502
+                                                              * 503
+                                                              * 504
+
+                                                              Implementations MAY support specifying additional discrete values in the
+                                                              500-599 range.
+
+                                                              Implementations MAY support specifying discrete values in the 400-499 range,
+                                                              which are often inadvisable to retry.
+                                                            maximum: 599
+                                                            minimum: 400
+                                                            type: integer
+                                                          type: array
+                                                          x-kubernetes-list-type: set
+                                                        condition:
+                                                          description: |-
+                                                            `condition` is a CEL expression evaluated against each response to decide
+                                                            whether to retry. A response is retried when its status code is in `codes` or
+                                                            this expression evaluates to `true`.
+                                                          maxLength: 16384
+                                                          minLength: 1
+                                                          type: string
+                                                        precondition:
+                                                          description: |-
+                                                            `precondition` is a CEL expression evaluated against the request before any
+                                                            attempt is made. When it evaluates to `false`, retries are disabled and only
+                                                            the initial attempt is made, for example `request.method == "GET"`.
+                                                            Retrying requires buffering the request body in memory for replay, so this lets
+                                                            us skip that cost when the request is known to be non-retriable (for example
+                                                            streaming uploads or long-lived connections like websockets).
+                                                          maxLength: 16384
+                                                          minLength: 1
+                                                          type: string
+                                                      type: object
                                                     tcp:
                                                       description: Settings for managing
                                                         TCP connections to the backend
@@ -3817,9 +3898,9 @@ spec:
                                                   type: object
                                                   x-kubernetes-validations:
                                                   - message: at least one of the fields
-                                                      in [auth http tcp tls tunnel]
-                                                      must be set
-                                                    rule: '[has(self.auth),has(self.http),has(self.tcp),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
+                                                      in [auth http retry tcp tls
+                                                      tunnel] must be set
+                                                    rule: '[has(self.auth),has(self.http),has(self.retry),has(self.tcp),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
                                                       >= 1'
                                                 regex:
                                                   description: Regular expression
@@ -6189,6 +6270,87 @@ spec:
                                                           - HTTP2
                                                           type: string
                                                       type: object
+                                                    retry:
+                                                      description: |-
+                                                        Retry calls to the prompt guard provider. All attempts and backoffs share
+                                                        the request timeout (`http.requestTimeout`, 10s by default), so an attempt
+                                                        that times out is not retried. Retries multiply with route retries.
+                                                      properties:
+                                                        attempts:
+                                                          default: 1
+                                                          description: |-
+                                                            Attempts specifies the maximum number of times an individual request
+                                                            from the Gateway to a backend should be retried in addition to the
+                                                            initial request.
+
+                                                            If the maximum number of retries has been attempted without a successful
+                                                            response from the backend, the Gateway MUST return an error.
+
+                                                            An explicit zero value MUST disable retries.
+
+                                                            Support: Extended
+                                                          minimum: 0
+                                                          type: integer
+                                                        backoff:
+                                                          description: 'Minimum duration
+                                                            to wait between retry
+                                                            attempts, in Gateway API
+                                                            Duration format. Implementations
+                                                            may add jitter or use
+                                                            exponential backoff, and
+                                                            must not exceed a configured
+                                                            request timeout. Support:
+                                                            Extended'
+                                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                                          type: string
+                                                        codes:
+                                                          description: |-
+                                                            Codes defines the HTTP response status codes for which a backend request
+                                                            should be retried.
+
+                                                            Support: Extended
+                                                          items:
+                                                            description: |-
+                                                              HTTPRouteRetryStatusCode defines an HTTP response status code for
+                                                              which a backend request should be retried.
+
+                                                              Implementations MUST support the following status codes as retriable:
+
+                                                              * 500
+                                                              * 502
+                                                              * 503
+                                                              * 504
+
+                                                              Implementations MAY support specifying additional discrete values in the
+                                                              500-599 range.
+
+                                                              Implementations MAY support specifying discrete values in the 400-499 range,
+                                                              which are often inadvisable to retry.
+                                                            maximum: 599
+                                                            minimum: 400
+                                                            type: integer
+                                                          type: array
+                                                          x-kubernetes-list-type: set
+                                                        condition:
+                                                          description: |-
+                                                            `condition` is a CEL expression evaluated against each response to decide
+                                                            whether to retry. A response is retried when its status code is in `codes` or
+                                                            this expression evaluates to `true`.
+                                                          maxLength: 16384
+                                                          minLength: 1
+                                                          type: string
+                                                        precondition:
+                                                          description: |-
+                                                            `precondition` is a CEL expression evaluated against the request before any
+                                                            attempt is made. When it evaluates to `false`, retries are disabled and only
+                                                            the initial attempt is made, for example `request.method == "GET"`.
+                                                            Retrying requires buffering the request body in memory for replay, so this lets
+                                                            us skip that cost when the request is known to be non-retriable (for example
+                                                            streaming uploads or long-lived connections like websockets).
+                                                          maxLength: 16384
+                                                          minLength: 1
+                                                          type: string
+                                                      type: object
                                                     tcp:
                                                       description: Settings for managing
                                                         TCP connections to the backend
@@ -6600,9 +6762,9 @@ spec:
                                                   type: object
                                                   x-kubernetes-validations:
                                                   - message: at least one of the fields
-                                                      in [auth http tcp tls tunnel]
-                                                      must be set
-                                                    rule: '[has(self.auth),has(self.http),has(self.tcp),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
+                                                      in [auth http retry tcp tls
+                                                      tunnel] must be set
+                                                    rule: '[has(self.auth),has(self.http),has(self.retry),has(self.tcp),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
                                                       >= 1'
                                                 regex:
                                                   description: Regular expression
@@ -15501,6 +15663,84 @@ spec:
                                           - HTTP2
                                           type: string
                                       type: object
+                                    retry:
+                                      description: |-
+                                        Retry calls to the prompt guard provider. All attempts and backoffs share
+                                        the request timeout (`http.requestTimeout`, 10s by default), so an attempt
+                                        that times out is not retried. Retries multiply with route retries.
+                                      properties:
+                                        attempts:
+                                          default: 1
+                                          description: |-
+                                            Attempts specifies the maximum number of times an individual request
+                                            from the Gateway to a backend should be retried in addition to the
+                                            initial request.
+
+                                            If the maximum number of retries has been attempted without a successful
+                                            response from the backend, the Gateway MUST return an error.
+
+                                            An explicit zero value MUST disable retries.
+
+                                            Support: Extended
+                                          minimum: 0
+                                          type: integer
+                                        backoff:
+                                          description: 'Minimum duration to wait between
+                                            retry attempts, in Gateway API Duration
+                                            format. Implementations may add jitter
+                                            or use exponential backoff, and must not
+                                            exceed a configured request timeout. Support:
+                                            Extended'
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                          type: string
+                                        codes:
+                                          description: |-
+                                            Codes defines the HTTP response status codes for which a backend request
+                                            should be retried.
+
+                                            Support: Extended
+                                          items:
+                                            description: |-
+                                              HTTPRouteRetryStatusCode defines an HTTP response status code for
+                                              which a backend request should be retried.
+
+                                              Implementations MUST support the following status codes as retriable:
+
+                                              * 500
+                                              * 502
+                                              * 503
+                                              * 504
+
+                                              Implementations MAY support specifying additional discrete values in the
+                                              500-599 range.
+
+                                              Implementations MAY support specifying discrete values in the 400-499 range,
+                                              which are often inadvisable to retry.
+                                            maximum: 599
+                                            minimum: 400
+                                            type: integer
+                                          type: array
+                                          x-kubernetes-list-type: set
+                                        condition:
+                                          description: |-
+                                            `condition` is a CEL expression evaluated against each response to decide
+                                            whether to retry. A response is retried when its status code is in `codes` or
+                                            this expression evaluates to `true`.
+                                          maxLength: 16384
+                                          minLength: 1
+                                          type: string
+                                        precondition:
+                                          description: |-
+                                            `precondition` is a CEL expression evaluated against the request before any
+                                            attempt is made. When it evaluates to `false`, retries are disabled and only
+                                            the initial attempt is made, for example `request.method == "GET"`.
+                                            Retrying requires buffering the request body in memory for replay, so this lets
+                                            us skip that cost when the request is known to be non-retriable (for example
+                                            streaming uploads or long-lived connections like websockets).
+                                          maxLength: 16384
+                                          minLength: 1
+                                          type: string
+                                      type: object
                                     tcp:
                                       description: Settings for managing TCP connections
                                         to the backend
@@ -15857,8 +16097,8 @@ spec:
                                   type: object
                                   x-kubernetes-validations:
                                   - message: at least one of the fields in [auth http
-                                      tcp tls tunnel] must be set
-                                    rule: '[has(self.auth),has(self.http),has(self.tcp),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
+                                      retry tcp tls tunnel] must be set
+                                    rule: '[has(self.auth),has(self.http),has(self.retry),has(self.tcp),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
                                       >= 1'
                                 regex:
                                   description: Regular expression (regex) matching
@@ -17901,6 +18141,84 @@ spec:
                                           - HTTP2
                                           type: string
                                       type: object
+                                    retry:
+                                      description: |-
+                                        Retry calls to the prompt guard provider. All attempts and backoffs share
+                                        the request timeout (`http.requestTimeout`, 10s by default), so an attempt
+                                        that times out is not retried. Retries multiply with route retries.
+                                      properties:
+                                        attempts:
+                                          default: 1
+                                          description: |-
+                                            Attempts specifies the maximum number of times an individual request
+                                            from the Gateway to a backend should be retried in addition to the
+                                            initial request.
+
+                                            If the maximum number of retries has been attempted without a successful
+                                            response from the backend, the Gateway MUST return an error.
+
+                                            An explicit zero value MUST disable retries.
+
+                                            Support: Extended
+                                          minimum: 0
+                                          type: integer
+                                        backoff:
+                                          description: 'Minimum duration to wait between
+                                            retry attempts, in Gateway API Duration
+                                            format. Implementations may add jitter
+                                            or use exponential backoff, and must not
+                                            exceed a configured request timeout. Support:
+                                            Extended'
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                          type: string
+                                        codes:
+                                          description: |-
+                                            Codes defines the HTTP response status codes for which a backend request
+                                            should be retried.
+
+                                            Support: Extended
+                                          items:
+                                            description: |-
+                                              HTTPRouteRetryStatusCode defines an HTTP response status code for
+                                              which a backend request should be retried.
+
+                                              Implementations MUST support the following status codes as retriable:
+
+                                              * 500
+                                              * 502
+                                              * 503
+                                              * 504
+
+                                              Implementations MAY support specifying additional discrete values in the
+                                              500-599 range.
+
+                                              Implementations MAY support specifying discrete values in the 400-499 range,
+                                              which are often inadvisable to retry.
+                                            maximum: 599
+                                            minimum: 400
+                                            type: integer
+                                          type: array
+                                          x-kubernetes-list-type: set
+                                        condition:
+                                          description: |-
+                                            `condition` is a CEL expression evaluated against each response to decide
+                                            whether to retry. A response is retried when its status code is in `codes` or
+                                            this expression evaluates to `true`.
+                                          maxLength: 16384
+                                          minLength: 1
+                                          type: string
+                                        precondition:
+                                          description: |-
+                                            `precondition` is a CEL expression evaluated against the request before any
+                                            attempt is made. When it evaluates to `false`, retries are disabled and only
+                                            the initial attempt is made, for example `request.method == "GET"`.
+                                            Retrying requires buffering the request body in memory for replay, so this lets
+                                            us skip that cost when the request is known to be non-retriable (for example
+                                            streaming uploads or long-lived connections like websockets).
+                                          maxLength: 16384
+                                          minLength: 1
+                                          type: string
+                                      type: object
                                     tcp:
                                       description: Settings for managing TCP connections
                                         to the backend
@@ -18257,8 +18575,8 @@ spec:
                                   type: object
                                   x-kubernetes-validations:
                                   - message: at least one of the fields in [auth http
-                                      tcp tls tunnel] must be set
-                                    rule: '[has(self.auth),has(self.http),has(self.tcp),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
+                                      retry tcp tls tunnel] must be set
+                                    rule: '[has(self.auth),has(self.http),has(self.retry),has(self.tcp),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
                                       >= 1'
                                 regex:
                                   description: Regular expression (regex) matching

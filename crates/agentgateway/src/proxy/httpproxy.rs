@@ -57,6 +57,10 @@ use crate::types::local::InternalBackend;
 use crate::types::{backend, frontend};
 use crate::{ProxyInputs, store, *};
 
+#[path = "httpproxy/callout_retry.rs"]
+mod callout_retry;
+pub use callout_retry::CalloutRetryClassifier;
+
 // Inline-awaited futures here can enlarge callers up to the per-request future; boxed ones
 // allocate on every call. A larger future usually means some value is now held across an await.
 const MAKE_BACKEND_CALL_FUTURE_SIZE: usize = 7 * 1024;
@@ -456,6 +460,8 @@ async fn apply_backend_policies(
 		override_dest: _,
 		// Applied elsewhere
 		health: _,
+		// Applied by PolicyClient around callouts
+		retry: _,
 	} = &*backend_call.backend_policies;
 	rp.backend_response_header = response_header_modifier.as_response_policy();
 
@@ -5570,18 +5576,16 @@ impl PolicyClient {
 		backend: Backend,
 		pols: BackendPolicies,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		let is_callout = self.is_callout();
+		if is_callout && let Some(retry) = pols.retry.clone() {
+			return Box::pin(callout_retry::call(self, req, backend, pols, retry));
+		}
 		// Preserve caller timeouts; backend policies can override this fallback.
 		req
 			.extensions_mut()
 			.get_or_insert(BackendRequestTimeout(Duration::from_secs(10)));
 		self.record_outbound(&mut req);
-		if !matches!(
-			self.outbound(),
-			Some(OutboundCallLabels {
-				kind: OutboundCallKind::Primary | OutboundCallKind::Mirror,
-				..
-			})
-		) {
+		if is_callout {
 			req.extensions_mut().insert(Callout);
 		}
 		let mut req = Some(req);
@@ -5606,6 +5610,18 @@ impl PolicyClient {
 			);
 			dtrace::scope_future(self.dtrace_scope(), call).await
 		})
+	}
+
+	/// Whether calls made by this client are policy callouts, as opposed to primary or mirrored
+	/// traffic (e.g. MCP upstream requests) that only uses `PolicyClient` as transport.
+	fn is_callout(&self) -> bool {
+		!matches!(
+			self.outbound(),
+			Some(OutboundCallLabels {
+				kind: OutboundCallKind::Primary | OutboundCallKind::Mirror,
+				..
+			})
+		)
 	}
 
 	pub fn simple_call(

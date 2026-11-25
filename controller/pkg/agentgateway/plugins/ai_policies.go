@@ -294,7 +294,7 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 	pgModeration.Action = mapRejectAuditAction(moderation.Action)
 	pgModeration.FailureMode = guardrailFailureMode(moderation.FailureMode)
 
-	pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardPolicies(policies, moderation.Policies))
+	pols, err := translateGuardPolicies(ctx, namespace, policies, moderation.Policies)
 	if err != nil {
 		logger.Warn("failed to translate policy", "err", err)
 	} else {
@@ -317,7 +317,7 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 		FailureMode: guardrailFailureMode(guardrails.FailureMode),
 	}
 
-	pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardPolicies(policies, guardrails.Policies))
+	pols, err := translateGuardPolicies(ctx, namespace, policies, guardrails.Policies)
 	if err != nil {
 		logger.Warn("failed to translate policy", "err", err)
 	} else {
@@ -346,7 +346,7 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 		pgArmor.Location = new("us-central1")
 	}
 
-	pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardPolicies(policies, armor.Policies))
+	pols, err := translateGuardPolicies(ctx, namespace, policies, armor.Policies)
 	if err != nil {
 		logger.Warn("failed to translate policy", "err", err)
 	} else {
@@ -381,13 +381,11 @@ func processAzureContentSafety(ctx PolicyCtx, namespace string, acs *agentgatewa
 		}
 	}
 
-	if policies != nil {
-		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, policies)
-		if err != nil {
-			logger.Warn("failed to translate policy", "err", err)
-		} else {
-			pgACS.InlinePolicies = pols
-		}
+	pols, err := translateGuardPolicies(ctx, namespace, policies, nil)
+	if err != nil {
+		logger.Warn("failed to translate policy", "err", err)
+	} else {
+		pgACS.InlinePolicies = pols
 	}
 
 	return pgACS
@@ -395,6 +393,38 @@ func processAzureContentSafety(ctx PolicyCtx, namespace string, acs *agentgatewa
 
 type backendSimplePolicy interface {
 	BackendSimple() *agentgateway.BackendSimple
+}
+
+// translateGuardPolicies translates the policies for calling a prompt guard provider,
+// including retry. An invalid retry is dropped so the other policies still apply.
+func translateGuardPolicies(ctx PolicyCtx, namespace string, guardLevel *agentgateway.PromptGuardPolicy, deprecated backendSimplePolicy) ([]*api.BackendPolicySpec, error) {
+	pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardPolicies(guardLevel, deprecated))
+	if err != nil {
+		return nil, err
+	}
+	retry, err := TranslateGuardRetry(guardLevel)
+	if err != nil {
+		logger.Warn("failed to translate guard retry policy", "err", err)
+		return pols, nil
+	}
+	if retry != nil {
+		pols = append(pols, retry)
+	}
+	return pols, nil
+}
+
+// TranslateGuardRetry translates a prompt guard's retry, or returns nil if none is set.
+func TranslateGuardRetry(policies *agentgateway.PromptGuardPolicy) (*api.BackendPolicySpec, error) {
+	if policies == nil || policies.Retry == nil {
+		return nil, nil
+	}
+	retry, err := translateRetry(policies.Retry)
+	if err != nil {
+		return nil, err
+	}
+	return &api.BackendPolicySpec{
+		Kind: &api.BackendPolicySpec_Retry{Retry: retry},
+	}, nil
 }
 
 // guardPolicies prefers guard-level policies over the deprecated provider-level policies.

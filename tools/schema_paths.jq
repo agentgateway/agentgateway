@@ -8,8 +8,8 @@
 ."$defs" as $DEFS |
 ($ARGS.named.shared // {}) as $SHARED |
 ($ARGS.named.root // "") as $ROOT |
-# A shared type's own section expands everything rather than linking elsewhere.
-(if $ROOT == "" then $SHARED else {} end) as $CUT |
+# A shared type's own section expands itself and links the other shared types.
+(if $ROOT == "" then $SHARED else ($SHARED | del(.[$ROOT])) end) as $CUT |
 
 # deref($stack) emits [node, stack] with any top-level $ref expanded.
 # $stack holds the definitions being expanded, so a recursive type stays a reference.

@@ -321,6 +321,12 @@ type PromptGuardPolicy struct {
 	// Settings for authenticating to the prompt guard provider.
 	// +optional
 	Auth *PromptGuardAuth `json:"auth,omitempty"`
+
+	// Retry calls to the prompt guard provider. All attempts and backoffs share
+	// the request timeout (`http.requestTimeout`, 10s by default), so an attempt
+	// that times out is not retried. Retries multiply with route retries.
+	// +optional
+	Retry *Retry `json:"retry,omitempty"`
 }
 
 func (p *PromptGuardPolicy) BackendSimple() *BackendSimple {

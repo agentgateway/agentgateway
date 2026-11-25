@@ -1618,7 +1618,7 @@ pub struct SimpleBackendReferenceWithPolicies {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+		schemars(with = "Option<crate::types::local::CalloutLocalBackendPolicies>")
 	)]
 	/// Backend policies used when connecting to the service.
 	pub policies: Vec<BackendTrafficPolicy>,
@@ -1695,7 +1695,7 @@ where
 		pub backend: Option<BackendKey>,
 
 		#[serde(default, skip_serializing_if = "Vec::is_empty")]
-		#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+		#[serde(deserialize_with = "crate::types::local::de_from_local_callout_backend_policy")]
 		/// Backend policies used when connecting to the service.
 		pub policies: Vec<BackendTrafficPolicy>,
 	}
@@ -3042,6 +3042,9 @@ pub enum BackendTrafficPolicy {
 	RequestRedirect(filters::RequestRedirect),
 	UrlRewrite(filters::UrlRewrite),
 	RequestMirror(Vec<filters::RequestMirror>),
+	/// Retries for policy callouts (guardrails, ext_authz, webhooks, ...). Ignored on the
+	/// main request path, which uses the route `retry` policy.
+	Retry(Arc<retry::Policy>),
 }
 
 impl BackendTrafficPolicy {
