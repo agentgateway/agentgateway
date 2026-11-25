@@ -39,8 +39,8 @@ use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, ErrorTypeLabel, GenAIErrorType, GenAILabels, GenAILabelsTokenUsage,
-	GenAIRequestDurationLabels, HTTPLabels, MCPCall, Metrics, OutboundCallKind, OutboundCallLabels,
-	RouteIdentifier, SubstrateRouteLabels,
+	GenAIRequestDurationLabels, HTTPLabels, MCPCall, MCPOutcome, Metrics, OutboundCallKind,
+	OutboundCallLabels, RouteIdentifier, SubstrateRouteLabels, http_method_label,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, semconv, trc};
@@ -382,10 +382,22 @@ pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 /// Per-request accumulator of mcpGuardrails dynamic metadata.
 pub type McpGuardrailsLog = AsyncLog<mcp::guardrails::McpGuardrailsDynamicMetadata>;
 
-#[derive(serde::Serialize, Debug, Default, Clone)]
+#[derive(serde::Serialize, Debug, Clone)]
 pub struct MetricsConfig {
 	pub metric_fields: MetricFields,
 	pub excluded_metrics: FzHashSet<String>,
+	/// Maximum distinct values recorded for each label whose values come from requests.
+	pub label_value_limit: usize,
+}
+
+impl Default for MetricsConfig {
+	fn default() -> Self {
+		Self {
+			metric_fields: Default::default(),
+			excluded_metrics: Default::default(),
+			label_value_limit: crate::telemetry::metrics::DEFAULT_LABEL_VALUE_LIMIT,
+		}
+	}
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
@@ -921,15 +933,33 @@ impl DropOnLog {
 		let request_model = llm_response
 			.map(|response| response.request_model.clone())
 			.or_else(|| request.map(|request| request.request_model.clone()));
+		// The request model is client supplied, so only admit it once the upstream accepted it or the
+		// catalog knows it.
+		let admit_request_model = (log.error.is_none()
+			&& log.status.is_some_and(|status| status.is_success()))
+			|| llm_response.is_some_and(|response| {
+				matches!(
+					response.cost_status,
+					Some(CostLookupStatus::Exact | CostLookupStatus::Unpriced)
+				)
+			});
+		let limits = &log.metrics.label_limits;
 		let gen_ai_labels = Arc::new(GenAILabels {
 			gen_ai_operation_name: request
 				.map(|request| gen_ai_operation_name(request.input_format))
 				.map(RichStrng::from)
 				.into(),
 			gen_ai_system: provider.into(),
-			gen_ai_request_model: request_model.into(),
-			gen_ai_response_model: llm_response
-				.and_then(|response| response.response_model.clone())
+			gen_ai_request_model: limits
+				.gen_ai_request_model
+				.limit(request_model, admit_request_model)
+				.into(),
+			gen_ai_response_model: limits
+				.gen_ai_response_model
+				.limit(
+					llm_response.and_then(|response| response.response_model.clone()),
+					true,
+				)
 				.into(),
 			custom: custom_metric_fields.clone(),
 			route: route_identifier.clone(),
@@ -1579,7 +1609,7 @@ impl Drop for DropOnLog {
 					.into(),
 				protocol: log.backend_protocol.into(),
 				route: route_identifier.clone(),
-				method: log.method.clone().into(),
+				method: log.method.as_ref().map(http_method_label).into(),
 				status: log.status.as_ref().map(|s| s.as_u16()).into(),
 				reason: log.reason.into(),
 				custom: CustomField::default(),
@@ -1737,15 +1767,28 @@ impl Drop for DropOnLog {
 				&& mcp.method_name.is_some()
 			{
 				// Check mcp.method_name is set, so we don't count things like GET and DELETE
+				let outcome = mcp_outcome(&log, mcp);
+				let method = mcp.method_name.clone().map(|method| {
+					if mcp::is_known_client_method(&method) {
+						method
+					} else {
+						strng::literal!("other")
+					}
+				});
+				// Resource names are client supplied, so only admit ones the server handled.
+				let resource = log.metrics.label_limits.mcp_resource.limit(
+					mcp.metric_resource_name().map(strng::new),
+					matches!(outcome, MCPOutcome::success | MCPOutcome::tool_error),
+				);
 				log
 					.metrics
 					.mcp_requests
 					.get_or_create(&MCPCall {
-						method: mcp.method_name.clone().map(RichStrng::from).into(),
-						outcome: mcp_outcome(&log, mcp),
+						method: method.into(),
+						outcome,
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
-						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
+						resource: resource.into(),
 
 						route: route_identifier.clone(),
 						custom: custom_metric_fields.clone(),

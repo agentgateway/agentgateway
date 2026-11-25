@@ -23,14 +23,15 @@ use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::{
-	CallToolRequestMethod, CallToolResult, CancelTaskMethod, CompleteRequestMethod, ConstString,
-	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod,
-	GetSkillRequestMethod, GetTaskMethod, InitializeResultMethod, JsonRpcError,
-	ListPromptsRequestMethod, ListResourceTemplatesRequestMethod, ListResourcesRequestMethod,
-	ListSkillsRequestMethod, ListToolsRequestMethod, PingRequestMethod, ProtocolVersion,
-	ReadResourceDirectoryRequestMethod, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
-	SubscribeRequestMethod, SubscriptionsListenRequestMethod, UnsubscribeRequestMethod,
-	UpdateTaskMethod,
+	CallToolRequestMethod, CallToolResult, CancelTaskMethod, CancelledNotificationMethod,
+	CompleteRequestMethod, ConstString, ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData,
+	GetPromptRequestMethod, GetSkillRequestMethod, GetTaskMethod, InitializeResultMethod,
+	InitializedNotificationMethod, JsonRpcError, ListPromptsRequestMethod,
+	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListSkillsRequestMethod,
+	ListToolsRequestMethod, PingRequestMethod, ProgressNotificationMethod, ProtocolVersion,
+	ReadResourceDirectoryRequestMethod, ReadResourceRequestMethod, RequestId,
+	RootsListChangedNotificationMethod, SetLevelRequestMethod, SubscribeRequestMethod,
+	SubscriptionsListenRequestMethod, UnsubscribeRequestMethod, UpdateTaskMethod,
 };
 pub use router::App;
 use thiserror::Error;
@@ -92,6 +93,18 @@ pub(crate) fn is_known_client_request_method(method: &str) -> bool {
 			| UpdateTaskMethod::VALUE
 			| CancelTaskMethod::VALUE
 	)
+}
+
+/// Whether a client request or notification method is one MCP defines.
+pub(crate) fn is_known_client_method(method: &str) -> bool {
+	is_known_client_request_method(method)
+		|| matches!(
+			method,
+			CancelledNotificationMethod::VALUE
+				| InitializedNotificationMethod::VALUE
+				| ProgressNotificationMethod::VALUE
+				| RootsListChangedNotificationMethod::VALUE
+		)
 }
 
 /// JSON-RPC classifies any message without a usable id as a notification, so a `tools/call` sent

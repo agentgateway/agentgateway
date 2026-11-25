@@ -561,6 +561,10 @@ pub fn parse_config(
 			.transpose()
 			.ctx("invalid config.tracing")?,
 		metrics: telemetry::log::MetricsConfig {
+			label_value_limit: parse_default(
+				"METRICS_LABEL_VALUE_LIMIT",
+				crate::telemetry::metrics::DEFAULT_LABEL_VALUE_LIMIT,
+			)?,
 			excluded_metrics: raw
 				.metrics
 				.as_ref()
