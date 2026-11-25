@@ -136,6 +136,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
 			true,
 		),
 		("countTokens", GeminiCountTokens, Op::CountTokens, true),
+		("embedContent", Detect, Op::Embeddings, true),
 	] {
 		endpoints.push(ServingEndpoint {
 			matcher: EndpointMatch::Regex(regex::Regex::new(&format!(
@@ -1184,6 +1185,7 @@ pub(crate) fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 	if path.ends_with(":generateContent")
 		|| path.ends_with(":streamGenerateContent")
 		|| path.ends_with(":countTokens")
+		|| path.ends_with(":embedContent")
 	{
 		if path.contains("/publishers/") {
 			return rewrite_publishers_path_model(path, target);
@@ -2102,6 +2104,16 @@ mod tests {
 			rewrite_path_model("/v1beta/models/virtual:countTokens", "gemini-2.5-pro").as_deref(),
 			Some("/v1beta/models/gemini-2.5-pro:countTokens")
 		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/global/publishers/google/models/virtual:embedContent",
+				"gemini-embedding-2",
+			)
+			.as_deref(),
+			Some(
+				"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-2:embedContent"
+			)
+		);
 	}
 
 	#[test]
@@ -2140,10 +2152,6 @@ mod tests {
 				"/v1/projects/p/locations/global/publishers//models/virtual:countTokens",
 				"gemini-2.5-flash",
 			),
-			None
-		);
-		assert_eq!(
-			rewrite_path_model("/v1beta/models/virtual:embedContent", "gemini-2.5-flash"),
 			None
 		);
 	}
