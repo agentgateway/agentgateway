@@ -83,9 +83,9 @@ export function JwtPolicyEditor(props: {
 }) {
 	const initialJwks = props.jwt?.jwks;
 	const initialJwksMode: JwksMode =
-		isRecord(initialJwks) && typeof initialJwks.url === 'string'
+		isRecord(initialJwks) && 'url' in initialJwks && typeof initialJwks.url === 'string'
 			? 'url'
-			: isRecord(initialJwks) && typeof initialJwks.file === 'string'
+			: isRecord(initialJwks) && 'file' in initialJwks && typeof initialJwks.file === 'string'
 				? 'file'
 				: initialJwks
 					? 'inline'
@@ -97,10 +97,14 @@ export function JwtPolicyEditor(props: {
 	const [audiences, setAudiences] = useState(props.jwt?.audiences ?? []);
 	const [jwksMode, setJwksMode] = useState<JwksMode>(initialJwksMode);
 	const [jwksFile, setJwksFile] = useState(
-		isRecord(initialJwks) && typeof initialJwks.file === 'string' ? initialJwks.file : ''
+		isRecord(initialJwks) && 'file' in initialJwks && typeof initialJwks.file === 'string'
+			? initialJwks.file
+			: ''
 	);
 	const [jwksUrl, setJwksUrl] = useState(
-		isRecord(initialJwks) && typeof initialJwks.url === 'string' ? initialJwks.url : ''
+		isRecord(initialJwks) && 'url' in initialJwks && typeof initialJwks.url === 'string'
+			? initialJwks.url
+			: ''
 	);
 	const [jwksInline, setJwksInline] = useState(
 		initialJwksMode === 'inline' ? toText(initialJwks ?? { keys: [] }) : '{\n  "keys": []\n}'

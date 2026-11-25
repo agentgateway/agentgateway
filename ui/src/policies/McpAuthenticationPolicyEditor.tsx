@@ -25,9 +25,9 @@ export function McpAuthenticationPolicyEditor(props: {
 }) {
 	const initialJwks = props.authentication?.jwks;
 	const initialJwksMode: JwksMode =
-		isRecord(initialJwks) && typeof initialJwks.file === 'string'
+		isRecord(initialJwks) && 'file' in initialJwks && typeof initialJwks.file === 'string'
 			? 'file'
-			: isRecord(initialJwks) && typeof initialJwks.url === 'string'
+			: isRecord(initialJwks) && 'url' in initialJwks && typeof initialJwks.url === 'string'
 				? 'url'
 				: 'inline';
 	const [mode, setMode] = useState<AuthMode>(props.authentication?.mode ?? 'strict');
