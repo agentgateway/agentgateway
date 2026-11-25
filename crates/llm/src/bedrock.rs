@@ -84,8 +84,8 @@ impl Provider {
 			| RT::Realtime => BedrockEndpoint::Runtime,
 			RT::Models => BedrockEndpoint::Mantle,
 			RT::Detect | RT::Passthrough | RT::GenerateContent => BedrockEndpoint::Runtime,
-			// Chat, and Anthropic count-tokens, follow the model's endpoint: Runtime's Converse /
-			// CountTokens APIs, or Mantle's native OpenAI/Anthropic APIs.
+			// Chat, and Anthropic count-tokens, follow the model's endpoint: Runtime's Converse API
+			// (count-tokens is answered locally), or Mantle's native OpenAI/Anthropic APIs.
 			RT::Completions | RT::Messages | RT::Responses | RT::AnthropicTokenCount => {
 				self.chat_endpoint(model_id, catalog)
 			},
@@ -304,7 +304,6 @@ impl Provider {
 			&percent_encoding::CONTROLS.add(b'/').add(b'%');
 		let model = percent_encoding::utf8_percent_encode(model, MODEL_SEGMENT);
 		match route_type {
-			super::RouteType::AnthropicTokenCount => strng::format!("/model/{model}/count-tokens"),
 			super::RouteType::Embeddings => strng::format!("/model/{model}/invoke"),
 			// Rerank uses the agent-runtime Rerank action (model goes in the body as an ARN).
 			super::RouteType::Rerank => strng::literal!("/rerank"),
@@ -656,24 +655,8 @@ mod tests {
 	}
 
 	#[test]
-	fn anthropic_count_tokens_follows_the_endpoint() {
-		// Runtime uses the Bedrock CountTokens API; Mantle uses Anthropic's native count_tokens.
-		let runtime = provider(BedrockEndpointPreference::RuntimeOnly);
-		let runtime_ep = runtime.resolve_endpoint(RouteType::AnthropicTokenCount, Some("m"), None);
-		assert_eq!(runtime_ep, BedrockEndpoint::Runtime);
-		assert_eq!(
-			runtime
-				.get_path_for_route(
-					RouteType::AnthropicTokenCount,
-					false,
-					"m",
-					runtime_ep,
-					runtime.native_chat(runtime_ep)
-				)
-				.as_str(),
-			"/model/m/count-tokens"
-		);
-
+	fn anthropic_count_tokens_uses_mantle_native_api() {
+		// Runtime count_tokens is answered locally; only Mantle forwards upstream.
 		let mantle = provider(BedrockEndpointPreference::MantleOnly);
 		let mantle_ep = mantle.resolve_endpoint(RouteType::AnthropicTokenCount, Some("m"), None);
 		assert_eq!(mantle_ep, BedrockEndpoint::Mantle);
