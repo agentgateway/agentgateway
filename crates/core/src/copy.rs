@@ -4,6 +4,7 @@ use std::marker::PhantomPinned;
 use std::mem::MaybeUninit;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll, ready};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -164,14 +165,26 @@ const RESIZE_THRESHOLD_LARGE: u64 = 128 * 1024;
 // After 10Mb of data we will trigger a resize from LARGE to JUMBO
 const RESIZE_THRESHOLD_JUMBO: u64 = 10 * 1024 * 1024;
 
-pub struct ConnectionResult {}
+/// Byte counts of a `copy_bidirectional` call: `sent` is copied from upstream to downstream,
+/// `recv` from downstream to upstream.
+#[derive(Debug, Default)]
+pub struct ConnectionResult {
+	sent: AtomicU64,
+	recv: AtomicU64,
+}
 
 impl ConnectionResult {
-	pub fn increment_recv(&self, _: u64) {
-		// TODO
+	pub fn increment_recv(&self, amt: u64) {
+		self.recv.fetch_add(amt, Ordering::Relaxed);
 	}
-	pub fn increment_send(&self, _: u64) {
-		// TODO
+	pub fn increment_send(&self, amt: u64) {
+		self.sent.fetch_add(amt, Ordering::Relaxed);
+	}
+	pub fn bytes_sent(&self) -> u64 {
+		self.sent.load(Ordering::Relaxed)
+	}
+	pub fn bytes_recv(&self) -> u64 {
+		self.recv.load(Ordering::Relaxed)
 	}
 }
 
@@ -486,4 +499,44 @@ pub fn poll_read_buf<T: AsyncRead + ?Sized, B: BufMut>(
 	}
 
 	Poll::Ready(Ok(n))
+}
+
+#[cfg(test)]
+mod tests {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	use super::*;
+
+	#[tokio::test]
+	async fn copy_bidirectional_counts_both_directions() {
+		let (mut client, downstream) = tokio::io::duplex(64);
+		let (upstream, mut server) = tokio::io::duplex(64);
+		let stats = ConnectionResult::default();
+
+		let client_side = async {
+			client.write_all(&[b'a'; 3000]).await.unwrap();
+			client.shutdown().await.unwrap();
+			let mut received = Vec::new();
+			client.read_to_end(&mut received).await.unwrap();
+			received.len()
+		};
+		let server_side = async {
+			let mut received = Vec::new();
+			server.read_to_end(&mut received).await.unwrap();
+			server.write_all(&[b'b'; 5000]).await.unwrap();
+			server.shutdown().await.unwrap();
+			received.len()
+		};
+		let (copied, client_received, server_received) = tokio::join!(
+			copy_bidirectional(downstream, upstream, &stats),
+			client_side,
+			server_side
+		);
+
+		copied.unwrap();
+		assert_eq!(server_received, 3000);
+		assert_eq!(client_received, 5000);
+		assert_eq!(stats.bytes_recv(), 3000);
+		assert_eq!(stats.bytes_sent(), 5000);
+	}
 }

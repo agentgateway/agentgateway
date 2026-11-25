@@ -283,6 +283,24 @@
             "string",
             "null"
           ]
+        },
+        "bytesSent": {
+          "description": "Bytes sent to the downstream by a CONNECT tunnel in `route` mode.\nSet when the tunnel is logged; unset otherwise.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "bytesReceived": {
+          "description": "Bytes received from the downstream by a CONNECT tunnel in `route` mode.\nSet when the tunnel is logged; unset otherwise.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         }
       },
       "additionalProperties": false

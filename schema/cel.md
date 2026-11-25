@@ -41,6 +41,8 @@
 |`proxy.requestProcessingDuration`|string|Time spent processing the request before sending the primary outbound call.|
 |`proxy.upstreamDuration`|string|Time spent waiting for the primary outbound call.|
 |`proxy.responseProcessingDuration`|string|Time spent processing the primary outbound response before sending the downstream response.|
+|`proxy.bytesSent`|integer|Bytes sent to the downstream by a CONNECT tunnel in `route` mode.<br>Set when the tunnel is logged; unset otherwise.|
+|`proxy.bytesReceived`|integer|Bytes received from the downstream by a CONNECT tunnel in `route` mode.<br>Set when the tunnel is logged; unset otherwise.|
 |`env`|object|`env` contains selected process environment attributes exposed to CEL.<br>This does NOT expose raw environment variables, but rather a subset of well-known variables.|
 |`env.podName`|string|The name of the pod (when running on Kubernetes)|
 |`env.namespace`|string|The namespace of the pod (when running on Kubernetes)|

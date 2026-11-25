@@ -716,9 +716,13 @@ impl Client {
 			.await
 			.map_err(ProxyError::UpstreamTCPCallFailed)?;
 
-		agent_core::copy::copy_bidirectional(source, upstream, &agent_core::copy::ConnectionResult {})
-			.await
-			.map_err(ProxyError::UpstreamTCPProxy)?;
+		agent_core::copy::copy_bidirectional(
+			source,
+			upstream,
+			&agent_core::copy::ConnectionResult::default(),
+		)
+		.await
+		.map_err(ProxyError::UpstreamTCPProxy)?;
 
 		let dur = format!("{}ms", start.elapsed().as_millis());
 		event!(
