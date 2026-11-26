@@ -1,0 +1,20 @@
+# Older model of a duplicate exact match.model pair; it must win the name.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: dup-z-old
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  match:
+    model: dup-gpt
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-dup-old"'

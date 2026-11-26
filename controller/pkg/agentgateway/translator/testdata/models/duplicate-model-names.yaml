@@ -1,0 +1,1200 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: All
+  - name: llm2
+    port: 81
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: All
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: a
+  namespace: default
+  creationTimestamp: "2024-01-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: gpt
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: b
+  namespace: default
+  creationTimestamp: "2024-01-02T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: gpt
+  provider: Anthropic
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt
+  namespace: default
+  creationTimestamp: "2024-01-03T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  provider: Gemini
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: q
+  namespace: default
+  creationTimestamp: "2024-02-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: tie
+  provider: Anthropic
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: p
+  namespace: default
+  creationTimestamp: "2024-02-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: tie
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: old-shared
+  namespace: default
+  creationTimestamp: "2024-03-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: shared
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: multi
+  namespace: default
+  creationTimestamp: "2024-03-02T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm2
+  match:
+    model: shared
+  provider: Anthropic
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: ghost
+  namespace: default
+  creationTimestamp: "2023-01-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: missing
+  match:
+    model: claimed
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: real
+  namespace: default
+  creationTimestamp: "2024-04-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: claimed
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: internal-m
+  namespace: default
+  creationTimestamp: "2024-05-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: vis
+  visibility: Internal
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: public-m
+  namespace: default
+  creationTimestamp: "2024-05-02T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: vis
+  provider: Anthropic
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: virt-dup
+  namespace: default
+  creationTimestamp: "2024-05-03T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: vis
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: a
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: w1
+  namespace: default
+  creationTimestamp: "2024-06-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: wild-*
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: w2
+  namespace: default
+  creationTimestamp: "2024-06-02T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: wild-*
+  provider: Anthropic
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: router
+  namespace: default
+  creationTimestamp: "2024-07-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: router-model
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: b
+      - modelRef:
+          name: a
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: other
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: zz
+  namespace: other
+  creationTimestamp: "2024-08-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: xns
+  provider: Anthropic
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: aa
+  namespace: default
+  creationTimestamp: "2024-08-01T00:00:00Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    namespace: default
+    sectionName: llm
+  match:
+    model: xns
+  provider: OpenAI
+
+---
+# Output
+output:
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/a/backend.llm
+      name:
+        name: a
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/aa/backend.llm
+      name:
+        name: aa
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/internal-m/backend.llm
+      name:
+        name: internal-m
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - anthropic: {}
+            name: backend
+      key: default/multi/backend.llm2
+      name:
+        name: multi
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/old-shared/backend.llm
+      name:
+        name: old-shared
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/p/backend.llm
+      name:
+        name: p
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/real/backend.llm
+      name:
+        name: real
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/w1/backend.llm
+      name:
+        name: w1
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - anthropic: {}
+            name: backend
+      key: default/w2/backend.llm
+      name:
+        name: w2
+        namespace: default
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/gw
+      port: 80
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    bind:
+      key: 81/default/gw
+      port: 81
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/gw
+      key: default/gw.llm
+      name:
+        gatewayName: gw
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 81/default/gw
+      key: default/gw.llm2
+      name:
+        gatewayName: gw
+        gatewayNamespace: default
+        listenerName: llm2
+      protocol: HTTP
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/a/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1704067200"
+      key: default/a.llm
+      listenerKey: default/gw.llm
+      match:
+        model: gpt
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/aa/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1722470400"
+      key: default/aa.llm
+      listenerKey: default/gw.llm
+      match:
+        model: xns
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/internal-m/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+        modelVisibility: INTERNAL
+      created: "1714521600"
+      key: default/internal-m.llm
+      listenerKey: default/gw.llm
+      match:
+        model: vis
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/multi/backend.llm2
+        discoveryProvider: anthropic
+        discoveryProviderConfig:
+          anthropic: {}
+      created: "1709337600"
+      key: default/multi.llm2
+      listenerKey: default/gw.llm2
+      match:
+        model: shared
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/old-shared/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1709251200"
+      key: default/old-shared.llm
+      listenerKey: default/gw.llm
+      match:
+        model: shared
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/p/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1706745600"
+      key: default/p.llm
+      listenerKey: default/gw.llm
+      match:
+        model: tie
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/real/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1711929600"
+      key: default/real.llm
+      listenerKey: default/gw.llm
+      match:
+        model: claimed
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      created: "1719792000"
+      key: default/router.llm
+      listenerKey: default/gw.llm
+      match:
+        model: router-model
+      virtualModel:
+        weighted:
+          targets:
+          - invalid: true
+            model: b
+            weight: 1
+          - model: gpt
+            weight: 1
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/w1/backend.llm
+        discoveryProvider: openai
+        discoveryProviderConfig:
+          openai: {}
+      created: "1717200000"
+      key: default/w1.llm
+      listenerKey: default/gw.llm
+      match:
+        model: wild-*
+- gateway:
+    Name: gw
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/w2/backend.llm
+        discoveryProvider: anthropic
+        discoveryProviderConfig:
+          anthropic: {}
+      created: "1717286400"
+      key: default/w2.llm
+      listenerKey: default/gw.llm
+      match:
+        model: wild-*
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: a
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: aa
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: b
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "gpt" conflicts with default/a on listener default/gw.llm
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: ghost
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: sectionName "missing" not found
+        reason: NoMatchingParent
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: missing
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: gpt
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "gpt" conflicts with default/a on listener default/gw.llm
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: internal-m
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: multi
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "shared" conflicts with default/old-shared on listener
+          default/gw.llm
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm2
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: old-shared
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: p
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: public-m
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "vis" conflicts with default/internal-m on listener default/gw.llm
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: q
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "tie" conflicts with default/p on listener default/gw.llm
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: real
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: router
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'model target default/b is not served on listener default/gw.llm:
+          match.model "gpt" is held by default/a'
+        reason: Invalid
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: virt-dup
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "vis" conflicts with default/internal-m on listener default/gw.llm
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: w1
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: w2
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: zz
+    namespace: other
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: match.model "xns" conflicts with default/aa on listener default/gw.llm
+        reason: Conflicted
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: gw
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: gw
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 9
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm2
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel

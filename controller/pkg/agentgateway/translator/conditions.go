@@ -20,6 +20,8 @@ const (
 	ParentErrorNotAccepted = ParentErrorReason(gwv1.RouteReasonNoMatchingParent)
 	ParentErrorNotAllowed  = ParentErrorReason(gwv1.RouteReasonNotAllowedByListeners)
 	ParentErrorNoHostname  = ParentErrorReason(gwv1.RouteReasonNoMatchingListenerHostname)
+	// ParentErrorConflicted marks a model attachment that lost an exact model name conflict on its router.
+	ParentErrorConflicted = ParentErrorReason("Conflicted")
 )
 
 // ConfigErrorReason is the error string for a ConfigError (reason configuration is invalid)
