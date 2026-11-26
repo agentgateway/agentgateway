@@ -1807,6 +1807,125 @@ data: [DONE]
 	}
 
 	#[tokio::test]
+	async fn completions_stream_empty_response_fails_on_done() {
+		let input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}],"model":"gpt-5","usage":{"prompt_tokens":100,"completion_tokens":5,"total_tokens":105}}
+
+data: [DONE]
+
+"#;
+		let reporter = || {
+			let info = Arc::new(Mutex::new(LLMInfo::new(
+				LLMRequest {
+					input_format: InputFormat::Detect(None),
+					cache_convention: CacheTokenConvention::pending(),
+					request_model: strng::literal!("input-model"),
+					streaming: true,
+					..Default::default()
+				},
+				LLMResponse::default(),
+			)));
+			(
+				info.clone(),
+				StreamingUsageGuard::new(Box::new(TestStreamingReporter { info })),
+			)
+		};
+
+		let (messages_info, messages_log) = reporter();
+		let messages = conversion::completions::from_messages::translate_stream(
+			agent_http::Body::from(input),
+			1024 * 1024,
+			messages_log,
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let messages = String::from_utf8(messages.to_vec()).unwrap();
+		assert!(messages.contains("event: error"), "{messages}");
+		assert!(messages.contains(r#""type":"api_error""#), "{messages}");
+		assert!(!messages.contains("message_stop"), "{messages}");
+		let messages_resp = messages_info.lock().unwrap().response.clone();
+		assert_eq!(
+			(
+				messages_resp.input_tokens,
+				messages_resp.output_tokens,
+				messages_resp.total_tokens
+			),
+			(Some(100), Some(5), Some(105))
+		);
+
+		let (responses_info, responses_log) = reporter();
+		let responses = conversion::openai_compat::to_responses::translate_stream(
+			agent_http::Body::from(input),
+			1024 * 1024,
+			responses_log,
+			LogContentFields::default(),
+			None,
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let responses = String::from_utf8(responses.to_vec()).unwrap();
+		assert!(!responses.contains("response.completed"), "{responses}");
+		let failed = responses
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+			.find(|event| event["type"] == "response.failed")
+			.unwrap();
+		assert_eq!(failed["response"]["error"]["code"], "server_error");
+		assert_eq!(failed["response"]["usage"]["input_tokens"], 100);
+		assert_eq!(failed["response"]["usage"]["output_tokens"], 5);
+		assert_eq!(failed["response"]["usage"]["total_tokens"], 105);
+		let responses_resp = responses_info.lock().unwrap().response.clone();
+		assert_eq!(
+			(
+				responses_resp.input_tokens,
+				responses_resp.output_tokens,
+				responses_resp.total_tokens
+			),
+			(Some(100), Some(5), Some(105))
+		);
+
+		let text_input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}],"model":"gpt-5","usage":null}
+
+data: [DONE]
+
+"#;
+		let messages = conversion::completions::from_messages::translate_stream(
+			agent_http::Body::from(text_input),
+			1024 * 1024,
+			reporter().1,
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let messages = String::from_utf8(messages.to_vec()).unwrap();
+		assert!(messages.contains(r#""end_turn""#), "{messages}");
+		assert!(messages.contains("event: message_stop"), "{messages}");
+		assert!(!messages.contains("event: error"), "{messages}");
+
+		let responses = conversion::openai_compat::to_responses::translate_stream(
+			agent_http::Body::from(text_input),
+			1024 * 1024,
+			reporter().1,
+			LogContentFields::default(),
+			None,
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let responses = String::from_utf8(responses.to_vec()).unwrap();
+		assert!(responses.contains("response.completed"), "{responses}");
+		assert!(!responses.contains("response.failed"), "{responses}");
+	}
+
+	#[tokio::test]
 	async fn completions_to_messages_stream_reports_matched_stop_sequence() {
 		let input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop","matched_stop":"STOPPROBE"}],"model":"gpt-5","usage":null}
 
