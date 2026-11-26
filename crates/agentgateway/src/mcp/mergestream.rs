@@ -261,7 +261,9 @@ impl Stream for MergeStream {
 							let discovery_rejection = self.fail_on_discovery_rejection
 								&& matches!(
 									e.error.code,
-									ErrorCode::METHOD_NOT_FOUND | ErrorCode::UNSUPPORTED_PROTOCOL_VERSION
+									ErrorCode::METHOD_NOT_FOUND
+										| ErrorCode::INVALID_PARAMS
+										| ErrorCode::UNSUPPORTED_PROTOCOL_VERSION
 								);
 							if self.failure_mode == FailureMode::FailOpen && !discovery_rejection {
 								warn!(
