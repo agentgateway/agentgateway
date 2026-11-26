@@ -42,6 +42,7 @@ struct PreparedOidcPolicy {
 	login: Option<OidcLogin>,
 	logout: Option<OidcLogout>,
 	credentials: OidcCredentials,
+	forward_access_token: bool,
 }
 
 /// Credentials an OIDC policy accepts.
@@ -184,6 +185,12 @@ pub struct LocalOidcConfig {
 	/// for `ui.policies.oidc`.
 	#[serde(default)]
 	pub credentials: Option<OidcCredentials>,
+
+	/// Store the provider's access token in the browser session and forward it as
+	/// `Authorization: Bearer`. Backend `oauthTokenExchange` can use it as its subject token.
+	/// Defaults to false. The access token's `expires_in`, when present, caps the session expiry.
+	#[serde(default)]
+	pub forward_access_token: bool,
 }
 
 struct DiscoveredProviderMetadata {
@@ -225,6 +232,7 @@ impl LocalOidcConfig {
 			login,
 			logout,
 			credentials,
+			forward_access_token,
 		} = self;
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
 		let mut endpoints = vec![redirect_uri.callback_path.as_str()];
@@ -337,6 +345,7 @@ impl LocalOidcConfig {
 			login,
 			logout,
 			credentials: credentials.unwrap_or_default(),
+			forward_access_token,
 		})
 	}
 }
@@ -477,6 +486,7 @@ impl PreparedOidcPolicy {
 			login,
 			logout,
 			credentials,
+			forward_access_token,
 		} = self;
 		let scopes = dedupe_scopes(scopes);
 		let token_endpoint_auth = provider.token_endpoint_auth;
@@ -506,6 +516,7 @@ impl PreparedOidcPolicy {
 			login,
 			logout,
 			credentials,
+			forward_access_token,
 		})
 	}
 }

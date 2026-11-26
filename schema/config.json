@@ -7201,6 +7201,11 @@
             }
           ],
           "default": null
+        },
+        "forwardAccessToken": {
+          "description": "Store the provider's access token in the browser session and forward it as\n`Authorization: Bearer`. Backend `oauthTokenExchange` can use it as its subject token.\nDefaults to false. The access token's `expires_in`, when present, caps the session expiry.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,

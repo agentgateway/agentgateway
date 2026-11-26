@@ -136,6 +136,7 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			login: None,
 			logout: None,
 			credentials: Default::default(),
+			forward_access_token: false,
 		}),
 		..Default::default()
 	}

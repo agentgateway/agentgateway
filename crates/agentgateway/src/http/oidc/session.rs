@@ -84,6 +84,8 @@ pub struct BrowserSession {
 	pub subject: Option<String>,
 	#[serde(serialize_with = "crate::serdes::ser_redact")]
 	pub raw_id_token: SecretString,
+	#[serde(default)]
+	pub access_token: Option<SecretString>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub expires_at_unix: Option<u64>,
 }
@@ -101,6 +103,8 @@ impl Serialize for BrowserSession {
 			policy_id: &'a PolicyId,
 			subject: Option<&'a str>,
 			raw_id_token: &'a str,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			access_token: Option<&'a str>,
 			expires_at_unix: Option<u64>,
 		}
 
@@ -108,6 +112,7 @@ impl Serialize for BrowserSession {
 			policy_id: &self.policy_id,
 			subject: self.subject.as_deref(),
 			raw_id_token: self.raw_id_token.expose_secret(),
+			access_token: self.access_token.as_ref().map(ExposeSecret::expose_secret),
 			expires_at_unix: self.expires_at_unix,
 		}
 		.serialize(serializer)
