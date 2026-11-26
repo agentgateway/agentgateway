@@ -1,6 +1,7 @@
 // Originally derived from https://github.com/istio/ztunnel (Apache 2.0 licensed)
 
 use std::ffi::{OsStr, OsString};
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use agentgateway::ConfigSource;
@@ -95,6 +96,13 @@ pub(crate) struct OneshotArgs {
 }
 
 #[derive(ClapArgs, Debug)]
+pub(crate) struct ProbeArgs {
+	/// TCP address of the readiness listener.
+	#[arg(long, default_value = "127.0.0.1:15021")]
+	pub(crate) address: SocketAddr,
+}
+
+#[derive(ClapArgs, Debug)]
 pub(crate) struct MigrateArgs {
 	/// Use config from file
 	#[arg(short, long, value_name = "file")]
@@ -121,6 +129,8 @@ enum Commands {
 	/// Run agentgateway as a subprocess and exec a command when ready.
 	#[cfg(target_os = "linux")]
 	Oneshot(OneshotArgs),
+	/// Check the readiness endpoint for a Kubernetes exec probe.
+	Probe(ProbeArgs),
 	/// Import standalone configuration from another gateway.
 	Import(ImportArgs),
 	/// Migrate deprecated fields in a local agentgateway configuration.
@@ -163,6 +173,7 @@ pub fn run() -> anyhow::Result<()> {
 	match args.command {
 		#[cfg(target_os = "linux")]
 		Some(Commands::Oneshot(oneshot)) => commands::oneshot::execute(oneshot),
+		Some(Commands::Probe(probe)) => commands::probe::execute(probe),
 		Some(Commands::Import(import)) => commands::import::execute(import),
 		Some(Commands::Migrate(migrate)) => commands::migrate::execute(migrate),
 		None => commands::run::execute(args.run),
