@@ -1,0 +1,48 @@
+{
+  "model": "claude-sonnet-4",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Run both tools."
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_one",
+          "type": "function",
+          "function": {
+            "name": "one",
+            "arguments": "{}"
+          }
+        },
+        {
+          "id": "call_two",
+          "type": "function",
+          "function": {
+            "name": "two",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_one",
+      "name": "one",
+      "content": "first result"
+    },
+    {
+      "role": "system",
+      "content": "Keep the answer concise."
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_two",
+      "name": "two",
+      "content": "second result"
+    }
+  ]
+}

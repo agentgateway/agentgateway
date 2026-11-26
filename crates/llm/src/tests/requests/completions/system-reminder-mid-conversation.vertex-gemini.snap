@@ -1,0 +1,88 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/system-reminder-mid-conversation.json
+info:
+  model: claude-sonnet-4
+  tools: []
+  messages:
+    - role: system
+      content: You are a coding agent.
+    - role: user
+      content: Clone the repo.
+    - role: assistant
+      content: Done.
+    - role: system
+      content: New skills: createSkill
+    - role: user
+      content: Which skills do you have?
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Clone the repo."
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "Done."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<system-reminder>\nNew skills: createSkill\n</system-reminder>"
+          },
+          {
+            "text": "Which skills do you have?"
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "You are a coding agent."
+        }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "system",
+        "content": "You are a coding agent."
+      },
+      {
+        "role": "user",
+        "content": "Clone the repo."
+      },
+      {
+        "role": "assistant",
+        "content": "Done."
+      },
+      {
+        "role": "system",
+        "content": "New skills: createSkill"
+      },
+      {
+        "role": "user",
+        "content": "Which skills do you have?"
+      }
+    ]
+  }
+}
