@@ -9,10 +9,7 @@ use serde_json::Value;
 use tokio::time::Instant;
 use tracing::debug;
 
-use super::{
-	BrowserSession, Error, OidcPolicy, OidcResponse, RefreshSession, cap_session_expiry, now_unix,
-	provider,
-};
+use super::{BrowserSession, Error, OidcPolicy, OidcResponse, RefreshSession, now_unix, provider};
 use crate::http::{Request, jwt};
 use crate::proxy::httpproxy::PolicyClient;
 
@@ -31,8 +28,9 @@ struct CachedRefresh {
 	expires_at: Instant,
 }
 
-struct RefreshedSession {
-	claims: jwt::Claims,
+pub(super) struct RefreshedSession {
+	pub(super) claims: jwt::Claims,
+	pub(super) access_token: Option<SecretString>,
 	response_headers: HeaderMap,
 	expires_at_unix: u64,
 }
@@ -43,7 +41,7 @@ impl OidcPolicy {
 		req: &mut Request,
 		browser_session: BrowserSession,
 		client: PolicyClient,
-	) -> Result<Option<(jwt::Claims, OidcResponse)>, Arc<Error>> {
+	) -> Result<Option<(Arc<RefreshedSession>, OidcResponse)>, Arc<Error>> {
 		let Some(cookie) = crate::http::read_request_cookie(req, &self.session.refresh_cookie_name)
 		else {
 			return Ok(None);
@@ -117,7 +115,7 @@ impl OidcPolicy {
 			return Err(Arc::new(Error::InvalidSession));
 		}
 		Ok(Some((
-			refreshed.claims.clone(),
+			refreshed.clone(),
 			OidcResponse {
 				direct_response: None,
 				response_headers: Some(refreshed.response_headers.clone()),
@@ -185,8 +183,10 @@ impl OidcPolicy {
 			return Err(Error::InvalidSession);
 		}
 
-		let expires_at_unix = cap_session_expiry(now_unix(), self.session.ttl, &claims.inner);
+		let (access_token, expires_at_unix) =
+			self.session_access_token(&claims, token.access_token, token.expires_in);
 		browser_session.raw_id_token = SecretString::new(id_token.into_boxed_str());
+		browser_session.access_token = access_token;
 		browser_session.expires_at_unix = Some(expires_at_unix);
 		let encoded_session = self.session.encode_browser_session(&browser_session)?;
 		let session_cookie = self.session.set_cookie(
@@ -212,6 +212,7 @@ impl OidcPolicy {
 		}
 		Ok(RefreshedSession {
 			claims,
+			access_token: browser_session.access_token,
 			response_headers,
 			expires_at_unix,
 		})

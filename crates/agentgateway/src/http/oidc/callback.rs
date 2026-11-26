@@ -9,7 +9,7 @@ use super::session::{
 	BrowserSession, TransactionState, generate_nonce, generate_pkce_verifier, generate_state,
 	generate_transaction_id, normalize_original_uri,
 };
-use super::{Error, OidcPolicy, build_redirect_response, cap_session_expiry, now_unix, provider};
+use super::{Error, OidcPolicy, build_redirect_response, now_unix, provider};
 use crate::http::Request;
 use crate::proxy::httpproxy::PolicyClient;
 
@@ -159,15 +159,14 @@ pub(super) async fn handle_callback(
 		.get("sub")
 		.and_then(Value::as_str)
 		.map(str::to_owned);
+	let (access_token, expires_at_unix) =
+		policy.session_access_token(&claims, token.access_token, token.expires_in);
 	let session = BrowserSession {
 		policy_id: policy.policy_id.clone(),
 		subject: subject.clone(),
 		raw_id_token: SecretString::new(id_token.into_boxed_str()),
-		expires_at_unix: Some(cap_session_expiry(
-			now_unix(),
-			policy.session.ttl,
-			&claims.inner,
-		)),
+		access_token,
+		expires_at_unix: Some(expires_at_unix),
 	};
 	let encoded = policy.session.encode_browser_session(&session)?;
 	let session_cookie = policy.session.set_cookie(

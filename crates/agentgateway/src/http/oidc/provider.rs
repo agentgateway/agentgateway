@@ -17,6 +17,10 @@ pub(crate) struct TokenResponse {
 	#[serde(default)]
 	pub id_token: Option<String>,
 	#[serde(default)]
+	pub access_token: Option<SecretString>,
+	#[serde(default)]
+	pub expires_in: Option<u64>,
+	#[serde(default)]
 	pub refresh_token: Option<String>,
 }
 
@@ -24,6 +28,7 @@ impl fmt::Debug for TokenResponse {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("TokenResponse")
 			.field("id_token", &self.id_token.as_ref().map(|_| "[redacted]"))
+			.field("access_token", &self.access_token)
 			.field(
 				"refresh_token",
 				&self.refresh_token.as_ref().map(|_| "[redacted]"),

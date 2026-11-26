@@ -143,6 +143,8 @@ pub struct OidcPolicy {
 	pub session: SessionConfig,
 	pub scopes: Vec<String>,
 	pub credentials: OidcCredentials,
+	#[serde(skip_serializing_if = "std::ops::Not::not")]
+	pub forward_access_token: bool,
 	#[serde(skip)]
 	refresh_cache: refresh::RefreshCache,
 }
@@ -240,6 +242,39 @@ struct CallbackQuery {
 }
 
 impl OidcPolicy {
+	fn session_access_token(
+		&self,
+		claims: &jwt::Claims,
+		access_token: Option<SecretString>,
+		expires_in: Option<u64>,
+	) -> (Option<SecretString>, u64) {
+		let access_token =
+			access_token.filter(|token| self.forward_access_token && !token.expose_secret().is_empty());
+		let now = now_unix();
+		let mut expiry = cap_session_expiry(now, self.session.ttl, &claims.inner);
+		if access_token.is_some()
+			&& let Some(ttl) = expires_in
+		{
+			expiry = expiry.min(now.saturating_add(ttl));
+		}
+		(access_token, expiry)
+	}
+
+	fn forward_session_access_token(
+		&self,
+		req: &mut Request,
+		access_token: Option<&SecretString>,
+	) -> Result<(), Error> {
+		if self.forward_access_token
+			&& let Some(token) = access_token
+		{
+			crate::http::auth::AuthorizationLocation::bearer_header()
+				.insert(req, token.expose_secret())
+				.map_err(|_| Error::InvalidSession)?;
+		}
+		Ok(())
+	}
+
 	pub async fn apply(
 		&self,
 		log: &mut RequestLog,
@@ -311,6 +346,7 @@ impl OidcPolicy {
 								)?),
 							);
 						}
+						self.forward_session_access_token(req, browser_session.access_token.as_ref())?;
 						req.extensions_mut().insert(AuthenticatedSession {
 							can_logout: self.logout.is_some(),
 						});
@@ -321,8 +357,8 @@ impl OidcPolicy {
 							.refresh_browser_session(req, browser_session, client)
 							.await
 						{
-							Ok(Some((claims, response))) => {
-								if let Some(Value::String(sub)) = claims.inner.get("sub") {
+							Ok(Some((refreshed, response))) => {
+								if let Some(Value::String(sub)) = refreshed.claims.inner.get("sub") {
 									log.jwt_sub = Some(sub.clone());
 								}
 								if self
@@ -335,10 +371,11 @@ impl OidcPolicy {
 										&[],
 									)?));
 								}
+								self.forward_session_access_token(req, refreshed.access_token.as_ref())?;
 								req.extensions_mut().insert(AuthenticatedSession {
 									can_logout: self.logout.is_some(),
 								});
-								req.extensions_mut().insert(claims);
+								req.extensions_mut().insert(refreshed.claims.clone());
 								return Ok(response);
 							},
 							Ok(None) => {},

@@ -125,6 +125,7 @@ fn test_policy() -> OidcPolicy {
 		session,
 		scopes: vec!["openid".into(), "profile".into()],
 		credentials: Default::default(),
+		forward_access_token: false,
 	}
 }
 
@@ -245,6 +246,7 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		login: None,
 		logout: None,
 		credentials: Default::default(),
+		forward_access_token: false,
 	}
 }
 
@@ -363,6 +365,7 @@ fn browser_session(raw_id_token: String) -> BrowserSession {
 		policy_id: PolicyId::policy("policy"),
 		subject: Some("user-1".into()),
 		raw_id_token: SecretString::new(raw_id_token.into()),
+		access_token: None,
 		expires_at_unix: Some(now_unix() + 300),
 	}
 }
@@ -435,6 +438,7 @@ async fn apply_derives_claims_from_stored_id_token() {
 			policy_id: policy.policy_id.clone(),
 			subject: Some("user-1".into()),
 			raw_id_token: SecretString::new(id_token.clone().into()),
+			access_token: None,
 			expires_at_unix: Some(now_unix() + 300),
 		})
 		.expect("encode session");
@@ -491,6 +495,7 @@ async fn apply_refreshes_expired_browser_session() {
 			policy_id: policy.policy_id.clone(),
 			subject: Some("user-1".into()),
 			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
+			access_token: None,
 			expires_at_unix: Some(now_unix().saturating_sub(1)),
 		})
 		.expect("encode expired session");
@@ -655,6 +660,7 @@ async fn apply_handles_refresh_failures() {
 			policy_id: policy.policy_id.clone(),
 			subject: Some("user-1".into()),
 			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
+			access_token: None,
 			expires_at_unix: Some(now_unix().saturating_sub(1)),
 		})
 		.expect("encode expired session");
@@ -1364,6 +1370,7 @@ async fn apply_permissive_continue_still_clears_refresh_cookie() {
 			policy_id: policy.policy_id.clone(),
 			subject: Some("user-1".into()),
 			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
+			access_token: None,
 			expires_at_unix: Some(now_unix().saturating_sub(1)),
 		})
 		.expect("encode expired session");
@@ -1667,6 +1674,7 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		.and(path("/token"))
 		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
 			"id_token": id_token,
+			"access_token": "ignored-by-default",
 			"refresh_token": "refresh-token"
 		})))
 		.mount(&mock)
@@ -1721,6 +1729,7 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		.decode_browser_session(parse_set_cookie(session_cookie).value())
 		.expect("decode session");
 	assert_eq!(session.subject.as_deref(), Some("user-1"));
+	assert!(session.access_token.is_none());
 	let refresh_cookie = cookies
 		.iter()
 		.find(|cookie| cookie.starts_with(&policy.session.refresh_cookie_name))
@@ -1915,6 +1924,7 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 				login: None,
 				logout: None,
 				credentials: Default::default(),
+				forward_access_token: false,
 			},
 			provider_endpoint(format!("{}/authorize", mock.uri())),
 			provider_endpoint(format!("{}/token", mock.uri())),
@@ -1996,6 +2006,7 @@ async fn discovery_rejects_relative_provider_endpoints() {
 		login: None,
 		logout: None,
 		credentials: Default::default(),
+		forward_access_token: false,
 	};
 	let err = compile_local_policy(policy, translated_policy_id("discovery-relative-endpoints"))
 		.await
@@ -2065,6 +2076,7 @@ async fn local_oidc_config_rejects_invalid_configuration() {
 				login: None,
 				logout: None,
 				credentials: Default::default(),
+				forward_access_token: false,
 			},
 			"authorizationEndpoint, tokenEndpoint, and jwks must either all be set or all be omitted",
 		),
@@ -2097,6 +2109,7 @@ async fn local_oidc_config_rejects_invalid_configuration() {
 				login: None,
 				logout: None,
 				credentials: Default::default(),
+				forward_access_token: false,
 			},
 			"tokenEndpointAuth must be omitted unless authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly",
 		),
@@ -2255,4 +2268,173 @@ async fn browser_login_and_logout_flow() {
 		assert_eq!(response.status(), StatusCode::SEE_OTHER);
 		assert_eq!(response.headers()[header::LOCATION], expected);
 	}
+}
+
+#[tokio::test]
+async fn oidc_browser_session_access_token_is_exchanged() {
+	use crate::test_helpers::proxymock::{
+		BIND_KEY, read_body, send_request, send_request_headers, setup_proxy_test_with_config,
+		simple_bind, simple_mock,
+	};
+
+	let provider = MockServer::start().await;
+	let upstream = simple_mock().await;
+	for (grant, access_token) in [
+		("authorization_code", "browser-access"),
+		("refresh_token", "refreshed-access"),
+	] {
+		Mock::given(method("POST"))
+			.and(path("/token"))
+			.and(move |req: &wiremock::Request| {
+				url::form_urlencoded::parse(&req.body).any(|(k, v)| k == "grant_type" && v == grant)
+			})
+			.respond_with(move |req: &wiremock::Request| {
+				let nonce = if grant == "authorization_code" {
+					url::form_urlencoded::parse(&req.body)
+						.find(|(k, _)| k == "code")
+						.unwrap()
+						.1
+				} else {
+					TEST_NONCE.into()
+				};
+				ResponseTemplate::new(200).set_body_json(json!({
+					"id_token": signed_id_token(&nonce),
+					"access_token": access_token,
+					"expires_in": 120,
+					"refresh_token": "browser-refresh",
+				}))
+			})
+			.mount(&provider)
+			.await;
+
+		Mock::given(method("POST"))
+			.and(path("/exchange"))
+			.and(move |req: &wiremock::Request| {
+				let form: std::collections::HashMap<_, _> =
+					url::form_urlencoded::parse(&req.body).collect();
+				form
+					.get("grant_type")
+					.is_some_and(|v| v == crate::http::oauth::GRANT_TYPE_TOKEN_EXCHANGE)
+					&& form.get("subject_token").is_some_and(|v| v == access_token)
+					&& form
+						.get("subject_token_type")
+						.is_some_and(|v| v == crate::http::oauth::TOKEN_TYPE_ACCESS)
+			})
+			.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+				"access_token": format!("exchanged-{access_token}"),
+				"token_type": "Bearer",
+				"issued_token_type": crate::http::oauth::TOKEN_TYPE_ACCESS,
+			})))
+			.mount(&provider)
+			.await;
+	}
+
+	let mut config = crate::config::parse_config("{}".into(), None).unwrap();
+	config.oidc_cookie_encoder = Some(test_oidc_cookie_encoder());
+	let mut proxy = setup_proxy_test_with_config(config).with_bind(simple_bind());
+	proxy
+		.attach_route(json!({
+			"policies": {"oidc": {
+				"issuer": TEST_ISSUER,
+				"authorizationEndpoint": "https://issuer.example.com/authorize",
+				"tokenEndpoint": format!("{}/token", provider.uri()),
+				"jwks": serde_json::to_string(&test_jwks()).unwrap(),
+				"clientId": TEST_CLIENT_ID,
+				"clientSecret": "client-secret",
+				"redirectURI": "http://example.com/oauth/callback",
+				"forwardAccessToken": true,
+			}},
+			"backends": [{
+				"host": upstream.address().to_string(),
+				"policies": {"backendAuth": {"oauthTokenExchange": {
+					"host": provider.address().to_string(),
+					"path": "/exchange",
+				}}},
+			}],
+		}))
+		.await;
+	let io = proxy.serve_http(BIND_KEY);
+	let protected = "http://example.com/protected";
+	let login = send_request(io.clone(), Method::GET, protected).await;
+	assert_eq!(login.status(), StatusCode::FOUND);
+	let location = redirect_location(&login);
+	let callback = format!(
+		"http://example.com/oauth/callback?state={}&code={}",
+		query_param(&location, "state"),
+		query_param(&location, "nonce"),
+	);
+	let transaction = login.headers()[header::SET_COOKIE].to_str().unwrap();
+	let transaction = transaction.split(';').next().unwrap();
+	let callback_started = now_unix();
+	let callback = send_request_headers(
+		io.clone(),
+		Method::GET,
+		&callback,
+		&[("cookie", transaction)],
+	)
+	.await;
+	assert_eq!(callback.status(), StatusCode::FOUND);
+	let cookies: Vec<_> = callback
+		.headers()
+		.get_all(header::SET_COOKIE)
+		.iter()
+		.map(|value| parse_set_cookie(value.to_str().unwrap()))
+		.collect();
+	let [session_cookie, refresh_cookie, _] = cookies.as_slice() else {
+		panic!("expected browser, refresh, and cleared transaction cookies");
+	};
+
+	let cookies = format!(
+		"{}={}; {}={}",
+		session_cookie.name(),
+		session_cookie.value(),
+		refresh_cookie.name(),
+		refresh_cookie.value()
+	);
+	let response =
+		send_request_headers(io.clone(), Method::GET, protected, &[("cookie", &cookies)]).await;
+	assert_eq!(
+		response.status(),
+		StatusCode::OK,
+		"browser session access token should reach OAuth token exchange"
+	);
+	let forwarded = read_body(response.into_body()).await;
+	assert_eq!(
+		forwarded.headers[header::AUTHORIZATION],
+		"Bearer exchanged-browser-access"
+	);
+	assert!(!forwarded.headers.contains_key(header::COOKIE));
+
+	let codec = test_policy().session;
+	let mut session = codec
+		.decode_browser_session(session_cookie.value())
+		.unwrap();
+	assert!((callback_started + 120..=now_unix() + 120).contains(&session.expires_at_unix.unwrap()));
+	session.expires_at_unix = Some(now_unix().saturating_sub(1));
+	let expired_cookie = codec.encode_browser_session(&session).unwrap();
+	let cookies = format!(
+		"{}={}; {}={}",
+		session_cookie.name(),
+		expired_cookie,
+		refresh_cookie.name(),
+		refresh_cookie.value()
+	);
+	let refreshed =
+		send_request_headers(io.clone(), Method::GET, protected, &[("cookie", &cookies)]).await;
+	assert_eq!(refreshed.status(), StatusCode::OK);
+	let cookie = refreshed.headers()[header::SET_COOKIE].to_str().unwrap();
+	let cookie = cookie.split(';').next().unwrap().to_owned();
+	let forwarded = read_body(refreshed.into_body()).await;
+	assert_eq!(
+		forwarded.headers[header::AUTHORIZATION],
+		"Bearer exchanged-refreshed-access"
+	);
+
+	let response = send_request_headers(io, Method::GET, protected, &[("cookie", &cookie)]).await;
+	assert_eq!(response.status(), StatusCode::OK);
+	let forwarded = read_body(response.into_body()).await;
+	assert_eq!(
+		forwarded.headers[header::AUTHORIZATION],
+		"Bearer exchanged-refreshed-access"
+	);
 }

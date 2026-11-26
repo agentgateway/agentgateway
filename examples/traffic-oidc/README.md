@@ -121,3 +121,29 @@ each other and the callback path.
 
 The built-in UI manages its own login and logout endpoints. Omit `login` and
 `logout` under `ui.policies.oidc`; configuring them there is rejected.
+
+### Forwarding or exchanging the provider access token
+
+Set `forwardAccessToken: true` under the route's `policies.oidc` to store the
+provider access token in the encrypted browser session cookie. On authenticated
+browser requests, the session access token supplies the `Authorization: Bearer`
+header. To exchange it for a token with a different audience, add
+`backendAuth.oauthTokenExchange` under the backend's `policies`:
+
+```yaml
+backendAuth:
+  oauthTokenExchange:
+    host: localhost:7080
+    path: /realms/agentgateway/protocol/openid-connect/token
+    audiences:
+    - internal-api
+```
+
+Configure the identity provider to allow the exchange and add any client
+authentication it requires. The default exchange subject source reads the Bearer
+header and the backend receives the exchanged token.
+
+Sessions created before forwarding was enabled gain an access token at their
+next successful refresh or sign-in. A provider's `expires_in` can trigger
+refresh before the ID token expires. The encrypted browser session cookie must
+still fit the gateway's cookie size limit.
