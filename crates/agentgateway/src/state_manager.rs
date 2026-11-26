@@ -5,6 +5,7 @@ use agent_core::prelude::*;
 use agent_core::readiness;
 
 use crate::client::Client;
+use crate::resource_manager::ResourceChange;
 use crate::store::Stores;
 use crate::types::agent::ListenerTarget;
 use crate::types::discovery::SelfIdentitySource;
@@ -137,11 +138,15 @@ pub struct LocalClient {
 
 impl LocalClient {
 	pub async fn run(self) -> Result<(), anyhow::Error> {
+		// Retain changes published while the initial config is still being applied.
+		let resource_changes = self.resource_manager.subscribe_changes();
 		let next_state = self.reload_config(PreviousState::default()).await?;
 		if let ConfigSource::File(path) = &self.cfg {
-			self.watch_config_file(path, next_state).await?;
+			self
+				.watch_config_file(path, next_state, resource_changes)
+				.await?;
 		} else {
-			self.watch_resource_changes(next_state);
+			self.watch_resource_changes(next_state, resource_changes);
 		}
 
 		Ok(())
@@ -151,6 +156,7 @@ impl LocalClient {
 		&self,
 		path: &Path,
 		mut next_state: PreviousState,
+		mut resource_changes: tokio::sync::watch::Receiver<ResourceChange>,
 	) -> anyhow::Result<()> {
 		let watch_options = crate::util::WatchFilesOptions::default().close_on_removal(true);
 		let mut watched =
@@ -159,7 +165,6 @@ impl LocalClient {
 
 		let lc: LocalClient = self.to_owned();
 		let path = path.to_path_buf();
-		let mut resource_changes = lc.resource_manager.subscribe_changes();
 		let mut config_store_changes = lc
 			.config_resource_store
 			.as_ref()
@@ -209,9 +214,12 @@ impl LocalClient {
 		Ok(())
 	}
 
-	fn watch_resource_changes(&self, mut next_state: PreviousState) {
+	fn watch_resource_changes(
+		&self,
+		mut next_state: PreviousState,
+		mut resource_changes: tokio::sync::watch::Receiver<ResourceChange>,
+	) {
 		let lc = self.clone();
-		let mut resource_changes = self.resource_manager.subscribe_changes();
 		let mut config_store_changes = self
 			.config_resource_store
 			.as_ref()
@@ -693,6 +701,145 @@ frontendPolicies:
 			.unwrap()
 			.1;
 		assert_eq!(exec.eval(expression).unwrap().as_string().unwrap(), "third");
+	}
+
+	#[tokio::test]
+	async fn jwks_outage_allows_config_updates_and_recovers_before_watcher_start() {
+		use serde_json::json;
+		use wiremock::matchers::method;
+		use wiremock::{Mock, MockServer, ResponseTemplate};
+
+		use crate::types::agent::TrafficPolicy;
+
+		let server = MockServer::start().await;
+		Mock::given(method("GET"))
+			.respond_with(ResponseTemplate::new(503))
+			.mount(&server)
+			.await;
+		let config_text = |field: &str| {
+			format!(
+				r#"
+frontendPolicies:
+  accessLog:
+    remove:
+    - {field}
+binds:
+- mode: internal
+  listeners:
+  - routes:
+    - policies:
+        jwtAuth:
+          mode: strict
+          issuer: unavailable
+          jwks:
+            url: {}/jwks
+      backends:
+      - host: 127.0.0.1:8080
+    - policies:
+        mcpAuthentication:
+          issuer: unavailable
+          jwks:
+            url: {}/jwks
+          resourceMetadata:
+            resource: http://localhost/mcp
+      backends:
+      - host: 127.0.0.1:8081
+"#,
+				server.uri(),
+				server.uri()
+			)
+		};
+		let config = Arc::new(test_config());
+		let stores = test_stores();
+		let mut registry = prometheus_client::registry::Registry::default();
+		let client = test_client();
+		let mut local_client = LocalClient {
+			config: config.clone(),
+			cfg: ConfigSource::Static(config_text("first").into()),
+			config_resource_store: None,
+			model_catalog: crate::llm::catalog::ModelCatalog::empty(),
+			stores: stores.clone(),
+			resource_manager: crate::resource_manager::ResourceManager::new(client.clone()).unwrap(),
+			client,
+			gateway: config.gateway(),
+			metrics: Arc::new(agent_xds::Metrics::new(&mut registry)),
+		};
+		let resource_changes = local_client.resource_manager.subscribe_changes();
+		let mut recovery = local_client.resource_manager.subscribe_changes();
+		let validators = || {
+			let mut validators = Vec::new();
+			for bind in &stores.binds.dump().binds {
+				for listener in bind.listeners.values() {
+					if let Some(routes) = &listener.routes {
+						for route in routes.iter() {
+							for policy in &route.inline_policies {
+								if let TrafficPolicy::JwtAuth(jwt) = policy {
+									validators.extend(jwt.iter().map(|p| p.pol.jwt.clone()));
+								}
+							}
+						}
+					}
+				}
+			}
+			validators
+		};
+		let token = crate::http::jwt::tests::build_signed_token_with_payload(
+			"recovered-key",
+			json!({"iss": "unavailable", "aud": "aud", "exp": 4102444800_u64}),
+		);
+		// This is the initial load performed by LocalClient::run.
+		let prev = local_client
+			.reload_config(PreviousState::default())
+			.await
+			.unwrap();
+		wait_for_access_log_remove(&config, &stores, "first").await;
+		let initial_validators = validators();
+		assert_eq!(
+			initial_validators.len(),
+			2,
+			"JWT and MCP policies must remain attached"
+		);
+		assert!(
+			initial_validators
+				.iter()
+				.all(|jwt| jwt.validate_claims(&token).is_err())
+		);
+		local_client.cfg = ConfigSource::Static(config_text("second").into());
+		let next_state = local_client.reload_config_after_change(prev).await;
+		wait_for_access_log_remove(&config, &stores, "second").await;
+		assert!(config.config_reload_status.last_error().is_none());
+
+		server.reset().await;
+		Mock::given(method("GET"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(json!({"keys": [{
+				"kty": "EC", "kid": "recovered-key", "crv": "P-256", "alg": "ES256",
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+			}]})))
+			.mount(&server)
+			.await;
+		// Let the real retry finish before starting the config watcher. A fresh
+		// subscription here would miss this recovery until the key set changes.
+		tokio::time::timeout(Duration::from_secs(25), recovery.changed())
+			.await
+			.expect("scheduled JWKS retry should publish recovery")
+			.unwrap();
+		local_client.watch_resource_changes(next_state, resource_changes);
+		tokio::time::timeout(Duration::from_secs(5), async {
+			loop {
+				let current = validators();
+				if current.len() == 2
+					&& current
+						.iter()
+						.all(|jwt| jwt.validate_claims(&token).is_ok())
+				{
+					return;
+				}
+				tokio::time::sleep(Duration::from_millis(10)).await;
+			}
+		})
+		.await
+		.expect("recovered JWKS should rebuild the JWT and MCP verifiers without a config edit");
 	}
 
 	#[tokio::test]

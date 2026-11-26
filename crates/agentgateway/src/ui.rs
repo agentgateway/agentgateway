@@ -222,6 +222,8 @@ struct RuntimeInfo {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	config: Option<RuntimeConfigInfo>,
 	config_reload: RuntimeConfigReloadInfo,
+	/// JWKS URLs that have not loaded yet; tokens they verify are rejected until a retry succeeds.
+	unavailable_jwks: Vec<String>,
 }
 
 /// Which sections the effective config sets.
@@ -456,6 +458,7 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 					last_error,
 				}
 			},
+			unavailable_jwks: app.resource_manager.unavailable_jwks(),
 		}),
 	)
 }

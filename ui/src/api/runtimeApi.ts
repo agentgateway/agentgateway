@@ -37,6 +37,8 @@ export interface RuntimeInfo {
 		/** Error of the most recent failed reload, if any. */
 		lastError: string | null;
 	};
+	/** JWKS URLs that have not loaded yet; tokens they verify are rejected until a retry succeeds. */
+	unavailableJwks: string[];
 }
 
 export function getRuntimeInfo() {
