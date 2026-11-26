@@ -4351,6 +4351,11 @@ func (in *McpTarget) DeepCopyInto(out *McpTarget) {
 		*out = new(corev1.LocalObjectReference)
 		**out = **in
 	}
+	if in.AgentCore != nil {
+		in, out := &in.AgentCore, &out.AgentCore
+		*out = new(AwsAgentCoreBackend)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Path != nil {
 		in, out := &in.Path, &out.Path
 		*out = new(LongString)

@@ -10523,6 +10523,20 @@ spec:
                             in-cluster `Service` resources, it is recommended to use `selector`
                             instead.
                           properties:
+                            agentCore:
+                              description: |-
+                                Amazon Bedrock AgentCore runtime to invoke. The gateway derives the
+                                endpoint and SigV4 signing settings from the runtime ARN.
+                              properties:
+                                agentRuntimeArn:
+                                  description: ARN of the AgentCore runtime.
+                                  type: string
+                                qualifier:
+                                  description: Alias or version qualifier.
+                                  type: string
+                              required:
+                              - agentRuntimeArn
+                              type: object
                             backendRef:
                               description: |-
                                 Namespace-local `Service` resource by name.
@@ -10544,7 +10558,7 @@ spec:
                               description: |-
                                 URL path of the MCP target endpoint.
                                 Defaults to `"/sse"` for the `SSE` protocol or `"/mcp"` for the
-                                `StreamableHTTP` protocol if not specified.
+                                `StreamableHTTP` protocol if not specified. AgentCore uses its invocation path.
                               maxLength: 1024
                               minLength: 1
                               type: string
@@ -10554,8 +10568,7 @@ spec:
                                 Policies may also be set in `AgentgatewayPolicy`, or in the top-level
                                 `AgentgatewayBackend`. Policies are merged on a field-level basis, with
                                 order: `AgentgatewayPolicy` < `AgentgatewayBackend` < `AgentgatewayBackend` MCP (this field).
-                                This field may only be used with host-based static targets, not
-                                `backendRef`.
+                                This field may be used with host or agentCore targets.
                               properties:
                                 auth:
                                   description: Settings for managing authentication
@@ -12942,28 +12955,36 @@ spec:
                                     rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                               type: object
                             port:
-                              description: Port number of the MCP target.
+                              description: Port number of the MCP target. Required
+                                for host and backendRef.
                               format: int32
                               maximum: 65535
                               minimum: 1
                               type: integer
                             protocol:
                               description: |-
-                                Protocol to use for the connection to the MCP
-                                target.
+                                Protocol to use for the connection to the MCP target. AgentCore uses
+                                `StreamableHTTP`.
                               enum:
                               - SSE
                               - StreamableHTTP
                               type: string
-                          required:
-                          - port
                           type: object
                           x-kubernetes-validations:
                           - message: mcp target policies may not be used with backendRef
                             rule: '!has(self.backendRef) || !has(self.policies)'
-                          - message: exactly one of the fields in [host backendRef]
-                              must be set
-                            rule: (has(self.host)?1:0)+(has(self.backendRef)?1:0)
+                          - message: mcp targets using host or backendRef require
+                              port
+                            rule: has(self.agentCore) || has(self.port)
+                          - message: mcp targets using agentCore may not specify port
+                              or path
+                            rule: '!has(self.agentCore) || (!has(self.port) && !has(self.path))'
+                          - message: mcp targets using agentCore require StreamableHTTP
+                            rule: '!has(self.agentCore) || !has(self.protocol) ||
+                              self.protocol == ''StreamableHTTP'''
+                          - message: exactly one of the fields in [host backendRef
+                              agentCore] must be set
+                            rule: (has(self.host)?1:0)+(has(self.backendRef)?1:0)+(has(self.agentCore)?1:0)
                               == 1
                       required:
                       - name

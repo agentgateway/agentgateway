@@ -1,0 +1,104 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agentcore-mcp
+  namespace: default
+spec:
+  mcp:
+    targets:
+    - name: qualified
+      condition: 'mcp.target.name == "qualified"'
+      static:
+        agentCore:
+          agentRuntimeArn: arn:aws:bedrock-agentcore:eu-west-1:123456789012:runtime/qualified
+          qualifier: prod
+    - name: unqualified
+      static:
+        agentCore:
+          agentRuntimeArn: arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/unqualified
+    - name: plain
+      static:
+        host: mcp.example.com
+        port: 443
+        path: /existing-mcp
+        protocol: StreamableHTTP
+
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/agentcore-mcp
+      mcp:
+        targets:
+        - backend:
+            backend: default/agentcore-mcp/qualified
+          condition: mcp.target.name == "qualified"
+          name: qualified
+          protocol: STREAMABLE_HTTP
+        - backend:
+            backend: default/agentcore-mcp/unqualified
+          name: unqualified
+          protocol: STREAMABLE_HTTP
+        - backend:
+            backend: default/agentcore-mcp/plain
+          name: plain
+          path: /existing-mcp
+          protocol: STREAMABLE_HTTP
+      name:
+        name: agentcore-mcp
+        namespace: default
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/agentcore-mcp/plain
+      name:
+        name: agentcore-mcp
+        namespace: default
+      static:
+        host: mcp.example.com
+        port: 443
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      aws:
+        agentCore:
+          agentRuntimeArn: arn:aws:bedrock-agentcore:eu-west-1:123456789012:runtime/qualified
+          qualifier: prod
+      key: default/agentcore-mcp/qualified
+      name:
+        name: agentcore-mcp
+        namespace: default
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      aws:
+        agentCore:
+          agentRuntimeArn: arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/unqualified
+      key: default/agentcore-mcp/unqualified
+      name:
+        name: agentcore-mcp
+        namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: agentcore-mcp
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
