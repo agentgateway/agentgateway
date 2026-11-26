@@ -1,4 +1,4 @@
-use agentgateway::test_helpers::{extauthmock, oteltracemock};
+use agentgateway::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
 use ppp::v2::{
 	Builder as ProxyV2Builder, Command as ProxyV2Command, Protocol as ProxyV2Protocol,
 	Version as ProxyV2Version,
@@ -208,6 +208,17 @@ async fn proxy_policy_v1_rejects_v2_header() {
 
 #[tokio::test]
 async fn tracing_exports_to_otel_trace_mock() {
+	use opentelemetry_proto::tonic::common::v1::any_value::Value as SpanValue;
+	use opentelemetry_proto::tonic::trace::v1::Span;
+
+	fn attribute<'a>(span: &'a Span, key: &str) -> Option<&'a SpanValue> {
+		span
+			.attributes
+			.iter()
+			.find(|attribute| attribute.key == key)
+			.and_then(|attribute| attribute.value.as_ref()?.value.as_ref())
+	}
+
 	unsafe {
 		// Drop export time to make tests fast
 		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
@@ -240,6 +251,9 @@ async fn tracing_exports_to_otel_trace_mock() {
 	struct AllowExtAuthz;
 	#[async_trait::async_trait]
 	impl extauthmock::Handler for AllowExtAuthz {}
+	struct AllowRateLimit;
+	#[async_trait::async_trait]
+	impl ratelimitmock::Handler for AllowRateLimit {}
 
 	let spans = Arc::new(StdMutex::new(Vec::new()));
 	let otel = oteltracemock::OtelTraceMock::new({
@@ -253,13 +267,22 @@ async fn tracing_exports_to_otel_trace_mock() {
 	let authz = extauthmock::ExtAuthMock::new(|| AllowExtAuthz)
 		.spawn()
 		.await;
+	let rate_limit = ratelimitmock::RateLimitMock::new(|| AllowRateLimit)
+		.spawn()
+		.await;
 
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
 		.attach_frontend_policy(json!({
 			"tracing": {
 				"host": otel.address.to_string(),
-				"randomSampling": true
+				"randomSampling": true,
+				"attributes": {
+					"user_id": "request.headers['x-user-id']",
+					"span.name": "'caller request'",
+					"unset": "null",
+					"agentgateway.outbound.kind": "'configured'",
+				},
 			}
 		}))
 		.await;
@@ -270,29 +293,86 @@ async fn tracing_exports_to_otel_trace_mock() {
 			},
 		}))
 		.await;
+	bind
+		.attach_route_policy(json!({
+			"remoteRateLimit": {
+				"domain": "tracing",
+				"host": rate_limit.address.to_string(),
+				"descriptors": [{
+					"entries": [{"key": "caller", "value": "'test'"}],
+					"type": "requests",
+				}],
+			},
+		}))
+		.await;
 
-	let res = send_request(io, Method::GET, "http://lo").await;
-	assert_eq!(res.status(), 200);
+	for user_id in ["caller-a", "caller-b"] {
+		let res = send_request_headers(
+			io.clone(),
+			Method::GET,
+			"http://lo",
+			&[("x-user-id", user_id)],
+		)
+		.await;
+		assert_eq!(res.status(), 200);
+		read_body_raw(res.into_body()).await;
 
-	tokio::time::timeout(Duration::from_secs(2), async {
-		while spans.lock().unwrap().len() < 2 {
-			tokio::task::yield_now().await;
+		tokio::time::timeout(Duration::from_secs(2), async {
+			while spans.lock().unwrap().len() < 4 {
+				tokio::task::yield_now().await;
+			}
+		})
+		.await
+		.unwrap();
+
+		let finished = std::mem::take(&mut *spans.lock().unwrap());
+		let request = finished
+			.iter()
+			.find(|span| span.name == "caller request")
+			.expect("parent request span should be exported");
+		let expected_user = SpanValue::StringValue(user_id.to_owned());
+		assert_eq!(attribute(request, "user_id"), Some(&expected_user));
+		assert_eq!(
+			attribute(request, "agentgateway.outbound.kind"),
+			Some(&SpanValue::StringValue("configured".to_owned())),
+		);
+
+		for (subtype, kind) in [
+			("RateLimit", "Policy"),
+			("ExtAuthz", "Policy"),
+			("Http", "Primary"),
+		] {
+			let subtype_attr = SpanValue::StringValue(subtype.to_owned());
+			let child = finished
+				.iter()
+				.find(|span| attribute(span, "agentgateway.outbound.subtype") == Some(&subtype_attr))
+				.unwrap_or_else(|| panic!("{subtype} span should be exported"));
+			if kind == "Policy" {
+				assert_eq!(child.name, subtype);
+			}
+			assert_eq!(child.trace_id, request.trace_id);
+			assert_eq!(child.parent_span_id, request.span_id);
+			assert_eq!(
+				attribute(child, "agentgateway.outbound.kind"),
+				Some(&SpanValue::StringValue(kind.to_owned())),
+			);
+			assert_eq!(
+				child
+					.attributes
+					.iter()
+					.filter(|attribute| attribute.key == "agentgateway.outbound.kind")
+					.count(),
+				1,
+			);
+			assert_eq!(attribute(child, "span.name"), None);
+			assert_eq!(attribute(child, "unset"), None);
+			assert_eq!(
+				attribute(child, "user_id"),
+				Some(&expected_user),
+				"{subtype} span should carry the evaluated user_id",
+			);
 		}
-	})
-	.await
-	.unwrap();
-
-	let spans = spans.lock().unwrap();
-	let ext_authz = spans
-		.iter()
-		.find(|span| span.name == "ExtAuthz")
-		.expect("ExtAuthz span should be exported");
-	let request = spans
-		.iter()
-		.find(|span| span.trace_id == ext_authz.trace_id && span.span_id == ext_authz.parent_span_id)
-		.expect("parent request span should be exported");
-	assert_eq!(ext_authz.trace_id, request.trace_id);
-	assert_eq!(ext_authz.parent_span_id, request.span_id);
+	}
 }
 
 /// `parentNotSampled` exports spans for a request whose incoming `traceparent` is `-00`, and
