@@ -414,6 +414,150 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
 	jsonwebtoken::encode(&header, &payload, &key).unwrap()
 }
 
+fn build_hmac_token(
+	alg: jsonwebtoken::Algorithm,
+	secret: &[u8],
+	kid: Option<&str>,
+	payload: serde_json::Value,
+) -> String {
+	crate::crypto::jwt::init();
+	let header = jsonwebtoken::Header {
+		alg,
+		kid: kid.map(str::to_string),
+		..Default::default()
+	};
+	jsonwebtoken::encode(&header, &payload, &jsonwebtoken::EncodingKey::from_secret(secret)).unwrap()
+}
+
+/// A provider with the ES256 JWKS fixture plus an HMAC secret, as the OIDC ID Token validator builds it.
+fn setup_test_jwt_with_hmac(secret: &[u8]) -> (Jwt, &'static str, &'static str) {
+	let (jwt, _kid, issuer, aud) = setup_test_jwt();
+	let provider = jwt.providers.into_iter().next().unwrap().with_hmac_secret(
+		secret,
+		Some(vec![aud.to_string()]),
+		JWTValidationOptions::default(),
+	);
+	(
+		Jwt {
+			providers: vec![provider],
+			..jwt
+		},
+		issuer,
+		aud,
+	)
+}
+
+fn unix_now() -> u64 {
+	std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+}
+
+#[test]
+pub fn test_hmac_token_without_kid_validates_with_shared_secret() {
+	use jsonwebtoken::Algorithm;
+
+	let secret = b"client-secret-client-secret-0123";
+	let (jwt, issuer, aud) = setup_test_jwt_with_hmac(secret);
+	let payload = json!({ "iss": issuer, "aud": aud, "exp": unix_now() + 600, "sub": "user-1" });
+
+	for alg in [Algorithm::HS256, Algorithm::HS384, Algorithm::HS512] {
+		let token = build_hmac_token(alg, secret, None, payload.clone());
+		let claims = jwt
+			.validate_claims(&token)
+			.unwrap_or_else(|e| panic!("{alg:?}: {e:?}"));
+		assert_eq!(claims.inner.get("sub"), Some(&json!("user-1")), "{alg:?}");
+	}
+}
+
+#[test]
+pub fn test_hmac_token_rejected_on_wrong_secret_or_claims() {
+	use jsonwebtoken::{Algorithm, errors::ErrorKind};
+
+	let secret = b"client-secret-client-secret-0123";
+	let (jwt, issuer, aud) = setup_test_jwt_with_hmac(secret);
+	let now = unix_now();
+
+	let wrong_secret = build_hmac_token(
+		Algorithm::HS256,
+		b"some-other-secret-some-other-0123",
+		None,
+		json!({ "iss": issuer, "aud": aud, "exp": now + 600 }),
+	);
+	match jwt.validate_claims(&wrong_secret) {
+		Err(TokenError::Invalid(e)) => assert!(matches!(e.kind(), ErrorKind::InvalidSignature)),
+		other => panic!("wrong secret: expected InvalidSignature, got {other:?}"),
+	}
+
+	let wrong_aud = build_hmac_token(
+		Algorithm::HS256,
+		secret,
+		None,
+		json!({ "iss": issuer, "aud": "other-aud", "exp": now + 600 }),
+	);
+	match jwt.validate_claims(&wrong_aud) {
+		Err(TokenError::Invalid(e)) => assert!(matches!(e.kind(), ErrorKind::InvalidAudience)),
+		other => panic!("wrong aud: expected InvalidAudience, got {other:?}"),
+	}
+
+	let wrong_iss = build_hmac_token(
+		Algorithm::HS256,
+		secret,
+		None,
+		json!({ "iss": "https://evil.example.com", "aud": aud, "exp": now + 600 }),
+	);
+	assert!(jwt.validate_claims(&wrong_iss).is_err());
+
+	let expired = build_hmac_token(
+		Algorithm::HS256,
+		secret,
+		None,
+		json!({ "iss": issuer, "aud": aud, "exp": now - 600 }),
+	);
+	match jwt.validate_claims(&expired) {
+		Err(TokenError::Invalid(e)) => assert!(matches!(e.kind(), ErrorKind::ExpiredSignature)),
+		other => panic!("expired: expected ExpiredSignature, got {other:?}"),
+	}
+}
+
+#[test]
+pub fn test_hmac_token_rejected_when_no_secret_configured() {
+	use jsonwebtoken::Algorithm;
+
+	// Default providers (JWKS only) must keep requiring a kid, so an HMAC token is never accepted.
+	let (jwt, _kid, issuer, aud) = setup_test_jwt();
+	let token = build_hmac_token(
+		Algorithm::HS256,
+		b"client-secret-client-secret-0123",
+		None,
+		json!({ "iss": issuer, "aud": aud, "exp": unix_now() + 600 }),
+	);
+	assert!(matches!(
+		jwt.validate_claims(&token),
+		Err(TokenError::MissingKeyId)
+	));
+}
+
+#[test]
+pub fn test_hmac_secret_cannot_be_used_to_forge_asymmetric_key_token() {
+	use jsonwebtoken::Algorithm;
+
+	// A token that claims an HMAC algorithm but names a JWKS `kid` must not be checked against the
+	// asymmetric JWKS key (classic algorithm-confusion attack), and a wrong-secret HMAC token with a
+	// kid must still fail.
+	let secret = b"client-secret-client-secret-0123";
+	let (jwt, issuer, aud) = setup_test_jwt_with_hmac(secret);
+	let (_, kid, _, _) = setup_test_jwt();
+	let token = build_hmac_token(
+		Algorithm::HS256,
+		b"attacker-chosen-secret-0123456789",
+		Some(kid),
+		json!({ "iss": issuer, "aud": aud, "exp": unix_now() + 600 }),
+	);
+	assert!(jwt.validate_claims(&token).is_err());
+}
+
 #[test]
 pub fn test_configured_issuer_and_audiences_require_claims() {
 	use std::time::{SystemTime, UNIX_EPOCH};
