@@ -99,6 +99,8 @@ export function useRuntimeInfo() {
 	return useQuery({
 		queryKey: ['runtime'],
 		queryFn: getRuntimeInfo,
+		// Keep runtime banners such as JWKS recovery current without a reload.
+		refetchInterval: 15_000,
 		retry: false
 	});
 }

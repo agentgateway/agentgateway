@@ -189,6 +189,12 @@ export function Shell() {
 							previous configuration. Fix the configuration and save it to retry.
 						</StatusBanner>
 					)}
+					{!!runtime.data?.unavailableJwks?.length && (
+						<StatusBanner state="warn" title="JWKS endpoint unreachable">
+							Tokens from these key sets are rejected until the gateway can fetch them. It retries
+							automatically: {runtime.data.unavailableJwks.join(', ')}
+						</StatusBanner>
+					)}
 					{runtime.data?.ui.configStoreMode === 'readOnly' && (
 						<StatusBanner state="info" title="Read-only mode">
 							The UI is configured as read-only. Editing is disabled.

@@ -240,6 +240,16 @@ impl ResourceFetcher {
 		}
 	}
 
+	/// Whether the config being built will run with retries for failed fetches.
+	/// `CachedOrDirect` validates UI edits that the managed runtime then applies,
+	/// so it tolerates the same failures. `Direct` (`--validate-only`) never retries.
+	pub(crate) fn retries_failed_fetches(&self) -> bool {
+		matches!(
+			self.mode,
+			ResourceFetcherMode::Managed(_) | ResourceFetcherMode::CachedOrDirect(_)
+		)
+	}
+
 	/// Records managed resource lookups during a full config computation.
 	/// The returned guard commits fetched resources on success, or restores the
 	/// last committed set on failure so failed reloads do not leave stale state.
@@ -617,6 +627,26 @@ impl ResourceManager {
 			})
 			.collect::<HashSet<_>>();
 		self.inner.watched_files.retain_paths(&retained_files);
+	}
+
+	/// JWKS URLs with no keys loaded yet; their verifiers reject every token until a retry succeeds.
+	pub fn unavailable_jwks(&self) -> Vec<String> {
+		let mut urls: Vec<String> = self
+			.inner
+			.entries
+			.lock()
+			.expect("resource cache mutex poisoned")
+			.iter()
+			.filter_map(|(resource, entry)| match resource {
+				ResourceRef::Http {
+					url,
+					kind: ResourceKind::Jwks,
+				} if entry.content.is_none() => Some(url.to_string()),
+				_ => None,
+			})
+			.collect();
+		urls.sort();
+		urls
 	}
 
 	fn cached(&self, resource: &ResourceRef) -> Option<Bytes> {

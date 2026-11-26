@@ -73,8 +73,9 @@ pub enum FileInlineOrRemote {
 }
 
 impl FileInlineOrRemote {
-	/// Keep a remote JWKS outage local to its verifier. Invalid data, local-file
-	/// errors, and non-retryable HTTP errors still reject the config.
+	/// Keep a remote JWKS outage local to its verifier while it is retried. Invalid
+	/// data, local-file errors, non-retryable HTTP errors, and failures nothing will
+	/// retry (such as `--validate-only`) still reject the config.
 	pub async fn load_jwks(
 		&self,
 		resources: &ResourceFetcher,
@@ -92,7 +93,7 @@ impl FileInlineOrRemote {
 		};
 		match resources.fetch(resource).await {
 			Ok(bytes) => serde_json::from_slice(&bytes).map_err(Into::into),
-			Err(e) if is_retryable_jwks_fetch_error(&e) => {
+			Err(e) if is_retryable_jwks_fetch_error(&e) && resources.retries_failed_fetches() => {
 				tracing::warn!(%url, error = %e, "JWKS endpoint unavailable; no verification keys loaded");
 				Ok(jsonwebtoken::jwk::JwkSet { keys: Vec::new() })
 			},
@@ -153,9 +154,10 @@ mod jwks_tests {
 	use crate::http::jwt::tests::build_signed_token_with_payload;
 	use crate::http::oidc::{LocalOidcConfig, PolicyId};
 	use crate::http::sessionpersistence::Encoder;
+	use crate::resource_manager::ResourceManager;
 
-	fn jwks_test_fetcher() -> ResourceFetcher {
-		ResourceFetcher::direct(crate::client::Client::new(
+	fn test_client() -> crate::client::Client {
+		crate::client::Client::new(
 			&crate::client::Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
@@ -164,7 +166,44 @@ mod jwks_tests {
 			None,
 			crate::BackendConfig::default(),
 			None,
-		))
+		)
+	}
+
+	// Outage tolerance relies on the manager retrying, so exercise the runtime mode.
+	fn jwks_test_fetcher() -> ResourceFetcher {
+		ResourceFetcher::managed(ResourceManager::new(test_client()).unwrap())
+	}
+
+	#[tokio::test]
+	async fn jwks_outage_rejects_config_only_when_nothing_retries() {
+		let server = MockServer::start().await;
+		Mock::given(method("GET"))
+			.respond_with(ResponseTemplate::new(503))
+			.mount(&server)
+			.await;
+		let config = || -> LocalJwtConfig {
+			serde_json::from_value(json!({
+				"mode": "strict", "issuer": "issuer",
+				"jwks": {"url": format!("{}/jwks", server.uri())}
+			}))
+			.unwrap()
+		};
+		// `--validate-only` never retries, so an empty key set would be final.
+		let direct = ResourceFetcher::direct(test_client());
+		assert!(config().try_into(&direct).await.is_err());
+
+		// The runtime keeps the config and reports the URL until a retry succeeds.
+		let manager = ResourceManager::new(test_client()).unwrap();
+		let runtime = ResourceFetcher::managed(manager.clone());
+		assert!(config().try_into(&runtime).await.is_ok());
+		assert_eq!(
+			manager.unavailable_jwks(),
+			[format!("{}/jwks", server.uri())]
+		);
+
+		// UI edits are applied by the managed runtime, so they match file edits.
+		let ui = ResourceFetcher::cached_or_direct(ResourceManager::new(test_client()).unwrap());
+		assert!(config().try_into(&ui).await.is_ok());
 	}
 
 	#[tokio::test]
