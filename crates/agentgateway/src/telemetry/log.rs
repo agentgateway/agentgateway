@@ -2265,16 +2265,6 @@ impl Drop for DropOnLog {
 					otel_kv.as_slice(),
 				);
 				otel_kv.truncate(base_len);
-				// Flush any buffered spans created during request processing.
-				// Does best effort, if the lock is poisoned, skip flushing.
-				if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
-					&& trc::should_export_span(t.filter.as_deref(), &cel_exec.executor)
-					&& let Ok(mut spans) = log.trace_spans.lock()
-				{
-					for buffered_span in spans.drain(..) {
-						t.processor.emit(buffered_span.into_span_data());
-					}
-				}
 			};
 			if let Some(otel) = &log.otel_logger
 				&& cel_exec.eval_otlp_filter()
@@ -3013,7 +3003,19 @@ pub struct BufferedSpan {
 }
 
 impl BufferedSpan {
-	fn into_span_data(self) -> opentelemetry_sdk::trace::SpanData {
+	pub(crate) fn into_span_data(
+		mut self,
+		added_attributes: &[KeyValue],
+	) -> opentelemetry_sdk::trace::SpanData {
+		for attribute in added_attributes {
+			if !self
+				.attributes
+				.iter()
+				.any(|existing| existing.key == attribute.key)
+			{
+				self.attributes.push(attribute.clone());
+			}
+		}
 		trc::trace_span_data(
 			self.name,
 			self.span_kind,

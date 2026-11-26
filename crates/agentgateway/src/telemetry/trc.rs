@@ -298,7 +298,7 @@ impl Tracer {
 		let start = request.start.as_system_time();
 		let end = end.as_system_time();
 
-		attributes.reserve(self.fields.add.len());
+		let mut added_attributes = Vec::with_capacity(self.fields.add.len());
 
 		// To avoid lifetime issues need to store the expression before we give it to ValueBag reference.
 		// TODO: we could allow log() to take a list of borrows and then a list of OwnedValueBag
@@ -310,9 +310,10 @@ impl Tracer {
 			{
 				span_name = Some(s);
 			} else if let Some(eval) = v.as_ref().map(ValueBag::capture_serde1) {
-				attributes.push(KeyValue::new(Key::new(k.to_string()), to_otel(&eval)));
+				added_attributes.push(KeyValue::new(Key::new(k.to_string()), to_otel(&eval)));
 			}
 		}
+		attributes.extend(added_attributes.iter().cloned());
 
 		let span_name = span_name.unwrap_or_else(|| {
 			protocol_span_name.map(str::to_owned).unwrap_or_else(|| {
@@ -334,6 +335,12 @@ impl Tracer {
 			attributes,
 			status,
 		));
+
+		if let Ok(mut spans) = request.trace_spans.lock() {
+			for span in spans.drain(..) {
+				self.processor.emit(span.into_span_data(&added_attributes));
+			}
+		}
 	}
 }
 
