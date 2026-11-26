@@ -246,7 +246,7 @@ impl ResourceFetcher {
 	pub(crate) fn retries_failed_fetches(&self) -> bool {
 		matches!(
 			self.mode,
-			ResourceFetcherMode::Managed(_) | ResourceFetcherMode::CachedOrDirect(_)
+			ResourceFetcherMode::Managed(_) | ResourceFetcherMode::CachedOrDirect(..)
 		)
 	}
 

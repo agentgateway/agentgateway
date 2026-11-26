@@ -154,7 +154,7 @@ mod jwks_tests {
 	use crate::http::jwt::tests::build_signed_token_with_payload;
 	use crate::http::oidc::{LocalOidcConfig, PolicyId};
 	use crate::http::sessionpersistence::Encoder;
-	use crate::resource_manager::ResourceManager;
+	use crate::resource_manager::{FileAccess, ResourceManager};
 
 	fn test_client() -> crate::client::Client {
 		crate::client::Client::new(
@@ -202,7 +202,10 @@ mod jwks_tests {
 		);
 
 		// UI edits are applied by the managed runtime, so they match file edits.
-		let ui = ResourceFetcher::cached_or_direct(ResourceManager::new(test_client()).unwrap());
+		let ui = ResourceFetcher::cached_or_direct(
+			ResourceManager::new(test_client()).unwrap(),
+			FileAccess::default(),
+		);
 		assert!(config().try_into(&ui).await.is_ok());
 	}
 
