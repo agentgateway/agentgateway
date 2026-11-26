@@ -161,7 +161,7 @@ spec:
       openai: {}
       host: example.com
 ---
-_err: exactly one of the fields in [host backendRef] must be set
+_err: exactly one of the fields in [host backendRef agentCore] must be set
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
@@ -176,7 +176,7 @@ spec:
           name: mcp-service
         port: 8080
 ---
-_err: exactly one of the fields in [host backendRef] must be set
+_err: exactly one of the fields in [host backendRef agentCore] must be set
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
@@ -203,6 +203,61 @@ spec:
         port: 8080
         policies:
           tls: {}
+---
+_err: mcp targets using host or backendRef require port
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-service-missing-port
+spec:
+  mcp:
+    targets:
+    - name: service
+      static:
+        backendRef:
+          name: mcp-service
+---
+_err: mcp targets using agentCore may not specify port or path
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-agentcore-with-port
+spec:
+  mcp:
+    targets:
+    - name: runtime
+      static:
+        agentCore:
+          agentRuntimeArn: arn:aws:bedrock-agentcore:eu-west-1:123456789012:runtime/example
+        port: 443
+---
+_err: mcp targets using agentCore may not specify port or path
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-agentcore-with-path
+spec:
+  mcp:
+    targets:
+    - name: runtime
+      static:
+        agentCore:
+          agentRuntimeArn: arn:aws:bedrock-agentcore:eu-west-1:123456789012:runtime/example
+        path: /mcp
+---
+_err: mcp targets using agentCore require StreamableHTTP
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-agentcore-with-sse
+spec:
+  mcp:
+    targets:
+    - name: runtime
+      static:
+        agentCore:
+          agentRuntimeArn: arn:aws:bedrock-agentcore:eu-west-1:123456789012:runtime/example
+        protocol: SSE
 ---
 _err: Required value
 apiVersion: agentgateway.dev/v1alpha1

@@ -346,17 +346,23 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				continue
 			}
 
-			staticBackendRef := utils.InternalMCPStaticBackendName(be.Namespace, be.Name, string(target.Name))
+			targetBackendKey := utils.InternalMCPStaticBackendName(be.Namespace, be.Name, string(target.Name))
 
-			staticBackend := &api.Backend{
-				Key:  staticBackendRef,
+			targetBackend := &api.Backend{
+				Key:  targetBackendKey,
 				Name: plugins.ResourceName(be),
-				Kind: &api.Backend_Static{
+			}
+			protocol := ptr.OrEmpty(s.Protocol)
+			if s.AgentCore != nil {
+				targetBackend.Kind = translateAgentCoreBackend(s.AgentCore)
+				protocol = agentgateway.MCPProtocolStreamableHTTP
+			} else {
+				targetBackend.Kind = &api.Backend_Static{
 					Static: &api.StaticBackend{
 						Host: ptr.OrEmpty(s.Host),
 						Port: s.Port,
 					},
-				},
+				}
 			}
 
 			if s.Policies != nil {
@@ -367,21 +373,21 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 					logger.Error("failed to translate static MCP backend policies", "err", err)
 					errs = append(errs, err)
 				}
-				staticBackend.InlinePolicies = polt
+				targetBackend.InlinePolicies = polt
 			}
-			backends = append(backends, staticBackend)
+			backends = append(backends, targetBackend)
 
 			mcpTarget := &api.MCPTarget{
 				Name: string(target.Name),
 				Backend: &api.BackendReference{
 					Kind: &api.BackendReference_Backend{
-						Backend: staticBackendRef,
+						Backend: targetBackendKey,
 					},
 				},
 				Path: ptr.OrEmpty(s.Path),
 			}
 
-			switch ptr.OrEmpty(s.Protocol) {
+			switch protocol {
 			case agentgateway.MCPProtocolSSE:
 				mcpTarget.Protocol = api.MCPTarget_SSE
 			case agentgateway.MCPProtocolStreamableHTTP:
@@ -714,23 +720,25 @@ func translateAwsBackends(
 	if aws == nil || aws.AgentCore == nil {
 		return nil, errors.New("AwsBackend: agentCore is required")
 	}
-	ac := aws.AgentCore
-	awsBackend := &api.AwsBackend{
-		Service: &api.AwsBackend_AgentCore{
-			AgentCore: &api.AwsAgentCoreBackend{
-				AgentRuntimeArn: ac.AgentRuntimeArn,
-				Qualifier:       ac.Qualifier,
+	return []*api.Backend{{
+		Key:            be.Namespace + "/" + be.Name,
+		Name:           plugins.ResourceName(be),
+		Kind:           translateAgentCoreBackend(aws.AgentCore),
+		InlinePolicies: inlinePolicies,
+	}}, nil
+}
+
+func translateAgentCoreBackend(ac *agentgateway.AwsAgentCoreBackend) *api.Backend_Aws {
+	return &api.Backend_Aws{
+		Aws: &api.AwsBackend{
+			Service: &api.AwsBackend_AgentCore{
+				AgentCore: &api.AwsAgentCoreBackend{
+					AgentRuntimeArn: ac.AgentRuntimeArn,
+					Qualifier:       ac.Qualifier,
+				},
 			},
 		},
 	}
-	return []*api.Backend{{
-		Key:  be.Namespace + "/" + be.Name,
-		Name: plugins.ResourceName(be),
-		Kind: &api.Backend_Aws{
-			Aws: awsBackend,
-		},
-		InlinePolicies: inlinePolicies,
-	}}, nil
 }
 
 func toMCPProtocol(appProtocol string) api.MCPTarget_Protocol {

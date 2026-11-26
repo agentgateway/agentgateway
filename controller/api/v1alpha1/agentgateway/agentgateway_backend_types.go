@@ -741,8 +741,11 @@ type McpSelector struct {
 }
 
 // MCP target configuration.
-// +kubebuilder:validation:ExactlyOneOf=host;backendRef
+// +kubebuilder:validation:ExactlyOneOf=host;backendRef;agentCore
 // +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.policies)",message="mcp target policies may not be used with backendRef"
+// +kubebuilder:validation:XValidation:rule="has(self.agentCore) || has(self.port)",message="mcp targets using host or backendRef require port"
+// +kubebuilder:validation:XValidation:rule="!has(self.agentCore) || (!has(self.port) && !has(self.path))",message="mcp targets using agentCore may not specify port or path"
+// +kubebuilder:validation:XValidation:rule="!has(self.agentCore) || !has(self.protocol) || self.protocol == 'StreamableHTTP'",message="mcp targets using agentCore require StreamableHTTP"
 type McpTarget struct {
 	// Hostname or IP address of the MCP target.
 	// +optional
@@ -754,20 +757,25 @@ type McpTarget struct {
 	// +optional
 	BackendRef *corev1.LocalObjectReference `json:"backendRef,omitempty"`
 
-	// Port number of the MCP target.
+	// Amazon Bedrock AgentCore runtime to invoke. The gateway derives the
+	// endpoint and SigV4 signing settings from the runtime ARN.
+	// +optional
+	AgentCore *AwsAgentCoreBackend `json:"agentCore,omitempty"`
+
+	// Port number of the MCP target. Required for host and backendRef.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
-	// +required
-	Port int32 `json:"port"`
+	// +optional
+	Port int32 `json:"port,omitempty"`
 
 	// URL path of the MCP target endpoint.
 	// Defaults to `"/sse"` for the `SSE` protocol or `"/mcp"` for the
-	// `StreamableHTTP` protocol if not specified.
+	// `StreamableHTTP` protocol if not specified. AgentCore uses its invocation path.
 	// +optional
 	Path *LongString `json:"path,omitempty"`
 
-	// Protocol to use for the connection to the MCP
-	// target.
+	// Protocol to use for the connection to the MCP target. AgentCore uses
+	// `StreamableHTTP`.
 	// +optional
 	Protocol *MCPProtocol `json:"protocol,omitempty"`
 
@@ -775,8 +783,7 @@ type McpTarget struct {
 	// Policies may also be set in `AgentgatewayPolicy`, or in the top-level
 	// `AgentgatewayBackend`. Policies are merged on a field-level basis, with
 	// order: `AgentgatewayPolicy` < `AgentgatewayBackend` < `AgentgatewayBackend` MCP (this field).
-	// This field may only be used with host-based static targets, not
-	// `backendRef`.
+	// This field may be used with host or agentCore targets.
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
