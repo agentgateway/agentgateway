@@ -2,16 +2,38 @@
 
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use agent_core::drain::DrainWatcher;
 use agent_core::readiness;
-use agent_http::Response;
+use agent_http::{Body, Response};
+use anyhow::Context;
 use hyper::Request;
 use hyper::body::Incoming;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use itertools::Itertools;
 
 use super::hyper_helpers;
 use crate::Address;
+
+const READINESS_PATH: &str = "/healthz/ready";
+
+/// Check the readiness listener over HTTP.
+pub async fn probe(address: SocketAddr) -> anyhow::Result<()> {
+	let uri = format!("http://{address}{READINESS_PATH}").parse()?;
+	let client = Client::builder(TokioExecutor::new()).build_http::<Body>();
+	let response = tokio::time::timeout(Duration::from_secs(1), client.get(uri))
+		.await
+		.with_context(|| format!("readiness probe to {address} timed out"))?
+		.with_context(|| format!("readiness probe to {address} failed"))?;
+	let status = response.status();
+	anyhow::ensure!(
+		status.is_success(),
+		"readiness endpoint at {address} returned {status}"
+	);
+	Ok(())
+}
 
 struct State {
 	ready: readiness::Ready,
@@ -57,7 +79,7 @@ impl Server {
 	pub fn spawn(self) {
 		self.s.spawn(|state, req| async move {
 			match req.uri().path() {
-				"/healthz/ready" => Ok(handle_ready(&state, req).await),
+				READINESS_PATH => Ok(handle_ready(&state, req).await),
 				_ => Ok(hyper_helpers::empty_response(hyper::StatusCode::NOT_FOUND)),
 			}
 		})

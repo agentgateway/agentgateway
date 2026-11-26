@@ -73,6 +73,20 @@
 - [Standalone Quickstart](https://agentgateway.dev/docs/standalone/latest/documentation/quickstart) — Get started with agentgateway in minutes.
 - [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest/documentation/quickstart) — Deploy on Kubernetes using the built-in controller and Gateway API.
 
+### Kubernetes readiness on loopback
+
+Set `READINESS_ADDR=localhost:15021` on the agentgateway container to bind its readiness listener to loopback.
+Replace the `httpGet` handler in both the `startupProbe` and `readinessProbe` with the following `exec` handler.
+
+```yaml
+exec:
+  command: ["/app/agentgateway", "probe"]
+```
+
+The command checks `/healthz/ready` at `127.0.0.1:15021` by default and gives the request one second to respond.
+It exits with status 0 on an HTTP 2xx response and status 1 if the check fails.
+Use `--address` for a different TCP address or port, for example `--address=[::1]:15021`.
+
 ## Documentation
 
 Depending on your deployment environment, check out the following docs:

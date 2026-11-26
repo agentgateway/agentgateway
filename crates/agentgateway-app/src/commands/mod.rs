@@ -3,4 +3,5 @@ pub(super) mod import;
 pub(super) mod migrate;
 #[cfg(target_os = "linux")]
 pub(super) mod oneshot;
+pub(super) mod probe;
 pub(super) mod run;
