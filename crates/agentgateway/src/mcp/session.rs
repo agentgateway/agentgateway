@@ -440,6 +440,7 @@ impl Session {
 				Err(mcp::Error::UpstreamError(Box::new(http::SyncResponse::new(*resp))).into())
 			},
 			Err(UpstreamError::Proxy(p)) => Err(p),
+			Err(UpstreamError::DiscoveryTimeout(_)) => Err(ProxyError::UpstreamCallTimeout),
 			// Preserve backend-auth error classification, and responses from backend policies (such
 			// as an ext_authz deny), through the MCP HTTP transport.
 			Err(UpstreamError::Http(ClientError::Proxy(

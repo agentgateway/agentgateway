@@ -415,7 +415,7 @@ mod tests {
 			.extensions_mut()
 			.insert(BackendRequestTimeout(Duration::from_secs(2)));
 
-		let Err(err) = upstream.generic_stream("stalled", req, &ctx).await else {
+		let Err(err) = upstream.generic_stream("stalled", req, &ctx, None).await else {
 			panic!("expected timeout");
 		};
 

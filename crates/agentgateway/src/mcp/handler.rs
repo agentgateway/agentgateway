@@ -524,7 +524,9 @@ impl Relay {
 			.upstreams
 			.iter_named()
 			.map(|(target, con)| async move {
-				let res = Self::serves_name(target.as_str(), &con, kind, name, ctx, meta).await;
+				let res = self
+					.serves_name(target.as_str(), &con, kind, name, ctx, meta)
+					.await;
 				(target, res)
 			})
 			.collect();
@@ -563,6 +565,7 @@ impl Relay {
 	/// Page through one target's `kind` list until `name` is found or the pages
 	/// run out. `Ok(false)` includes targets that don't support the list method.
 	async fn serves_name(
+		&self,
 		target_name: &str,
 		con: &upstream::Upstream,
 		kind: ResolveKind,
@@ -582,9 +585,15 @@ impl Relay {
 				RequestId::String(format!("agw-resolve-{seq}").into()),
 				kind.list_request(cursor, meta),
 			);
-			let Some(result) =
-				Self::first_response(con.generic_stream(target_name, req, ctx).await?).await?
-			else {
+			let stream = con
+				.generic_stream(
+					target_name,
+					req,
+					ctx,
+					self.upstreams.discovery_timeout(target_name),
+				)
+				.await?;
+			let Some(result) = Self::first_response(stream).await? else {
 				return Ok(false);
 			};
 			if !matches!(
@@ -1313,7 +1322,14 @@ impl Relay {
 				let ctx = &*ctx;
 				async move {
 					let id = r.id.clone();
-					let mut result = con.generic_stream(name.as_str(), r, ctx).await;
+					let mut result = con
+						.generic_stream(
+							name.as_str(),
+							r,
+							ctx,
+							self.upstreams.discovery_timeout(&name),
+						)
+						.await;
 					if skip_unsupported_skills {
 						// A non-skills target contributes an empty page. Preserve unrelated
 						// HTTP 404s, including a legacy upstream losing its session.
@@ -1529,8 +1545,13 @@ impl Relay {
 		let mut stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(
-				us.generic_stream(service_name, r, &ctx)
-					.assert_size::<{ GENERIC_STREAM_FUTURE_SIZE }>(),
+				us.generic_stream(
+					service_name,
+					r,
+					&ctx,
+					self.upstreams.discovery_timeout(service_name),
+				)
+				.assert_size::<{ GENERIC_STREAM_FUTURE_SIZE }>(),
 			)
 			.await?,
 			cel.clone(),
@@ -1899,7 +1920,12 @@ impl Relay {
 					(
 						name.clone(),
 						con
-							.generic_notification(name.as_str(), notification, ctx)
+							.generic_notification(
+								name.as_str(),
+								notification,
+								ctx,
+								self.upstreams.discovery_timeout(&name),
+							)
 							.await,
 					)
 				}
@@ -1940,7 +1966,13 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		us.generic_notification(service_name, r, &ctx).await?;
+		us.generic_notification(
+			service_name,
+			r,
+			&ctx,
+			self.upstreams.discovery_timeout(service_name),
+		)
+		.await?;
 		Ok(accepted_response())
 	}
 

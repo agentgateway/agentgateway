@@ -1364,6 +1364,173 @@ async fn stateless_vnext_tools_list_reaches_upstream() {
 	);
 }
 
+#[rstest::rstest]
+#[case::headers(false)]
+#[case::sse(true)]
+#[tokio::test]
+async fn mcp_target_discovery_timeout(#[case] stall_after_headers: bool) {
+	use axum::response::IntoResponse;
+	use futures_util::StreamExt;
+	use tokio::time::{Instant, sleep, timeout};
+
+	let good = mock_modern_streamable_http_server().await;
+	let slow = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let slow_addr = slow.local_addr().unwrap();
+	let router = axum::Router::new().route(
+		"/mcp",
+		axum::routing::post(
+			move |axum::Json(body): axum::Json<serde_json::Value>| async move {
+				if body["method"] == "tools/call" {
+					sleep(Duration::from_millis(400)).await;
+					return axum::Json(serde_json::json!({
+						"jsonrpc": "2.0", "id": body["id"],
+						"result": {"content": [{"type": "text", "text": "slow tool finished"}]}
+					}))
+					.into_response();
+				}
+				if !stall_after_headers {
+					return std::future::pending().await;
+				}
+				let frames = futures::stream::iter([Ok::<_, std::convert::Infallible>(
+					bytes::Bytes::from_static(b": upstream ready\n\n"),
+				)])
+				.chain(futures::stream::pending());
+				(
+					[(::http::header::CONTENT_TYPE, "text/event-stream")],
+					axum::body::Body::from_stream(frames),
+				)
+					.into_response()
+			},
+		),
+	);
+	let server = tokio::spawn(async move { axum::serve(slow, router).await.unwrap() });
+	for (failure_mode, fail_open) in [("failOpen", true), ("failClosed", false)] {
+		let t = setup_proxy_test("{}").unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
+		let config = format!(
+			r#"
+binds:
+- port: 0
+  listeners:
+  - routes:
+    - backends:
+      - mcp:
+          failureMode: {failure_mode}
+          statefulMode: stateless
+          targets:
+          - name: good
+            discoveryTimeout: 1s
+            mcp:
+              host: http://{}/mcp
+          - name: slow
+            discoveryTimeout: 150ms
+            mcp:
+              host: http://{slow_addr}/mcp
+            policies:
+              http:
+                requestTimeout: 10s
+"#,
+			good.addr
+		);
+		let cfg = crate::types::local::NormalizedLocalConfig::from(
+			&t.pi.cfg,
+			&resources,
+			t.pi.cfg.gateway(),
+			&config,
+		)
+		.await
+		.unwrap();
+		let bind = cfg.binds[0].bind.key.clone();
+		t.pi
+			.stores
+			.binds
+			.sync_local(
+				cfg.binds,
+				cfg.listener_routes,
+				cfg.listener_tcp_routes,
+				cfg.policies,
+				cfg.backends,
+				cfg.route_groups,
+				Default::default(),
+			)
+			.unwrap();
+		let io = t.serve_real_listener(bind).await;
+		let client = reqwest::Client::new();
+		let url = format!("http://{io}/mcp");
+		for (method, legacy) in [
+			("tools/list", false),
+			("server/discover", false),
+			("tools/list", true),
+		] {
+			let mut msg = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": method});
+			let request = if legacy {
+				mcp_json_post(&client, &url, &msg).header("mcp-protocol-version", "2025-06-18")
+			} else {
+				msg["params"] = serde_json::json!({"_meta": modern_meta()});
+				mcp_json_post(&client, &url, &msg)
+					.header("mcp-protocol-version", "2026-07-28")
+					.header("mcp-method", method)
+			};
+			let started = Instant::now();
+			let response = timeout(Duration::from_secs(2), async {
+				let response = request.send().await.unwrap();
+				let status = response.status();
+				let body = if status == reqwest::StatusCode::OK {
+					read_response_message(response).await.to_string()
+				} else {
+					response.text().await.unwrap()
+				};
+				(status, body)
+			})
+			.await
+			.unwrap_or_else(|_| {
+				panic!(
+					"{method} still waiting after {:?} (failureMode={failure_mode}, SSE={stall_after_headers}, legacy={legacy})",
+					started.elapsed()
+				)
+			});
+			eprintln!(
+				"{method} completed in {:?} (failureMode={failure_mode}, SSE={stall_after_headers}, legacy={legacy})",
+				started.elapsed()
+			);
+			if fail_open {
+				assert_eq!(response.0, reqwest::StatusCode::OK);
+				let message: serde_json::Value = serde_json::from_str(&response.1).unwrap();
+				assert_eq!(message["id"], 1);
+				if method == "tools/list" {
+					assert_eq!(message["result"]["tools"][0]["name"], "good_echo");
+				} else {
+					assert_eq!(message["result"]["supportedVersions"][0], "2025-06-18");
+				}
+			} else {
+				assert_eq!(response.0, reqwest::StatusCode::GATEWAY_TIMEOUT);
+				assert!(response.1.contains("timeout"), "{response:?}");
+			}
+		}
+
+		let call = serde_json::json!({
+			"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+			"params": {"name": "slow_echo", "_meta": modern_meta()}
+		});
+		let started = Instant::now();
+		let response = mcp_json_post(&client, &url, &call)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", "tools/call")
+			.header("mcp-name", "slow_echo")
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::OK);
+		let result = read_response_message(response).await;
+		assert_eq!(result["result"]["content"][0]["text"], "slow tool finished");
+		eprintln!(
+			"tools/call completed in {:?} (failureMode={failure_mode}, SSE={stall_after_headers})",
+			started.elapsed()
+		);
+	}
+	server.abort();
+}
+
 #[tokio::test]
 async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize() {
 	let down = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -7049,6 +7216,7 @@ async fn test_setup_partial_success_fail_open() {
 	let backend = McpBackendGroup {
 		targets: vec![
 			Arc::new(McpTarget {
+				discovery_timeout: None,
 				name: "bad".into(),
 				condition: None,
 				spec: crate::types::agent::McpTargetSpec::Stdio {
@@ -7061,6 +7229,7 @@ async fn test_setup_partial_success_fail_open() {
 				backend: None,
 			}),
 			Arc::new(McpTarget {
+				discovery_timeout: None,
 				name: "ok".into(),
 				condition: None,
 				spec: crate::types::agent::McpTargetSpec::Stdio {
@@ -7089,6 +7258,7 @@ async fn test_all_targets_fail_open_still_errors() {
 	let backend = McpBackendGroup {
 		targets: vec![
 			Arc::new(McpTarget {
+				discovery_timeout: None,
 				name: "bad-1".into(),
 				condition: None,
 				spec: crate::types::agent::McpTargetSpec::Stdio {
@@ -7101,6 +7271,7 @@ async fn test_all_targets_fail_open_still_errors() {
 				backend: None,
 			}),
 			Arc::new(McpTarget {
+				discovery_timeout: None,
 				name: "bad-2".into(),
 				condition: None,
 				spec: crate::types::agent::McpTargetSpec::Stdio {
@@ -7126,6 +7297,7 @@ async fn test_all_targets_fail_open_still_errors() {
 
 fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 	Arc::new(McpTarget {
+		discovery_timeout: None,
 		name: name.into(),
 		condition: None,
 		spec: crate::types::agent::McpTargetSpec::Mcp(crate::types::agent::StreamableHTTPTargetSpec {
@@ -7144,6 +7316,7 @@ fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 
 fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 	Arc::new(McpTarget {
+		discovery_timeout: None,
 		name: name.into(),
 		condition: None,
 		spec: crate::types::agent::McpTargetSpec::Sse(crate::types::agent::SseTargetSpec {
@@ -7162,6 +7335,7 @@ fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 
 fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 	Arc::new(McpTarget {
+		discovery_timeout: None,
 		name: name.into(),
 		condition: None,
 		spec: crate::types::agent::McpTargetSpec::OpenAPI(crate::types::agent::OpenAPITarget {
@@ -7181,6 +7355,7 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 
 fn fake_stdio_target(name: &str) -> Arc<McpTarget> {
 	Arc::new(McpTarget {
+		discovery_timeout: None,
 		name: name.into(),
 		condition: None,
 		spec: crate::types::agent::McpTargetSpec::Stdio {

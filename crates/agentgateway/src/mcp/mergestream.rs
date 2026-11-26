@@ -31,6 +31,29 @@ impl Messages {
 		Self::from(ServerJsonRpcMessage::response(result.into(), id))
 	}
 
+	// Discovery is complete at the terminal response, even if the upstream keeps its SSE stream open.
+	pub async fn through_terminal(mut self, id: &RequestId) -> (Self, bool) {
+		let mut messages = Vec::new();
+		let mut succeeded = false;
+		while let Some(message) = self.next().await {
+			let terminal = match &message {
+				Ok(ServerJsonRpcMessage::Response(response)) if &response.id == id => {
+					succeeded = true;
+					true
+				},
+				Ok(ServerJsonRpcMessage::Error(error)) if error.id.as_ref().is_none_or(|i| i == id) => true,
+				Ok(ServerJsonRpcMessage::Response(_) | ServerJsonRpcMessage::Error(_)) => continue,
+				Err(_) => true,
+				_ => false,
+			};
+			messages.push(message);
+			if terminal {
+				break;
+			}
+		}
+		(Messages(futures::stream::iter(messages).boxed()), succeeded)
+	}
+
 	pub fn map_server_messages(
 		self,
 		mut f: impl FnMut(ServerJsonRpcMessage) -> ServerJsonRpcMessage + Send + 'static,

@@ -2086,6 +2086,7 @@ async fn test_openapi_from_url() {
 	// Create a LocalBackend::MCP to test the full conversion pipeline
 	let local_backend = LocalBackend::MCP(LocalMcpBackend {
 		targets: vec![Arc::new(LocalMcpTarget {
+			discovery_timeout: None,
 			name: "users-api".into(),
 			condition: None,
 			spec: local_target_spec,

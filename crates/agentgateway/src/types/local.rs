@@ -1939,6 +1939,7 @@ impl LocalBackend {
 					};
 					let t = McpTarget {
 						name: t.name.clone(),
+						discovery_timeout: t.discovery_timeout,
 						condition: t.condition.clone(),
 						spec,
 					};
@@ -2052,6 +2053,16 @@ pub struct LocalMcpBackend {
 pub struct LocalMcpTarget {
 	/// Name identifying this MCP target, used to prefix tool and resource names when multiplexing.
 	pub name: McpTargetName,
+	/// Deadline for initialize, initialized notifications, server discovery, and tool,
+	/// prompt, resource, and resource-template lists (for example, `500ms`).
+	/// Covers the request and terminal response, including SSE. Unset by default.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub discovery_timeout: Option<Duration>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub condition: Option<Arc<cel::Expression>>,
 	#[serde(flatten)]

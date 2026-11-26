@@ -712,6 +712,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].discoveryTimeout`|string|Deadline for initialize, initialized notifications, server discovery, and tool,<br>prompt, resource, and resource-template lists (for example, `500ms`).<br>Covers the request and terminal response, including SSE. Unset by default.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].condition`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
@@ -2279,6 +2280,7 @@
 |`backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`backends[].mcp.targets[].openapi.schema.url`|string||
 |`backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
+|`backends[].mcp.targets[].discoveryTimeout`|string|Deadline for initialize, initialized notifications, server discovery, and tool,<br>prompt, resource, and resource-template lists (for example, `500ms`).<br>Covers the request and terminal response, including SSE. Unset by default.|
 |`backends[].mcp.targets[].condition`|string||
 |`backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
@@ -3422,6 +3424,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
+|`routeGroups[].routes[].backends[].mcp.targets[].discoveryTimeout`|string|Deadline for initialize, initialized notifications, server discovery, and tool,<br>prompt, resource, and resource-template lists (for example, `500ms`).<br>Covers the request and terminal response, including SSE. Unset by default.|
 |`routeGroups[].routes[].backends[].mcp.targets[].condition`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
@@ -5056,6 +5059,7 @@
 |`routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`routes[].backends[].mcp.targets[].openapi.schema.url`|string||
 |`routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
+|`routes[].backends[].mcp.targets[].discoveryTimeout`|string|Deadline for initialize, initialized notifications, server discovery, and tool,<br>prompt, resource, and resource-template lists (for example, `500ms`).<br>Covers the request and terminal response, including SSE. Unset by default.|
 |`routes[].backends[].mcp.targets[].condition`|string||
 |`routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
@@ -6254,6 +6258,7 @@
 |`mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`mcp.targets[].openapi.schema.url`|string||
 |`mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
+|`mcp.targets[].discoveryTimeout`|string|Deadline for initialize, initialized notifications, server discovery, and tool,<br>prompt, resource, and resource-template lists (for example, `500ms`).<br>Covers the request and terminal response, including SSE. Unset by default.|
 |`mcp.targets[].condition`|string||
 |`mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
@@ -6777,6 +6782,7 @@
 |`mcp.endpoints[].targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`mcp.endpoints[].targets[].openapi.schema.url`|string||
 |`mcp.endpoints[].targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
+|`mcp.endpoints[].targets[].discoveryTimeout`|string|Deadline for initialize, initialized notifications, server discovery, and tool,<br>prompt, resource, and resource-template lists (for example, `500ms`).<br>Covers the request and terminal response, including SSE. Unset by default.|
 |`mcp.endpoints[].targets[].condition`|string||
 |`mcp.endpoints[].targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`mcp.endpoints[].statefulMode`|enum|Possible values: `stateless`, `stateful`.|
