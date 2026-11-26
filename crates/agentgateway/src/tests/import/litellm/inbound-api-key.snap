@@ -1,0 +1,39 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/inbound-api-key.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: $LITELLM_MASTER_KEY
+        mode: strict
+        location:
+          header:
+            name: x-litellm-key
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: approximate
+    message: "Mapped LiteLLM's master_key (an admin-equivalent credential, not a per-user virtual key) and custom API-key header to inbound API-key authentication; LiteLLM also accepts the same key with a Bearer prefix on this header, which this does not replicate. Per-user virtual-key migration needs LiteLLM's database state, not config.yaml alone."
+  - sourcePath: general_settings.litellm_key_header_name
+    status: exact
+    message: "Mapped LiteLLM's custom API-key header name to the inbound API-key policy"

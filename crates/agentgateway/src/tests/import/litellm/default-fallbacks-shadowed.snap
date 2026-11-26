@@ -23,6 +23,9 @@ findings:
   - sourcePath: "model_list[0]"
     status: exact
     message: Imported model deployment for solo
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: "No master_key in config.yaml; if LiteLLM authenticates from the LITELLM_MASTER_KEY environment variable directly (common in Docker deployments), this importer can't see it from config.yaml alone. Set general_settings.master_key: os.environ/LITELLM_MASTER_KEY to make it visible"
   - sourcePath: litellm_settings.default_fallbacks
     status: manual
     message: litellm_settings.default_fallbacks is shadowed by router_settings.default_fallbacks; the router_settings value was applied
