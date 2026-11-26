@@ -104,6 +104,7 @@ impl App {
 					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
+						discovery_timeout: t.discovery_timeout,
 						condition: t.condition.clone(),
 						spec: t.spec.clone(),
 						backend: be.map(|b| b.backend),
@@ -268,6 +269,7 @@ impl Default for McpBackendGroup {
 #[derive(Debug)]
 pub struct McpTarget {
 	pub name: Strng,
+	pub discovery_timeout: Option<Duration>,
 	pub condition: Option<Arc<cel::Expression>>,
 	pub spec: crate::types::agent::McpTargetSpec,
 	pub backend_policies: BackendPolicies,

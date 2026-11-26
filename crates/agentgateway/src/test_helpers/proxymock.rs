@@ -755,6 +755,7 @@ impl TestBind {
 			ResourceName::new(strng::format!("{}", b), "".into()),
 			McpBackend {
 				targets: vec![Arc::new(McpTarget {
+					discovery_timeout: None,
 					name: "mcp".into(),
 					condition: None,
 					spec: if !legacy_sse {
@@ -898,6 +899,7 @@ impl TestBind {
 					.map(|((name, addr, legacy_sse), condition)| {
 						let sb = SimpleBackendReference::Backend(strng::format!("/basic-{}", addr));
 						Arc::new(McpTarget {
+							discovery_timeout: None,
 							name: strng::new(name),
 							condition,
 							spec: if !legacy_sse {

@@ -17,7 +17,7 @@ pub(crate) use openapi::{
 use opentelemetry::KeyValue;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, ExtensionCapabilities,
-	GetMeta, JsonObject, JsonRpcRequest,
+	GetMeta, InitializedNotificationMethod, JsonObject, JsonRpcRequest,
 };
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::common::http_header::HEADER_SESSION_ID;
@@ -192,6 +192,8 @@ pub enum UpstreamError {
 	/// so client-visible errors do not blame the request for a backend condition.
 	#[error("{0}")]
 	Unavailable(String),
+	#[error("MCP discovery timeout for {0}")]
+	DiscoveryTimeout(String),
 	#[error("unsupported method: {0}")]
 	InvalidMethod(String),
 	#[error("stdio upstream error: {0}")]
@@ -337,8 +339,20 @@ impl Upstream {
 		target_name: &str,
 		mut request: JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
+		discovery_timeout: Option<Duration>,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		let method = request.request.method().to_string();
+		let discovery_timeout = discovery_timeout.filter(|_| {
+			matches!(
+				&request.request,
+				ClientRequest::InitializeRequest(_)
+					| ClientRequest::DiscoverRequest(_)
+					| ClientRequest::ListToolsRequest(_)
+					| ClientRequest::ListPromptsRequest(_)
+					| ClientRequest::ListResourcesRequest(_)
+					| ClientRequest::ListResourceTemplatesRequest(_)
+			)
+		});
 		let (operation_target, tool_name) = match &request.request {
 			ClientRequest::CallToolRequest(request) => {
 				let name = request.params.name.as_ref();
@@ -362,7 +376,7 @@ impl Upstream {
 			tool_name,
 		);
 
-		let result = async {
+		let call = async {
 			// stdio/SSE route server-initiated notifications through `get_event_stream`,
 			// which `subscriptions/listen` never merges. Reject them before sending
 			// an ack over a silent stream. OpenAPI has no notifications to lose.
@@ -400,21 +414,32 @@ impl Upstream {
 					.await?,
 				)),
 				Upstream::McpStreamable(c) => {
-					let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
+					let is_init = matches!(&request.request, ClientRequest::InitializeRequest(_));
+					let request_id = discovery_timeout.map(|_| request.id.clone());
 					let res = Box::pin(
 						c.send_request(request, &ctx)
 							.assert_size::<{ STREAMABLE_SEND_REQUEST_FUTURE_SIZE }>(),
 					)
 					.await?;
-					if is_init {
-						let sid = match &res {
-							StreamableHttpPostResponse::Accepted => None,
-							StreamableHttpPostResponse::Json(_, sid) => sid.as_ref(),
-							StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
-						};
-						c.set_session_id(sid.map(|s| s.as_str()), None);
+					let sid = match &res {
+						StreamableHttpPostResponse::Accepted => None,
+						StreamableHttpPostResponse::Json(_, sid) | StreamableHttpPostResponse::Sse(_, sid) => {
+							sid.as_ref()
+						},
+					};
+					if let Some(id) = request_id {
+						let sid = sid.filter(|_| is_init).cloned();
+						let (stream, succeeded) = Messages::try_from(res)?.through_terminal(&id).await;
+						if is_init && succeeded {
+							c.set_session_id(sid.as_deref(), None);
+						}
+						Ok(stream)
+					} else {
+						if is_init {
+							c.set_session_id(sid.map(String::as_str), None);
+						}
+						Ok(res.try_into()?)
 					}
-					res.try_into().map_err(Into::into)
 				},
 				Upstream::OpenAPI(c) => Ok(
 					Box::pin(
@@ -424,8 +449,13 @@ impl Upstream {
 					.await?,
 				),
 			}
-		}
-		.await;
+		};
+		let result = match discovery_timeout {
+			Some(timeout) => tokio::time::timeout(timeout, Box::pin(call))
+				.await
+				.unwrap_or_else(|_| Err(UpstreamError::DiscoveryTimeout(method))),
+			None => call.await,
+		};
 		if let (Some(span), Err(error)) = (span.as_mut(), &result) {
 			span.set_error(ProxyResponseReason::MCP.to_string(), error.to_string());
 		}
@@ -437,6 +467,7 @@ impl Upstream {
 		target_name: &str,
 		mut request: ClientNotification,
 		ctx: &IncomingRequestContext,
+		discovery_timeout: Option<Duration>,
 	) -> Result<(), UpstreamError> {
 		if matches!(self, Upstream::OpenAPI(_)) {
 			return Ok(());
@@ -457,7 +488,9 @@ impl Upstream {
 			None,
 		);
 		ctx.stamp_trace_context(&mut request.get_meta_mut().0);
-		let result: Result<(), UpstreamError> = async {
+		let discovery_timeout = discovery_timeout
+			.filter(|_| matches!(&request, ClientNotification::InitializedNotification(_)));
+		let call = async {
 			match &self {
 				Upstream::McpStdio(c) => c.send_notification(request, &ctx).await?,
 				Upstream::McpSSE(c) => c.send_notification(request, &ctx).await?,
@@ -467,8 +500,17 @@ impl Upstream {
 				Upstream::OpenAPI(_) => {},
 			}
 			Ok(())
-		}
-		.await;
+		};
+		let result = match discovery_timeout {
+			Some(timeout) => tokio::time::timeout(timeout, Box::pin(call))
+				.await
+				.unwrap_or_else(|_| {
+					Err(UpstreamError::DiscoveryTimeout(
+						InitializedNotificationMethod::VALUE.to_string(),
+					))
+				}),
+			None => call.await,
+		};
 		if let (Some(span), Err(error)) = (span.as_mut(), &result) {
 			span.set_error(ProxyResponseReason::MCP.to_string(), error.to_string());
 		}
@@ -666,6 +708,15 @@ impl UpstreamGroup {
 	/// Used by `parse_resource_uri` to get a stable `&str` reference.
 	pub(crate) fn get_name(&self, name: &str) -> Option<&str> {
 		self.by_name.get_key_value(name).map(|(k, _)| k.as_str())
+	}
+
+	pub(crate) fn discovery_timeout(&self, name: &str) -> Option<Duration> {
+		self
+			.backend
+			.targets
+			.iter()
+			.find(|target| target.name.as_str() == name)
+			.and_then(|target| target.discovery_timeout)
 	}
 
 	pub(crate) fn stateful(&self) -> bool {

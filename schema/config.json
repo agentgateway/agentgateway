@@ -9230,6 +9230,13 @@
           "description": "Name identifying this MCP target, used to prefix tool and resource names when multiplexing.",
           "type": "string"
         },
+        "discoveryTimeout": {
+          "description": "Deadline for initialize, initialized notifications, server discovery, and tool,\nprompt, resource, and resource-template lists (for example, `500ms`).\nCovers the request and terminal response, including SSE. Unset by default.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "condition": {
           "anyOf": [
             {

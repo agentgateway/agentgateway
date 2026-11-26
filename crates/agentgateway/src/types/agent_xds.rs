@@ -2381,6 +2381,7 @@ fn mcp_target_from_proto(
 	validate_mcp_target_name(&s.name).map_err(ProtoError::Generic)?;
 
 	Ok(McpTarget {
+		discovery_timeout: None,
 		name: strng::new(&s.name),
 		condition: s
 			.condition

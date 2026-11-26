@@ -2039,6 +2039,14 @@ impl McpServerOverrides {
 #[apply(schema_ser_schema!)]
 pub struct McpTarget {
 	pub name: McpTargetName,
+	/// Maximum time for an MCP discovery request to this target, including its response stream.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub discovery_timeout: Option<Duration>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub condition: Option<Arc<crate::cel::Expression>>,
 	#[serde(flatten)]
