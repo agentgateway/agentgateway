@@ -2,6 +2,9 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::cel::{ContextBuilder, Executor};
+use crate::metrics::{
+	AuthorizationCelErrorLabels, AuthorizationCelErrors, AuthorizationLayer, AuthorizationMode,
+};
 use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{
 	self, AuthorizationResult as TraceAuthorizationResult, AuthorizationRuleMode,
@@ -23,9 +26,28 @@ impl HTTPAuthorizationSet {
 		self.0.expressions()
 	}
 	pub fn apply(&self, req: &http::Request) -> anyhow::Result<()> {
+		self.apply_inner(req, None)
+	}
+
+	pub(crate) fn apply_with_metrics(
+		&self,
+		req: &http::Request,
+		cel_errors: &AuthorizationCelErrors,
+	) -> anyhow::Result<()> {
+		self.apply_inner(req, Some(cel_errors))
+	}
+
+	fn apply_inner(
+		&self,
+		req: &http::Request,
+		cel_errors: Option<&AuthorizationCelErrors>,
+	) -> anyhow::Result<()> {
 		tracing::debug!(info=?http::DebugExtensions(req), "Checking HTTP request");
 		let exec = cel::Executor::new_request(req);
-		let allowed = self.0.validate(&exec);
+		let allowed = self.0.validate_inner(
+			&exec,
+			cel_errors.map(|errors| (AuthorizationLayer::http, errors)),
+		);
 		if !allowed {
 			anyhow::bail!("HTTP authorization denied");
 		}
@@ -36,12 +58,15 @@ impl HTTPAuthorizationSet {
 impl crate::store::RequestPolicyTrait for HTTPAuthorizationSet {
 	async fn apply(
 		&self,
-		_client: &crate::proxy::httpproxy::PolicyClient,
+		client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut http::Request,
 	) -> Result<http::PolicyResponse, ProxyError> {
 		self
-			.apply(req)
+			.apply_with_metrics(
+				req,
+				&client.inputs.metrics.authorization_cel_evaluation_errors,
+			)
 			.map_err(|_| ProxyError::AuthorizationFailed)?;
 		Ok(http::PolicyResponse::default())
 	}
@@ -54,12 +79,15 @@ impl crate::store::RequestPolicyTrait for HTTPAuthorizationSet {
 impl crate::store::BackendPolicyTrait for HTTPAuthorizationSet {
 	async fn apply(
 		&self,
-		_client: &crate::proxy::httpproxy::PolicyClient,
+		client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut Option<&mut crate::telemetry::log::RequestLog>,
 		req: &mut http::Request,
 	) -> Result<http::PolicyResponse, ProxyError> {
 		self
-			.apply(req)
+			.apply_with_metrics(
+				req,
+				&client.inputs.metrics.authorization_cel_evaluation_errors,
+			)
 			.map_err(|_| ProxyError::AuthorizationFailed)?;
 		Ok(http::PolicyResponse::default())
 	}
@@ -78,7 +106,26 @@ impl NetworkAuthorizationSet {
 	}
 
 	pub fn apply(&self, exec: &Executor<'_>) -> Result<(), ProxyError> {
-		let allowed = self.0.validate(exec);
+		self.apply_inner(exec, None)
+	}
+
+	pub(crate) fn apply_with_metrics(
+		&self,
+		exec: &Executor<'_>,
+		cel_errors: &AuthorizationCelErrors,
+	) -> Result<(), ProxyError> {
+		self.apply_inner(exec, Some(cel_errors))
+	}
+
+	fn apply_inner(
+		&self,
+		exec: &Executor<'_>,
+		cel_errors: Option<&AuthorizationCelErrors>,
+	) -> Result<(), ProxyError> {
+		let allowed = self.0.validate_inner(
+			exec,
+			cel_errors.map(|errors| (AuthorizationLayer::network, errors)),
+		);
 		if !allowed {
 			Err(ProxyError::AuthorizationFailed)
 		} else {
@@ -252,6 +299,24 @@ impl RuleSets {
 		self.0.iter().any(|r| r.has_rules())
 	}
 	pub fn validate(&self, exec: &Executor) -> bool {
+		self.validate_inner(exec, None)
+	}
+
+	pub(crate) fn validate_inner(
+		&self,
+		exec: &Executor,
+		metrics: Option<(AuthorizationLayer, &AuthorizationCelErrors)>,
+	) -> bool {
+		let evaluate = |rule: &cel::Expression, mode| {
+			exec.try_eval_bool(rule).unwrap_or_else(|_| {
+				if let Some((layer, errors)) = metrics {
+					errors
+						.get_or_create(&AuthorizationCelErrorLabels { mode, layer })
+						.inc();
+				}
+				false
+			})
+		};
 		let rule_sets = &self.0;
 		let has_rules = self.has_rules();
 		// If there are no rule sets, everyone has access
@@ -259,13 +324,22 @@ impl RuleSets {
 		let allowed = if !has_rules {
 			true
 		// If there are any DENY, deny
-		} else if rule_sets.iter().any(|r| r.denies(exec)) {
+		} else if rule_sets
+			.iter()
+			.any(|r| r.matches(AuthorizationMode::deny, evaluate))
+		{
 			false
 		// All REQUIRE policies must match when present.
-		} else if rule_sets.iter().any(|r| !r.all_requires_match(exec)) {
+		} else if rule_sets
+			.iter()
+			.any(|r| !r.matches(AuthorizationMode::require, evaluate))
+		{
 			false
 		// If there are any ALLOW, allow
-		} else if rule_sets.iter().any(|r| r.allows(exec)) {
+		} else if rule_sets
+			.iter()
+			.any(|r| r.matches(AuthorizationMode::allow, evaluate))
+		{
 			true
 		} else {
 			// If only deny rules exist (no allow rules), default to allow (denylist semantics).
@@ -332,35 +406,28 @@ impl RuleSet {
 		!self.rules.allow.is_empty()
 	}
 	pub fn denies(&self, exec: &cel::Executor) -> bool {
-		if self.rules.deny.is_empty() {
-			false
-		} else {
-			self
-				.rules
-				.deny
-				.iter()
-				.any(|rule| exec.eval_bool(rule.as_ref()))
-		}
+		self.matches(AuthorizationMode::deny, |rule, _| exec.eval_bool(rule))
 	}
 
 	pub fn allows(&self, exec: &cel::Executor) -> bool {
-		if self.rules.allow.is_empty() {
-			false
-		} else {
-			self
-				.rules
-				.allow
-				.iter()
-				.any(|rule| exec.eval_bool(rule.as_ref()))
-		}
+		self.matches(AuthorizationMode::allow, |rule, _| exec.eval_bool(rule))
 	}
 
 	pub fn all_requires_match(&self, exec: &cel::Executor) -> bool {
-		self
-			.rules
-			.require
-			.iter()
-			.all(|rule| exec.eval_bool(rule.as_ref()))
+		self.matches(AuthorizationMode::require, |rule, _| exec.eval_bool(rule))
+	}
+
+	fn matches(
+		&self,
+		mode: AuthorizationMode,
+		evaluate: impl Fn(&cel::Expression, AuthorizationMode) -> bool,
+	) -> bool {
+		let evaluate = |rule: &Arc<cel::Expression>| evaluate(rule, mode);
+		match mode {
+			AuthorizationMode::allow => self.rules.allow.iter().any(evaluate),
+			AuthorizationMode::deny => self.rules.deny.iter().any(evaluate),
+			AuthorizationMode::require => self.rules.require.iter().all(evaluate),
+		}
 	}
 }
 

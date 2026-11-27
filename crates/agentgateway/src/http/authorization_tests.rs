@@ -414,6 +414,143 @@ fn test_require_act_chain_denies_bad_deep_actor_despite_allow() {
 	assert_matches!(rs.validate(&exec), false);
 }
 
+#[tokio::test]
+async fn test_authorization_cel_error_metrics() {
+	use prometheus_client::encoding::text::encode;
+	use prometheus_client::registry::Registry;
+
+	use crate::test_helpers::proxymock::{
+		BIND_KEY, base_gateway, read_body_raw, send_request_headers, simple_mock,
+	};
+
+	const TRACE_PATH: &str = "/authorization-cel-error-metrics";
+	const DENY: &str = "int(request.headers['x-number']) == 1";
+	const SKIPPED_ALLOW: &str = "int(request.headers['x-absent']) == 1";
+	const METRIC: &str = "agentgateway_authorization_cel_evaluation_errors_total";
+
+	let mock = simple_mock().await;
+	let mut bind = base_gateway(&mock);
+	let mut registry = Registry::default();
+	Arc::make_mut(&mut bind.pi).metrics = Arc::new(metrics::Metrics::new(
+		agent_core::metrics::sub_registry(&mut registry),
+		Default::default(),
+		bind.pi.cfg.histograms,
+	));
+	bind
+		.attach_gateway_policy(json!({
+			"authorization": {"rules": [{"deny": DENY}]}
+		}))
+		.await;
+	let io = bind.serve_http(BIND_KEY);
+
+	let samples = || {
+		let mut output = String::new();
+		encode(&mut output, &registry).unwrap();
+		output
+			.lines()
+			.filter(|line| line.starts_with(METRIC))
+			.map(str::to_owned)
+			.collect::<Vec<_>>()
+	};
+
+	for (value, status) in [("2", 200), ("1", 403)] {
+		let response = send_request_headers(
+			io.clone(),
+			Method::GET,
+			"http://lo/",
+			&[("x-number", value)],
+		)
+		.await;
+		assert_eq!(response.status(), status);
+		read_body_raw(response.into_body()).await;
+	}
+	assert!(samples().is_empty());
+
+	let mut trace_rx = dtrace::track_expression(Some(
+		cel::Expression::new_strict(format!("request.path == '{TRACE_PATH}'")).unwrap(),
+	));
+	let url = format!("http://lo{TRACE_PATH}");
+	let response =
+		send_request_headers(io.clone(), Method::GET, &url, &[("x-number", "invalid")]).await;
+	assert_eq!(response.status(), 200);
+	read_body_raw(response.into_body()).await;
+	let deny_evaluations = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+		let mut evaluations = 0;
+		while let Some(event) = trace_rx.recv().await {
+			let event = serde_json::to_value(event).unwrap();
+			let message = &event["message"];
+			match message["type"].as_str() {
+				Some("cel") if message["expr"] == DENY => {
+					assert!(message["result"].get("error").is_some());
+					evaluations += 1;
+				},
+				Some("authorizationResult") => return evaluations,
+				_ => {},
+			}
+		}
+		panic!("missing authorization trace")
+	})
+	.await
+	.unwrap();
+	assert_eq!(deny_evaluations, 2);
+	let after_traced_deny = samples();
+
+	bind
+		.attach_gateway_policy(json!({
+			"authorization": {"rules": [
+				{"require": format!("request.path == '{TRACE_PATH}' ? request.headers['x-number'] : true")},
+				{"allow": SKIPPED_ALLOW},
+				{"allow": "true"},
+			]}
+		}))
+		.await;
+	let mut trace_rx = dtrace::track_expression(Some(
+		cel::Expression::new_strict(format!("request.path == '{TRACE_PATH}'")).unwrap(),
+	));
+	let response = send_request_headers(io, Method::GET, &url, &[("x-number", "2")]).await;
+	assert_eq!(response.status(), 403);
+	read_body_raw(response.into_body()).await;
+	tokio::time::timeout(std::time::Duration::from_secs(1), async {
+		while let Some(event) = trace_rx.recv().await {
+			let event = serde_json::to_value(event).unwrap();
+			let message = &event["message"];
+			if message["type"] == "cel" && message["expr"] == SKIPPED_ALLOW {
+				assert!(message["result"].get("error").is_some());
+				return;
+			}
+		}
+		panic!("missing trace for skipped allow")
+	})
+	.await
+	.unwrap();
+	bind
+		.attach_frontend_policy(json!({
+			"networkAuthorization": {"rules": [
+				{"allow": "int(string(source.address)) == 1"},
+				{"allow": "source.port == 12345"},
+			]}
+		}))
+		.await;
+	let io = bind.serve_http(BIND_KEY);
+	let response = send_request_headers(io, Method::GET, "http://lo/", &[("x-number", "1")]).await;
+	assert_eq!(response.status(), 403);
+
+	assert_eq!(
+		after_traced_deny,
+		[format!(r#"{METRIC}{{mode="deny",layer="http"}} 1"#)]
+	);
+	let mut actual = samples();
+	actual.sort();
+	assert_eq!(
+		actual,
+		[
+			format!(r#"{METRIC}{{mode="allow",layer="network"}} 1"#),
+			format!(r#"{METRIC}{{mode="deny",layer="http"}} 1"#),
+			format!(r#"{METRIC}{{mode="require",layer="http"}} 1"#),
+		]
+	);
+}
+
 #[divan::bench]
 fn bench(b: Bencher) {
 	let policies = vec![r#"mcp.tool.name == "increment" && jwt.user.role == "admin""#];

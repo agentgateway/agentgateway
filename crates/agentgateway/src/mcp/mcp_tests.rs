@@ -4261,6 +4261,56 @@ async fn single_resource_updated_notification_is_not_prefixed() {
 	assert_eq!(updated_uri.lock().await.as_deref(), Some("memo://insights"));
 }
 
+#[tokio::test]
+async fn authorization_cel_error_metrics_for_mcp_list() {
+	use prometheus_client::encoding::text::encode;
+	use prometheus_client::registry::Registry;
+
+	let mock = mock_streamable_http_server(true).await;
+	let policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(
+				r#"mcp.tool.name == "increment" && int(request.headers["content-type"]) == 1"#,
+			)
+			.unwrap(),
+		)],
+		vec![],
+	)));
+	let mut bind = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			mock.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthorization(policy)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let mut registry = Registry::default();
+	Arc::make_mut(&mut bind.pi).metrics = Arc::new(metrics::Metrics::new(
+		agent_core::metrics::sub_registry(&mut registry),
+		Default::default(),
+		bind.pi.cfg.histograms,
+	));
+	let client = mcp_streamable_client(bind.serve_real_listener(BIND_KEY).await).await;
+
+	let result = client.list_tools(None).await.unwrap();
+	assert!(result.tools.iter().any(|tool| tool.name == "increment"));
+	assert!(result.tools.iter().any(|tool| tool.name == "echo"));
+
+	let mut output = String::new();
+	encode(&mut output, &registry).unwrap();
+	let samples: Vec<_> = output
+		.lines()
+		.filter(|line| line.starts_with("agentgateway_authorization_cel_evaluation_errors_total"))
+		.collect();
+	assert_eq!(
+		samples,
+		[r#"agentgateway_authorization_cel_evaluation_errors_total{mode="deny",layer="mcp"} 1"#]
+	);
+}
+
 /// Test that a deny policy targeting a specific tool filters only that tool from list_tools,
 /// while leaving all other tools accessible.
 #[tokio::test]

@@ -74,6 +74,34 @@ pub struct GuardrailLabels {
 	pub action: GuardrailAction,
 }
 
+#[derive(
+	Clone, Copy, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue,
+)]
+#[allow(non_camel_case_types)]
+pub(crate) enum AuthorizationMode {
+	allow,
+	deny,
+	require,
+}
+
+#[derive(
+	Clone, Copy, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue,
+)]
+#[allow(non_camel_case_types)]
+pub(crate) enum AuthorizationLayer {
+	http,
+	network,
+	mcp,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub(crate) struct AuthorizationCelErrorLabels {
+	pub mode: AuthorizationMode,
+	pub layer: AuthorizationLayer,
+}
+
+pub(crate) type AuthorizationCelErrors = Family<AuthorizationCelErrorLabels, counter::Counter>;
+
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct MinimalHTTPLabels {
 	pub backend: DefaultedUnknown<RichStrng>,
@@ -331,6 +359,7 @@ pub struct Metrics {
 	pub guardrail_checks: Family<GuardrailLabels, counter::Counter>,
 
 	pub cost_catalog_lookups: Family<CostCatalogLookupLabels, counter::Counter>,
+	pub(crate) authorization_cel_evaluation_errors: AuthorizationCelErrors,
 
 	// metrics for request retries
 	pub retries: Counter,
@@ -506,6 +535,11 @@ impl Metrics {
 				);
 				m
 			},
+			authorization_cel_evaluation_errors: build(
+				&mut registry,
+				"authorization_cel_evaluation_errors",
+				"Total number of authorization CEL evaluations that failed",
+			),
 			downstream_connection: build(
 				&mut registry,
 				"downstream_connections",

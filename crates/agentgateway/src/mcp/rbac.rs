@@ -8,6 +8,7 @@ use vector_map::VecMap;
 
 use crate::cel::ContextBuilder;
 use crate::http::authorization::{RuleSet, RuleSets};
+use crate::metrics::{AuthorizationCelErrors, AuthorizationLayer};
 use crate::*;
 
 #[apply(schema!)]
@@ -37,21 +38,36 @@ impl From<crate::mcp::upstream::IncomingRequestContext> for CelExecWrapper {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct McpAuthorizationSet(RuleSets);
+#[serde(transparent)]
+pub struct McpAuthorizationSet {
+	rules: RuleSets,
+	#[serde(skip)]
+	cel_errors: Option<AuthorizationCelErrors>,
+}
 
 impl McpAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
-		Self(rs)
+		Self {
+			rules: rs,
+			cel_errors: None,
+		}
+	}
+
+	pub(super) fn with_cel_error_metrics(mut self, errors: &AuthorizationCelErrors) -> Self {
+		self.cel_errors = Some(errors.clone());
+		self
 	}
 
 	/// Combine rule sets so both apply; see [`RuleSets::merge`].
 	pub fn merge(self, other: Self) -> Self {
-		Self(self.0.merge(other.0))
+		Self {
+			rules: self.rules.merge(other.rules),
+			cel_errors: self.cel_errors.or(other.cel_errors),
+		}
 	}
 
 	pub fn validate(&self, res: &ResourceType, method_name: &Strng, cel: &CelExecWrapper) -> bool {
-		if !self.0.has_rules() {
+		if !self.rules.has_rules() {
 			return true;
 		}
 		tracing::debug!("Checking RBAC for resource: {:?}", res);
@@ -59,11 +75,17 @@ impl McpAuthorizationSet {
 		mcp.method_name = Some(method_name.clone());
 		let mut exec = cel.0.executor();
 		exec.mcp = Some(crate::mcp::MCPView::new(&mcp));
-		self.0.validate(&exec)
+		self.rules.validate_inner(
+			&exec,
+			self
+				.cel_errors
+				.as_ref()
+				.map(|errors| (AuthorizationLayer::mcp, errors)),
+		)
 	}
 
 	pub fn register(&self, cel: &mut ContextBuilder) {
-		self.0.register(cel);
+		self.rules.register(cel);
 	}
 }
 

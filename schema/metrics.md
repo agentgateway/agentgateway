@@ -56,6 +56,7 @@
 | Metric | Type | Unit | Description |
 | --- | --- | --- | --- |
 | `agentgateway_atenet_router_route_duration_seconds` | Histogram | seconds | Time from receiving a Substrate request to resolving its worker endpoint. |
+| `agentgateway_authorization_cel_evaluation_errors_total` | Counter | — | Total number of authorization CEL evaluations that failed. |
 | `agentgateway_build_info` | Info | — | Agentgateway build information. |
 | `agentgateway_config_synchronized` | Gauge | — | Whether the last configuration load/reload was successful or not, being synchronized with the on-disk configuration. |
 | `agentgateway_substrate_request_parking_active` | Gauge | — | Number of requests waiting for a Substrate actor to become routable. |
