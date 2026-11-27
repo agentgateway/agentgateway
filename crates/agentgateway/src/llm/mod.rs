@@ -1027,6 +1027,16 @@ impl AIProvider {
 		}
 	}
 
+	/// The region requests are sent to, for providers that price by region: `global`, or the
+	/// provider's region name. None for providers that price the same everywhere.
+	pub fn region(&self) -> Option<Strng> {
+		match self {
+			// An unset Vertex region uses the global endpoint.
+			AIProvider::Vertex(p) => Some(p.region.clone().unwrap_or(strng::literal!("global"))),
+			_ => None,
+		}
+	}
+
 	pub fn supported_formats(&self, request_model: &str) -> Vec<custom::ProviderFormat> {
 		use custom::ProviderFormat::*;
 		match self {
@@ -2492,6 +2502,7 @@ impl AIProvider {
 
 		let mut llm_info =
 			req.to_llm_request(self.provider(), tokenize && guardrail_rejection.is_none())?;
+		llm_info.region = self.region();
 		llm_info.original_model = parts
 			.extensions
 			.get::<model_router::OriginalModel>()

@@ -282,6 +282,9 @@ pub struct LLMRequest {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub original_model: Option<Strng>,
 	pub provider: Strng,
+	/// The provider region the request is sent to, when it affects pricing.
+	#[serde(skip)]
+	pub region: Option<Strng>,
 	pub streaming: bool,
 	pub params: LLMRequestParams,
 	#[serde(skip_serializing_if = "Option::is_none")]

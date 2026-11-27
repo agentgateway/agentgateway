@@ -108,6 +108,25 @@ impl PricingTier {
 	}
 }
 
+/// Where a request was served, for providers that price regional endpoints differently.
+#[apply(schema!)]
+#[derive(Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PricingRegion {
+	Global,
+	Regional,
+}
+
+impl PricingRegion {
+	/// Classifies the region a provider reported. Providers that do not price by region report
+	/// none, so only region-independent tiers apply to them.
+	pub fn detect(region: Option<&str>) -> Option<Self> {
+		region.map(|region| match region {
+			"global" => Self::Global,
+			_ => Self::Regional,
+		})
+	}
+}
+
 pub struct ModelCatalog {
 	state: ArcSwap<ModelCatalogState>,
 	file_watch: Mutex<Option<tokio::task::AbortHandle>>,
@@ -238,6 +257,7 @@ impl ModelCatalog {
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
 		let provider = info.request.provider.as_str();
 		let convention = info.request.cache_convention;
+		let region = PricingRegion::detect(info.request.region.as_deref());
 		let state = self.state.load();
 		let snapshot = &state.snapshot;
 		let primary = |resp: &LLMResponse| {
@@ -245,8 +265,14 @@ impl ModelCatalog {
 				.into_iter()
 				.flatten()
 			{
-				let projection =
-					snapshot.project_with_missing_trace(provider, model.as_str(), resp, convention, false);
+				let projection = snapshot.project_with_missing_trace(
+					provider,
+					model.as_str(),
+					resp,
+					convention,
+					region,
+					false,
+				);
 				if projection.status != CostLookupStatus::Missing {
 					return projection;
 				}
@@ -257,12 +283,13 @@ impl ModelCatalog {
 				info.request.request_model.as_str(),
 				resp,
 				convention,
+				region,
 				original_model.is_none(),
 			);
 			// Last resort: the model the client asked for, before any virtual model or alias rewrite.
 			match original_model {
 				Some(original_model) if projection.status == CostLookupStatus::Missing => {
-					snapshot.project(provider, original_model.as_str(), resp, convention)
+					snapshot.project(provider, original_model.as_str(), resp, convention, region)
 				},
 				_ => projection,
 			}
@@ -287,7 +314,9 @@ impl ModelCatalog {
 			let projection = line
 				.model
 				.as_deref()
-				.map(|model| snapshot.project_with_missing_trace(provider, model, &resp, convention, false))
+				.map(|model| {
+					snapshot.project_with_missing_trace(provider, model, &resp, convention, region, false)
+				})
 				.filter(|p| p.status == CostLookupStatus::Exact)
 				.unwrap_or_else(|| primary(&resp));
 			let Some(total) = total.as_mut() else {
@@ -468,8 +497,9 @@ impl CatalogSnapshot {
 		model: &str,
 		resp: &LLMResponse,
 		convention: CacheTokenConvention,
+		region: Option<PricingRegion>,
 	) -> CostProjection {
-		self.project_with_missing_trace(provider, model, resp, convention, true)
+		self.project_with_missing_trace(provider, model, resp, convention, region, true)
 	}
 
 	fn project_with_missing_trace(
@@ -478,6 +508,7 @@ impl CatalogSnapshot {
 		model: &str,
 		resp: &LLMResponse,
 		convention: CacheTokenConvention,
+		region: Option<PricingRegion>,
 		trace_missing: bool,
 	) -> CostProjection {
 		let Some(catalog) = self.catalog.as_ref() else {
@@ -524,7 +555,7 @@ impl CatalogSnapshot {
 		// Tier selection must be invariant to cache repricing below: cache tokens
 		// may move between input and their cache buckets, but their sum is stable.
 		let context_tokens = provisional_usage.context_tokens();
-		let rates = entry.effective_rates(context_tokens, &pricing_tier);
+		let rates = entry.effective_rates(context_tokens, &pricing_tier, region);
 		if rates.is_empty() {
 			crate::proxy::dtrace::pol_event!(
 				TRACE_POLICY_KIND,
@@ -563,6 +594,7 @@ impl CatalogSnapshot {
 				"model": model,
 				"status": status_name(CostLookupStatus::Exact),
 				"pricingTier": format!("{pricing_tier:?}"),
+				"pricingRegion": region.map(|region| format!("{region:?}")),
 				"cacheTokenConvention": cache_convention_name(convention),
 				"contextTokens": context_tokens,
 				"pricesCacheRead": prices_cache_read,
@@ -1190,6 +1222,73 @@ mod tests {
 		assert_eq!(price(100_000, None), Some(0.1));
 	}
 
+	#[test]
+	fn pricing_region_classifies_reported_region() {
+		assert_eq!(PricingRegion::detect(None), None);
+		assert_eq!(
+			PricingRegion::detect(Some("global")),
+			Some(PricingRegion::Global)
+		);
+		for region in ["us-central1", "us-east5", "us"] {
+			assert_eq!(
+				PricingRegion::detect(Some(region)),
+				Some(PricingRegion::Regional),
+				"{region}"
+			);
+		}
+	}
+
+	#[test]
+	fn project_prices_vertex_requests_by_backend_region() {
+		let catalog = model_catalog(
+			r#"{"providers":{
+				"gcp.vertex_ai":{"models":{"m":{
+					"rates":{"input":"1","output":"10"},
+					"tiers":[{"region":"regional","rates":{"input":"1.1","output":"11"}}]
+				}}},
+				"openai":{"models":{"m":{
+					"rates":{"input":"1","output":"10"},
+					"tiers":[{"region":"regional","rates":{"input":"1.1","output":"11"}}]
+				}}}
+			}}"#,
+		);
+		let cost = |provider: &str, region: Option<&str>| {
+			let mut info = test_llm_info("m", None);
+			info.request.provider = provider.into();
+			info.request.region = region.map(Into::into);
+			let projection = catalog.project(&info);
+			assert_eq!(projection.status, CostLookupStatus::Exact);
+			projection.cost.unwrap().total().to_f64()
+		};
+		assert_eq!(cost("gcp.vertex_ai", Some("global")), Some(6.0));
+		assert_eq!(cost("gcp.vertex_ai", Some("us-central1")), Some(6.6));
+		assert_eq!(cost("gcp.vertex_ai", Some("us")), Some(6.6));
+		// Providers that report no region only match region-independent tiers.
+		assert_eq!(cost("openai", None), Some(6.0));
+	}
+
+	#[test]
+	fn project_prices_usage_lines_by_backend_region() {
+		let catalog = model_catalog(
+			r#"{"providers":{"gcp.vertex_ai":{"models":{
+				"m":{"rates":{"input":"1"},"tiers":[{"region":"regional","rates":{"input":"1.1"}}]},
+				"other":{"rates":{"input":"2"},"tiers":[{"region":"regional","rates":{"input":"2.2"}}]}
+			}}}}"#,
+		);
+		let line = |model: Option<&str>| agent_llm::UsageLine {
+			model: model.map(Into::into),
+			input_tokens: 1_000_000,
+			..Default::default()
+		};
+		let mut info = test_llm_info("m", None);
+		info.request.provider = "gcp.vertex_ai".into();
+		info.request.region = Some("us-central1".into());
+		info.response.usage_lines = vec![line(None), line(Some("other"))];
+		let projection = catalog.project(&info);
+		assert_eq!(projection.status, CostLookupStatus::Exact);
+		assert_eq!(projection.cost.unwrap().total().to_f64(), Some(3.3));
+	}
+
 	fn test_catalog(input_rate: &str) -> String {
 		format!(
 			r#"{{"providers":{{"openai":{{"models":{{"my-model":{{"rates":{{"input":"{input_rate}","output":"2"}}}}}}}}}}}}"#
@@ -1267,7 +1366,7 @@ mod tests {
 			resp: &LLMResponse,
 			convention: CacheTokenConvention,
 		) -> (Option<f64>, CostLookupStatus) {
-			let p = self.project(provider, model, resp, convention);
+			let p = self.project(provider, model, resp, convention, None);
 			(p.cost.and_then(|c| c.total().to_f64()), p.status)
 		}
 	}
@@ -1394,6 +1493,7 @@ mod tests {
 				"gpt-5.6",
 				&resp,
 				CacheTokenConvention::InputIncludesCache,
+				None,
 			);
 			let cost = projection.cost.expect("model is priced");
 			assert_eq!(cost.input.to_f64(), Some(expected_input));
@@ -1465,6 +1565,7 @@ mod tests {
 					"claude-opus-5",
 					&resp,
 					CacheTokenConvention::InputExcludesCache,
+					None,
 				)
 				.cost
 				.expect("model is priced");
@@ -1491,6 +1592,7 @@ mod tests {
 			"gpt-5.6",
 			&resp,
 			CacheTokenConvention::InputIncludesCache,
+			None,
 		);
 		let cost = projection.cost.expect("model is priced");
 		assert_eq!(cost.input.to_f64(), Some(0.7));
@@ -1943,6 +2045,7 @@ mod tests {
 			"m",
 			&resp,
 			CacheTokenConvention::InputIncludesCache,
+			None,
 		);
 		assert_eq!(p.status, CostLookupStatus::Exact);
 		assert_eq!(

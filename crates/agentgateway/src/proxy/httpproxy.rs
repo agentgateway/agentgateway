@@ -3158,6 +3158,7 @@ async fn make_backend_call(
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),
+								region: llm.provider.region(),
 								..Default::default()
 							})
 						});

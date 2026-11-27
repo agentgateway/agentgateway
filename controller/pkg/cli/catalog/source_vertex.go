@@ -9,9 +9,11 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"golang.org/x/net/html"
 )
 
@@ -53,11 +55,100 @@ func init() {
 			_, ok := known[id]
 			return !ok
 		})
+		claude, err := vertexClaudeRegionalTiers(known)
+		if err != nil {
+			return nil, nil, err
+		}
+		maps.Copy(cat.Providers[vertexProviderID].Models, claude)
 		return cat, warnings, nil
 	}
 }
 
-// vertexParsePricing imports Global prices. The catalog cannot select by region yet.
+// vertexClaudeVersion matches Claude model IDs on Vertex, such as claude-sonnet-4-5@20250929.
+var vertexClaudeVersion = regexp.MustCompile(`^claude-[a-z]+-(\d+)(?:-(\d+))?@`)
+
+// vertexClaudeRegionalPremium is the regional and multi-region premium over global endpoints for
+// Claude 4.5 and later models.
+var vertexClaudeRegionalPremium = decimal.RequireFromString("1.1")
+
+// vertexClaudeRegionalTiers returns regional tiers for Claude 4.5 and later models, derived from
+// their global standard rates and long-context tiers.
+func vertexClaudeRegionalTiers(known map[string]Model) (map[string]Model, error) {
+	out := map[string]Model{}
+	for id, model := range known {
+		m := vertexClaudeVersion.FindStringSubmatch(id)
+		if m == nil {
+			continue
+		}
+		major, _ := strconv.Atoi(m[1])
+		minor, _ := strconv.Atoi(m[2])
+		if major < 4 || (major == 4 && minor < 5) {
+			continue
+		}
+		var tiers []Tier
+		if !model.Rates.IsZero() {
+			rates, err := scaleRates(model.Rates, vertexClaudeRegionalPremium)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", id, err)
+			}
+			tiers = append(tiers, Tier{Region: "regional", Rates: rates})
+		}
+		for _, tier := range model.Tiers {
+			if tier.ServiceTier != "" || tier.Region != "" {
+				continue
+			}
+			rates, err := scaleRates(tier.Rates, vertexClaudeRegionalPremium)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", id, err)
+			}
+			tiers = append(tiers, Tier{ContextOver: tier.ContextOver, Region: "regional", Rates: rates})
+		}
+		if len(tiers) > 0 {
+			out[id] = Model{Tiers: tiers}
+		}
+	}
+	return out, nil
+}
+
+// scaleRates multiplies every set rate by factor.
+func scaleRates(r Rates, factor decimal.Decimal) (Rates, error) {
+	scale := func(m Money) (Money, error) {
+		if m == "" {
+			return m, nil
+		}
+		d, err := m.Decimal()
+		if err != nil {
+			return "", err
+		}
+		return Money(d.Mul(factor).Round(maxFractionalDigits).String()), nil
+	}
+	out := r
+	// Walk every Money field, so rates added to Rates later are scaled too.
+	fields := reflect.ValueOf(&out).Elem()
+	for _, field := range fields.Fields() {
+		m, ok := reflect.TypeAssert[*Money](field.Addr())
+		if !ok {
+			continue
+		}
+		scaled, err := scale(*m)
+		if err != nil {
+			return Rates{}, err
+		}
+		*m = scaled
+	}
+	out.CacheWriteDetails = maps.Clone(r.CacheWriteDetails)
+	for ttl, m := range out.CacheWriteDetails {
+		scaled, err := scale(m)
+		if err != nil {
+			return Rates{}, err
+		}
+		out.CacheWriteDetails[ttl] = scaled
+	}
+	return out, nil
+}
+
+// vertexParsePricing imports service tier prices, and Non-global prices as regional tiers.
+// Standard Global prices are the base rates from models.dev.
 // Flex and Batch share a table; Batch-only models get a harmless flex tier.
 func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, error) {
 	doc, err := html.Parse(r)
@@ -66,6 +157,7 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 	}
 	models := map[string]Model{}
 	services := map[string]bool{}
+	var warns []string
 	for table := range doc.Descendants() {
 		if table.Type != html.ElementNode || table.Data != "table" {
 			continue
@@ -75,17 +167,17 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 			continue
 		}
 		header := rows[0]
-		service := ""
-		switch joined := strings.Join(header, " "); {
-		case strings.Contains(joined, "with Priority"):
-			service = "priority"
-		case strings.Contains(joined, "with Flex/Batch"):
-			service = "flex"
-		default:
+		service := vertexTableService(table, header)
+		regionCol := slices.Index(header, "Region")
+		if service == "" || (service == "standard" && regionCol < 0) {
 			continue
 		}
 		services[service] = true
-		regionCol := slices.Index(header, "Region")
+		// Standard prices are the base rates, so they only contribute region tiers.
+		tierService := service
+		if service == "standard" {
+			tierService = ""
+		}
 		// Column index per [context tier] for input and cached input prices; -1 if absent.
 		inputCols, cacheCols := [2]int{-1, -1}, [2]int{-1, -1}
 		// Columns without a context threshold apply to all context sizes.
@@ -97,9 +189,14 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 			if strings.Contains(h, "> 200K") {
 				ctx = 1
 			}
-			if strings.Contains(h, "cached input") {
+			switch lower := strings.ToLower(h); {
+			case strings.Contains(lower, "cache write"):
+				// Cache write pricing is announced ahead of its effective date, with no
+				// machine-readable schedule, so it is not imported.
+				continue
+			case strings.Contains(lower, "cached input"), strings.Contains(lower, "cache read"):
 				cacheCols[ctx] = i
-			} else {
+			default:
 				inputCols[ctx] = i
 			}
 		}
@@ -121,6 +218,14 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 					if !ok {
 						continue
 					}
+					date, rest, _ := strings.Cut(date, ")")
+					// A cell can name further models after the date, which the row format cannot attribute.
+					if extra := strings.Trim(rest, " ,"); extra != "" {
+						warn := fmt.Sprintf("Vertex: skipped %q listed after the date in %q", extra, row[0])
+						if !slices.Contains(warns, warn) {
+							warns = append(warns, warn)
+						}
+					}
 					d, err := time.Parse("January 2, 2006", strings.TrimSpace(date))
 					if err != nil {
 						return nil, nil, fmt.Errorf("Vertex %s model %q: %w", service, row[0], err)
@@ -133,7 +238,8 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 					name = before
 					break
 				}
-				if active {
+				// Live API models price each modality separately, which the catalog cannot express.
+				if active && !strings.Contains(name, "live api") {
 					name, _, _ = strings.Cut(name, "(")
 					id = strings.Join(strings.Fields(strings.Trim(name, " *")), "-")
 				}
@@ -141,7 +247,20 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 			if row[1] != "" {
 				usage = strings.ToLower(row[1])
 			}
-			if id == "" || (regionCol >= 0 && row[regionCol] != "Global" && row[regionCol] != "Global (Flex)") {
+			if id == "" {
+				continue
+			}
+			region := ""
+			if regionCol >= 0 {
+				switch strings.TrimSuffix(row[regionCol], "*") {
+				case "Global", "Global (Flex)":
+				case "Non-global":
+					region = "regional"
+				default:
+					continue
+				}
+			}
+			if service == "standard" && region == "" {
 				continue
 			}
 			if row[inputCols[0]] == "N/A" && (inputCols[1] < 0 || row[inputCols[1]] == "N/A") {
@@ -173,9 +292,11 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 				if err != nil {
 					return nil, nil, fmt.Errorf("%s %s: %w", id, service, err)
 				}
-				idx := slices.IndexFunc(model.Tiers, func(t Tier) bool { return t.ServiceTier == service && t.ContextOver == threshold })
+				idx := slices.IndexFunc(model.Tiers, func(t Tier) bool {
+					return t.ServiceTier == tierService && t.Region == region && t.ContextOver == threshold
+				})
 				if idx < 0 {
-					model.Tiers = append(model.Tiers, Tier{ServiceTier: service, ContextOver: threshold})
+					model.Tiers = append(model.Tiers, Tier{ServiceTier: tierService, Region: region, ContextOver: threshold})
 					idx = len(model.Tiers) - 1
 				}
 				rates := &model.Tiers[idx].Rates
@@ -189,7 +310,7 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 					dst = &rates.Output
 				}
 				if *dst != "" {
-					return nil, nil, fmt.Errorf("duplicate Vertex price for %s %s %s context %d", id, service, field, threshold)
+					return nil, nil, fmt.Errorf("duplicate Vertex price for %s %s %s %s context %d", id, service, region, field, threshold)
 				}
 				*dst = rate
 				switch field {
@@ -209,7 +330,7 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 			models[id] = model
 		}
 	}
-	for _, service := range []string{"priority", "flex"} {
+	for _, service := range []string{"standard", "priority", "flex"} {
 		if !services[service] {
 			return nil, nil, fmt.Errorf("no Vertex %s pricing tables found", service)
 		}
@@ -217,18 +338,18 @@ func vertexParsePricing(r io.Reader, now time.Time) (*ModelCatalog, []string, er
 	for id, model := range models {
 		for _, tier := range model.Tiers {
 			if tier.Rates.Input == "" || tier.Rates.Output == "" {
-				return nil, nil, fmt.Errorf("incomplete Vertex %s prices for %s context %d", tier.ServiceTier, id, tier.ContextOver)
+				return nil, nil, fmt.Errorf("incomplete Vertex %s %s prices for %s context %d", tier.ServiceTier, tier.Region, id, tier.ContextOver)
 			}
 		}
 		// Equal long-context prices need no additional tier.
 		model.Tiers = slices.DeleteFunc(model.Tiers, func(t Tier) bool {
 			return t.ContextOver != 0 && slices.ContainsFunc(model.Tiers, func(base Tier) bool {
-				return base.ContextOver == 0 && base.ServiceTier == t.ServiceTier && reflect.DeepEqual(base.Rates, t.Rates)
+				return base.ContextOver == 0 && base.ServiceTier == t.ServiceTier && base.Region == t.Region && reflect.DeepEqual(base.Rates, t.Rates)
 			})
 		})
 		models[id] = model
 	}
-	return &ModelCatalog{Providers: map[string]Provider{vertexProviderID: {Models: models}}}, nil, nil
+	return &ModelCatalog{Providers: map[string]Provider{vertexProviderID: {Models: models}}}, warns, nil
 }
 
 func vertexMoney(value string) (Money, error) {
@@ -241,27 +362,75 @@ func vertexMoney(value string) (Money, error) {
 
 var vertexFootnote = regexp.MustCompile(`\[\d+\]`)
 
+// vertexTableService reads the service tier from the header, or else from the table's tab label.
+func vertexTableService(table *html.Node, header []string) string {
+	switch joined := strings.Join(header, " "); {
+	case strings.Contains(joined, "with Priority"):
+		return "priority"
+	case strings.Contains(joined, "with Flex/Batch"):
+		return "flex"
+	}
+	switch label := vertexTabLabel(table); {
+	case strings.HasPrefix(label, "Standard"):
+		return "standard"
+	case label == "Priority":
+		return "priority"
+	case strings.Contains(label, "Flex") || strings.Contains(label, "Batch"):
+		return "flex"
+	}
+	return ""
+}
+
+func vertexTabLabel(n *html.Node) string {
+	for panel := n.Parent; panel != nil; panel = panel.Parent {
+		if vertexAttr(panel, "role") != "tabpanel" {
+			continue
+		}
+		id := vertexAttr(panel, "aria-labelledby")
+		root := panel
+		for root.Parent != nil {
+			root = root.Parent
+		}
+		for tab := range root.Descendants() {
+			if id != "" && tab.Type == html.ElementNode && vertexAttr(tab, "id") == id {
+				return strings.Join(strings.Fields(vertexText(tab)), " ")
+			}
+		}
+		return ""
+	}
+	return ""
+}
+
+func vertexAttr(n *html.Node, key string) string {
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return a.Val
+		}
+	}
+	return ""
+}
+
+func vertexText(n *html.Node) string {
+	if n.Type == html.TextNode {
+		return n.Data
+	}
+	var s strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		s.WriteString(vertexText(c))
+	}
+	return s.String()
+}
+
 // Tables use explicit empty cells for repeated model and usage labels.
 func vertexTableRows(table *html.Node) [][]string {
 	var rows [][]string
-	var text func(*html.Node) string
-	text = func(n *html.Node) string {
-		if n.Type == html.TextNode {
-			return n.Data
-		}
-		var s strings.Builder
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			s.WriteString(text(c))
-		}
-		return s.String()
-	}
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "tr" {
 			var row []string
 			for c := n.FirstChild; c != nil; c = c.NextSibling {
 				if c.Type == html.ElementNode && (c.Data == "td" || c.Data == "th") {
-					row = append(row, strings.Join(strings.Fields(vertexFootnote.ReplaceAllString(text(c), "")), " "))
+					row = append(row, strings.Join(strings.Fields(vertexFootnote.ReplaceAllString(vertexText(c), "")), " "))
 				}
 			}
 			if len(row) > 0 {

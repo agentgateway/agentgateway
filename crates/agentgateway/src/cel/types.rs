@@ -1843,6 +1843,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			request_model,
 			original_model,
 			provider,
+			region: _,
 			streaming,
 			params,
 			prompt,

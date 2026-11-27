@@ -22,7 +22,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.status`|string|Lifecycle stage (alpha, beta, deprecated); absent means generally available.|
 |`config.modelCatalog[].inline.providers.*.models.*.released`|string|Release date, as YYYY-MM-DD or YYYY-MM.|
 |`config.modelCatalog[].inline.providers.*.models.*.endpoints`|[]string|Client endpoints the model serves; absent means a chat model.|
-|`config.modelCatalog[].inline.providers.*.models.*.rates`|object|Base pricing rates for this model.|
+|`config.modelCatalog[].inline.providers.*.models.*.rates`|object|Base pricing rates for this model. In an override catalog, a rate set here also replaces that<br>rate in the base catalog's regional tiers for standard traffic, so the configured price<br>applies on regional endpoints too. Add regional `tiers` to the override to price those.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheRead`|string|Cost per 1M tokens read from cache.|
@@ -36,6 +36,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers`|[]object|Pricing rules ordered by increasing context threshold within each service tier.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].contextOver`|integer|Context-token threshold above which this rule applies. Defaults to zero.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].serviceTier`|enum|Normalized served service tier; absent matches any service tier.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `ultrafast`, `fast`.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].region`|enum|Region the request was served in; absent matches any region.<br>Possible values: `global`, `regional`.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates`|object|Pricing rates for this tier, overlaid on the base model rates.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.output`|string|Cost per 1M output (completion) tokens.|

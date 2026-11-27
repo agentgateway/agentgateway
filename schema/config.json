@@ -656,7 +656,7 @@
           }
         },
         "rates": {
-          "description": "Base pricing rates for this model.",
+          "description": "Base pricing rates for this model. In an override catalog, a rate set here also replaces that\nrate in the base catalog's regional tiers for standard traffic, so the configured price\napplies on regional endpoints too. Add regional `tiers` to the override to price those.",
           "$ref": "#/$defs/Rates"
         },
         "tiers": {
@@ -828,6 +828,17 @@
             }
           ]
         },
+        "region": {
+          "description": "Region the request was served in; absent matches any region.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PricingRegion"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "rates": {
           "description": "Pricing rates for this tier, overlaid on the base model rates.",
           "$ref": "#/$defs/Rates"
@@ -851,6 +862,14 @@
             "fast"
           ]
         }
+      ]
+    },
+    "PricingRegion": {
+      "description": "Where a request was served, for providers that price regional endpoints differently.",
+      "type": "string",
+      "enum": [
+        "global",
+        "regional"
       ]
     },
     "Limits": {
