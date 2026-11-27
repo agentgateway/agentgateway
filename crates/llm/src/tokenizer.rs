@@ -3,17 +3,20 @@ use tiktoken::CoreBpe;
 
 use crate::types::{NormalizedMessage, NormalizedMessagePartType};
 
-/// Estimates input tokens for any model by counting the request content with o200k.
+/// Estimates input tokens using the model's vocabulary when supported, with o200k as the fallback.
 ///
 /// Claude's tokenizers produce more tokens than o200k for the same text (about 1.3x, and about
 /// 1.6x from Claude 4.7), and Claude adds a hidden system prompt of about 600 tokens when tools
-/// are defined. Other providers land close to o200k.
+/// are defined.
 pub fn num_tokens<'a>(
 	model: &str,
 	messages: &[NormalizedMessage],
 	tools: impl IntoIterator<Item = &'a Value>,
 ) -> u64 {
-	let bpe = o200k_base();
+	let (bpe, claude) = match model_tokenizer(model) {
+		Some(bpe) => (bpe, None),
+		None => (o200k_base(), claude_version(model)),
+	};
 	let mut content = 0;
 	for part in messages.iter().flat_map(|m| &m.parts) {
 		content += match part.r#type {
@@ -38,7 +41,6 @@ pub fn num_tokens<'a>(
 		content += count_json(bpe, tool);
 	}
 
-	let claude = claude_version(model);
 	let multiplier = match claude {
 		Some(version) if version >= (4, 7) => 1.6,
 		Some(_) => 1.3,
@@ -90,6 +92,17 @@ fn claude_version(model: &str) -> Option<(u32, u32)> {
 
 pub fn preload_tokenizers() {
 	let _ = o200k_base();
+}
+
+fn model_tokenizer(model: &str) -> Option<&'static CoreBpe> {
+	let model = model.rsplit('/').next().unwrap_or(model);
+	match tiktoken::model_to_encoding(model) {
+		Some(
+			encoding @ ("deepseek_v3" | "deepseek_v4" | "glm4" | "glm5" | "kimi_k2" | "kimi_k3" | "qwen2"
+			| "qwen3_5" | "minimax_m2"),
+		) => tiktoken::get_encoding(encoding),
+		_ => None,
+	}
 }
 
 fn o200k_base() -> &'static CoreBpe {

@@ -229,7 +229,14 @@ subtle = "2"
 sync_wrapper = "1"
 tempfile = "3.27"
 thiserror = "2.0"
-tiktoken = { version = "5.0.1", default-features = false, features = ["vocab-o200k_base"] }
+tiktoken = { version = "5.0.1", default-features = false, features = [
+    "vocab-o200k_base",
+    "vocab-deepseek",
+    "vocab-moonshot",
+    "vocab-zhipu",
+    "vocab-qwen",
+    "vocab-minimax",
+] }
 tokio = { version = "1.53", features = ["full", "macros", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["tls12", "logging"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
