@@ -180,6 +180,16 @@
                 "cacheRead": "0.025",
                 "reasoning": "1.50"
               }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "0.275",
+                "output": "1.65",
+                "cacheRead": "0.0275",
+                "reasoning": "1.65"
+              }
             }
           ]
         },
@@ -196,6 +206,17 @@
               }
             },
             {
+              "serviceTier": "priority",
+              "region": "regional",
+              "rates": {
+                "input": "0.495",
+                "output": "2.97",
+                "cacheRead": "0.0495",
+                "reasoning": "2.97",
+                "inputAudio": "0.99"
+              }
+            },
+            {
               "serviceTier": "flex",
               "rates": {
                 "input": "0.125",
@@ -203,6 +224,17 @@
                 "cacheRead": "0.0125",
                 "reasoning": "0.75",
                 "inputAudio": "0.25"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "0.1375",
+                "output": "0.825",
+                "cacheRead": "0.01375",
+                "reasoning": "0.825",
+                "inputAudio": "0.275"
               }
             }
           ]
@@ -277,6 +309,17 @@
               }
             },
             {
+              "serviceTier": "priority",
+              "region": "regional",
+              "rates": {
+                "input": "2.97",
+                "output": "17.82",
+                "cacheRead": "0.297",
+                "reasoning": "17.82",
+                "inputAudio": "2.97"
+              }
+            },
+            {
               "serviceTier": "flex",
               "rates": {
                 "input": "0.75",
@@ -284,6 +327,27 @@
                 "cacheRead": "0.075",
                 "reasoning": "4.50",
                 "inputAudio": "0.75"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "0.825",
+                "output": "4.95",
+                "cacheRead": "0.0825",
+                "reasoning": "4.95",
+                "inputAudio": "0.825"
+              }
+            },
+            {
+              "region": "regional",
+              "rates": {
+                "input": "1.65",
+                "output": "9.90",
+                "cacheRead": "0.165",
+                "reasoning": "9.90",
+                "inputAudio": "1.65"
               }
             }
           ]
@@ -301,6 +365,17 @@
               }
             },
             {
+              "serviceTier": "priority",
+              "region": "regional",
+              "rates": {
+                "input": "0.594",
+                "output": "4.95",
+                "cacheRead": "0.0594",
+                "reasoning": "4.95",
+                "inputAudio": "0.594"
+              }
+            },
+            {
               "serviceTier": "flex",
               "rates": {
                 "input": "0.15",
@@ -308,6 +383,17 @@
                 "cacheRead": "0.015",
                 "reasoning": "1.25",
                 "inputAudio": "0.15"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "0.165",
+                "output": "1.375",
+                "cacheRead": "0.0165",
+                "reasoning": "1.375",
+                "inputAudio": "0.165"
               }
             }
           ]
@@ -325,6 +411,17 @@
               }
             },
             {
+              "serviceTier": "priority",
+              "region": "regional",
+              "rates": {
+                "input": "1.485",
+                "output": "7.425",
+                "cacheRead": "0.1485",
+                "reasoning": "7.425",
+                "inputAudio": "1.485"
+              }
+            },
+            {
               "serviceTier": "flex",
               "rates": {
                 "input": "0.375",
@@ -332,6 +429,17 @@
                 "cacheRead": "0.0375",
                 "reasoning": "1.875",
                 "inputAudio": "0.375"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "0.4125",
+                "output": "2.0625",
+                "cacheRead": "0.04125",
+                "reasoning": "2.0625",
+                "inputAudio": "0.4125"
               }
             }
           ]
@@ -349,6 +457,17 @@
               }
             },
             {
+              "serviceTier": "priority",
+              "region": "regional",
+              "rates": {
+                "input": "1.485",
+                "output": "7.425",
+                "cacheRead": "0.1485",
+                "reasoning": "7.425",
+                "inputAudio": "1.485"
+              }
+            },
+            {
               "serviceTier": "flex",
               "rates": {
                 "input": "0.375",
@@ -356,6 +475,17 @@
                 "cacheRead": "0.0375",
                 "reasoning": "1.875",
                 "inputAudio": "0.375"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "0.4125",
+                "output": "2.0625",
+                "cacheRead": "0.04125",
+                "reasoning": "2.0625",
+                "inputAudio": "0.4125"
               }
             }
           ]
@@ -373,6 +503,17 @@
               }
             },
             {
+              "serviceTier": "priority",
+              "region": "regional",
+              "rates": {
+                "input": "1.485",
+                "output": "7.425",
+                "cacheRead": "0.1485",
+                "reasoning": "7.425",
+                "inputAudio": "1.485"
+              }
+            },
+            {
               "serviceTier": "flex",
               "rates": {
                 "input": "0.375",
@@ -380,6 +521,17 @@
                 "cacheRead": "0.0375",
                 "reasoning": "1.875",
                 "inputAudio": "0.375"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "0.4125",
+                "output": "2.0625",
+                "cacheRead": "0.04125",
+                "reasoning": "2.0625",
+                "inputAudio": "0.4125"
               }
             }
           ]
@@ -397,6 +549,17 @@
               }
             },
             {
+              "serviceTier": "priority",
+              "region": "regional",
+              "rates": {
+                "input": "2.97",
+                "output": "14.85",
+                "cacheRead": "0.297",
+                "reasoning": "14.85",
+                "inputAudio": "2.97"
+              }
+            },
+            {
               "serviceTier": "flex",
               "rates": {
                 "input": "0.75",
@@ -404,6 +567,83 @@
                 "cacheRead": "0.075",
                 "reasoning": "3.75",
                 "inputAudio": "0.75"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "0.825",
+                "output": "4.125",
+                "cacheRead": "0.0825",
+                "reasoning": "4.125",
+                "inputAudio": "0.825"
+              }
+            },
+            {
+              "region": "regional",
+              "rates": {
+                "input": "1.65",
+                "output": "8.25",
+                "cacheRead": "0.165",
+                "reasoning": "8.25",
+                "inputAudio": "1.65"
+              }
+            }
+          ]
+        },
+        "gemini-4-argon": {
+          "tiers": [
+            {
+              "region": "regional",
+              "rates": {
+                "input": "2.20",
+                "output": "11.00",
+                "cacheRead": "0.11",
+                "reasoning": "11.00",
+                "inputAudio": "2.20"
+              }
+            },
+            {
+              "serviceTier": "priority",
+              "rates": {
+                "input": "3.60",
+                "output": "18.00",
+                "cacheRead": "0.18",
+                "reasoning": "18.00",
+                "inputAudio": "3.60"
+              }
+            },
+            {
+              "serviceTier": "priority",
+              "region": "regional",
+              "rates": {
+                "input": "3.96",
+                "output": "19.80",
+                "cacheRead": "0.198",
+                "reasoning": "19.80",
+                "inputAudio": "3.96"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "rates": {
+                "input": "1.00",
+                "output": "5.00",
+                "cacheRead": "0.05",
+                "reasoning": "5.00",
+                "inputAudio": "1.00"
+              }
+            },
+            {
+              "serviceTier": "flex",
+              "region": "regional",
+              "rates": {
+                "input": "1.10",
+                "output": "5.50",
+                "cacheRead": "0.055",
+                "reasoning": "5.50",
+                "inputAudio": "1.10"
               }
             }
           ]

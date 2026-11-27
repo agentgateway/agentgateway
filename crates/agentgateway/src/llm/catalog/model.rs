@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use super::PricingTier;
+use super::{PricingRegion, PricingTier};
 use crate::llm::{Provider as _, azure, vertex};
 
 // Unknown fields are captured rather than denied by serde, so catalogs from newer versions can be
@@ -94,11 +94,12 @@ impl Catalog {
 						&format_args!("{provider}/{model} tier {index} rates"),
 						&tier.rates.unknown,
 					)?;
-					if let Some(prior) = previous.insert(tier.service_tier.as_ref(), tier.context_over)
+					if let Some(prior) =
+						previous.insert((tier.service_tier.as_ref(), tier.region), tier.context_over)
 						&& tier.context_over <= prior
 					{
 						anyhow::bail!(
-							"{provider}/{model}: tier {index} contextOver must increase within its serviceTier"
+							"{provider}/{model}: tier {index} contextOver must increase within its serviceTier and region"
 						);
 					}
 				}
@@ -115,10 +116,25 @@ impl Catalog {
 				let merged = match base.models.remove(&mid) {
 					Some(mut bm) => {
 						bm.rates = bm.rates.overlay(&om.rates);
+						// Base regional tiers for standard traffic are premiums over the base rates, so a
+						// rate the overlay sets replaces them too; otherwise the list price would override
+						// the configured one on regional endpoints. Rates the overlay leaves unset keep
+						// their regional premium.
+						for tier in &mut bm.tiers {
+							if tier.region.is_some()
+								&& matches!(tier.service_tier, None | Some(PricingTier::Standard))
+							{
+								tier.rates = tier.rates.without(&om.rates);
+							}
+						}
 						if !om.tiers.is_empty() {
-							// Replace each supplied service tier while preserving other service tiers.
-							bm.tiers
-								.retain(|t| !om.tiers.iter().any(|o| o.service_tier == t.service_tier));
+							// Replace each supplied service tier and region while preserving the others.
+							bm.tiers.retain(|t| {
+								!om
+									.tiers
+									.iter()
+									.any(|o| o.service_tier == t.service_tier && o.region == t.region)
+							});
 							bm.tiers.extend(om.tiers);
 						}
 						bm.tags.extend(om.tags);
@@ -290,7 +306,9 @@ pub struct Model {
 	/// Client endpoints the model serves; absent means a chat model.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub endpoints: Option<Vec<String>>,
-	/// Base pricing rates for this model.
+	/// Base pricing rates for this model. In an override catalog, a rate set here also replaces that
+	/// rate in the base catalog's regional tiers for standard traffic, so the configured price
+	/// applies on regional endpoints too. Add regional `tiers` to the override to price those.
 	#[serde(default, skip_serializing_if = "Rates::is_empty")]
 	pub rates: Rates,
 	/// Pricing rules ordered by increasing context threshold within each service tier.
@@ -489,6 +507,29 @@ impl Rates {
 			unknown: Unknown::new(),
 		}
 	}
+
+	/// Clears every rate `delta` sets, so lower layers supply it instead.
+	pub fn without(&self, delta: &Rates) -> Rates {
+		let keep = |base: &Option<Money>, d: &Option<Money>| base.clone().filter(|_| d.is_none());
+		Rates {
+			input: keep(&self.input, &delta.input),
+			output: keep(&self.output, &delta.output),
+			cache_read: keep(&self.cache_read, &delta.cache_read),
+			cache_write: keep(&self.cache_write, &delta.cache_write),
+			cache_write_details: self
+				.cache_write_details
+				.iter()
+				.filter(|(k, _)| !delta.cache_write_details.contains_key(*k))
+				.map(|(k, v)| (k.clone(), v.clone()))
+				.collect(),
+			reasoning: keep(&self.reasoning, &delta.reasoning),
+			input_audio: keep(&self.input_audio, &delta.input_audio),
+			output_audio: keep(&self.output_audio, &delta.output_audio),
+			per_page: keep(&self.per_page, &delta.per_page),
+			per_audio_minute: keep(&self.per_audio_minute, &delta.per_audio_minute),
+			unknown: Unknown::new(),
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -502,6 +543,9 @@ pub struct Tier {
 	/// Normalized served service tier; absent matches any service tier.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<PricingTier>,
+	/// Region the request was served in; absent matches any region.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub region: Option<PricingRegion>,
 	/// Pricing rates for this tier, overlaid on the base model rates.
 	pub rates: Rates,
 	/// Fields not understood by this version.
@@ -674,20 +718,42 @@ impl Model {
 	#[cfg(test)]
 	pub fn breakdown(&self, usage: &Usage) -> Breakdown {
 		self
-			.effective_rates(usage.context_tokens(), &PricingTier::Standard)
+			.effective_rates(usage.context_tokens(), &PricingTier::Standard, None)
 			.breakdown(usage)
 	}
 
-	pub(super) fn effective_rates(&self, context_tokens: u64, service_tier: &PricingTier) -> Rates {
-		let select = |service_tier: Option<&PricingTier>| {
+	pub(super) fn effective_rates(
+		&self,
+		context_tokens: u64,
+		service_tier: &PricingTier,
+		region: Option<PricingRegion>,
+	) -> Rates {
+		let select = |service_tier: Option<&PricingTier>, region: Option<PricingRegion>| {
 			self.tiers.iter().rev().find(|tier| {
-				tier.service_tier.as_ref() == service_tier && context_tokens > tier.context_over
+				tier.service_tier.as_ref() == service_tier
+					&& tier.region == region
+					&& context_tokens > tier.context_over
 			})
+		};
+		// Region rates overlay the tier for the same service tier, unless that tier has a higher
+		// context threshold: long-context pricing outweighs the regional premium.
+		let layer = |service_tier: Option<&PricingTier>| {
+			let mut tiers = [
+				select(service_tier, None),
+				region.and_then(|region| select(service_tier, Some(region))),
+			];
+			if let [Some(any_region), Some(regional)] = tiers
+				&& any_region.context_over > regional.context_over
+			{
+				tiers.swap(0, 1);
+			}
+			tiers
 		};
 		// Service-tier rates overlay the context tier, so components a service tier omits use the
 		// context-appropriate standard rate.
-		[select(None), select(Some(service_tier))]
+		layer(None)
 			.into_iter()
+			.chain(layer(Some(service_tier)))
 			.flatten()
 			.fold(self.rates.clone(), |rates, tier| rates.overlay(&tier.rates))
 	}
@@ -725,6 +791,7 @@ mod tests {
 		Tier {
 			context_over,
 			service_tier: None,
+			region: None,
 			rates,
 			unknown: Unknown::new(),
 		}
@@ -771,7 +838,7 @@ mod tests {
 		assert!(
 			!mini
 				.unwrap()
-				.effective_rates(0, &PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard, None)
 				.is_empty(),
 			"and is priced"
 		);
@@ -939,7 +1006,7 @@ mod tests {
 			"rates":{"input":"1","future":"2"},
 			"tiers":[
 				{"contextOver":100,"rates":{"input":"3","future":"4"}},
-				{"contextOver":100,"region":"us","rates":{"input":"5"}}
+				{"contextOver":100,"future":"x","rates":{"input":"5"}}
 			]}}}}}"#;
 		assert!(from_json(json).is_err());
 		let mut catalog: Catalog = serde_json::from_str(json).unwrap();
@@ -1205,6 +1272,201 @@ mod tests {
 		assert_eq!(e.price(&u), d("2.4"));
 	}
 
+	fn vertex_model(tiers: &str) -> Model {
+		from_json(&format!(
+			r#"{{"providers":{{"gcp.vertex_ai":{{"models":{{"m":{{
+				"rates":{{"input":"1","output":"10"}},
+				"tiers":[{tiers}]
+			}}}}}}}}}}"#
+		))
+		.unwrap()
+		.providers["gcp.vertex_ai"]
+			.models["m"]
+			.clone()
+	}
+
+	#[test]
+	fn region_tiers_apply_only_to_their_region() {
+		let model = vertex_model(r#"{"region":"regional","rates":{"input":"1.1"}}"#);
+		let rates = |region| model.effective_rates(1_000, &PricingTier::Standard, region);
+		assert_eq!(rates(None).input, Some(m("1")));
+		assert_eq!(rates(Some(PricingRegion::Global)).input, Some(m("1")));
+		assert_eq!(rates(Some(PricingRegion::Regional)).input, Some(m("1.1")));
+		assert_eq!(rates(Some(PricingRegion::Regional)).output, Some(m("10")));
+		assert_eq!(
+			serde_json::to_value(&model.tiers[0]).unwrap()["region"],
+			"regional"
+		);
+	}
+
+	#[test]
+	fn region_tiers_follow_context_thresholds() {
+		let model = vertex_model(
+			r#"{"contextOver":200000,"rates":{"input":"2"}},
+			{"region":"regional","rates":{"input":"1.1"}},
+			{"region":"regional","contextOver":200000,"rates":{"input":"2.2"}}"#,
+		);
+		let input = |tokens, region| {
+			model
+				.effective_rates(tokens, &PricingTier::Standard, region)
+				.input
+		};
+		assert_eq!(
+			input(100_000, Some(PricingRegion::Regional)),
+			Some(m("1.1"))
+		);
+		assert_eq!(
+			input(300_000, Some(PricingRegion::Regional)),
+			Some(m("2.2"))
+		);
+		assert_eq!(input(300_000, Some(PricingRegion::Global)), Some(m("2")));
+		assert_eq!(input(300_000, None), Some(m("2")));
+	}
+
+	#[test]
+	fn long_context_tier_outranks_shorter_region_tier() {
+		let model = vertex_model(
+			r#"{"contextOver":200000,"rates":{"input":"2"}},
+			{"region":"regional","rates":{"input":"1.1","output":"11"}}"#,
+		);
+		let rates = |tokens| {
+			model.effective_rates(
+				tokens,
+				&PricingTier::Standard,
+				Some(PricingRegion::Regional),
+			)
+		};
+		assert_eq!(rates(100_000).input, Some(m("1.1")));
+		assert_eq!(rates(300_000).input, Some(m("2")));
+		assert_eq!(rates(300_000).output, Some(m("11")));
+	}
+
+	#[test]
+	fn region_tiers_combine_with_service_tiers() {
+		let model = vertex_model(
+			r#"{"region":"regional","rates":{"input":"1.1"}},
+			{"serviceTier":"flex","rates":{"input":"0.5"}},
+			{"serviceTier":"flex","region":"regional","rates":{"input":"0.55"}}"#,
+		);
+		let input = |tier, region| model.effective_rates(1_000, tier, Some(region)).input;
+		assert_eq!(
+			input(&PricingTier::Flex, PricingRegion::Regional),
+			Some(m("0.55"))
+		);
+		assert_eq!(
+			input(&PricingTier::Flex, PricingRegion::Global),
+			Some(m("0.5"))
+		);
+		assert_eq!(
+			input(&PricingTier::Standard, PricingRegion::Regional),
+			Some(m("1.1"))
+		);
+		assert_eq!(
+			input(&PricingTier::Priority, PricingRegion::Regional),
+			Some(m("1.1"))
+		);
+	}
+
+	#[test]
+	fn override_replaces_tiers_with_the_same_service_tier_and_region() {
+		let merged = override_catalog(
+			r#"{"input":"1"}"#,
+			r#"{"region":"regional","rates":{"input":"1.1"}},
+			{"serviceTier":"flex","rates":{"input":"0.5"}},
+			{"serviceTier":"flex","region":"regional","rates":{"input":"0.55"}}"#,
+		)
+		.override_with(override_catalog(
+			"{}",
+			r#"{"serviceTier":"flex","rates":{"input":"0.4"}}"#,
+		));
+		let model = &merged.providers["gcp.vertex_ai"].models["m"];
+		let input = |tier, region| model.effective_rates(1_000, tier, Some(region)).input;
+		assert_eq!(
+			input(&PricingTier::Flex, PricingRegion::Global),
+			Some(m("0.4"))
+		);
+		assert_eq!(
+			input(&PricingTier::Flex, PricingRegion::Regional),
+			Some(m("0.55"))
+		);
+		assert_eq!(
+			input(&PricingTier::Standard, PricingRegion::Regional),
+			Some(m("1.1"))
+		);
+	}
+
+	#[test]
+	fn override_rates_replace_base_regional_rates() {
+		let merged = override_catalog(
+			r#"{"input":"1","output":"10"}"#,
+			r#"{"region":"regional","rates":{"input":"1.1","output":"11"}},
+			{"region":"regional","contextOver":200000,"rates":{"input":"2.2"}},
+			{"serviceTier":"flex","region":"regional","rates":{"input":"0.55"}}"#,
+		)
+		.override_with(override_catalog(r#"{"input":"0.8"}"#, ""));
+		let model = &merged.providers["gcp.vertex_ai"].models["m"];
+		let rates = |tokens, tier| model.effective_rates(tokens, tier, Some(PricingRegion::Regional));
+
+		let standard = rates(1_000, &PricingTier::Standard);
+		assert_eq!(standard.input, Some(m("0.8")));
+		// The overlay left output unset, so it keeps its regional premium.
+		assert_eq!(standard.output, Some(m("11")));
+		assert_eq!(rates(300_000, &PricingTier::Standard).input, Some(m("0.8")));
+		// The overlay only priced standard traffic, so other service tiers keep their regional rates.
+		assert_eq!(rates(1_000, &PricingTier::Flex).input, Some(m("0.55")));
+	}
+
+	#[test]
+	fn override_tiers_can_set_their_own_regional_price() {
+		let merged = override_catalog(
+			r#"{"input":"1"}"#,
+			r#"{"region":"regional","rates":{"input":"1.1"}}"#,
+		)
+		.override_with(override_catalog(
+			r#"{"input":"0.8"}"#,
+			r#"{"region":"regional","rates":{"input":"0.9"}}"#,
+		));
+		let model = &merged.providers["gcp.vertex_ai"].models["m"];
+		assert_eq!(
+			model
+				.effective_rates(1_000, &PricingTier::Standard, Some(PricingRegion::Regional))
+				.input,
+			Some(m("0.9"))
+		);
+	}
+
+	fn override_catalog(rates: &str, tiers: &str) -> Catalog {
+		serde_json::from_str(&format!(
+			r#"{{"providers":{{"gcp.vertex_ai":{{"models":{{"m":{{"rates":{rates},"tiers":[{tiers}]}}}}}}}}}}"#
+		))
+		.unwrap()
+	}
+
+	#[test]
+	fn validates_region_rule_order() {
+		let catalog = |tiers: &str| {
+			from_json(&format!(
+				r#"{{"providers":{{"gcp.vertex_ai":{{"models":{{"m":{{"tiers":[{tiers}]}}}}}}}}}}"#
+			))
+		};
+		assert!(
+			catalog(r#"{"contextOver":200000,"rates":{}},{"region":"regional","rates":{}}"#).is_ok()
+		);
+		assert!(
+			catalog(
+				r#"{"region":"regional","rates":{}},{"region":"regional","contextOver":200000,"rates":{}}"#
+			)
+			.is_ok()
+		);
+		assert!(
+			catalog(
+				r#"{"region":"regional","contextOver":200000,"rates":{}},{"region":"regional","rates":{}}"#
+			)
+			.is_err()
+		);
+		assert!(catalog(r#"{"region":"us","rates":{}}"#).is_err());
+	}
+
 	#[test]
 	fn validates_rule_order() {
 		let catalog = |tiers: &str| {
@@ -1262,30 +1524,30 @@ mod tests {
 		};
 		assert!(
 			entry(Rates::default(), vec![])
-				.effective_rates(0, &PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard, None)
 				.is_empty()
 		);
 		assert!(
 			!entry(input_rate.clone(), vec![])
-				.effective_rates(0, &PricingTier::Standard)
+				.effective_rates(0, &PricingTier::Standard, None)
 				.is_empty()
 		);
 
 		let tier_only = entry(Rates::default(), vec![tier(100_000, input_rate)]);
 		assert!(
 			tier_only
-				.effective_rates(100_000, &PricingTier::Standard)
+				.effective_rates(100_000, &PricingTier::Standard, None)
 				.is_empty()
 		);
 		assert!(
 			!tier_only
-				.effective_rates(100_001, &PricingTier::Standard)
+				.effective_rates(100_001, &PricingTier::Standard, None)
 				.is_empty()
 		);
 
 		assert!(
 			entry(Rates::default(), vec![tier(100_000, Rates::default())])
-				.effective_rates(100_001, &PricingTier::Standard)
+				.effective_rates(100_001, &PricingTier::Standard, None)
 				.is_empty()
 		);
 	}

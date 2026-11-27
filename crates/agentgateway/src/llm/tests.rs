@@ -1399,6 +1399,75 @@ fn vertex_backend_info() -> crate::http::auth::BackendInfo {
 }
 
 #[tokio::test]
+async fn vertex_requests_record_backend_region() {
+	for region in [None, Some("global"), Some("us-central1"), Some("us")] {
+		let provider = AIProvider::Vertex(vertex::Provider {
+			model_override: None,
+			region: region.map(strng::new),
+			project_id: strng::new("test-project"),
+		});
+		let req = gemini_generate_content_request(
+			"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
+		);
+		let RequestResult::Success { llm_request, .. } = provider
+			.process_gemini_request(&vertex_backend_info(), None, req, false, &mut None, None)
+			.await
+			.expect("generateContent request should process")
+		else {
+			panic!("expected forwarded request");
+		};
+		// An unset region uses the global endpoint.
+		let expected = region.or(Some("global"));
+		assert_eq!(llm_request.region.as_deref(), expected, "generateContent");
+
+		let req = ::http::Request::builder()
+			.uri("/v1/chat/completions")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(
+				br#"{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "hello"}]}"#
+					.to_vec(),
+			))
+			.unwrap();
+		let RequestResult::Success { llm_request, .. } = provider
+			.process_completions_request(&vertex_backend_info(), None, req, false, &mut None, None)
+			.await
+			.expect("completions request should process")
+		else {
+			panic!("expected forwarded request");
+		};
+		assert_eq!(llm_request.region.as_deref(), expected, "completions");
+	}
+}
+
+#[tokio::test]
+async fn non_vertex_requests_record_no_region() {
+	let provider = custom_provider(custom::ProviderFormat::GenerateContent);
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "hello"}]}"#
+				.to_vec(),
+		))
+		.unwrap();
+	let RequestResult::Success { llm_request, .. } = provider
+		.process_completions_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
+		.await
+		.expect("completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(llm_request.region, None);
+}
+
+#[tokio::test]
 async fn gemini_generate_content_forwards_unknown_top_level_fields() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		model_override: None,
