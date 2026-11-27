@@ -182,8 +182,9 @@ pub enum RouteType {
 	SystemOne,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize)]
 pub enum InputFormat {
+	#[default]
 	Completions,
 	Messages,
 	Responses,
@@ -269,7 +270,7 @@ impl ChatFormat {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct LLMRequest {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
@@ -287,6 +288,10 @@ pub struct LLMRequest {
 	pub prompt: Option<Arc<Vec<SimpleChatCompletionMessage>>>,
 	#[serde(skip)]
 	pub provider_state: Option<ProviderState>,
+	/// A native Gemini `:streamGenerateContent` without `?alt=sse`: the client expects the stream as
+	/// a JSON array rather than SSE.
+	#[serde(skip)]
+	pub gemini_json_stream: bool,
 }
 
 #[derive(Debug, Clone)]

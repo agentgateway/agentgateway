@@ -527,7 +527,10 @@ func (s *DiscoveryServer) processDeltaRequest(req *discovery.DeltaDiscoveryReque
 	stype := GetShortType(req.TypeUrl)
 	log.Debug("ADS: REQ resources", "type", stype, "connection", con.ID(), "subscribe", len(req.ResourceNamesSubscribe), "unsubscribe", len(req.ResourceNamesUnsubscribe), "nonce", req.ResponseNonce)
 
-	shouldRespond := shouldRespondDelta(con, req, s.nackPublisher)
+	shouldRespond, err := shouldRespondDelta(con, req, s.nackPublisher)
+	if err != nil {
+		return err
+	}
 	if !shouldRespond {
 		log.Debug("no response needed")
 		return nil
@@ -544,21 +547,21 @@ func (s *DiscoveryServer) processDeltaRequest(req *discovery.DeltaDiscoveryReque
 		},
 	}
 
-	err := s.pushDeltaXds(con, con.proxy.GetWatchedResource(req.TypeUrl), request)
-	if err != nil {
-		return err
-	}
-	return nil
+	return s.pushDeltaXds(con, con.proxy.GetWatchedResource(req.TypeUrl), request)
 }
 
 // shouldRespondDelta determines whether this request needs to be responded back. It applies the ack/nack rules as per xds protocol
 // using WatchedResource for previous state and discovery request for the current state.
-func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryRequest, nackPublisher *nack.Publisher) bool {
+func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryRequest, nackPublisher *nack.Publisher) (bool, error) {
 	stype := GetShortType(request.TypeUrl)
+	previousInfo := con.proxy.GetWatchedResource(request.TypeUrl)
 
 	// Feedback is reported even for an expired nonce: a later response may not have replaced the
 	// resources it describes.
 	if request.ErrorDetail != nil {
+		if previousInfo == nil {
+			return false, status.Errorf(codes.InvalidArgument, "diagnostic feedback for unwatched resource type %q", request.TypeUrl)
+		}
 		message := request.ErrorDetail.GetMessage()
 		// nolint: gosec // error side is bounded
 		errCode := codes.Code(request.ErrorDetail.Code)
@@ -598,12 +601,11 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 				}
 				nackPublisher.PublishNack(&nackEvent)
 			}
-			return false
+			return false, nil
 		}
 	}
 
 	log.Debug("ADS: REQUEST", "type", stype, "connection", con.ID(), "subscribe", request.ResourceNamesSubscribe, "unsubscribe", request.ResourceNamesUnsubscribe, "initial", request.InitialResourceVersions)
-	previousInfo := con.proxy.GetWatchedResource(request.TypeUrl)
 
 	// This can happen in two cases:
 	// 1. Envoy initially send request to Istiod
@@ -633,7 +635,7 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 			ResourceNames: res,
 			Wildcard:      wildcard,
 		}
-		return true
+		return true, nil
 	}
 
 	// If there is mismatch in the nonce, that is a case of expired/stale nonce.
@@ -641,7 +643,7 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 	if request.ResponseNonce != "" && request.ResponseNonce != previousInfo.NonceSent {
 		log.Debug("ADS: REQ Expired nonce received", "type", stype, "connection", con.ID(), "received", request.ResponseNonce, "sent", previousInfo.NonceSent)
 		//xds.ExpiredNonce.With(typeTag.Value(v3.GetMetricType(request.TypeUrl))).Increment()
-		return false
+		return false, nil
 	}
 
 	// Spontaneous DeltaDiscoveryRequests from the client.
@@ -683,15 +685,15 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 		// even though Nonce match and it looks like an ACK.
 		if alwaysRespond {
 			log.Info("ADS: FORCE RESPONSE for warming", "type", stype, "connection", con.ID())
-			return true
+			return true, nil
 		}
 
 		log.Debug("ADS: ACK", "type", stype, "connection", con.ID(), "nonce", request.ResponseNonce)
-		return false
+		return false, nil
 	}
 	log.Debug("ADS: RESOURCE CHANGE", "type", stype, "connection", con.ID(), "nonce", request.ResponseNonce)
 
-	return true
+	return true, nil
 }
 
 // Push a Delta XDS resource for the given connection.

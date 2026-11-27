@@ -11,7 +11,6 @@ use anyhow::anyhow;
 use hashbrown::Equivalent;
 use heck::ToSnakeCase;
 use once_cell::sync::Lazy;
-use openapiv3::OpenAPI;
 use prometheus_client::encoding::EncodeLabelValue;
 use regex::Regex;
 use rustls::ServerConfig;
@@ -737,6 +736,10 @@ pub enum ListenerProtocol {
 }
 
 impl ListenerProtocol {
+	pub fn is_https(&self) -> bool {
+		matches!(self, ListenerProtocol::HTTPS(_))
+	}
+
 	pub async fn tls(
 		&self,
 		tls: Option<&frontend::TLS>,
@@ -2117,7 +2120,7 @@ pub struct OpenAPITarget {
 	pub backend: SimpleBackendReference,
 	#[serde(skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
-	pub schema: Arc<OpenAPI>,
+	pub(crate) tools: crate::mcp::OpenAPITools,
 	/// Path prepended to each operation path.
 	pub prefix: String,
 }

@@ -1234,16 +1234,11 @@ mod tests {
 	fn test_llm_info(request_model: &str, provider_model: Option<&str>) -> LLMInfo {
 		LLMInfo {
 			request: crate::llm::LLMRequest {
-				input_tokens: None,
 				input_format: crate::llm::InputFormat::Completions,
 				cache_convention: CacheTokenConvention::InputIncludesCache,
 				request_model: request_model.into(),
-				original_model: None,
 				provider: "openai".into(),
-				streaming: false,
-				params: Default::default(),
-				prompt: None,
-				provider_state: None,
+				..Default::default()
 			},
 			response: LLMResponse {
 				input_tokens: Some(1_000_000),
@@ -2214,5 +2209,28 @@ mod tests {
 		.await
 		.unwrap_err();
 		assert!(err.to_string().contains("invalid inline model catalog"));
+	}
+
+	#[test]
+	fn builtin_vertex_claude_models_resolve_from_response_model() {
+		let catalog = model::from_json(BUILTIN_CATALOG_JSON).unwrap();
+		let provider = vertex::Provider::NAME;
+		let keys: Vec<&String> = catalog.providers[provider.as_str()]
+			.models
+			.keys()
+			.filter(|k| k.starts_with("claude-"))
+			.collect();
+		assert!(!keys.is_empty());
+		for key in keys {
+			let returned = match key.split_once('@') {
+				Some((name, "default")) => name.to_string(),
+				Some((name, date)) => format!("{name}-{date}"),
+				None => key.to_string(),
+			};
+			let (id, _) = catalog
+				.resolve_entry(&provider, &returned)
+				.unwrap_or_else(|| panic!("{returned} does not resolve"));
+			assert_eq!(id, key, "{returned}");
+		}
 	}
 }

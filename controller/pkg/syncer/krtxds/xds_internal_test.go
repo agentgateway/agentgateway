@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"google.golang.org/genproto/googleapis/rpc/status"
+	statuspb "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"istio.io/istio/pilot/pkg/model"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics/metricstest"
@@ -53,9 +55,13 @@ func TestDiagnosticFeedback(t *testing.T) {
 			}}}
 			req := &discovery.DeltaDiscoveryRequest{
 				TypeUrl: typeURL, ResponseNonce: tt.nonce,
-				ErrorDetail: &status.Status{Message: tt.message},
+				ErrorDetail: &statuspb.Status{Message: tt.message},
 			}
-			if shouldRespondDelta(con, req, nil) {
+			shouldRespond, err := shouldRespondDelta(con, req, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if shouldRespond {
 				t.Fatal("feedback should not trigger another response")
 			}
 			wr := con.proxy.GetWatchedResource(typeURL)
@@ -76,6 +82,38 @@ func TestDiagnosticFeedback(t *testing.T) {
 			m.AssertMetric("agentgateway_xds_warnings_total", &metricstest.ExpectedMetric{Value: tt.warnings})
 			m.AssertMetric("agentgateway_xds_rejects_total", &metricstest.ExpectedMetric{Value: tt.rejects})
 		})
+	}
+}
+
+func TestDiagnosticFeedbackWithoutWatch(t *testing.T) {
+	const typeURL = TargetTypeResourceUrl
+	server := &DiscoveryServer{}
+	unwatched := &Connection{proxy: &Proxy{WatchedResources: map[string]*model.WatchedResource{}}}
+	watching := &Connection{proxy: &Proxy{WatchedResources: map[string]*model.WatchedResource{
+		typeURL: {TypeUrl: typeURL, NonceSent: "nonce", LastError: "previous error"},
+	}}}
+
+	for _, message := range []string{"invalid backend", `[{"key":"bind/default","warn":"cipher skipped"}]`} {
+		err := server.processDeltaRequest(&discovery.DeltaDiscoveryRequest{
+			TypeUrl: typeURL, ErrorDetail: &statuspb.Status{Message: message},
+		}, unwatched)
+		if status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("expected InvalidArgument for feedback without a watch, got %v", err)
+		}
+	}
+	if wr := unwatched.proxy.GetWatchedResource(typeURL); wr != nil {
+		t.Fatalf("feedback created a watch: %#v", wr)
+	}
+	if wr := watching.proxy.GetWatchedResource(typeURL); wr.LastError != "previous error" {
+		t.Fatalf("feedback changed another connection's watch: %#v", wr)
+	}
+	if err := server.processDeltaRequest(&discovery.DeltaDiscoveryRequest{
+		TypeUrl: typeURL, ResponseNonce: "nonce",
+	}, watching); err != nil {
+		t.Fatal(err)
+	}
+	if wr := watching.proxy.GetWatchedResource(typeURL); wr.NonceAcked != "nonce" || wr.LastError != "" {
+		t.Fatalf("another connection could not acknowledge its response: %#v", wr)
 	}
 }
 

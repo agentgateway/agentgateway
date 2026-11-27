@@ -601,10 +601,11 @@ async fn connect_tunnel_terminates_outer_tls() {
 		}))
 		.await;
 		// Authorize the inner request only when the custom header carried on the
-		// (TLS-encrypted) CONNECT survived termination + re-entry.
+		// (TLS-encrypted) CONNECT survived termination + re-entry, and the inner
+		// plaintext request keeps the http scheme despite the outer TLS.
 		t.attach_route_policy(json!({
 			"authorization": {
-				"rules": ["source.connectHeaders[\"x-custom-header\"] == \"custom-value\""],
+				"rules": ["source.connectHeaders[\"x-custom-header\"] == \"custom-value\" && request.scheme == \"http\""],
 			},
 		}))
 		.await;

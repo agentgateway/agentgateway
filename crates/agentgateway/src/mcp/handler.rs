@@ -376,49 +376,45 @@ pub struct RelayInputs {
 }
 
 impl RelayInputs {
-	pub fn build_new_connections(
+	/// Builds the relay for a request. Targets, clients, and policies always come from these
+	/// inputs; `prev`, the session's existing relay, only supplies upstream connection state.
+	pub fn build(
 		self,
 		ctx: &upstream::IncomingRequestContext,
+		prev: Option<&Relay>,
 	) -> Result<Relay, mcp::Error> {
-		let r = Relay::new_for_request(self.backend, self.policies, self.client, ctx)?;
+		let client = PolicyClient::new(self.client.inputs.clone());
 		Ok(Relay {
+			upstreams: Arc::new(upstream::UpstreamGroup::new_for_request(
+				client.clone(),
+				self.backend,
+				ctx,
+				prev.map(|p| p.upstreams.as_ref()),
+			)?),
+			policies: self.policies,
 			mcp_guardrails: self.mcp_guardrails,
+			policy_client: client,
 			backend_id: Some(self.backend_id),
-			..r
 		})
 	}
 }
 
 impl Relay {
+	#[cfg(test)]
 	pub fn new_for_request(
 		backend: McpBackendGroup,
 		policies: McpAuthorizationSet,
 		client: PolicyClient,
 		ctx: &upstream::IncomingRequestContext,
 	) -> Result<Self, mcp::Error> {
-		let client = PolicyClient::new(client.inputs.clone());
-		Ok(Self {
-			upstreams: Arc::new(upstream::UpstreamGroup::new_for_request(
-				client.clone(),
-				backend,
-				ctx,
-			)?),
+		RelayInputs {
+			backend_id: ResourceName::new("test".into(), "".into()),
+			backend,
 			policies,
 			mcp_guardrails: None,
-			policy_client: client,
-			backend_id: None,
-		})
-	}
-	/// Rebind a reused session to the current route's policies; the session may have been
-	/// created on a different route to the same backend group.
-	pub fn with_inputs(&self, inputs: RelayInputs) -> Self {
-		Self {
-			upstreams: self.upstreams.clone(),
-			policies: inputs.policies,
-			mcp_guardrails: inputs.mcp_guardrails,
-			policy_client: PolicyClient::new(inputs.client.inputs.clone()),
-			backend_id: Some(inputs.backend_id),
+			client,
 		}
+		.build(ctx, None)
 	}
 
 	fn rewrite_outbound_server_messages(

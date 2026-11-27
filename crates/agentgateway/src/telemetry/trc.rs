@@ -1055,16 +1055,10 @@ mod tests {
 
 	fn test_llm_request() -> crate::llm::LLMRequest {
 		crate::llm::LLMRequest {
-			input_tokens: None,
 			input_format: crate::llm::InputFormat::Responses,
-			cache_convention: Default::default(),
 			request_model: "test-model".into(),
-			original_model: None,
 			provider: "test-provider".into(),
-			streaming: false,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
+			..Default::default()
 		}
 	}
 

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use agent_core::strng;
 use itertools::Itertools;
-use openapiv3::OpenAPI;
 use rmcp::RoleClient;
 use rmcp::model::{ClientJsonRpcMessage, InitializeRequestParams, RequestId};
 use rmcp::service::RunningService;
@@ -3806,6 +3805,78 @@ async fn stateful_session_reuse_applies_route_guardrails() {
 	assert_eq!(msg["result"]["content"][0]["text"], "denied by route b");
 }
 
+// `streamable` sessions are rebuilt from the session ID; `sse` sessions are held in memory.
+#[rstest::rstest]
+#[case::streamable(false)]
+#[case::sse(true)]
+#[tokio::test]
+async fn stateful_session_reuse_applies_route_backend_policies(#[case] legacy_sse: bool) {
+	let mock = if legacy_sse {
+		mock_sse_server().await
+	} else {
+		mock_streamable_http_server(true).await
+	};
+	let backend = strng::format!("/{}", mock.addr);
+	let deny_all = crate::types::agent::Authorization(Arc::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+		vec![],
+	))));
+
+	let mut route_a = basic_named_route(backend.clone());
+	route_a.key = "route-a".into();
+	route_a.name.name = "route-a".into();
+	route_a.matches[0].path = crate::types::agent::PathMatch::Exact("/a".into());
+	let mut route_b = basic_named_route(backend);
+	route_b.key = "route-b".into();
+	route_b.name.name = "route-b".into();
+	route_b.matches[0].path = crate::types::agent::PathMatch::Exact("/b".into());
+	route_b.backends[0].inline_policies = vec![BackendTrafficPolicy::Authorization(deny_all)];
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, legacy_sse)
+		.with_bind(simple_bind())
+		.with_route(route_a)
+		.with_route(route_b);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "scope-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/a"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let sid = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+
+	let list = serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"});
+	let send = |path: &str| {
+		mcp_json_post(&client, &format!("http://{io}{path}"), &list)
+			.header("mcp-protocol-version", "2025-06-18")
+			.header("mcp-session-id", &sid)
+			.send()
+	};
+	let allowed = read_response_message(send("/a").await.unwrap()).await;
+	assert!(allowed.get("result").is_some(), "{allowed}");
+
+	let reused = send("/b").await.unwrap();
+	assert_eq!(reused.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+}
+
 #[tokio::test]
 async fn persisted_stateful_session_cannot_cross_mcp_backends() {
 	let a = mock_streamable_http_server(true).await;
@@ -6956,7 +7027,7 @@ async fn test_zero_targets_fail_closed() {
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
 	let err =
-		crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx).unwrap_err();
+		crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx, None).unwrap_err();
 	assert!(matches!(err, crate::mcp::Error::NoBackends));
 }
 
@@ -6969,7 +7040,7 @@ async fn test_zero_targets_fail_open() {
 	};
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
-	crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx).unwrap();
+	crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx, None).unwrap();
 }
 
 #[tokio::test]
@@ -7008,7 +7079,8 @@ async fn test_setup_partial_success_fail_open() {
 	};
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
-	let group = crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx).unwrap();
+	let group =
+		crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx, None).unwrap();
 	assert_eq!(group.size(), 1);
 }
 
@@ -7048,7 +7120,7 @@ async fn test_all_targets_fail_open_still_errors() {
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
 	let err =
-		crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx).unwrap_err();
+		crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx, None).unwrap_err();
 	assert!(matches!(err, crate::mcp::Error::NoBackends));
 }
 
@@ -7089,16 +7161,6 @@ fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 }
 
 fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
-	let schema: OpenAPI = serde_json::from_value(serde_json::json!({
-		"openapi": "3.0.0",
-		"info": {
-			"title": "Test API",
-			"version": "1.0.0"
-		},
-		"paths": {}
-	}))
-	.expect("valid OpenAPI schema");
-
 	Arc::new(McpTarget {
 		name: name.into(),
 		condition: None,
@@ -7106,7 +7168,7 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
 				"/unused-{name}"
 			)),
-			schema: Arc::new(schema),
+			tools: Vec::new().into(),
 			prefix: String::new(),
 		}),
 		backend_policies: Default::default(),

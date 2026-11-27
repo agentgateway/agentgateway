@@ -11,7 +11,9 @@ use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 use itertools::Itertools;
 pub use openapi::ParseError as OpenAPIParseError;
-pub(crate) use openapi::{get_server_prefix as openapi_server_prefix, parse_openapi_schema};
+pub(crate) use openapi::{
+	OpenAPITools, get_server_prefix as openapi_server_prefix, parse_openapi_schema,
+};
 use opentelemetry::KeyValue;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, ExtensionCapabilities,
@@ -231,6 +233,16 @@ pub(crate) enum Upstream {
 }
 
 impl Upstream {
+	/// Takes over `prev`'s connection state: upstream session, pinned endpoint, and open stream.
+	fn adopt(&mut self, prev: &Upstream) {
+		match (self, prev) {
+			(Upstream::McpStreamable(c), Upstream::McpStreamable(p)) => c.adopt(p),
+			(Upstream::McpSSE(c), Upstream::McpSSE(p)) => c.adopt(p),
+			(Upstream::OpenAPI(c), Upstream::OpenAPI(p)) => c.adopt(p),
+			_ => {},
+		}
+	}
+
 	pub fn get_session_state(&self) -> Option<http::sessionpersistence::MCPSession> {
 		match self {
 			Upstream::McpStreamable(c) => Some(c.get_session_state()),
@@ -516,7 +528,7 @@ pub(crate) struct UpstreamGroup {
 
 	// per-target set of capabilities; we record the capabilities from a legacy
 	// target's initialize response so a modern client can see them in discover.
-	extensions: RwLock<HashMap<Strng, ExtensionCapabilities>>,
+	extensions: Arc<RwLock<HashMap<Strng, ExtensionCapabilities>>>,
 
 	// If we have one target and prefixMode is not Always, names and URIs pass
 	// through unchanged and all calls route to this target.
@@ -537,10 +549,13 @@ impl UpstreamGroup {
 		self.all_targets_conditioned_out
 	}
 
+	/// Builds the group from the request's backend and policies. With `prev`, the session's
+	/// existing group, each target continues that group's upstream connection.
 	pub(crate) fn new_for_request(
 		client: PolicyClient,
 		mut backend: McpBackendGroup,
 		ctx: &IncomingRequestContext,
+		prev: Option<&UpstreamGroup>,
 	) -> Result<Self, mcp::Error> {
 		let client = PolicyClient::new(client.inputs.clone());
 		let is_multiplexing = backend.targets.len() != 1;
@@ -560,12 +575,12 @@ impl UpstreamGroup {
 			backend,
 			client,
 			by_name: IndexMap::new(),
-			extensions: RwLock::new(HashMap::new()),
+			extensions: prev.map(|p| p.extensions.clone()).unwrap_or_default(),
 			default_target_name,
 			is_multiplexing,
 			all_targets_conditioned_out,
 		};
-		s.setup_connections()?;
+		s.setup_connections(prev)?;
 		if s.by_name.is_empty() {
 			if all_targets_conditioned_out {
 				return Ok(s);
@@ -599,12 +614,28 @@ impl UpstreamGroup {
 			})
 	}
 
-	pub(crate) fn setup_connections(&mut self) -> Result<(), mcp::Error> {
+	fn setup_connections(&mut self, prev: Option<&UpstreamGroup>) -> Result<(), mcp::Error> {
 		for tgt in &self.backend.targets {
 			debug!("initializing target: {}", tgt.name);
-			match self.setup_upstream(tgt.as_ref()) {
+			let prev = prev.and_then(|p| p.by_name.get(&tgt.name));
+			let transport = match prev {
+				// A stdio process is the connection itself.
+				Some(p)
+					if matches!(p.as_ref(), Upstream::McpStdio(_))
+						&& matches!(tgt.spec, McpTargetSpec::Stdio { .. }) =>
+				{
+					Ok(p.clone())
+				},
+				_ => self.setup_upstream(tgt.as_ref()).map(|mut transport| {
+					if let Some(p) = prev {
+						transport.adopt(p);
+					}
+					Arc::new(transport)
+				}),
+			};
+			match transport {
 				Ok(transport) => {
-					self.by_name.insert(tgt.name.clone(), Arc::new(transport));
+					self.by_name.insert(tgt.name.clone(), transport);
 				},
 				Err(e) => {
 					if self.failure_mode == FailureMode::FailOpen {
@@ -760,8 +791,6 @@ impl UpstreamGroup {
 				// Renamed for clarity
 				debug!("starting OpenAPI transport for target: {}", target.name);
 
-				let tools = openapi::parse_openapi_schema(&open.schema).map_err(mcp::Error::OpenAPI)?;
-
 				let http_client = McpHttpClient::new(
 					self.client.clone(),
 					target
@@ -774,7 +803,7 @@ impl UpstreamGroup {
 				);
 				upstream::Upstream::OpenAPI(Box::new(openapi::Handler::new(
 					http_client,
-					tools, // From parse_openapi_schema
+					open.tools.clone(),
 					open.prefix.clone(),
 				)))
 			},

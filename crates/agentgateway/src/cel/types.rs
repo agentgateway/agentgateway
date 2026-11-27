@@ -1847,6 +1847,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			params,
 			prompt,
 			provider_state: _,
+			gemini_json_stream: _,
 		} = info;
 		LLMContext {
 			streaming,

@@ -178,21 +178,44 @@ impl Catalog {
 	/// Like `resolve`, but also returns the catalog model ID that matched.
 	pub fn resolve_entry(&self, provider: &str, model: &str) -> Option<(&String, &Model)> {
 		let models = &self.providers.get(provider)?.models;
-		models.get_key_value(model).or_else(|| match provider {
-			p if p == vertex::Provider::NAME.as_str() => {
-				models.get_key_value(vertex::Provider::canonical_model(model).as_str())
-			},
-			p if p == azure::Provider::NAME.as_str() => {
+		models.get_key_value(model).or_else(|| {
+			let is_vertex = provider == vertex::Provider::NAME.as_str();
+			let model = match provider {
+				_ if is_vertex => vertex::Provider::canonical_model(model).to_string(),
 				// Azure deployment names are case-insensitive, and responses report dated model
 				// versions while the catalog is keyed by the undated lowercase model.
-				let model = model.to_ascii_lowercase();
-				models
-					.get_key_value(model.as_str())
-					.or_else(|| models.get_key_value(strip_version_date(&model)?))
-			},
-			_ => None,
+				p if p == azure::Provider::NAME.as_str() => model.to_ascii_lowercase(),
+				_ => model.to_string(),
+			};
+			models
+				.get_key_value(model.as_str())
+				.or_else(|| models.get_key_value(strip_version_date(&model)?))
+				.or_else(|| {
+					is_vertex
+						.then(|| vertex_family_entry(models, &model))
+						.flatten()
+				})
 		})
 	}
+}
+
+fn vertex_family_entry<'a>(
+	models: &'a BTreeMap<String, Model>,
+	model: &str,
+) -> Option<(&'a String, &'a Model)> {
+	let base = model.split_once('@').map_or(model, |(base, _)| base);
+	let prefix = format!("{}@", strip_version_date(base).unwrap_or(base));
+	models
+		.get_key_value(format!("{prefix}default").as_str())
+		.or_else(|| {
+			let mut versions = models
+				.range(prefix.clone()..)
+				.take_while(|(k, _)| k.starts_with(&prefix));
+			match (versions.next(), versions.next()) {
+				(Some(entry), None) => Some(entry),
+				_ => None,
+			}
+		})
 }
 
 /// Strips a trailing `-YYYY-MM-DD` or `-YYYYMMDD` model version.
@@ -838,6 +861,40 @@ mod tests {
 	}
 
 	#[test]
+	fn resolve_dated_and_default_fallbacks() {
+		let catalog = from_json(
+			r#"{"providers":{
+				"gcp.vertex_ai":{"models":{
+					"claude-y@default":{"rates":{"input":"5"}},
+					"claude-y@20250929":{"rates":{"input":"6"}},
+					"claude-z@20250101":{"rates":{"input":"7"}},
+					"claude-w@20250101":{"rates":{"input":"8"}},
+					"claude-w@20250601":{"rates":{"input":"9"}}
+				}},
+				"openai":{"models":{
+					"gpt-x":{"rates":{"input":"1"}},
+					"gpt-x-2024-05-13":{"rates":{"input":"2"}}
+				}},
+				"anthropic":{"models":{"claude-a":{"rates":{"input":"3"}}}}
+			}}"#,
+		)
+		.unwrap();
+		let input = |p, m| catalog.resolve(p, m).and_then(|m| m.rates.input.clone());
+		assert_eq!(input("gcp.vertex_ai", "claude-y"), Some(m("5")));
+		assert_eq!(input("gcp.vertex_ai", "anthropic/claude-y"), Some(m("5")));
+		assert_eq!(input("gcp.vertex_ai", "claude-y-20250929"), Some(m("6")));
+		assert_eq!(input("gcp.vertex_ai", "claude-y-20990101"), Some(m("5")));
+		assert_eq!(input("gcp.vertex_ai", "claude-z"), Some(m("7")));
+		assert_eq!(input("gcp.vertex_ai", "claude-z-20990101"), Some(m("7")));
+		assert_eq!(input("gcp.vertex_ai", "claude-w"), None);
+		assert_eq!(input("openai", "gpt-x-2024-07-18"), Some(m("1")));
+		assert_eq!(input("openai", "gpt-x-20240718"), Some(m("1")));
+		assert_eq!(input("openai", "gpt-x-2024-05-13"), Some(m("2")));
+		assert_eq!(input("anthropic", "claude-a-20251001"), Some(m("3")));
+		assert_eq!(input("anthropic", "claude-y"), None);
+	}
+
+	#[test]
 	fn resolve_azure_versions() {
 		let catalog = from_json(
 			r#"{"providers":{
@@ -857,7 +914,6 @@ mod tests {
 		assert_eq!(input("azure", "gpt-x-2026-01-02"), Some(m("2")));
 		assert_eq!(input("azure", "claude-x-20251001"), Some(m("3")));
 		assert_eq!(input("azure", "mistral-large-2411"), None);
-		assert_eq!(input("openai", "gpt-x-2026-03-17"), None);
 	}
 
 	#[test]

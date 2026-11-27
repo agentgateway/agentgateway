@@ -1,5 +1,5 @@
 use crate::http::filters::BackendRequestTimeout;
-use crate::transport::stream::TLSConnectionInfo;
+use crate::proxy::httpproxy::HttpsListener;
 use crate::types::agent::SimpleBackendReference;
 use crate::{apply, *};
 
@@ -43,12 +43,11 @@ impl HTTP {
 				// There are a few cases here...
 				// In general, we cannot be assured that the downstream and the upstream protocol have anything
 				// to do with each other. Typically, the downstream will ALPN negotiate up to HTTP/2, even
-				// if the backend shouldn't do HTTP/2. So, if TLS is used, we never want to trust the downstream
+				// if the backend shouldn't do HTTP/2. So, if the listener terminated HTTPS, we never want to trust the downstream
 				// protocol.
 				// If they are plaintext, however, that means the client very intentionally sent HTTP/2, and we respect that.
 				// Additionally, since gRPC is known to only work over HTTP/2, we special case that.
-				let tls = req.extensions().get::<TLSConnectionInfo>();
-				if tls.is_some() {
+				if req.extensions().get::<HttpsListener>().is_some() {
 					// Do not trust the downstream, use HTTP/1.1
 					if http::is_grpc_content_type(req.headers()) {
 						Some(::http::Version::HTTP_2)

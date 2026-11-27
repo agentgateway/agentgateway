@@ -220,9 +220,13 @@ impl Session {
 		}
 	}
 
-	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
-		self.relay = Arc::new(self.relay.with_inputs(inputs));
-		self
+	pub fn with_inputs(
+		mut self,
+		inputs: RelayInputs,
+		ctx: &IncomingRequestContext,
+	) -> Result<Self, mcp::Error> {
+		self.relay = Arc::new(inputs.build(ctx, Some(&self.relay))?);
+		Ok(self)
 	}
 
 	async fn authorize_prompt_request<'a, 'b: 'a>(
@@ -1024,9 +1028,11 @@ impl SessionManager {
 		id: &str,
 		builder: RelayInputs,
 		ctx: &IncomingRequestContext,
-	) -> Option<Session> {
-		let mut sessions = self.sessions.write().ok()?;
-		let entry = sessions.get_mut(id)?;
+	) -> Result<Option<Session>, mcp::Error> {
+		let mut sessions = self.sessions.write().expect("poisoned");
+		let Some(entry) = sessions.get_mut(id) else {
+			return Ok(None);
+		};
 		if entry.backend_id != builder.backend_id
 			|| !entry
 				.session
@@ -1034,10 +1040,11 @@ impl SessionManager {
 				.upstreams
 				.conditions_match(&builder.backend, ctx)
 		{
-			return None;
+			return Ok(None);
 		}
 		entry.last_access = Instant::now();
-		Some(entry.session.clone().with_inputs(builder))
+		entry.session = entry.session.clone().with_inputs(builder, ctx)?;
+		Ok(Some(entry.session.clone()))
 	}
 
 	pub fn get_or_resume_session(
@@ -1057,7 +1064,8 @@ impl SessionManager {
 				return Ok(None);
 			}
 			s.last_access = Instant::now();
-			return Ok(Some(s.session.clone().with_inputs(builder)));
+			s.session = s.session.clone().with_inputs(builder, ctx)?;
+			return Ok(Some(s.session.clone()));
 		}
 		let idle_ttl = builder.backend.session_idle_ttl;
 		let backend_id = builder.backend_id.clone();
@@ -1073,30 +1081,23 @@ impl SessionManager {
 		{
 			return Ok(None);
 		}
-		let relay = builder.build_new_connections(ctx)?;
+		let relay = builder.build(ctx, None)?;
 		if let Err(err) = relay.set_sessions(state.sessions) {
 			warn!("failed to resume session: {err}");
 			return Ok(None);
 		}
 
-		let sess = Session {
+		let session = Session {
 			id: id.into(),
 			relay: Arc::new(relay),
 			tx: None,
 			synthetic: false,
 			encoder: self.encoder.clone(),
 		};
-		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(
-			id.to_string(),
-			SessionEntry {
-				session: sess.clone(),
-				backend_id,
-				last_access: Instant::now(),
-				idle_ttl,
-			},
-		);
-		Ok(Some(sess))
+		if session.has_connection_teardown() {
+			self.insert_session(backend_id, session.clone(), idle_ttl);
+		}
+		Ok(Some(session))
 	}
 
 	/// create_session establishes an MCP session.

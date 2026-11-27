@@ -354,6 +354,93 @@ async fn gateway_tokenization_masks_upstream_and_restores_after_response_guards(
 	}
 }
 
+#[rstest::rstest]
+#[case("", true)]
+#[case("?alt=json", true)]
+#[case("?alt=sse", false)]
+#[tokio::test]
+async fn gateway_tokenization_preserves_gemini_stream_formats(
+	#[case] query: &str,
+	#[case] json_stream: bool,
+	#[values(false, true)] enabled: bool,
+) {
+	use wiremock::{Mock, MockServer, ResponseTemplate};
+
+	use crate::llm::{AIProvider, gemini};
+	use crate::test_helpers::proxymock::{
+		llm_named_provider, send_request_body, setup_llm_named_provider_mock,
+	};
+
+	let mock = MockServer::start().await;
+	let chunks = vec![
+		json!({"candidates":[{"content":{"role":"model","parts":[{"text":"alice@example.org"}]}}]}),
+		json!({"candidates":[{"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":8,"candidatesTokenCount":2,"totalTokenCount":10}}),
+	];
+	let wire: String = chunks
+		.iter()
+		.map(|chunk| format!("data: {chunk}\n\n"))
+		.collect();
+	Mock::given(wiremock::matchers::query_param("alt", "sse"))
+		.respond_with(
+			ResponseTemplate::new(200)
+				.insert_header("content-type", "text/event-stream")
+				.set_body_string(wire),
+		)
+		.expect(1)
+		.mount(&mock)
+		.await;
+	let mut provider = llm_named_provider(
+		&mock,
+		AIProvider::Gemini(gemini::Provider {
+			model_override: None,
+		}),
+		false,
+	);
+	provider.path_prefix = Some("/".into());
+	provider.policies = Some(
+		serde_json::from_value(json!({"ai":{
+			"routes":{"*":"generateContent"}, "promptGuard":{"tokenization":{"email":enabled}}
+		}}))
+		.unwrap(),
+	);
+	let (mock, _gateway, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let request = json!({"contents":[{"role":"user","parts":[{"text":"alice@example.org"}]}]});
+	let response = send_request_body(
+		io,
+		::http::Method::POST,
+		&format!("http://localhost/v1beta/models/gemini-2.5-flash:streamGenerateContent{query}"),
+		&serde_json::to_vec(&request).unwrap(),
+	)
+	.await;
+	assert_eq!(response.status(), 200);
+	assert_eq!(
+		response.headers()["content-type"],
+		if json_stream {
+			"application/json; charset=UTF-8"
+		} else {
+			"text/event-stream"
+		}
+	);
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	let received_chunks: Vec<Value> = if json_stream {
+		serde_json::from_slice(&body).unwrap()
+	} else {
+		std::str::from_utf8(&body)
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.map(|data| serde_json::from_str(data).unwrap())
+			.collect()
+	};
+	assert_eq!(received_chunks, chunks);
+	let received = mock.received_requests().await.unwrap();
+	assert_eq!(received.len(), 1);
+	assert_eq!(
+		serde_json::from_slice::<Value>(&received[0].body).unwrap(),
+		request
+	);
+}
+
 #[tokio::test]
 async fn gateway_tokenization_leaves_other_api_formats_unchanged() {
 	use wiremock::{Mock, MockServer, ResponseTemplate};

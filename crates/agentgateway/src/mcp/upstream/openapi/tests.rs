@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use agent_core::{metrics, strng};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use openapiv3::{OpenAPI, ReferenceOr};
+use openapiv3::OpenAPI;
 use prometheus_client::registry::Registry;
 use rmcp::model::Tool;
 use rstest::rstest;
@@ -195,7 +195,8 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 			(test_tool_get, upstream_call_get),
 			(test_tool_doc, upstream_call_doc),
 			(test_tool_post, upstream_call_post),
-		],
+		]
+		.into(),
 		prefix.to_string(),
 	);
 
@@ -2136,47 +2137,19 @@ async fn test_openapi_from_url() {
 
 		// Verify it's an OpenAPI target spec with the fetched schema
 		if let crate::types::agent::McpTargetSpec::OpenAPI(openapi_target) = &target.spec {
-			let schema = &openapi_target.schema;
-			assert_eq!(schema.openapi, "3.0.0");
-			assert_eq!(schema.info.title, "User API");
-			assert_eq!(schema.info.version, "1.0.0");
-
-			// Check if paths contains the expected paths
-			let has_users_path = schema.paths.paths.contains_key("/users");
-			assert!(has_users_path, "Schema should contain /users path");
-
-			let has_users_id_path = schema.paths.paths.contains_key("/users/{user_id}");
-			assert!(
-				has_users_id_path,
-				"Schema should contain /users/{{user_id}} path"
+			let mut tools: Vec<_> = openapi_target
+				.tools
+				.iter()
+				.map(|(t, _)| (t.name.as_ref(), t.title.as_deref()))
+				.collect();
+			tools.sort();
+			assert_eq!(
+				tools,
+				vec![
+					("createUser", Some("Create a new user")),
+					("getUser", Some("Get user details")),
+				]
 			);
-
-			// Verify the path details were preserved
-			if let Some(path_item_ref) = schema.paths.paths.get("/users/{user_id}") {
-				match path_item_ref {
-					ReferenceOr::Item(path_item) => {
-						if let Some(get_op) = &path_item.get {
-							assert_eq!(get_op.summary.as_deref(), Some("Get user details"));
-						}
-					},
-					ReferenceOr::Reference { reference: _ } => {
-						panic!("Expected path item, got reference");
-					},
-				}
-			}
-
-			if let Some(path_item_ref) = schema.paths.paths.get("/users") {
-				match path_item_ref {
-					ReferenceOr::Item(path_item) => {
-						if let Some(post_op) = &path_item.post {
-							assert_eq!(post_op.summary.as_deref(), Some("Create a new user"));
-						}
-					},
-					ReferenceOr::Reference { reference: _ } => {
-						panic!("Expected path item, got reference");
-					},
-				}
-			}
 		} else {
 			panic!("Expected OpenAPI target spec, got {:?}", target.spec);
 		}
@@ -2427,7 +2400,7 @@ async fn test_call_tool_with_binary_body() {
 	);
 	let handler = Handler::new(
 		upstream_client,
-		vec![(test_tool_upload, upstream_call_upload)],
+		vec![(test_tool_upload, upstream_call_upload)].into(),
 		"".to_string(),
 	);
 

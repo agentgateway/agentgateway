@@ -91,6 +91,11 @@ impl McpHttpClient {
 		Ok(resp)
 	}
 
+	/// Shares `prev`'s pinned endpoint.
+	pub fn adopt(&mut self, prev: &McpHttpClient) {
+		self.pinned_dest = prev.pinned_dest.clone();
+	}
+
 	pub fn pin_backend(&self, resolved: ResolvedDestination) {
 		tracing::debug!(
 			target = %self.target_name,

@@ -574,8 +574,10 @@ fn encode_query_value(value: &str) -> Cow<'_, str> {
 pub struct Handler {
 	pub prefix: String,
 	pub http_client: super::McpHttpClient,
-	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
+	pub tools: OpenAPITools,
 }
+
+pub(crate) type OpenAPITools = Arc<[(Tool, UpstreamOpenAPICall)]>;
 
 /// Media types whose body may be JSON or human-readable text and should be parsed as such.
 fn is_text_like(m: &headers::Mime) -> bool {
@@ -595,16 +597,17 @@ fn looks_like_text(b: &[u8]) -> bool {
 }
 
 impl Handler {
-	pub fn new(
-		http_client: super::McpHttpClient,
-		tools: Vec<(Tool, UpstreamOpenAPICall)>,
-		prefix: String,
-	) -> Self {
+	pub fn new(http_client: super::McpHttpClient, tools: OpenAPITools, prefix: String) -> Self {
 		Self {
 			prefix,
 			http_client,
 			tools,
 		}
+	}
+
+	/// Shares `prev`'s pinned endpoint.
+	pub fn adopt(&mut self, prev: &Handler) {
+		self.http_client.adopt(&prev.http_client);
 	}
 
 	pub fn get_session_state(&self) -> sessionpersistence::MCPSession {
@@ -1001,7 +1004,7 @@ impl Handler {
 	}
 
 	pub fn tools(&self) -> Vec<Tool> {
-		self.tools.clone().into_iter().map(|(t, _)| t).collect()
+		self.tools.iter().map(|(t, _)| t.clone()).collect()
 	}
 }
 

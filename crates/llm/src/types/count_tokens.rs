@@ -45,17 +45,11 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		Ok(LLMRequest {
-			// We never tokenize these, so always empty
-			input_tokens: None,
 			input_format: InputFormat::CountTokens,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
-			original_model: None,
 			provider,
-			streaming: false,
-			params: Default::default(),
-			prompt: Default::default(),
-			provider_state: None,
+			..Default::default()
 		})
 	}
 

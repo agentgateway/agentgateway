@@ -81,14 +81,10 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		Ok(LLMRequest {
-			// We never tokenize these, so always empty
-			input_tokens: None,
 			input_format: InputFormat::Embeddings,
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
-			original_model: None,
 			provider,
-			streaming: false,
 			params: LLMRequestParams {
 				temperature: None,
 				top_p: None,
@@ -103,8 +99,7 @@ impl RequestType for Request {
 				dimensions: self.dimensions.map(|d| d as u64),
 				reasoning_effort: None,
 			},
-			prompt: Default::default(),
-			provider_state: None,
+			..Default::default()
 		})
 	}
 

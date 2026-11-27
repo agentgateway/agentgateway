@@ -168,12 +168,8 @@ fn llm_context_with_usage(
 		input_format: llm::InputFormat::Completions,
 		cache_convention,
 		request_model: "model".into(),
-		original_model: None,
 		provider: "provider".into(),
-		streaming: false,
-		params: llm::LLMRequestParams::default(),
-		prompt: None,
-		provider_state: None,
+		..Default::default()
 	};
 	LLMContext::from_llm_info(llm::LLMInfo::new(request, response), None)
 }
