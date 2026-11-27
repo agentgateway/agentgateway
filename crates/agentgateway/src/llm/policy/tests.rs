@@ -11,6 +11,7 @@ async fn webhook_fail_open_emits_single_metric() {
 	use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
 
 	let guard = PromptGuard {
+		tokenization: None,
 		streaming: Default::default(),
 		request: vec![RequestGuard {
 			rejection: Default::default(),

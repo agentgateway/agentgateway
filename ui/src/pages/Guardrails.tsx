@@ -1,5 +1,5 @@
 import { useBlocker } from '@tanstack/react-router';
-import { Button, Checkbox, Collapse, Input } from 'antd';
+import { Button, Checkbox, Collapse, Input, Tag } from 'antd';
 import { Braces, ListChecks, Pencil, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -127,6 +127,7 @@ type RegexRulesShape = {
 	rules?: Array<{ builtin?: BuiltinRule; pattern?: string }>;
 };
 type GuardrailDraft = {
+	email: boolean;
 	request: GuardDraft[];
 	response: GuardDraft[];
 };
@@ -271,8 +272,8 @@ export function GuardrailsPage() {
 					onConfirm={remove}
 				>
 					<p>
-						Remove all request and response guardrails? LLM traffic will no longer be checked by
-						these rules.
+						Remove all request and response guardrails and data tokenization? These protections will
+						no longer apply to LLM traffic.
 					</p>
 				</ConfirmDialog>
 			) : null}
@@ -352,6 +353,41 @@ function GuardrailsEditor(props: {
 				guards={draft.response}
 				onChange={response => applyDraft({ ...draft, response })}
 			/>
+			<section className="policy-form-section guardrail-section">
+				<div className="policy-form-section-header">
+					<span className="policy-form-section-icon">
+						<ShieldCheck size={17} />
+					</span>
+					<div>
+						<h4>
+							Data tokenization <Tag color="warning">(Beta)</Tag>
+						</h4>
+						<p>
+							Replace sensitive data with temporary tokens before sending it to the model. Restore
+							original values in replies, including streaming replies.
+						</p>
+					</div>
+				</div>
+				<div className="policy-form-section-body">
+					<Checkbox
+						checked={draft.email}
+						onChange={event => applyDraft({ ...draft, email: event.target.checked })}
+					>
+						Email addresses
+					</Checkbox>
+					<p className="muted-copy">
+						Detects standard ASCII email addresses in message text and tool arguments. Repeated
+						addresses reuse the same token within a request. Tokens are private to each request.
+					</p>
+					<p className="muted-copy">
+						This early feature applies only to Chat Completions, including streaming replies. Other
+						APIs continue normally without email tokenization and can send email addresses to the
+						provider unchanged. Images, attachments, metadata and tool definitions are not
+						inspected. Request guards run before tokenization. Response guards run before
+						restoration.
+					</p>
+				</div>
+			</section>
 			{dirty ? (
 				<ConfigDiffSaveActions
 					config={props.config}
@@ -1343,7 +1379,8 @@ function PatternList(props: {
 function draftFromGuardrails(guardrails: LlmGuardrail): GuardrailDraft {
 	return {
 		request: (guardrails.request ?? []).map(draftFromGuard),
-		response: ((guardrails.response ?? []) as GuardObject[]).map(draftFromGuard)
+		response: ((guardrails.response ?? []) as GuardObject[]).map(draftFromGuard),
+		email: guardrails.tokenization?.email ?? false
 	};
 }
 
@@ -1480,7 +1517,8 @@ function buildGuardrails(draft: GuardrailDraft, original: LlmGuardrail): LlmGuar
 	return cleanEmpty({
 		...original,
 		request: request.length ? request : undefined,
-		response: response.length ? response : undefined
+		response: response.length ? response : undefined,
+		tokenization: draft.email ? { email: true } : undefined
 	}) as LlmGuardrail;
 }
 
