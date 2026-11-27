@@ -455,8 +455,9 @@ impl ModelRouter {
 			);
 			return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, response);
 		}
+		let cel_errors = &client.inputs.metrics.authorization_cel_evaluation_errors;
 		if is_model_list_request(req) {
-			return ResolveResult::ModelDiscovery(self.model_list_response(req, catalog));
+			return ResolveResult::ModelDiscovery(self.model_list_response(req, catalog, cel_errors));
 		}
 		let requested_model = match requested_model(req).await {
 			Ok(requested_model) => requested_model,
@@ -483,7 +484,7 @@ impl ModelRouter {
 			"unable to find declared virtual model; trying concrete model routes",
 		);
 
-		match self.resolve_concrete_model(&requested_model.model, false, req) {
+		match self.resolve_concrete_model(&requested_model.model, false, req, cel_errors) {
 			Ok(Some(route)) => ResolveResult::Backend(route),
 			Ok(None) => {
 				ResolveResult::Rejected(ProxyResponseReason::NotFound, model_not_found_response())
@@ -495,14 +496,19 @@ impl ModelRouter {
 		}
 	}
 
-	fn model_list_response(&self, req: &Request, catalog: &llm::catalog::ModelCatalog) -> Response {
+	fn model_list_response(
+		&self,
+		req: &Request,
+		catalog: &llm::catalog::ModelCatalog,
+		cel_errors: &crate::metrics::AuthorizationCelErrors,
+	) -> Response {
 		let catalog = catalog.snapshot();
 		let expand = self.discovery == llm::discovery::Discovery::Catalog;
 		let data = self
 			.models
 			.iter()
 			.filter(|model| model.visibility == ModelVisibility::Public)
-			.filter(|model| model_authorized(model, req))
+			.filter(|model| model_authorized(model, req, cel_errors))
 			.flat_map(|model| {
 				if expand
 					&& let Some(discovery) = &model.discovery
@@ -759,7 +765,12 @@ impl ModelRouter {
 		if let Err(resp) = Box::pin(rewrite_request_model(req, location, &target, fields)).await {
 			return ResolveResult::Rejected(ProxyResponseReason::InvalidRequest, *resp);
 		}
-		match self.resolve_concrete_model(&target, true, req) {
+		match self.resolve_concrete_model(
+			&target,
+			true,
+			req,
+			&client.inputs.metrics.authorization_cel_evaluation_errors,
+		) {
 			Ok(Some(route)) => ResolveResult::Backend(route),
 			Ok(None) => {
 				tracing::debug!(
@@ -799,6 +810,7 @@ impl ModelRouter {
 		requested_model: &str,
 		allow_internal: bool,
 		req: &Request,
+		cel_errors: &crate::metrics::AuthorizationCelErrors,
 	) -> Result<Option<ResolvedBackend>, ()> {
 		// `models` can store things like `provider/*`. The concrete `requested_model` will be like `provider/real-model`.
 		let matches = |model: &ModelRoute| {
@@ -809,7 +821,7 @@ impl ModelRouter {
 		let Some(model) = self
 			.models
 			.iter()
-			.find(|model| matches(model) && model_authorized(model, req))
+			.find(|model| matches(model) && model_authorized(model, req, cel_errors))
 		else {
 			return if self.models.iter().any(matches) {
 				Err(())
@@ -870,7 +882,11 @@ fn llm_error_response(status: ::http::StatusCode, message: &str, code: &str) -> 
 		.expect("LLM error response is valid")
 }
 
-fn model_authorized(model: &ModelRoute, req: &Request) -> bool {
+fn model_authorized(
+	model: &ModelRoute,
+	req: &Request,
+	cel_errors: &crate::metrics::AuthorizationCelErrors,
+) -> bool {
 	let rules = model
 		.policies
 		.authorization
@@ -883,7 +899,7 @@ fn model_authorized(model: &ModelRoute, req: &Request) -> bool {
 	crate::http::authorization::HTTPAuthorizationSet::new(
 		crate::http::authorization::RuleSets::from_arcs(rules),
 	)
-	.apply(req)
+	.apply_with_metrics(req, cel_errors)
 	.is_ok()
 }
 
@@ -1565,7 +1581,7 @@ mod tests {
 				.body(http::Body::empty())
 				.expect("valid request");
 			router
-				.resolve_concrete_model(name, false, &req)
+				.resolve_concrete_model(name, false, &req, &Default::default())
 				.expect("authorized")
 				.expect("model exists")
 				.route_type
@@ -1990,8 +2006,9 @@ mod tests {
 			.body(http::Body::empty())
 			.expect("valid request");
 
-		assert!(model_authorized(&model, &allowed));
-		assert!(!model_authorized(&model, &denied));
+		let cel_errors = Default::default();
+		assert!(model_authorized(&model, &allowed, &cel_errors));
+		assert!(!model_authorized(&model, &denied, &cel_errors));
 	}
 
 	#[test]

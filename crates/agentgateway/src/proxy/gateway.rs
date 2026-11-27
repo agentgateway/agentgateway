@@ -928,8 +928,10 @@ impl Gateway {
 			src.connect_headers = ch.0;
 		}
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
-			&& let Err(e) = network_authorization.apply(&crate::cel::Executor::new_tcp(Some(&src), &dst))
-		{
+			&& let Err(e) = network_authorization.apply_with_metrics(
+				&crate::cel::Executor::new_tcp(Some(&src), &dst),
+				&inputs.metrics.authorization_cel_evaluation_errors,
+			) {
 			anyhow::bail!("network authorization denied: {e}");
 		}
 		if let Some(authz) = policies.network_ext_authz.as_ref() {

@@ -119,10 +119,10 @@ impl TCPProxy {
 			hostname: sni.as_deref().map(strng::new),
 		};
 		if let Some(authz) = frontend_policies.network_authorization.as_ref() {
-			authz.apply(&cel::Executor::new_tcp(
-				log.source_context.as_ref(),
-				&destination,
-			))?;
+			authz.apply_with_metrics(
+				&cel::Executor::new_tcp(log.source_context.as_ref(), &destination),
+				&self.inputs.metrics.authorization_cel_evaluation_errors,
+			)?;
 		}
 		if let Some(authz) = frontend_policies.network_ext_authz.as_ref() {
 			authz

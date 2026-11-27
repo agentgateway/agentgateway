@@ -814,20 +814,19 @@ impl<'a> Executor<'a> {
 		}
 	}
 	pub fn eval_bool(&self, expr: &Expression) -> bool {
-		self
-			.eval(expr)
-			.map(|v| match v.as_bool() {
-				Ok(b) => b,
-				Err(e) => {
-					event!(
-						target: "cel",
-						tracing::Level::TRACE,
-						"failed to convert expression result to bool: {v:?}: {e}",
-					);
-					false
-				},
-			})
-			.unwrap_or_default()
+		self.try_eval_bool(expr).unwrap_or_default()
+	}
+
+	pub(crate) fn try_eval_bool(&self, expr: &Expression) -> Result<bool, Error> {
+		let value = self.eval(expr)?;
+		value.as_bool().map_err(|e| {
+			event!(
+				target: "cel",
+				tracing::Level::TRACE,
+				"failed to convert expression result to bool: {value:?}: {e}",
+			);
+			e.into()
+		})
 	}
 
 	/// eval_rng evaluates a float (0.0-1.0) or a bool and evaluates to a bool. If a float is returned,

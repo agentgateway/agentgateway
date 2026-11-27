@@ -391,7 +391,9 @@ impl RelayInputs {
 				ctx,
 				prev.map(|p| p.upstreams.as_ref()),
 			)?),
-			policies: self.policies,
+			policies: self
+				.policies
+				.with_cel_error_metrics(&client.inputs.metrics.authorization_cel_evaluation_errors),
 			mcp_guardrails: self.mcp_guardrails,
 			policy_client: client,
 			backend_id: Some(self.backend_id),
