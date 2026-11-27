@@ -1669,6 +1669,44 @@ pub mod typed {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::types::RequestType;
+
+	#[rstest::rstest]
+	#[case::deepseek_v4("deepseek-v4-flash", 16)]
+	#[case::deepseek_v3("deepseek-v3", 16)]
+	#[case::glm5("glm-5.3-flash", 17)]
+	#[case::glm4("glm-4.5", 17)]
+	#[case::kimi_k3("kimi-k3", 15)]
+	#[case::kimi_k2("kimi-k2", 15)]
+	#[case::qwen3_5("Qwen3.5-27B", 14)]
+	#[case::qwen2("Qwen2.5-7B", 19)]
+	#[case::minimax_m2("MiniMax-M2", 15)]
+	#[case::prefixed("provider/deepseek-v4-flash", 16)]
+	#[case::unknown("doubao-seed-2.1-lite", 21)]
+	#[case::openai("gpt-4o", 21)]
+	#[case::claude("claude-opus-4-7", 34)]
+	fn tokenization_uses_model_vocabulary(#[case] model: &str, #[case] content_tokens: u64) {
+		let request: Request = serde_json::from_value(serde_json::json!({
+			"model": model,
+			"messages": [{
+				"role": "user",
+				"content": "请用简体中文详细介绍如何在网关中配置模型路由和请求限流。"
+			}]
+		}))
+		.unwrap();
+
+		let provider = strng::new("openai");
+		let estimate = request.to_llm_request(provider.clone(), true).unwrap();
+		let info = crate::LLMInfo::new(estimate, crate::LLMResponse::default());
+		assert_eq!(info.normalized_input_tokens(), Some(content_tokens + 7));
+		assert_eq!(
+			request
+				.to_llm_request(provider, false)
+				.unwrap()
+				.input_tokens,
+			None
+		);
+	}
 
 	#[test]
 	fn test_extract_tool_calls_from_response() {
