@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use websocket_sans_io::{FrameInfo, Opcode, WebsocketFrameEncoder, WebsocketFrameEvent};
 
 use crate::llm::policy::PromptGuard;
-use crate::llm::{LLMInfo, UsageLine};
+use crate::llm::{LLMInfo, LLMResponse, UsageLine};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 
@@ -26,66 +26,63 @@ fn add_usage_value(target: &mut Option<u64>, value: Option<u64>) {
 /// Accumulate usage reported for a Realtime response into the connection-level record.
 /// Realtime sockets can carry multiple responses, so each response contributes to the
 /// connection total instead of replacing usage from earlier turns.
-fn accumulate_realtime_usage(log: &AsyncLog<LLMInfo>, usage: &serde_json::Value) {
-	log.non_atomic_mutate(|info| {
-		let response = &mut info.response;
-		add_usage_value(
-			&mut response.input_tokens,
-			usage.get("input_tokens").and_then(serde_json::Value::as_u64),
-		);
-		add_usage_value(
-			&mut response.output_tokens,
-			usage.get("output_tokens").and_then(serde_json::Value::as_u64),
-		);
-		add_usage_value(
-			&mut response.total_tokens,
-			usage.get("total_tokens").and_then(serde_json::Value::as_u64),
-		);
+fn accumulate_realtime_usage(response: &mut LLMResponse, usage: &serde_json::Value) {
+	add_usage_value(
+		&mut response.input_tokens,
+		usage.get("input_tokens").and_then(serde_json::Value::as_u64),
+	);
+	add_usage_value(
+		&mut response.output_tokens,
+		usage.get("output_tokens").and_then(serde_json::Value::as_u64),
+	);
+	add_usage_value(
+		&mut response.total_tokens,
+		usage.get("total_tokens").and_then(serde_json::Value::as_u64),
+	);
 
-		let input = usage
-			.get("input_token_details")
-			.or_else(|| usage.get("input_tokens_details"));
-		add_usage_value(
-			&mut response.input_text_tokens,
-			input
-				.and_then(|v| v.get("text_tokens"))
-				.and_then(serde_json::Value::as_u64),
-		);
-		add_usage_value(
-			&mut response.input_image_tokens,
-			input
-				.and_then(|v| v.get("image_tokens"))
-				.and_then(serde_json::Value::as_u64),
-		);
-		add_usage_value(
-			&mut response.input_audio_tokens,
-			input
-				.and_then(|v| v.get("audio_tokens"))
-				.and_then(serde_json::Value::as_u64),
-		);
-		add_usage_value(
-			&mut response.cached_input_tokens,
-			input
-				.and_then(|v| v.get("cached_tokens"))
-				.and_then(serde_json::Value::as_u64),
-		);
+	let input = usage
+		.get("input_token_details")
+		.or_else(|| usage.get("input_tokens_details"));
+	add_usage_value(
+		&mut response.input_text_tokens,
+		input
+			.and_then(|v| v.get("text_tokens"))
+			.and_then(serde_json::Value::as_u64),
+	);
+	add_usage_value(
+		&mut response.input_image_tokens,
+		input
+			.and_then(|v| v.get("image_tokens"))
+			.and_then(serde_json::Value::as_u64),
+	);
+	add_usage_value(
+		&mut response.input_audio_tokens,
+		input
+			.and_then(|v| v.get("audio_tokens"))
+			.and_then(serde_json::Value::as_u64),
+	);
+	add_usage_value(
+		&mut response.cached_input_tokens,
+		input
+			.and_then(|v| v.get("cached_tokens"))
+			.and_then(serde_json::Value::as_u64),
+	);
 
-		let output = usage
-			.get("output_token_details")
-			.or_else(|| usage.get("output_tokens_details"));
-		add_usage_value(
-			&mut response.output_text_tokens,
-			output
-				.and_then(|v| v.get("text_tokens"))
-				.and_then(serde_json::Value::as_u64),
-		);
-		add_usage_value(
-			&mut response.output_audio_tokens,
-			output
-				.and_then(|v| v.get("audio_tokens"))
-				.and_then(serde_json::Value::as_u64),
-		);
-	});
+	let output = usage
+		.get("output_token_details")
+		.or_else(|| usage.get("output_tokens_details"));
+	add_usage_value(
+		&mut response.output_text_tokens,
+		output
+			.and_then(|v| v.get("text_tokens"))
+			.and_then(serde_json::Value::as_u64),
+	);
+	add_usage_value(
+		&mut response.output_audio_tokens,
+		output
+			.and_then(|v| v.get("audio_tokens"))
+			.and_then(serde_json::Value::as_u64),
+	);
 }
 
 /// Record one completed Response's usage and add its modality-aware connection totals.
@@ -112,8 +109,8 @@ fn record_response_usage(
 		.and_then(|details| details.get("audio_tokens"))
 		.and_then(serde_json::Value::as_u64);
 
-	accumulate_realtime_usage(log, usage);
 	log.non_atomic_mutate(|info| {
+		accumulate_realtime_usage(&mut info.response, usage);
 		info.response.usage_lines.push(UsageLine {
 			model: model.map(agent_core::strng::new),
 			input_tokens: input_tokens.unwrap_or_default(),
@@ -724,10 +721,9 @@ mod tests {
 
 	#[test]
 	fn realtime_usage_accumulates_across_responses_and_token_modalities() {
-		let log: AsyncLog<LLMInfo> = AsyncLog::default();
-		log.store(Some(LLMInfo::new(Default::default(), Default::default())));
+		let mut response = LLMResponse::default();
 		accumulate_realtime_usage(
-			&log,
+			&mut response,
 			&serde_json::json!({
 				"input_tokens": 100,
 				"output_tokens": 20,
@@ -741,7 +737,7 @@ mod tests {
 			}),
 		);
 		accumulate_realtime_usage(
-			&log,
+			&mut response,
 			&serde_json::json!({
 				"input_tokens": 50,
 				"output_tokens": 10,
@@ -755,7 +751,6 @@ mod tests {
 			}),
 		);
 
-		let response = log.load_clone().expect("log initialized").response;
 		assert_eq!(response.input_tokens, Some(150));
 		assert_eq!(response.output_tokens, Some(30));
 		assert_eq!(response.total_tokens, Some(180));
