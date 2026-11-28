@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 
 use async_openai::types::realtime::{
-	RealtimeClientEvent, RealtimeResponseUsage, RealtimeServerEvent, UserMessageContent,
+	RealtimeClientEvent, RealtimeServerEvent, UserMessageContent,
 };
 use bytes::{Bytes, BytesMut};
 use serde::{Deserialize, Serialize};
@@ -88,10 +88,47 @@ fn accumulate_realtime_usage(log: &AsyncLog<LLMInfo>, usage: &serde_json::Value)
 	});
 }
 
-/// Record GPT-Live lifecycle usage and delegated Responses usage carried in Live events.
-/// Live duration updates are cumulative snapshots, while each completed delegated Response
-/// contributes a separate token-usage line.
-fn record_live_usage(
+/// Record one completed Response's usage and add its modality-aware connection totals.
+fn record_response_usage(
+	log: &AsyncLog<LLMInfo>,
+	model: Option<&str>,
+	usage: &serde_json::Value,
+) {
+	let input_tokens = usage.get("input_tokens").and_then(serde_json::Value::as_u64);
+	let output_tokens = usage.get("output_tokens").and_then(serde_json::Value::as_u64);
+	let input_details = usage
+		.get("input_token_details")
+		.or_else(|| usage.get("input_tokens_details"));
+	let output_details = usage
+		.get("output_token_details")
+		.or_else(|| usage.get("output_tokens_details"));
+	let cached_input_tokens = input_details
+		.and_then(|details| details.get("cached_tokens"))
+		.and_then(serde_json::Value::as_u64);
+	let input_audio_tokens = input_details
+		.and_then(|details| details.get("audio_tokens"))
+		.and_then(serde_json::Value::as_u64);
+	let output_audio_tokens = output_details
+		.and_then(|details| details.get("audio_tokens"))
+		.and_then(serde_json::Value::as_u64);
+
+	accumulate_realtime_usage(log, usage);
+	log.non_atomic_mutate(|info| {
+		info.response.usage_lines.push(UsageLine {
+			model: model.map(agent_core::strng::new),
+			input_tokens: input_tokens.unwrap_or_default(),
+			output_tokens: output_tokens.unwrap_or_default(),
+			input_audio_tokens,
+			output_audio_tokens,
+			cached_input_tokens,
+			..Default::default()
+		});
+	});
+}
+
+/// Record usage for GPT-Live and Realtime WebSocket events.
+/// Live duration updates are cumulative snapshots; completed responses contribute usage lines.
+fn record_websocket_usage(
 	log: &AsyncLog<LLMInfo>,
 	event: &serde_json::Value,
 	seen_responses: &mut HashSet<String>,
@@ -125,6 +162,16 @@ fn record_live_usage(
 				}
 			});
 		},
+		Some("response.done") => {
+			let Some(response) = event.get("response") else {
+				return;
+			};
+			let Some(usage) = response.get("usage") else {
+				return;
+			};
+			let model = response.get("model").and_then(serde_json::Value::as_str);
+			record_response_usage(log, model, usage);
+		},
 		Some("response.event") => {
 			let nested = event.get("event");
 			if nested
@@ -146,61 +193,18 @@ fn record_live_usage(
 			let Some(usage) = response.get("usage") else {
 				return;
 			};
-			let model = response
-				.get("model")
-				.and_then(serde_json::Value::as_str)
-				.map(agent_core::strng::new);
-			let input_tokens = usage.get("input_tokens").and_then(serde_json::Value::as_u64);
-			let output_tokens = usage.get("output_tokens").and_then(serde_json::Value::as_u64);
-			let cached_input_tokens = usage
-				.get("input_tokens_details")
-				.and_then(|details| details.get("cached_tokens"))
-				.and_then(serde_json::Value::as_u64);
-			let input_audio_tokens = usage
-				.get("input_tokens_details")
-				.and_then(|details| details.get("audio_tokens"))
-				.and_then(serde_json::Value::as_u64);
-			let output_audio_tokens = usage
-				.get("output_tokens_details")
-				.and_then(|details| details.get("audio_tokens"))
-				.and_then(serde_json::Value::as_u64);
-
-			if let Ok(usage) = serde_json::to_value(usage) {
-				accumulate_realtime_usage(log, &usage);
-			}
-			log.non_atomic_mutate(|info| {
-				info.response.usage_lines.push(UsageLine {
-					model,
-					input_tokens: input_tokens.unwrap_or_default(),
-					output_tokens: output_tokens.unwrap_or_default(),
-					input_audio_tokens,
-					output_audio_tokens,
-					cached_input_tokens,
-					..Default::default()
-				});
-			});
+			let model = response.get("model").and_then(serde_json::Value::as_str);
+			record_response_usage(log, model, usage);
 		},
 		_ => {},
 	}
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ResponseDoneEvent {
-	/// The response resource.
-	pub response: ResponseResource,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ResponseResource {
-	/// Usage statistics for the response.
-	pub usage: Option<RealtimeResponseUsage>,
 }
 
 struct Parser<IO> {
 	inner: IO,
 	frames: Option<WsFrameAccumulator>,
 	log: AsyncLog<LLMInfo>,
-	seen_live_responses: RefCell<HashSet<String>>,
+	seen_responses: RefCell<HashSet<String>>,
 }
 
 impl<IO> Parser<IO> {
@@ -211,20 +215,7 @@ impl<IO> Parser<IO> {
 		let Ok(value) = serde_json::from_str::<serde_json::Value>(data) else {
 			return;
 		};
-		record_live_usage(&self.log, &value, &mut self.seen_live_responses.borrow_mut());
-		if value.get("type").and_then(serde_json::Value::as_str) == Some("response.done") {
-			let Ok(typed) = serde_json::from_value::<ResponseDoneEvent>(value) else {
-				return;
-			};
-			if let Some(usage) = typed.response.usage {
-				// TODO: do we need to parse the request side to get the request model?
-				// it seems like we get an event from the server with the same thing.
-				// also, the model can change... so what do we report??
-				if let Ok(usage) = serde_json::to_value(usage) {
-					accumulate_realtime_usage(&self.log, &usage);
-				}
-			}
-		}
+		record_websocket_usage(&self.log, &value, &mut self.seen_responses.borrow_mut());
 	}
 }
 
@@ -298,7 +289,7 @@ where
 		inner: body,
 		frames: Some(WsFrameAccumulator::new(frame_limit)),
 		log,
-		seen_live_responses: RefCell::new(HashSet::new()),
+		seen_responses: RefCell::new(HashSet::new()),
 	}
 }
 
@@ -581,7 +572,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 	let server_to_client = {
 		async move {
 			let mut accum = WsFrameAccumulator::new(frame_limit);
-			let mut seen_live_responses = HashSet::new();
+			let mut seen_responses = HashSet::new();
 			let mut read_buf = [0u8; 4096];
 			let mut evaluators = guard_clone.begin_streaming_response_guard(
 				&policy_client_clone,
@@ -604,8 +595,9 @@ pub async fn guarded_realtime_proxy<C, S>(
 				for frame in accum.drain_frames()? {
 					match frame {
 						WsCompletedFrame::Text { raw, payload } => {
-							if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&payload) {
-								record_live_usage(&log_clone, &value, &mut seen_live_responses);
+							let value = serde_json::from_slice::<serde_json::Value>(&payload).ok();
+							if let Some(value) = value.as_ref() {
+								record_websocket_usage(&log_clone, value, &mut seen_responses);
 							}
 							let event = std::str::from_utf8(&payload)
 								.ok()
@@ -677,12 +669,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 										let _ = client_tx.send(raw).await;
 									}
 								},
-								Some(RealtimeServerEvent::ResponseDone(ref done_event)) => {
-									if let Some(usage) = done_event.response.usage.as_ref() {
-										if let Ok(usage) = serde_json::to_value(usage) {
-											accumulate_realtime_usage(&log_clone, &usage);
-										}
-									}
+								Some(RealtimeServerEvent::ResponseDone(_)) => {
 									let _ = client_tx.send(raw).await;
 								},
 								_ => {
@@ -780,7 +767,7 @@ mod tests {
 	}
 
 	#[test]
-	fn live_usage_replaces_duration_snapshots_and_deduplicates_completed_responses() {
+	fn websocket_usage_preserves_turns_and_replaces_live_duration_snapshots() {
 		let log: AsyncLog<LLMInfo> = AsyncLog::default();
 		log.store(Some(LLMInfo::new(Default::default(), Default::default())));
 		let mut seen_responses = HashSet::new();
@@ -792,7 +779,7 @@ mod tests {
 			serde_json::json!({"type": "session.usage.updated", "usage": {"seconds": 12}}),
 			serde_json::json!({"type": "session.usage.updated", "usage": {"seconds": 15}}),
 		] {
-			record_live_usage(&log, &event, &mut seen_responses);
+			record_websocket_usage(&log, &event, &mut seen_responses);
 		}
 
 		let completion = serde_json::json!({
@@ -806,15 +793,15 @@ mod tests {
 						"input_tokens": 100,
 						"output_tokens": 20,
 						"total_tokens": 120,
-					"input_tokens_details": {"cached_tokens": 10, "audio_tokens": 5},
-					"output_tokens_details": {"audio_tokens": 7}
+						"input_tokens_details": {"cached_tokens": 10, "audio_tokens": 5},
+						"output_tokens_details": {"audio_tokens": 7}
 					}
 				}
 			}
 		});
-		record_live_usage(&log, &completion, &mut seen_responses);
-		record_live_usage(&log, &completion, &mut seen_responses);
-		record_live_usage(
+		record_websocket_usage(&log, &completion, &mut seen_responses);
+		record_websocket_usage(&log, &completion, &mut seen_responses);
+		record_websocket_usage(
 			&log,
 			&serde_json::json!({
 				"type": "session.closed",
