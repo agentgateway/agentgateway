@@ -461,6 +461,7 @@ impl ConfigImporter for LiteLlmImporter {
 				upstream_headers: model_upstream_headers,
 				vertex_credentials,
 				empty_vertex_credentials,
+				empty_vertex_ai_credentials,
 			}) = import_litellm_model(
 				internal_name.clone(),
 				model,
@@ -491,6 +492,7 @@ impl ConfigImporter for LiteLlmImporter {
 					let resolved = resolve_litellm_vertex_credentials(
 						vertex_credentials,
 						empty_vertex_credentials,
+						empty_vertex_ai_credentials,
 						shared,
 					);
 					if let Some(model_field) = model_field
@@ -1571,6 +1573,8 @@ fn import_litellm_model(
 		);
 	let empty_vertex_credentials =
 		params.get("vertex_credentials").and_then(Value::as_str) == Some("");
+	let empty_vertex_ai_credentials =
+		params.get("vertex_ai_credentials").and_then(Value::as_str) == Some("");
 	let vertex_credentials = if provider == "vertex" {
 		take_litellm_vertex_credentials(
 			&mut params,
@@ -1719,6 +1723,7 @@ fn import_litellm_model(
 		upstream_headers: model_upstream_headers,
 		vertex_credentials,
 		empty_vertex_credentials,
+		empty_vertex_ai_credentials,
 	})
 }
 
@@ -1730,6 +1735,8 @@ struct LiteLlmImportedModel {
 	vertex_credentials: LiteLlmVertexCredentials,
 	/// The model sets `vertex_credentials` to an empty string rather than leaving it unset.
 	empty_vertex_credentials: bool,
+	/// The model sets `vertex_ai_credentials` to an empty string rather than leaving it unset.
+	empty_vertex_ai_credentials: bool,
 }
 
 /// Reads `vertex_credentials`, or its `vertex_ai_credentials` alias, the way LiteLLM selects them.
@@ -1810,11 +1817,12 @@ fn take_litellm_vertex_credentials(
 }
 
 /// LiteLLM fills credential-list values only for keys the deployment does not set, then reads
-/// `vertex_credentials` before `vertex_ai_credentials`. An empty `vertex_credentials` on the
-/// deployment counts as set, so the credential's value is never read.
+/// `vertex_credentials` before `vertex_ai_credentials`. An empty value for either key on the
+/// deployment counts as set, so the credential's value for that key is never read.
 fn resolve_litellm_vertex_credentials(
 	model: LiteLlmVertexCredentials,
 	model_vertex_credentials_is_empty: bool,
+	model_vertex_ai_credentials_is_empty: bool,
 	shared: LiteLlmVertexCredentials,
 ) -> LiteLlmVertexCredentials {
 	match (model.field(), shared.field()) {
@@ -1823,6 +1831,13 @@ fn resolve_litellm_vertex_credentials(
 		(None, Some("vertex_credentials")) if model_vertex_credentials_is_empty => {
 			LiteLlmVertexCredentials::Unresolved {
 				reason: "not read for vertex_credentials because the model sets an empty value",
+				field: None,
+			}
+		},
+		// LiteLLM then uses its ambient identity.
+		(None, Some("vertex_ai_credentials")) if model_vertex_ai_credentials_is_empty => {
+			LiteLlmVertexCredentials::Unresolved {
+				reason: "not read for vertex_ai_credentials because the model sets an empty value",
 				field: None,
 			}
 		},
@@ -3861,6 +3876,122 @@ model_list:
 				.iter()
 				.any(|finding| finding.message.contains("application default credentials"))
 		);
+	}
+
+	#[test]
+	fn does_not_use_shared_vertex_alias_when_model_alias_is_an_empty_string() {
+		let result = import_config(
+			"litellm",
+			r#"
+credential_list:
+- credential_name: alias-only
+  credential_values:
+    vertex_project: example-project
+    vertex_ai_credentials: /var/run/secrets/vertex/credential-alias.json
+- credential_name: primary-only
+  credential_values:
+    vertex_project: example-project
+    vertex_credentials: /var/run/secrets/vertex/shared.json
+model_list:
+- model_name: empty-alias
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    litellm_credential_name: alias-only
+    vertex_ai_credentials: ""
+- model_name: empty-alias-and-primary
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    litellm_credential_name: alias-only
+    vertex_credentials: ""
+    vertex_ai_credentials: ""
+- model_name: null-alias
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    litellm_credential_name: alias-only
+    vertex_ai_credentials: null
+- model_name: empty-alias-shared-primary
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    litellm_credential_name: primary-only
+    vertex_ai_credentials: ""
+- model_name: empty-alias-unreferenced
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_ai_credentials: ""
+"#,
+		)
+		.expect("import litellm config");
+
+		// An empty model-level alias counts as set, so LiteLLM does not read the credential's alias
+		// and uses its ambient identity. Stricter than LiteLLM: the model is omitted.
+		assert_eq!(
+			imported_model(&result, "empty-alias").map(|model| &model["auth"]),
+			None
+		);
+		assert_eq!(
+			model_names(&result),
+			[
+				"null-alias",
+				"empty-alias-shared-primary",
+				"empty-alias-unreferenced"
+			]
+		);
+		for index in [0, 1] {
+			let finding = find_finding(
+				&result,
+				&format!("model_list[{index}].litellm_params.litellm_credential_name"),
+			);
+			assert_eq!(finding.status, ImportStatus::Unsupported, "{index}");
+			assert_eq!(
+				finding.message,
+				"LiteLLM credential \"alias-only\" is not read for vertex_ai_credentials because the model sets an empty value, so the Vertex AI credentials for this model are unknown; the model was not emitted",
+				"{index}"
+			);
+			assert!(
+				!result
+					.findings
+					.iter()
+					.any(|finding| finding.source_path == format!("model_list[{index}]")),
+				"model_list[{index}] must not be reported as imported"
+			);
+		}
+
+		assert_eq!(
+			imported_model(&result, "null-alias").expect("model emitted")["auth"],
+			gcp_credential_file("/var/run/secrets/vertex/credential-alias.json")
+		);
+		assert_eq!(
+			find_status(
+				&result,
+				"credential_list[0].credential_values.vertex_ai_credentials"
+			),
+			ImportStatus::Exact
+		);
+		assert_eq!(
+			imported_model(&result, "empty-alias-shared-primary").expect("model emitted")["auth"],
+			gcp_credential_file("/var/run/secrets/vertex/shared.json")
+		);
+		assert_eq!(
+			find_status(
+				&result,
+				"credential_list[1].credential_values.vertex_credentials"
+			),
+			ImportStatus::Exact
+		);
+		for index in [2, 3] {
+			assert_eq!(
+				find_status(&result, &format!("model_list[{index}]")),
+				ImportStatus::Exact,
+				"{index}"
+			);
+		}
+
+		let model = imported_model(&result, "empty-alias-unreferenced").expect("model emitted");
+		assert!(model.get("auth").is_none());
+		let finding = find_finding(&result, "model_list[4].litellm_params.vertex_credentials");
+		assert_eq!(finding.status, ImportStatus::Approximate);
+		assert!(finding.message.contains("application default credentials"));
 	}
 
 	#[test]
