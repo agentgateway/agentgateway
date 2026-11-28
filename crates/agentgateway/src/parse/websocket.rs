@@ -119,6 +119,21 @@ fn record_response_usage(
 	});
 }
 
+fn record_live_session_start(log: &AsyncLog<LLMInfo>, event: &serde_json::Value) {
+	if event.get("type").and_then(serde_json::Value::as_str) != Some("session.start") {
+		return;
+	}
+	if let Some(model) = event
+		.get("session")
+		.and_then(|session| session.get("model"))
+		.and_then(serde_json::Value::as_str)
+	{
+		log.non_atomic_mutate(|info| {
+			info.request.request_model = agent_core::strng::new(model);
+		});
+	}
+}
+
 fn record_websocket_usage(
 	log: &AsyncLog<LLMInfo>,
 	event: &serde_json::Value,
@@ -195,17 +210,36 @@ struct Parser<IO> {
 	frames: Option<WsFrameAccumulator>,
 	log: AsyncLog<LLMInfo>,
 	seen_responses: RefCell<HashSet<String>>,
+	mode: ParserMode,
+	is_gpt_live: bool,
+}
+
+#[derive(Clone, Copy)]
+enum ParserMode {
+	Server,
+	LiveClient,
 }
 
 impl<IO> Parser<IO> {
 	fn emit(&self, data: Bytes) {
+		if matches!(self.mode, ParserMode::LiveClient) && !self.is_gpt_live {
+			return;
+		}
 		let Ok(data) = str::from_utf8(&data) else {
 			return;
 		};
 		let Ok(value) = serde_json::from_str::<serde_json::Value>(data) else {
 			return;
 		};
-		record_websocket_usage(&self.log, &value, &mut self.seen_responses.borrow_mut());
+		match self.mode {
+			ParserMode::Server => {
+				record_websocket_usage(&self.log, &value, &mut self.seen_responses.borrow_mut());
+			},
+			ParserMode::LiveClient if self.is_gpt_live => {
+				record_live_session_start(&self.log, &value);
+			},
+			ParserMode::LiveClient => {},
+		}
 	}
 }
 
@@ -280,6 +314,27 @@ where
 		frames: Some(WsFrameAccumulator::new(frame_limit)),
 		log,
 		seen_responses: RefCell::new(HashSet::new()),
+		mode: ParserMode::Server,
+		is_gpt_live: false,
+	}
+}
+
+pub async fn live_client_parser<IO>(
+	body: IO,
+	log: AsyncLog<LLMInfo>,
+	frame_limit: usize,
+	is_gpt_live: bool,
+) -> impl AsyncRead + AsyncWrite + Unpin + 'static
+where
+	IO: AsyncRead + AsyncWrite + Unpin + 'static,
+{
+	Parser {
+		inner: body,
+		frames: Some(WsFrameAccumulator::new(frame_limit)),
+		log,
+		seen_responses: RefCell::new(HashSet::new()),
+		mode: ParserMode::LiveClient,
+		is_gpt_live,
 	}
 }
 
@@ -474,6 +529,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 	guard: PromptGuard,
 	policy_client: PolicyClient,
 	log: AsyncLog<LLMInfo>,
+	is_gpt_live: bool,
 	req_headers: ::http::HeaderMap,
 	original: Option<std::sync::Arc<crate::cel::RequestSnapshot>>,
 	guardrail_log: crate::telemetry::log::GuardrailLog,
@@ -495,6 +551,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 	let policy_client_clone = policy_client.clone();
 	let request_guardrail_log = guardrail_log.clone();
 	let log_clone = log.clone();
+	let client_log = log.clone();
 	let original_clone = original.clone();
 
 	let client_to_server = {
@@ -514,6 +571,11 @@ pub async fn guarded_realtime_proxy<C, S>(
 				for frame in accum.drain_frames()? {
 					match frame {
 						WsCompletedFrame::Text { raw, payload } => {
+							if is_gpt_live
+								&& let Ok(value) = serde_json::from_slice::<serde_json::Value>(&payload)
+							{
+								record_live_session_start(&client_log, &value);
+							}
 							if let Ok(text) = std::str::from_utf8(&payload)
 								&& let Ok(RealtimeClientEvent::ConversationItemCreate(create)) =
 									serde_json::from_str::<RealtimeClientEvent>(text)
