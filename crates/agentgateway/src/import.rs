@@ -54,6 +54,8 @@ pub struct ImportedModel {
 	pub defaults: Map<String, Value>,
 	pub request_headers: IndexMap<String, String>,
 	pub request_headers_override_defaults: bool,
+	/// Backend authentication emitted as the model's `auth`. When unset, the provider default applies.
+	pub auth: Option<Value>,
 	pub weight: usize,
 	/// False when the deployment overrides source-wide health settings, so
 	/// [`ImportPlan::model_health`] is not applied to it.
@@ -210,6 +212,9 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 					json!({"set": model.request_headers}),
 				);
 			}
+			if let Some(auth) = &model.auth {
+				value.insert("auth".to_string(), auth.clone());
+			}
 			if model.inherits_model_health
 				&& let Some(health) = &model_health
 			{
@@ -294,7 +299,22 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		.as_object_mut()
 		.expect("default standalone config must be an object")
 		.insert("llm".to_string(), Value::Object(llm));
-	let yaml = crate::yaml::to_string(&config)?;
+	let mut validated = config.clone();
+	// GCP credential files are read when the gateway loads the configuration, not where it is imported.
+	if let Some(models) = validated
+		.pointer_mut("/llm/models")
+		.and_then(Value::as_array_mut)
+	{
+		for model in models {
+			if let Some(gcp) = model
+				.pointer_mut("/auth/gcp")
+				.and_then(Value::as_object_mut)
+			{
+				gcp.remove("credential");
+			}
+		}
+	}
+	let yaml = crate::yaml::to_string(&validated)?;
 	let _: crate::types::local::LocalConfig =
 		crate::yaml::from_str(&yaml).context("generated agentgateway configuration is invalid")?;
 	Ok(ImportResult {
@@ -342,6 +362,27 @@ struct LiteLlmCredential {
 	provider_hint: Option<String>,
 	params: Map<String, Value>,
 	upstream_headers: LiteLlmUpstreamHeaders,
+	vertex_credentials: LiteLlmVertexCredentials,
+}
+
+/// The Google identity a LiteLLM Vertex AI deployment authenticates with.
+#[derive(Debug, Clone)]
+enum LiteLlmVertexCredentials {
+	/// No credentials are configured, so the process's application default credentials apply.
+	Unset,
+	/// A credential file path, from `field`.
+	File { path: String, field: &'static str },
+	/// Credentials from `field` that cannot be emitted without copying secrets or changing identity.
+	Rejected { field: &'static str },
+}
+
+impl LiteLlmVertexCredentials {
+	fn field(&self) -> Option<&'static str> {
+		match self {
+			Self::Unset => None,
+			Self::File { field, .. } | Self::Rejected { field } => Some(field),
+		}
+	}
 }
 
 #[derive(Debug, Default)]
@@ -404,17 +445,62 @@ impl ConfigImporter for LiteLlmImporter {
 			let deployment = counts.entry(model.model_name.clone()).or_default();
 			*deployment += 1;
 			let internal_name = imported_model_name(self.source(), &model.model_name, *deployment);
-			let Some((public_name, mut imported, credential_name, model_upstream_headers)) =
-				import_litellm_model(
-					internal_name.clone(),
-					model,
-					&source_path,
-					use_rpm_weights,
-					&mut plan.findings,
-				)
+			let Some(LiteLlmImportedModel {
+				public_name,
+				model: mut imported,
+				credential_name,
+				upstream_headers: model_upstream_headers,
+				vertex_credentials,
+			}) = import_litellm_model(
+				internal_name.clone(),
+				model,
+				&source_path,
+				use_rpm_weights,
+				&mut plan.findings,
+			)
 			else {
 				continue;
 			};
+			let is_vertex = matches!(&imported.provider, ImportedModelProvider::Inline(provider) if provider == "vertex");
+			let vertex_credentials = match &credential_name {
+				Some(credential_name) if is_vertex => {
+					let model_field = vertex_credentials.field();
+					let resolved = resolve_litellm_vertex_credentials(
+						vertex_credentials,
+						credentials.vertex_credentials(credential_name),
+					);
+					if let Some(model_field) = model_field
+						&& resolved.field() != Some(model_field)
+					{
+						let ignored = format!("{source_path}.litellm_params.{model_field}");
+						if let Some(finding) = plan
+							.findings
+							.iter_mut()
+							.find(|finding| finding.source_path == ignored)
+						{
+							finding.status = ImportStatus::Manual;
+							finding.message = format!(
+								"LiteLLM uses vertex_credentials from credential {credential_name:?} over this value; this value was ignored"
+							);
+						}
+					}
+					resolved
+				},
+				_ => vertex_credentials,
+			};
+			if let LiteLlmVertexCredentials::Rejected { .. } = vertex_credentials {
+				plan.findings.push(ImportFinding {
+					source_path: format!("{source_path}.litellm_params.litellm_credential_name"),
+					status: ImportStatus::Manual,
+					message: "The referenced LiteLLM credential holds Vertex AI credentials that cannot be mapped safely; the model was not emitted".to_string(),
+				});
+				continue;
+			}
+			plan.findings.push(ImportFinding {
+				source_path: source_path.clone(),
+				status: ImportStatus::Exact,
+				message: format!("Imported model deployment for {public_name}"),
+			});
 			if let Some(credential_name) = credential_name {
 				credentials.apply(
 					self.source(),
@@ -424,6 +510,17 @@ impl ConfigImporter for LiteLlmImporter {
 					&mut imported,
 					&mut plan,
 				);
+			}
+			match vertex_credentials {
+				LiteLlmVertexCredentials::File { path, .. } => {
+					imported.auth = Some(json!({"gcp": {"credential": {"file": path}}}));
+				},
+				LiteLlmVertexCredentials::Unset if is_vertex => plan.findings.push(ImportFinding {
+					source_path: format!("{source_path}.litellm_params.vertex_credentials"),
+					status: ImportStatus::Approximate,
+					message: "No Vertex AI credentials are configured, so agentgateway uses its application default credentials; LiteLLM would first use VERTEXAI_CREDENTIALS from its environment".to_string(),
+				}),
+				_ => {},
 			}
 			plan
 				.routes
@@ -1037,6 +1134,12 @@ impl LiteLlmCredentials {
 
 			let mut params = Map::new();
 			move_litellm_provider_params(&mut credential_values, &mut params);
+			let vertex_credentials = take_litellm_vertex_credentials(
+				&mut credential_values,
+				&format!("{source_path}.credential_values"),
+				"Vertex AI models that reference this credential were not emitted",
+				findings,
+			);
 			let extra_headers = take_litellm_extra_headers(
 				&mut credential_values,
 				&format!("{source_path}.credential_values"),
@@ -1064,6 +1167,7 @@ impl LiteLlmCredentials {
 					organization,
 					extra_headers,
 				},
+				vertex_credentials,
 			});
 		}
 
@@ -1095,6 +1199,18 @@ impl LiteLlmCredentials {
 			reported_request_headers: HashSet::new(),
 			reported_organization_providers: HashSet::new(),
 		}
+	}
+
+	fn vertex_credentials(&self, credential_name: &str) -> LiteLlmVertexCredentials {
+		if self.ambiguous.contains(credential_name) {
+			return LiteLlmVertexCredentials::Unset;
+		}
+		self
+			.entries
+			.get(credential_name)
+			.map_or(LiteLlmVertexCredentials::Unset, |credential| {
+				credential.vertex_credentials.clone()
+			})
 	}
 
 	fn report_unused(&self, findings: &mut Vec<ImportFinding>) {
@@ -1207,7 +1323,15 @@ impl LiteLlmCredentials {
 					.cloned(),
 			);
 		}
-		if credential.params.is_empty() && credential_request_headers.is_empty() {
+		let applies_vertex_credentials = provider == "vertex"
+			&& !matches!(
+				credential.vertex_credentials,
+				LiteLlmVertexCredentials::Unset
+			);
+		if credential.params.is_empty()
+			&& credential_request_headers.is_empty()
+			&& !applies_vertex_credentials
+		{
 			plan.findings.push(ImportFinding {
 				source_path: reference_path,
 				status: ImportStatus::Manual,
@@ -1289,12 +1413,7 @@ fn import_litellm_model(
 	source_path: &str,
 	use_rpm_weights: bool,
 	findings: &mut Vec<ImportFinding>,
-) -> Option<(
-	String,
-	ImportedModel,
-	Option<String>,
-	LiteLlmUpstreamHeaders,
-)> {
+) -> Option<LiteLlmImportedModel> {
 	let LiteLlmModel {
 		model_name: public_name,
 		litellm_params: mut params,
@@ -1381,6 +1500,22 @@ fn import_litellm_model(
 				"LiteLLM upstream wildcard rewrite from public model pattern {public_name:?} to upstream model pattern {model_id:?} cannot be represented safely and the model was not emitted"
 			),
 		});
+		return None;
+	}
+	let vertex_credentials = if provider == "vertex" {
+		take_litellm_vertex_credentials(
+			&mut params,
+			&format!("{source_path}.litellm_params"),
+			"The model was not emitted",
+			findings,
+		)
+	} else {
+		LiteLlmVertexCredentials::Unset
+	};
+	if matches!(
+		vertex_credentials,
+		LiteLlmVertexCredentials::Rejected { .. }
+	) {
 		return None;
 	}
 
@@ -1497,26 +1632,120 @@ fn import_litellm_model(
 		ImportStatus::Manual,
 		"LiteLLM parameter requires manual review and was not emitted",
 	);
-	findings.push(ImportFinding {
-		source_path: source_path.to_string(),
-		status: ImportStatus::Exact,
-		message: format!("Imported model deployment for {public_name}"),
-	});
-	Some((
+	Some(LiteLlmImportedModel {
 		public_name,
-		ImportedModel {
+		model: ImportedModel {
 			name,
 			provider: ImportedModelProvider::Inline(provider.to_string()),
 			params: output_params,
 			defaults,
 			request_headers,
 			request_headers_override_defaults: false,
+			auth: None,
 			weight,
 			inherits_model_health: !health_override,
 		},
 		credential_name,
-		model_upstream_headers,
-	))
+		upstream_headers: model_upstream_headers,
+		vertex_credentials,
+	})
+}
+
+struct LiteLlmImportedModel {
+	public_name: String,
+	model: ImportedModel,
+	credential_name: Option<String>,
+	upstream_headers: LiteLlmUpstreamHeaders,
+	vertex_credentials: LiteLlmVertexCredentials,
+}
+
+/// Reads `vertex_credentials`, or its `vertex_ai_credentials` alias, the way LiteLLM selects them.
+/// `rejected_consequence` completes findings for credentials that are not emitted.
+fn take_litellm_vertex_credentials(
+	source: &mut Map<String, Value>,
+	prefix: &str,
+	rejected_consequence: &str,
+	findings: &mut Vec<ImportFinding>,
+) -> LiteLlmVertexCredentials {
+	let mut selected = None;
+	for field in ["vertex_credentials", "vertex_ai_credentials"] {
+		let Some(value) = source.remove(field) else {
+			continue;
+		};
+		// LiteLLM skips empty values and falls through to the next source.
+		if value.is_null() || value.as_str() == Some("") {
+			continue;
+		}
+		let source_path = format!("{prefix}.{field}");
+		if selected.is_some() {
+			findings.push(ImportFinding {
+				source_path,
+				status: ImportStatus::Manual,
+				message: "LiteLLM uses vertex_credentials when both are set; this value was ignored"
+					.to_string(),
+			});
+			continue;
+		}
+		let is_inline = match &value {
+			Value::Object(_) => true,
+			Value::String(value) => value
+				.trim_start_matches([' ', '\t', '\r', '\n', '\u{feff}', '"', '\''])
+				.starts_with('{'),
+			_ => false,
+		};
+		let (status, message, credentials) = match value {
+			_ if is_inline => (
+				ImportStatus::Manual,
+				format!(
+					"Inline Vertex AI credential JSON is not copied into generated configuration; store it in a file and reference the path. {rejected_consequence}"
+				),
+				LiteLlmVertexCredentials::Rejected { field },
+			),
+			Value::String(value) if value.starts_with("os.environ/") => (
+				ImportStatus::Manual,
+				format!(
+					"Vertex AI credentials from an environment variable may be credential JSON or a file path and cannot be mapped safely. {rejected_consequence}"
+				),
+				LiteLlmVertexCredentials::Rejected { field },
+			),
+			Value::String(path) if std::path::Path::new(&path).is_absolute() => (
+				ImportStatus::Exact,
+				"Mapped Vertex AI credential file to auth.gcp.credential".to_string(),
+				LiteLlmVertexCredentials::File { path, field },
+			),
+			Value::String(path) => (
+				ImportStatus::Approximate,
+				"Mapped relative Vertex AI credential file to auth.gcp.credential; agentgateway resolves it against its own working directory".to_string(),
+				LiteLlmVertexCredentials::File { path, field },
+			),
+			_ => (
+				ImportStatus::Unsupported,
+				format!(
+					"Vertex AI credentials must be a file path or credential JSON. {rejected_consequence}"
+				),
+				LiteLlmVertexCredentials::Rejected { field },
+			),
+		};
+		findings.push(ImportFinding {
+			source_path,
+			status,
+			message,
+		});
+		selected = Some(credentials);
+	}
+	selected.unwrap_or(LiteLlmVertexCredentials::Unset)
+}
+
+/// LiteLLM fills credential-list values only for keys the deployment does not set, then reads
+/// `vertex_credentials` before `vertex_ai_credentials`.
+fn resolve_litellm_vertex_credentials(
+	model: LiteLlmVertexCredentials,
+	shared: LiteLlmVertexCredentials,
+) -> LiteLlmVertexCredentials {
+	match (model.field(), shared.field()) {
+		(None, _) | (Some("vertex_ai_credentials"), Some("vertex_credentials")) => shared,
+		_ => model,
+	}
 }
 
 fn split_provider(model: &str) -> (&str, &str) {
@@ -2673,7 +2902,429 @@ router_settings:
 	}
 
 	#[test]
+	fn imports_vertex_credentials_without_identity_fallback() {
+		assert_litellm_golden("vertex-credentials");
+	}
+
+	#[test]
 	fn lists_registered_sources_in_stable_order() {
 		assert_eq!(available_sources(), vec!["litellm"]);
+	}
+
+	const CREDENTIAL_SENTINEL: &str = "SENTINEL-vertex-secret-7f3a";
+
+	fn find_finding<'a>(result: &'a ImportResult, source_path: &str) -> &'a ImportFinding {
+		result
+			.findings
+			.iter()
+			.find(|finding| finding.source_path == source_path)
+			.unwrap_or_else(|| panic!("missing finding for {source_path}"))
+	}
+
+	fn imported_model<'a>(result: &'a ImportResult, name: &str) -> Option<&'a Value> {
+		imported_models(result)
+			.iter()
+			.find(|model| model["name"] == name)
+	}
+
+	#[test]
+	fn maps_vertex_credentials_file_to_gcp_auth() {
+		let result = import_config(
+			"litellm",
+			r#"
+model_list:
+- model_name: absolute
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_location: us-central1
+    vertex_credentials: /var/run/secrets/vertex/credentials.json
+- model_name: alias
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_location: europe-west4
+    vertex_ai_credentials: /var/run/secrets/vertex/alias.json
+- model_name: relative
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_location: us-central1
+    vertex_credentials: secrets/credentials.json
+"#,
+		)
+		.expect("import litellm config");
+
+		for (name, path, location, field, status) in [
+			(
+				"absolute",
+				"/var/run/secrets/vertex/credentials.json",
+				"us-central1",
+				"model_list[0].litellm_params.vertex_credentials",
+				ImportStatus::Exact,
+			),
+			(
+				"alias",
+				"/var/run/secrets/vertex/alias.json",
+				"europe-west4",
+				"model_list[1].litellm_params.vertex_ai_credentials",
+				ImportStatus::Exact,
+			),
+			(
+				"relative",
+				"secrets/credentials.json",
+				"us-central1",
+				"model_list[2].litellm_params.vertex_credentials",
+				ImportStatus::Approximate,
+			),
+		] {
+			let model = imported_model(&result, name).unwrap_or_else(|| panic!("{name} not emitted"));
+			assert_eq!(model["provider"], "vertex");
+			assert_eq!(model["params"]["vertexProject"], "example-project");
+			assert_eq!(model["params"]["vertexRegion"], location);
+			assert_eq!(
+				model["auth"],
+				json!({"gcp": {"credential": {"file": path}}})
+			);
+			assert_eq!(find_status(&result, field), status, "{field}");
+		}
+	}
+
+	#[test]
+	fn reports_ambient_vertex_credentials() {
+		let result = import_config(
+			"litellm",
+			r#"
+model_list:
+- model_name: ambient
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_location: us-central1
+"#,
+		)
+		.expect("import litellm config");
+
+		let model = imported_model(&result, "ambient").expect("ambient model emitted");
+		assert!(model.get("auth").is_none());
+		assert_eq!(model["params"]["vertexProject"], "example-project");
+		assert_eq!(model["params"]["vertexRegion"], "us-central1");
+		let finding = find_finding(&result, "model_list[0].litellm_params.vertex_credentials");
+		assert_eq!(finding.status, ImportStatus::Approximate);
+		assert!(finding.message.contains("VERTEXAI_CREDENTIALS"));
+	}
+
+	#[test]
+	fn does_not_emit_vertex_models_with_unrepresentable_credentials() {
+		let input = format!(
+			r#"
+model_list:
+- model_name: inline-json
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_credentials: '{{"type": "service_account", "private_key": "{CREDENTIAL_SENTINEL}"}}'
+- model_name: inline-mapping
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_credentials:
+      type: service_account
+      private_key: {CREDENTIAL_SENTINEL}
+- model_name: environment
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_credentials: os.environ/VERTEX_CREDENTIALS_{CREDENTIAL_SENTINEL}
+- model_name: malformed
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_credentials: 42
+"#
+		);
+		let result = import_config("litellm", &input).expect("import litellm config");
+
+		for (index, name, status) in [
+			(0, "inline-json", ImportStatus::Manual),
+			(1, "inline-mapping", ImportStatus::Manual),
+			(2, "environment", ImportStatus::Manual),
+			(3, "malformed", ImportStatus::Unsupported),
+		] {
+			assert!(
+				imported_model(&result, name).is_none(),
+				"{name} must not fall back to ambient credentials"
+			);
+			let field = format!("model_list[{index}].litellm_params.vertex_credentials");
+			let finding = find_finding(&result, &field);
+			assert_eq!(finding.status, status, "{field}");
+			assert!(finding.message.contains("not emitted"), "{field}");
+			assert!(
+				!result.findings.iter().any(|finding| finding.source_path
+					== format!("model_list[{index}]")
+					&& finding.status == ImportStatus::Exact),
+				"{name} must not be reported as imported"
+			);
+		}
+		let serialized = serde_json::to_string(&result).expect("serialize result");
+		assert!(!serialized.contains(CREDENTIAL_SENTINEL));
+	}
+
+	#[test]
+	fn resolves_conflicting_vertex_credential_settings_like_litellm() {
+		let result = import_config(
+			"litellm",
+			r#"
+credential_list:
+- credential_name: shared-vertex
+  credential_values:
+    vertex_project: example-project
+    vertex_location: us-central1
+    vertex_credentials: /var/run/secrets/vertex/shared.json
+model_list:
+- model_name: both-keys
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_credentials: /var/run/secrets/vertex/primary.json
+    vertex_ai_credentials: /var/run/secrets/vertex/ignored.json
+- model_name: shared
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    litellm_credential_name: shared-vertex
+- model_name: model-override
+  litellm_params:
+    model: vertex_ai/gemini-2.5-pro
+    litellm_credential_name: shared-vertex
+    vertex_credentials: /var/run/secrets/vertex/override.json
+- model_name: model-alias
+  litellm_params:
+    model: vertex_ai/gemini-2.5-pro
+    litellm_credential_name: shared-vertex
+    vertex_ai_credentials: /var/run/secrets/vertex/alias.json
+"#,
+		)
+		.expect("import litellm config");
+
+		let alias = imported_model(&result, "model-alias").expect("model-alias emitted");
+		assert_eq!(
+			alias["auth"],
+			json!({"gcp": {"credential": {"file": "/var/run/secrets/vertex/shared.json"}}})
+		);
+		assert_eq!(
+			find_status(
+				&result,
+				"model_list[3].litellm_params.vertex_ai_credentials"
+			),
+			ImportStatus::Manual
+		);
+		assert_eq!(
+			find_status(&result, "model_list[2].litellm_params.vertex_credentials"),
+			ImportStatus::Exact
+		);
+
+		let both = imported_model(&result, "both-keys").expect("both-keys emitted");
+		assert_eq!(
+			both["auth"],
+			json!({"gcp": {"credential": {"file": "/var/run/secrets/vertex/primary.json"}}})
+		);
+		assert_eq!(
+			find_status(
+				&result,
+				"model_list[0].litellm_params.vertex_ai_credentials"
+			),
+			ImportStatus::Manual
+		);
+
+		let shared = imported_model(&result, "shared").expect("shared emitted");
+		assert_eq!(
+			shared["auth"],
+			json!({"gcp": {"credential": {"file": "/var/run/secrets/vertex/shared.json"}}})
+		);
+		assert_eq!(
+			find_status(
+				&result,
+				"credential_list[0].credential_values.vertex_credentials"
+			),
+			ImportStatus::Exact
+		);
+
+		let overridden = imported_model(&result, "model-override").expect("model-override emitted");
+		assert_eq!(
+			overridden["auth"],
+			json!({"gcp": {"credential": {"file": "/var/run/secrets/vertex/override.json"}}})
+		);
+		let providers = result.config["llm"]["providers"]
+			.as_array()
+			.expect("generated providers");
+		for model in [shared, overridden] {
+			let reference = &model["provider"]["reference"];
+			let provider = providers
+				.iter()
+				.find(|provider| &provider["name"] == reference)
+				.expect("referenced provider");
+			assert_eq!(provider["params"]["vertexProject"], "example-project");
+			assert_eq!(provider["params"]["vertexRegion"], "us-central1");
+			assert!(provider.get("defaults").is_none());
+		}
+	}
+
+	#[test]
+	fn does_not_emit_vertex_models_referencing_unrepresentable_shared_credentials() {
+		let result = import_config(
+			"litellm",
+			&format!(
+				r#"
+credential_list:
+- credential_name: inline-vertex
+  credential_values:
+    vertex_project: example-project
+    vertex_credentials: '{{"type": "service_account", "private_key": "{CREDENTIAL_SENTINEL}"}}'
+model_list:
+- model_name: shared-inline
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    litellm_credential_name: inline-vertex
+"#
+			),
+		)
+		.expect("import litellm config");
+
+		assert!(imported_model(&result, "shared-inline").is_none());
+		assert!(result.config["llm"].get("providers").is_none());
+		assert_eq!(
+			find_status(
+				&result,
+				"credential_list[0].credential_values.vertex_credentials"
+			),
+			ImportStatus::Manual
+		);
+		let serialized = serde_json::to_string(&result).expect("serialize result");
+		assert!(!serialized.contains(CREDENTIAL_SENTINEL));
+	}
+
+	#[test]
+	fn leaves_vertex_credentials_on_other_providers_for_manual_review() {
+		let result = import_config(
+			"litellm",
+			r#"
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+    api_key: os.environ/OPENAI_API_KEY
+    vertex_credentials: /var/run/secrets/vertex/credentials.json
+"#,
+		)
+		.expect("import litellm config");
+
+		let model = imported_model(&result, "chat").expect("chat emitted");
+		assert!(model.get("auth").is_none());
+		assert_eq!(model["params"]["apiKey"], "$OPENAI_API_KEY");
+		assert_eq!(
+			find_status(&result, "model_list[0].litellm_params.vertex_credentials"),
+			ImportStatus::Manual
+		);
+		assert_eq!(find_status(&result, "model_list[0]"), ImportStatus::Exact);
+	}
+
+	async fn load_native(
+		config: &Value,
+	) -> anyhow::Result<crate::types::local::NormalizedLocalConfig> {
+		let yaml = crate::yaml::to_string(config)?;
+		crate::types::local::NormalizedLocalConfig::from(
+			&crate::config::parse_config("{}".to_string(), None)?,
+			&crate::resource_manager::ResourceFetcher::files_only(),
+			crate::types::agent::ListenerTarget {
+				gateway_name: "name".into(),
+				gateway_namespace: "ns".into(),
+				listener_name: None,
+				port: None,
+			},
+			&yaml,
+		)
+		.await
+	}
+
+	fn has_explicit_vertex_gcp_credential(
+		config: &crate::types::local::NormalizedLocalConfig,
+	) -> bool {
+		use crate::http::auth::{BackendAuth, BackendAuthKind, GcpAuth};
+		use crate::types::agent::{Backend, BackendTrafficPolicy};
+		config.backends.iter().any(|backend| {
+			let Backend::AI(_, ai) = &backend.backend else {
+				return false;
+			};
+			let is_vertex = ai
+				.providers
+				.iter()
+				.iter()
+				.any(|(provider, _)| matches!(provider.provider, crate::llm::AIProvider::Vertex(_)));
+			is_vertex
+				&& backend.inline_policies.iter().any(|policy| {
+					matches!(
+						policy,
+						BackendTrafficPolicy::BackendAuth(BackendAuth {
+							kind: Some(BackendAuthKind::Gcp(GcpAuth::AccessToken {
+								credential: Some(_),
+								..
+							})),
+							..
+						})
+					)
+				})
+		})
+	}
+
+	#[tokio::test]
+	async fn native_loader_reads_imported_vertex_credential_file() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let credential_path = dir.path().join("credentials.json");
+		let subject_token_path = dir.path().join("token");
+		fs::write(&subject_token_path, "synthetic-subject-token").expect("write token");
+		fs::write(
+			&credential_path,
+			json!({
+				"type": "external_account",
+				"audience": "//iam.googleapis.com/projects/0/locations/global/workloadIdentityPools/pool/providers/provider",
+				"subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+				"token_url": "https://sts.googleapis.com/v1/token",
+				"credential_source": {"file": subject_token_path},
+			})
+			.to_string(),
+		)
+		.expect("write credential");
+		let input = format!(
+			r#"
+model_list:
+- model_name: vertex
+  litellm_params:
+    model: vertex_ai/gemini-2.5-flash
+    vertex_project: example-project
+    vertex_location: us-central1
+    vertex_credentials: {}
+- model_name: openai
+  litellm_params:
+    model: openai/gpt-4o
+    api_key: synthetic-openai-key
+"#,
+			credential_path.display()
+		);
+		let result = import_config("litellm", &input).expect("import litellm config");
+		let loaded = load_native(&result.config)
+			.await
+			.expect("native loader accepts the imported credential file");
+		assert!(has_explicit_vertex_gcp_credential(&loaded));
+
+		fs::remove_file(&credential_path).expect("remove credential");
+		let error = load_native(&result.config)
+			.await
+			.expect_err("a missing credential file must fail closed");
+		assert!(format!("{error:#}").contains("llm.models[0]"), "{error:#}");
+
+		fs::write(&credential_path, "not json").expect("write invalid credential");
+		load_native(&result.config)
+			.await
+			.expect_err("an invalid credential file must fail closed");
 	}
 }
