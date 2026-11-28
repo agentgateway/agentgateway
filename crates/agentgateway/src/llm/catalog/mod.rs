@@ -273,9 +273,6 @@ impl ModelCatalog {
 		// Price each pass at the model that ran it, falling back to the primary model when that
 		// model is unpriced. Rates and model info are reported from the first pass, which is
 		// always the primary model's.
-		// GPT-Live can report session-duration usage for the voice model alongside one or more
-		// delegated Responses token-usage lines. Price the primary session duration separately so
-		// per-model backend token lines do not replace the Live audio cost.
 		let mut total: Option<CostProjection> = info.response.audio_seconds.map(|audio_seconds| {
 			primary(&LLMResponse {
 				audio_seconds: Some(audio_seconds),

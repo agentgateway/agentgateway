@@ -23,9 +23,6 @@ fn add_usage_value(target: &mut Option<u64>, value: Option<u64>) {
 	}
 }
 
-/// Accumulate usage reported for a Realtime response into the connection-level record.
-/// Realtime sockets can carry multiple responses, so each response contributes to the
-/// connection total instead of replacing usage from earlier turns.
 fn accumulate_realtime_usage(response: &mut LLMResponse, usage: &serde_json::Value) {
 	add_usage_value(
 		&mut response.input_tokens,
@@ -85,7 +82,6 @@ fn accumulate_realtime_usage(response: &mut LLMResponse, usage: &serde_json::Val
 	);
 }
 
-/// Record one completed Response's usage and add its modality-aware connection totals.
 fn record_response_usage(
 	log: &AsyncLog<LLMInfo>,
 	model: Option<&str>,
@@ -123,8 +119,6 @@ fn record_response_usage(
 	});
 }
 
-/// Record usage for GPT-Live and Realtime WebSocket events.
-/// Live duration updates are cumulative snapshots; completed responses contribute usage lines.
 fn record_websocket_usage(
 	log: &AsyncLog<LLMInfo>,
 	event: &serde_json::Value,
@@ -149,7 +143,6 @@ fn record_websocket_usage(
 					.and_then(|usage| usage.get("seconds"))
 					.and_then(serde_json::Value::as_f64)
 				{
-					// Live usage is cumulative; each update replaces the previous snapshot.
 					info.response.audio_seconds = Some(seconds);
 				}
 				if event.get("type").and_then(serde_json::Value::as_str) == Some("session.closed")
