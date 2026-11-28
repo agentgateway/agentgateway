@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::io::{Error, IoSlice};
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
@@ -11,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use websocket_sans_io::{FrameInfo, Opcode, WebsocketFrameEncoder, WebsocketFrameEvent};
 
 use crate::llm::policy::PromptGuard;
-use crate::llm::LLMInfo;
+use crate::llm::{LLMInfo, UsageLine};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 
@@ -40,7 +42,9 @@ fn accumulate_realtime_usage(log: &AsyncLog<LLMInfo>, usage: &serde_json::Value)
 			usage.get("total_tokens").and_then(serde_json::Value::as_u64),
 		);
 
-		let input = usage.get("input_token_details");
+		let input = usage
+			.get("input_token_details")
+			.or_else(|| usage.get("input_tokens_details"));
 		add_usage_value(
 			&mut response.input_text_tokens,
 			input
@@ -66,7 +70,9 @@ fn accumulate_realtime_usage(log: &AsyncLog<LLMInfo>, usage: &serde_json::Value)
 				.and_then(serde_json::Value::as_u64),
 		);
 
-		let output = usage.get("output_token_details");
+		let output = usage
+			.get("output_token_details")
+			.or_else(|| usage.get("output_tokens_details"));
 		add_usage_value(
 			&mut response.output_text_tokens,
 			output
@@ -80,6 +86,102 @@ fn accumulate_realtime_usage(log: &AsyncLog<LLMInfo>, usage: &serde_json::Value)
 				.and_then(serde_json::Value::as_u64),
 		);
 	});
+}
+
+/// Record GPT-Live lifecycle usage and delegated Responses usage carried in Live events.
+/// Live duration updates are cumulative snapshots, while each completed delegated Response
+/// contributes a separate token-usage line.
+fn record_live_usage(
+	log: &AsyncLog<LLMInfo>,
+	event: &serde_json::Value,
+	seen_responses: &mut HashSet<String>,
+) {
+	match event.get("type").and_then(serde_json::Value::as_str) {
+		Some("session.started") => {
+			if let Some(model) = event
+				.get("session")
+				.and_then(|session| session.get("model"))
+				.and_then(serde_json::Value::as_str)
+			{
+				log.non_atomic_mutate(|info| {
+					info.response.provider_model = Some(agent_core::strng::new(model));
+				});
+			}
+		},
+		Some("session.usage.updated" | "session.closed") => {
+			log.non_atomic_mutate(|info| {
+				if let Some(seconds) = event
+					.get("usage")
+					.and_then(|usage| usage.get("seconds"))
+					.and_then(serde_json::Value::as_f64)
+				{
+					// Live usage is cumulative; each update replaces the previous snapshot.
+					info.response.audio_seconds = Some(seconds);
+				}
+				if event.get("type").and_then(serde_json::Value::as_str) == Some("session.closed")
+					&& let Some(reason) = event.get("reason").and_then(serde_json::Value::as_str)
+				{
+					info.response.finish_reasons = Some(vec![agent_core::strng::new(reason)]);
+				}
+			});
+		},
+		Some("response.event") => {
+			let nested = event.get("event");
+			if nested
+				.and_then(|value| value.get("type"))
+				.and_then(serde_json::Value::as_str)
+				!= Some("response.completed")
+			{
+				return;
+			}
+			let Some(response) = nested.and_then(|value| value.get("response")) else {
+				return;
+			};
+			let Some(response_id) = response.get("id").and_then(serde_json::Value::as_str) else {
+				return;
+			};
+			if !seen_responses.insert(response_id.to_string()) {
+				return;
+			}
+			let Some(usage) = response.get("usage") else {
+				return;
+			};
+			let model = response
+				.get("model")
+				.and_then(serde_json::Value::as_str)
+				.map(agent_core::strng::new);
+			let input_tokens = usage.get("input_tokens").and_then(serde_json::Value::as_u64);
+			let output_tokens = usage.get("output_tokens").and_then(serde_json::Value::as_u64);
+			let cached_input_tokens = usage
+				.get("input_tokens_details")
+				.and_then(|details| details.get("cached_tokens"))
+				.and_then(serde_json::Value::as_u64);
+			let input_audio_tokens = usage
+				.get("input_tokens_details")
+				.and_then(|details| details.get("audio_tokens"))
+				.and_then(serde_json::Value::as_u64);
+			let output_audio_tokens = usage
+				.get("output_tokens_details")
+				.and_then(|details| details.get("audio_tokens"))
+				.and_then(serde_json::Value::as_u64);
+
+			if let Ok(usage) = serde_json::to_value(usage) {
+				accumulate_realtime_usage(log, &usage);
+			}
+			log.non_atomic_mutate(|info| {
+				info.response.usage_lines.push(UsageLine {
+					model,
+					input_tokens: input_tokens.unwrap_or_default(),
+					output_tokens: output_tokens.unwrap_or_default(),
+					input_audio_tokens,
+					output_audio_tokens,
+					cached_input_tokens,
+					..Default::default()
+				});
+			});
+		},
+		_ => {},
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -98,6 +200,7 @@ struct Parser<IO> {
 	inner: IO,
 	frames: Option<WsFrameAccumulator>,
 	log: AsyncLog<LLMInfo>,
+	seen_live_responses: RefCell<HashSet<String>>,
 }
 
 impl<IO> Parser<IO> {
@@ -105,8 +208,12 @@ impl<IO> Parser<IO> {
 		let Ok(data) = str::from_utf8(&data) else {
 			return;
 		};
-		if data.contains("response.done") {
-			let Ok(typed) = serde_json::from_str::<ResponseDoneEvent>(data) else {
+		let Ok(value) = serde_json::from_str::<serde_json::Value>(data) else {
+			return;
+		};
+		record_live_usage(&self.log, &value, &mut self.seen_live_responses.borrow_mut());
+		if value.get("type").and_then(serde_json::Value::as_str) == Some("response.done") {
+			let Ok(typed) = serde_json::from_value::<ResponseDoneEvent>(value) else {
 				return;
 			};
 			if let Some(usage) = typed.response.usage {
@@ -191,6 +298,7 @@ where
 		inner: body,
 		frames: Some(WsFrameAccumulator::new(frame_limit)),
 		log,
+		seen_live_responses: RefCell::new(HashSet::new()),
 	}
 }
 
@@ -473,6 +581,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 	let server_to_client = {
 		async move {
 			let mut accum = WsFrameAccumulator::new(frame_limit);
+			let mut seen_live_responses = HashSet::new();
 			let mut read_buf = [0u8; 4096];
 			let mut evaluators = guard_clone.begin_streaming_response_guard(
 				&policy_client_clone,
@@ -495,6 +604,9 @@ pub async fn guarded_realtime_proxy<C, S>(
 				for frame in accum.drain_frames()? {
 					match frame {
 						WsCompletedFrame::Text { raw, payload } => {
+							if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&payload) {
+								record_live_usage(&log_clone, &value, &mut seen_live_responses);
+							}
 							let event = std::str::from_utf8(&payload)
 								.ok()
 								.and_then(|s| serde_json::from_str::<RealtimeServerEvent>(s).ok());
@@ -665,6 +777,65 @@ mod tests {
 		assert_eq!(response.cached_input_tokens, Some(15));
 		assert_eq!(response.output_text_tokens, Some(23));
 		assert_eq!(response.output_audio_tokens, Some(7));
+	}
+
+	#[test]
+	fn live_usage_replaces_duration_snapshots_and_deduplicates_completed_responses() {
+		let log: AsyncLog<LLMInfo> = AsyncLog::default();
+		log.store(Some(LLMInfo::new(Default::default(), Default::default())));
+		let mut seen_responses = HashSet::new();
+		for event in [
+			serde_json::json!({
+				"type": "session.started",
+				"session": {"model": "gpt-live-1.1"}
+			}),
+			serde_json::json!({"type": "session.usage.updated", "usage": {"seconds": 12}}),
+			serde_json::json!({"type": "session.usage.updated", "usage": {"seconds": 15}}),
+		] {
+			record_live_usage(&log, &event, &mut seen_responses);
+		}
+
+		let completion = serde_json::json!({
+			"type": "response.event",
+			"event": {
+				"type": "response.completed",
+				"response": {
+					"id": "resp_1",
+					"model": "gpt-4.1",
+					"usage": {
+						"input_tokens": 100,
+						"output_tokens": 20,
+						"total_tokens": 120,
+					"input_tokens_details": {"cached_tokens": 10, "audio_tokens": 5},
+					"output_tokens_details": {"audio_tokens": 7}
+					}
+				}
+			}
+		});
+		record_live_usage(&log, &completion, &mut seen_responses);
+		record_live_usage(&log, &completion, &mut seen_responses);
+		record_live_usage(
+			&log,
+			&serde_json::json!({
+				"type": "session.closed",
+				"reason": "close_requested",
+				"usage": {"seconds": 16}
+			}),
+			&mut seen_responses,
+		);
+
+		let response = log.load_clone().expect("log initialized").response;
+		assert_eq!(response.provider_model.as_deref(), Some("gpt-live-1.1"));
+		assert_eq!(response.audio_seconds, Some(16.0));
+		assert_eq!(response.input_tokens, Some(100));
+		assert_eq!(response.output_tokens, Some(20));
+		assert_eq!(response.total_tokens, Some(120));
+		assert_eq!(response.cached_input_tokens, Some(10));
+		assert_eq!(response.usage_lines.len(), 1);
+		assert_eq!(response.usage_lines[0].model.as_deref(), Some("gpt-4.1"));
+		assert_eq!(response.usage_lines[0].input_audio_tokens, Some(5));
+		assert_eq!(response.usage_lines[0].output_audio_tokens, Some(7));
+		assert_eq!(response.finish_reasons.as_ref().map(|v| v[0].as_str()), Some("close_requested"));
 	}
 
 	#[test]

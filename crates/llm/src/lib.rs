@@ -533,6 +533,10 @@ pub struct UsageLine {
 	pub input_tokens: u64,
 	pub output_tokens: u64,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_audio_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_audio_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_creation_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_creation_1h_input_tokens: Option<u64>,

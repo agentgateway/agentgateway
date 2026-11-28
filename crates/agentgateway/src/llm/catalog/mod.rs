@@ -273,11 +273,22 @@ impl ModelCatalog {
 		// Price each pass at the model that ran it, falling back to the primary model when that
 		// model is unpriced. Rates and model info are reported from the first pass, which is
 		// always the primary model's.
-		let mut total: Option<CostProjection> = None;
+		// GPT-Live can report session-duration usage for the voice model alongside one or more
+		// delegated Responses token-usage lines. Price the primary session duration separately so
+		// per-model backend token lines do not replace the Live audio cost.
+		let mut total: Option<CostProjection> = info.response.audio_seconds.map(|audio_seconds| {
+			primary(&LLMResponse {
+				audio_seconds: Some(audio_seconds),
+				service_tier: info.response.service_tier.clone(),
+				..Default::default()
+			})
+		});
 		for line in &info.response.usage_lines {
 			let resp = LLMResponse {
 				input_tokens: Some(line.input_tokens),
 				output_tokens: Some(line.output_tokens),
+				input_audio_tokens: line.input_audio_tokens,
+				output_audio_tokens: line.output_audio_tokens,
 				cached_input_tokens: line.cached_input_tokens,
 				cache_creation_input_tokens: line.cache_creation_input_tokens,
 				cache_creation_1h_input_tokens: line.cache_creation_1h_input_tokens,
@@ -1710,6 +1721,30 @@ mod tests {
 		assert_eq!(projection.status, CostLookupStatus::Exact);
 		// executor 3 + advisor 30 + unknown falls back to executor 3
 		assert_eq!(projection.cost.and_then(|c| c.total().to_f64()), Some(36.0));
+	}
+
+	#[test]
+	fn project_prices_live_audio_duration_and_delegated_responses_separately() {
+		let catalog = model_catalog(
+			r#"{"providers":{"openai":{"models":{
+				"gpt-live-1.1":{"rates":{"perAudioMinute":"0.06"}},
+				"gpt-4.1":{"rates":{"input":"1","output":"2","inputAudio":"4","outputAudio":"5"}}
+			}}}}"#,
+		);
+		let mut info = test_llm_info("gpt-live-1.1", Some("gpt-live-1.1"));
+		info.response.audio_seconds = Some(60.0);
+		info.response.usage_lines = vec![agent_llm::UsageLine {
+			model: Some("gpt-4.1".into()),
+			input_tokens: 1_000_000,
+			output_tokens: 1_000_000,
+			input_audio_tokens: Some(200_000),
+			output_audio_tokens: Some(300_000),
+			..Default::default()
+		}];
+
+		let projection = catalog.project(&info);
+		assert_eq!(projection.status, CostLookupStatus::Exact);
+		assert_eq!(projection.cost.and_then(|cost| cost.total().to_f64()), Some(4.46));
 	}
 
 	#[test]
