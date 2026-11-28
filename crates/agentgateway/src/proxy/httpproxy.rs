@@ -1745,6 +1745,7 @@ async fn handle_upgrade(
 	let RequestUpgrade {
 		upgrade_type,
 		upgrade,
+		is_gpt_live,
 	} = req_upgrade_type;
 	let buffer_limit = http::response_buffer_limit(&resp);
 	let resp_upgrade_type = get_upgrade_type(resp.headers());
@@ -1788,6 +1789,7 @@ async fn handle_upgrade(
 					guard_context.prompt_guard,
 					guard_context.policy_client,
 					llm,
+					is_gpt_live,
 					guard_context.req_headers,
 					guard_context.request_snapshot,
 					log.guardrails.clone(),
@@ -1795,9 +1797,16 @@ async fn handle_upgrade(
 				.await;
 				return;
 			}
-			let mut server = parse::websocket::parser(server, llm, buffer_limit).await;
+			let mut server = parse::websocket::parser(server, llm.clone(), buffer_limit).await;
+			let mut client = parse::websocket::live_client_parser(
+				TokioIo::new(req),
+				llm,
+				buffer_limit,
+				is_gpt_live,
+			)
+			.await;
 			let _ = agent_core::copy::copy_bidirectional(
-				&mut TokioIo::new(req),
+				&mut client,
 				&mut server,
 				&agent_core::copy::ConnectionResult {},
 			)
@@ -3131,13 +3140,29 @@ async fn make_backend_call(
 					// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
 					// We do not need LLM policies nor token-based rate limits, etc.
 					// For realtime we do the same and handle everything in the Websocket handler
+					let requested_path = llm
+						.path_override
+						.as_deref()
+						.unwrap_or_else(|| req.uri().path());
+					let is_gpt_live = route_type == RouteType::Realtime
+						&& llm.provider.provider().as_str() == "openai"
+						&& requested_path.trim_end_matches('/').ends_with("/live/sessions");
+					let live_path = is_gpt_live.then(|| {
+						format!(
+							"{}/live/sessions",
+							llm.path_prefix.as_deref().unwrap_or("/v1").trim_end_matches('/')
+						)
+					});
+					if let Some(upgrade) = req_upgrade.as_mut() {
+						upgrade.is_gpt_live = is_gpt_live;
+					}
 					llm
 						.provider
 						.setup_request(
 							&mut req,
 							route_type,
 							None,
-							llm.path_override.as_deref(),
+							llm.path_override.as_deref().or(live_path.as_deref()),
 							llm.path_prefix.as_deref(),
 							llm.host_override.is_some(),
 							Some(&mut backend_call.target),
@@ -4777,6 +4802,7 @@ fn connection_header_tokens(headers: &HeaderMap) -> Vec<HeaderName> {
 struct RequestUpgrade {
 	upgrade_type: HeaderValue,
 	upgrade: OnUpgrade,
+	is_gpt_live: bool,
 }
 
 #[derive(Clone)]
@@ -4827,6 +4853,7 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 		Some(RequestUpgrade {
 			upgrade_type: t,
 			upgrade: u,
+			is_gpt_live: false,
 		})
 	} else {
 		None

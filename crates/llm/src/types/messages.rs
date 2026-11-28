@@ -371,6 +371,8 @@ pub(crate) fn usage_lines(iterations: &[UsageIteration]) -> Vec<crate::UsageLine
 			model: i.model.as_deref().map(strng::new),
 			input_tokens: i.input_tokens,
 			output_tokens: i.output_tokens,
+			input_audio_tokens: None,
+			output_audio_tokens: None,
 			cache_creation_input_tokens: i.cache_creation_input_tokens,
 			cache_creation_1h_input_tokens: i
 				.cache_creation
